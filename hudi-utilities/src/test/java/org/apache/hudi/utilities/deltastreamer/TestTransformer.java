@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -53,9 +55,9 @@ import java.util.Set;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.assertRecordCount;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.makeConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
@@ -101,53 +103,75 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testTransformerSchemaValidation() throws Exception {
+  public void testTransformerSchemaValidationPasses() throws Exception {
     List<String> transformerClassNames = Arrays.asList(
+        // Flattens the nested schema
         FlatteningTransformerWithTransformedSchema.class.getName(),
+        // No change to schema
         TimestampTransformer.class.getName(),
+        // Adds a new column named random in the schema
         AddColumnTransformerWithTransformedSchema.class.getName());
-    runDeltaStreamerWithTransformers(transformerClassNames);
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames);
   }
 
   @Test
-  public void testTransformerSchemaValidationFails() throws Exception {
-    String errorMsg = "Expected target schema not provided for transformer";
+  public void testTransformerSchemaValidationFailsWhenTransformedSchemaNotProvided() {
+    String expectedErrorMsg = "Expected target schema not provided for transformer org.apache.hudi.utilities.transform.FlatteningTransformer";
     List<String> transformerClassNames = Arrays.asList(
+        // transformedSchema not implemented for FlatteningTransformer
         FlatteningTransformer.class.getName(),
         TimestampTransformer.class.getName(),
         AddColumnTransformerWithTransformedSchema.class.getName());
-    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
 
+    expectedErrorMsg = "Expected target schema not provided for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$AddColumnTransformer";
     transformerClassNames = Arrays.asList(
         FlatteningTransformerWithTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
+        // transformedSchema not implemented for AddColumnTransformer
         AddColumnTransformer.class.getName());
-    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
+  }
 
-    errorMsg = "Schema of transformed data does not match expected schema";
+
+  @Test
+  public void testTransformerSchemaValidationFailsWithSchemaMismatch() {
+    String expectedErrorMsg = "Schema of transformed data does not match expected schema for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer" +
+        "$AddColumnTransformerWithWrongTransformedSchema";
+    List<String> transformerClassNames = Collections.singletonList(
+        AddColumnTransformerWithWrongTransformedSchema.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, "source.avsc", expectedErrorMsg);
+
     transformerClassNames = Arrays.asList(
         FlatteningTransformerWithTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
+        // AddColumnTransformerWithWrongTransformedSchema provides a wrong transformedSchema.
+        // The transformedSchema API adds field random1 whereas transformation adds field random
         AddColumnTransformerWithWrongTransformedSchema.class.getName());
-    testTransformerSchemaValidationFails(transformerClassNames, errorMsg);
+    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
   }
 
-  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String errorMsg) {
-    try {
-      runDeltaStreamerWithTransformers(transformerClasses);
-      fail();
-    } catch (Exception e) {
-      assertTrue(e.getMessage().contains(errorMsg), e.getMessage());
-    }
+  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String expectedErrorMsg) {
+    Throwable t = assertThrows(HoodieSchemaException.class, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses));
+    assertTrue(t.getMessage().contains(expectedErrorMsg), "Expected error \n" + expectedErrorMsg + "\nbut got\n" + t.getMessage());
   }
 
-  private void runDeltaStreamerWithTransformers(List<String> transformerClassNames) throws Exception {
+  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String targetSchemaFile, String expectedErrorMsg) {
+    Throwable t = assertThrows(HoodieSchemaException.class, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses, targetSchemaFile));
+    assertTrue(t.getMessage().contains(expectedErrorMsg), "Expected error \n" + expectedErrorMsg + "\nbut got\n" + t.getMessage());
+  }
+
+  private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames) throws Exception {
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames, "target-flattened-addcolumn-transformer.avsc");
+  }
+
+  private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames, String targetSchemaFile) throws Exception {
     // Create source using TRIP_EXAMPLE_SCHEMA
     boolean useSchemaProvider = true;
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 10;
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
-    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", "target-flattened-addcolumn-transformer.avsc", PROPS_FILENAME_TEST_PARQUET,
+    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
     HoodieDeltaStreamer.Config config = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
@@ -161,7 +185,6 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
     deltaStreamer.sync();
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    sqlContext.read().format("org.apache.hudi").load(tableBasePath).show();
     FileIOUtils.deleteDirectory(new File(tableBasePath));
   }
 

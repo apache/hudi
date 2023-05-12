@@ -52,21 +52,23 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
-  private Option<Schema> sourceSchemaOpt = Option.empty();
-  private boolean enableSchemaValidation = false;
+  private final Option<Schema> sourceSchemaOpt = Option.empty();
+  private final boolean enableSchemaValidation = false;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
     for (Transformer transformer : transformersList) {
       this.transformers.add(new TransformerInfo(transformer));
     }
+    this.sourceSchemaOpt = Option.empty();
+    this.enableSchemaValidation = false;
   }
 
   /**
    * Creates a chained transformer using the input transformer class names. Refer {@link HoodieDeltaStreamer.Config#transformerClassNames}
    * for more information on how the transformers can be configured.
    *
-   * @param sourceSchemaOpt                   Source Schema
+   * @param sourceSchemaOpt                   Schema from the dataset the transform is applied to
    * @param configuredTransformers            List of configured transformer class names.
    * @param enableSchemaValidation            If true, schema is validated for the transformed data against expected schema.
    *                                          Expected schema is provided by {@link Transformer#transformedSchema}
@@ -105,10 +107,14 @@ public class ChainedTransformer implements Transformer {
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
     Dataset<Row> dataset = rowDataset;
     Option<Schema> incomingSchemaOpt = sourceSchemaOpt;
+    if (!sourceSchemaOpt.isPresent()) {
+      incomingSchemaOpt = Option.of(AvroConversionUtils.convertStructTypeToAvroSchema(dataset.schema(), dataset.schema().typeName(), ""));
+    }
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
       if (enableSchemaValidation) {
+        // Transformed schema of 1st transformer is incoming schema for 2nd transformer
         incomingSchemaOpt = validateAndGetTransformedSchema(transformerInfo, dataset, incomingSchemaOpt, jsc, sparkSession, properties);
       }
     }
@@ -143,7 +149,7 @@ public class ChainedTransformer implements Transformer {
 
     Schema expectedTargetSchema = expectedTargetSchemaOpt.get();
     if (!AvroSchemaUtils.isSchemaCompatible(expectedTargetSchema, targetSchema, false, false)) {
-      throw new HoodieSchemaException(String.format("Transformer %s - Schema of transformed data does not match expected schema \nexpected=%s \nactual=%s",
+      throw new HoodieSchemaException(String.format("Schema of transformed data does not match expected schema for transformer %s\nexpected=%s \nactual=%s",
           transformerInfo, expectedTargetSchema, targetSchema));
     }
     return expectedTargetSchemaOpt;
