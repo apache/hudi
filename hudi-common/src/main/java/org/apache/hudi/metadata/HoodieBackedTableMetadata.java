@@ -147,9 +147,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
-                                                   Types.RecordType partitionFields,
-                                                   Expression expression) throws IOException {
+  public List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                          Types.RecordType partitionFields,
+                                                                          Expression expression) throws IOException {
     Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, false));
     boolean hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
     boolean urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());

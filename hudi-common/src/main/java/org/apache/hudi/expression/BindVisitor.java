@@ -110,8 +110,9 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
 
   @Override
   public Expression visitNameReference(NameReference attribute) {
-    // TODO Should consider caseSensitive?
-    Types.Field field = recordType.field(attribute.getName());
+    Types.Field field = caseSensitive ?
+        recordType.fieldByName(attribute.getName())
+        : recordType.fieldByNameCaseInsensitive(attribute.getName());
 
     if (field == null) {
       throw new IllegalArgumentException("The attribute " + attribute

@@ -198,9 +198,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Retrieve the paths of partitions under the provided sub-directories,
    * and filter these partitions using the provided {@link Expression}.
    */
-  List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
-                                            Types.RecordType partitionFields,
-                                            Expression expression) throws IOException;
+  List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                   Types.RecordType partitionFields,
+                                                                   Expression expression) throws IOException;
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.

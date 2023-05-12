@@ -147,7 +147,7 @@ public class Predicates {
     }
   }
 
-  public static class And extends BinaryLike implements Predicate {
+  public static class And extends BinaryExpression implements Predicate {
 
     public And(Expression left, Expression right) {
       super(left, Operator.AND, right);
@@ -186,7 +186,7 @@ public class Predicates {
     }
   }
 
-  public static class Or extends BinaryLike implements Predicate {
+  public static class Or extends BinaryExpression implements Predicate {
 
     public Or(Expression left, Expression right) {
       super(left, Operator.OR, right);
@@ -223,7 +223,7 @@ public class Predicates {
     }
   }
 
-  public static class StringContains extends BinaryLike implements Predicate {
+  public static class StringContains extends BinaryExpression implements Predicate {
 
     StringContains(Expression left, Expression right) {
       super(left, Operator.CONTAINS, right);
@@ -367,7 +367,7 @@ public class Predicates {
     }
   }
 
-  public static class BinaryComparison extends BinaryLike implements Predicate {
+  public static class BinaryComparison extends BinaryExpression implements Predicate {
 
     public BinaryComparison(Expression left, Operator operator, Expression right) {
       super(left, operator, right);

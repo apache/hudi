@@ -24,7 +24,7 @@ import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.expression.NameReference;
-import org.apache.hudi.expression.BinaryLike;
+import org.apache.hudi.expression.BinaryExpression;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
 import org.apache.hudi.internal.schema.Types;
@@ -92,7 +92,7 @@ public class PartitionFilterGenerator {
 
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
-        BinaryLike exp = Predicates.eq(new NameReference(field.getName()),
+        BinaryExpression exp = Predicates.eq(new NameReference(field.getName()),
             buildLiteralExpression(partitionValues.get(i), field.getType()));
         if (root != null) {
           root = Predicates.and(root, exp);

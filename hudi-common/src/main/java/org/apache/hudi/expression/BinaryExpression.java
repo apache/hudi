@@ -24,13 +24,13 @@ import java.util.List;
 /**
  * The expression that accept two child expressions.
  */
-public abstract class BinaryLike implements Expression {
+public abstract class BinaryExpression implements Expression {
 
   private final Operator operator;
   private final Expression left;
   private final Expression right;
 
-  BinaryLike(Expression left, Operator operator, Expression right) {
+  BinaryExpression(Expression left, Operator operator, Expression right) {
     this.left = left;
     this.operator = operator;
     this.right = right;

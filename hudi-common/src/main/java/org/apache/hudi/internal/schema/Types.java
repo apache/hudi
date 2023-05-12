@@ -511,6 +511,7 @@ public class Types {
     private final Field[] fields;
 
     private transient Map<String, Field> nameToFields = null;
+    private transient Map<String, Field> lowercaseNameToFields = null;
     private transient Map<Integer, Field> idToFields = null;
 
     private RecordType(List<Field> fields, String name) {
@@ -523,14 +524,27 @@ public class Types {
       return Arrays.asList(fields);
     }
 
-    public Field field(String name) {
+    /**
+     * Case-sensitive get field by name
+     */
+    public Field fieldByName(String name) {
       if (nameToFields == null) {
         nameToFields = new HashMap<>();
         for (Field field : fields) {
-          nameToFields.put(field.name().toLowerCase(Locale.ROOT), field);
+          nameToFields.put(field.name(), field);
         }
       }
-      return nameToFields.get(name.toLowerCase(Locale.ROOT));
+      return nameToFields.get(name);
+    }
+
+    public Field fieldByNameCaseInsensitive(String name) {
+      if (lowercaseNameToFields == null) {
+        lowercaseNameToFields = new HashMap<>();
+        for (Field field : fields) {
+          lowercaseNameToFields.put(field.name().toLowerCase(Locale.ROOT), field);
+        }
+      }
+      return lowercaseNameToFields.get(name.toLowerCase(Locale.ROOT));
     }
 
     @Override
@@ -546,7 +560,7 @@ public class Types {
 
     @Override
     public Type fieldType(String name) {
-      Field field = field(name);
+      Field field = fieldByNameCaseInsensitive(name);
       if (field != null) {
         return field.type();
       }
