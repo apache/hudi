@@ -20,14 +20,17 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -38,113 +41,139 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Properties;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_STR;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_WITH_METAFIELDS;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletes;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getInserts;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getKeyGenProps;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getUpdates;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness {
 
-  private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testReadLatestRecordsWithDeletes(HoodieTableType tableType) throws IOException {
-    HoodieWriteConfig writeConfig = getWriteConfig();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
-    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
-      final int totalRecords = 4;
-      // 1st batch: inserts
-      String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
-      List<HoodieRecord> insertsAtEpoch0 = convertPayload(dataGen
-          .generateInsertsForPartition(commitTimeAtEpoch0, totalRecords, DEFAULT_FIRST_PARTITION_PATH), DefaultHoodieRecordPayload.class);
-      client.startCommitWithTime(commitTimeAtEpoch0);
-      client.upsert(jsc().parallelize(insertsAtEpoch0, 1), commitTimeAtEpoch0);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch0, DEFAULT_FIRST_PARTITION_PATH, 0);
-
-      // 2nd batch: normal updates
-      String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
-      List<HoodieRecord> updatesAtEpoch5 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch5, insertsAtEpoch0, 5), DefaultHoodieRecordPayload.class);
-      client.startCommitWithTime(commitTimeAtEpoch5);
-      client.upsert(jsc().parallelize(updatesAtEpoch5, 1), commitTimeAtEpoch5);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch5, DEFAULT_FIRST_PARTITION_PATH, 5);
-
-      // 3rd batch: delete a record
-      String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
-      client.startCommitWithTime(commitTimeAtEpoch6);
-      List<HoodieRecord> deletesAtEpoch6 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch6, Collections.singletonList(insertsAtEpoch0.get(0)), 6), DefaultHoodieRecordPayload.class, true);
-      client.upsert(jsc().parallelize(deletesAtEpoch6, 1), commitTimeAtEpoch6);
-      validate(metaClient, writeConfig, totalRecords - 1, commitTimeAtEpoch5, DEFAULT_FIRST_PARTITION_PATH, 5);
-
-      // 4th batch: normal updates
-      String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
-      List<HoodieRecord> updatesAtEpoch9 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch9, insertsAtEpoch0, 9), DefaultHoodieRecordPayload.class);
-      client.startCommitWithTime(commitTimeAtEpoch9);
-      client.upsert(jsc().parallelize(updatesAtEpoch9, 1), commitTimeAtEpoch9);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch9, DEFAULT_FIRST_PARTITION_PATH, 9);
-
-    }
+  private static Stream<Arguments> avroPayloadClasses() {
+    return Stream.of(
+        Arguments.of(COPY_ON_WRITE, OverwriteWithLatestAvroPayload.class),
+        Arguments.of(COPY_ON_WRITE, OverwriteNonDefaultsWithLatestAvroPayload.class),
+        Arguments.of(COPY_ON_WRITE, PartialUpdateAvroPayload.class),
+        Arguments.of(COPY_ON_WRITE, DefaultHoodieRecordPayload.class),
+        Arguments.of(MERGE_ON_READ, OverwriteWithLatestAvroPayload.class),
+        Arguments.of(MERGE_ON_READ, OverwriteNonDefaultsWithLatestAvroPayload.class),
+        Arguments.of(MERGE_ON_READ, PartialUpdateAvroPayload.class),
+        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class)
+    );
   }
 
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testReadLatestRecordsWithLateArrivedRecords(HoodieTableType tableType) throws IOException {
-    HoodieWriteConfig writeConfig = getWriteConfig();
+  @MethodSource("avroPayloadClasses")
+  public void testReadLatestRecordsWithDeletes(HoodieTableType tableType, Class<?> payloadClass) throws IOException {
+    HoodieWriteConfig writeConfig = getWriteConfig(payloadClass);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       final int totalRecords = 4;
+      final String partition = "foo";
+
       // 1st batch: inserts
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
-      List<HoodieRecord> insertsAtEpoch0 = convertPayload(dataGen
-          .generateInsertsForPartition(commitTimeAtEpoch0, totalRecords, DEFAULT_FIRST_PARTITION_PATH), DefaultHoodieRecordPayload.class);
+      List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, partition, 0, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch0);
       client.upsert(jsc().parallelize(insertsAtEpoch0, 1), commitTimeAtEpoch0);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch0, DEFAULT_FIRST_PARTITION_PATH, 0);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 0, payloadClass);
 
       // 2nd batch: normal updates
       String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
-      List<HoodieRecord> updatesAtEpoch5 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch5, insertsAtEpoch0, 5), DefaultHoodieRecordPayload.class);
+      List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0, 5, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch5);
+      JavaRDD<WriteStatus> writeStatusesAtEpoch5 = client.upsert(jsc().parallelize(updatesAtEpoch5, 1), commitTimeAtEpoch5);
+      assertNoWriteErrors(writeStatusesAtEpoch5.collect());
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 5, payloadClass);
+
+      // 3rd batch: delete the record with id 3 (the last one)
+      String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
+      client.startCommitWithTime(commitTimeAtEpoch6);
+      List<HoodieRecord> deletesAtEpoch6 = getDeletes(updatesAtEpoch5.subList(totalRecords - 1, totalRecords), 6, payloadClass);
+      JavaRDD<WriteStatus> writeStatusesAtEpoch6 = client.upsert(jsc().parallelize(deletesAtEpoch6, 1), commitTimeAtEpoch6);
+      assertNoWriteErrors(writeStatusesAtEpoch6.collect());
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords - 1, partition, 5, payloadClass);
+
+      // 4th batch: normal updates
+      String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
+      List<HoodieRecord> updatesAtEpoch9 = getUpdates(updatesAtEpoch5, 9, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch9);
+      client.upsert(jsc().parallelize(updatesAtEpoch9, 1), commitTimeAtEpoch9);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 9, payloadClass);
+    }
+  }
+
+  private static Stream<Arguments> avroPayloadClassesThatHonorOrdering() {
+    return Stream.of(
+        Arguments.of(COPY_ON_WRITE, PartialUpdateAvroPayload.class),
+        Arguments.of(COPY_ON_WRITE, DefaultHoodieRecordPayload.class),
+        Arguments.of(MERGE_ON_READ, PartialUpdateAvroPayload.class),
+        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("avroPayloadClassesThatHonorOrdering")
+  public void testReadLatestRecordsWithLateArrivedRecords(HoodieTableType tableType, Class<?> payloadClass) throws IOException {
+    HoodieWriteConfig writeConfig = getWriteConfig(payloadClass);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      final int totalRecords = 4;
+      final String partition = "foo";
+
+      // 1st batch: inserts
+      String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
+      List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, partition, 0, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch0);
+      client.upsert(jsc().parallelize(insertsAtEpoch0, 1), commitTimeAtEpoch0);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 0, payloadClass);
+
+      // 2nd batch: normal updates
+      String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
+      List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0, 5, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch5);
       client.upsert(jsc().parallelize(updatesAtEpoch5, 1), commitTimeAtEpoch5);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch5, DEFAULT_FIRST_PARTITION_PATH, 5);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 5, payloadClass);
 
       // 3rd batch: updates with old timestamp will be discarded
       String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
-      List<HoodieRecord> updatesAtEpoch1 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch6, insertsAtEpoch0, 1), DefaultHoodieRecordPayload.class);
+      List<HoodieRecord> updatesAtEpoch1 = getUpdates(insertsAtEpoch0, 1, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch6);
       client.upsert(jsc().parallelize(updatesAtEpoch1, 1), commitTimeAtEpoch6);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch5, DEFAULT_FIRST_PARTITION_PATH, 5);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 5, payloadClass);
 
       // 4th batch: normal updates
       String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
-      List<HoodieRecord> updatesAtEpoch9 = convertPayload(dataGen
-          .generateUpdatesWithTimestamp(commitTimeAtEpoch9, insertsAtEpoch0, 9), DefaultHoodieRecordPayload.class);
+      List<HoodieRecord> updatesAtEpoch9 = getUpdates(updatesAtEpoch5, 9, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch9);
       client.upsert(jsc().parallelize(updatesAtEpoch9, 1), commitTimeAtEpoch9);
-      validate(metaClient, writeConfig, totalRecords, commitTimeAtEpoch9, DEFAULT_FIRST_PARTITION_PATH, 9);
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords, partition, 9, payloadClass);
     }
   }
 
-  private void validate(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig,
-      int totalRecords, String commitTime, String partition, long timestamp) throws IOException {
+  private void doMergedReadAndValidate(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig,
+      int totalRecords, String partition, long timestamp, Class<?> payloadClass) throws IOException {
+    String orderingField = new HoodieAdaptablePayloadDataGenerator.RecordGen(payloadClass).getOrderingField();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(writeConfig, context(), metaClient);
     List<Pair<String, String>> partitionPathAndFileIDPairs = table.getHoodieView()
@@ -156,58 +185,38 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
     HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0));
     List<HoodieRecord> mergedRecords = mergedReadHandle.getMergedRecords();
     assertEquals(totalRecords, mergedRecords.size());
-    for (HoodieRecord rec : mergedRecords) {
-      HoodieRecord r = rec.wrapIntoHoodieRecordPayloadWithParams(
-          addMetadataFields(AVRO_SCHEMA, writeConfig.allowOperationMetadataField()),
-          writeConfig.getProps(), Option.empty(), writeConfig.allowOperationMetadataField(), Option.empty(), false, Option.of(AVRO_SCHEMA));
+    for (int i = 0; i < mergedRecords.size(); i++) {
+      HoodieRecord r = mergedRecords.get(i);
+      mergedRecords.set(i, r.wrapIntoHoodieRecordPayloadWithParams(
+          SCHEMA_WITH_METAFIELDS, writeConfig.getProps(), Option.empty(), writeConfig.allowOperationMetadataField(),
+          Option.empty(), false, Option.of(SCHEMA)));
+    }
+    List<HoodieRecord> sortedMergedRecords = mergedRecords.stream()
+        .sorted(Comparator.comparing(HoodieRecord::getRecordKey)).collect(Collectors.toList());
+    for (int i = 0; i < sortedMergedRecords.size(); i++) {
+      HoodieRecord r = sortedMergedRecords.get(i);
+      assertEquals(i, Integer.parseInt(r.getRecordKey()));
       assertEquals(partition, r.getPartitionPath());
-      assertEquals(DefaultHoodieRecordPayload.class, r.getData().getClass());
-      DefaultHoodieRecordPayload data = (DefaultHoodieRecordPayload) r.getData();
-      assertEquals(timestamp, data.getOrderingVal());
-      Option<IndexedRecord> valueOpt = data.getInsertValue(AVRO_SCHEMA);
+      assertEquals(payloadClass.getName(), r.getData().getClass().getName());
+      Option<IndexedRecord> valueOpt = ((HoodieRecordPayload) r.getData()).getInsertValue(SCHEMA);
       assertTrue(valueOpt.isPresent());
       GenericRecord avroValue = (GenericRecord) valueOpt.get();
-      assertEquals("rider-" + commitTime, avroValue.get("rider").toString());
-      assertEquals("driver-" + commitTime, avroValue.get("driver").toString());
-      assertEquals(timestamp, Long.parseLong(avroValue.get("timestamp").toString()));
+      assertEquals(i, Integer.parseInt(avroValue.get("id").toString()));
+      assertEquals(partition, avroValue.get("pt").toString());
+      assertEquals(timestamp, Long.parseLong(avroValue.get(orderingField).toString()));
     }
   }
 
-  private List<HoodieRecord> convertPayload(List<HoodieRecord> records, Class<?> payloadClazz) throws IOException {
-    return convertPayload(records, payloadClazz, false);
-  }
-
-  private List<HoodieRecord> convertPayload(List<HoodieRecord> records, Class<?> payloadClazz, boolean isDeleted) throws IOException {
-    List<HoodieRecord> convertedRecords = new ArrayList<>();
-    for (HoodieRecord r : records) {
-      GenericRecord avroData = (GenericRecord) ((RawTripTestPayload) r.getData()).getRecordToInsert(AVRO_SCHEMA);
-      avroData.put("_hoodie_is_deleted", isDeleted);
-      convertedRecords.add(
-          createHoodieRecordFromAvro(avroData, payloadClazz.getName(),
-              "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
-              false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
-    }
-    return convertedRecords;
-  }
-
-  private HoodieWriteConfig getWriteConfig() {
-    Properties properties = new Properties();
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.put("hoodie.datasource.write.precombine.field", "timestamp");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+  private HoodieWriteConfig getWriteConfig(Class<?> payloadClass) {
     return getConfigBuilder(true)
-        .withProperties(properties)
+        .withProperties(getKeyGenProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withDeleteParallelism(1)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-            .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
-            .withPayloadOrderingField("timestamp").build())
+            .fromProperties(getPayloadProps(payloadClass)).build())
         .build();
   }
 }

@@ -109,16 +109,6 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
         StructField("dt", StringType, true))
     )
 
-    // miss primaryKey parameter
-    val sqlOptions1 = baseSqlOptions ++ Map(
-      "type" -> "mor"
-    )
-
-    val e1 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions1)
-    }
-    assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
-
     // primary field not found
     val sqlOptions2 = baseSqlOptions ++ Map(
       "primaryKey" -> "xxx",
