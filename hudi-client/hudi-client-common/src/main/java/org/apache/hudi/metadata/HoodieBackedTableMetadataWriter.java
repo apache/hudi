@@ -242,8 +242,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
-      String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants()
-          .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+      String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
       // Initialize partitions for the first time using data from the files on the file system
       if (!initializeFromFilesystem(initializationTime, partitionsToInit, inflightInstantTimestamp)) {
@@ -640,6 +639,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
     // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
 
+    // Even though the initial commit is a bulkInsert which creates the first baseFiles directly, we still
+    // create a log file first. This ensures that if any fileGroups of the MDT index do not receive any records
+    // during initial commit, then the fileGroup would still be recognized (as a FileSlice with no baseFiles but a
+    // valid logFile). Since these log files being created have no content, it is safe to add them here before
+    // the bulkInsert.
     LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
         fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
     final List<String> fileGroupFileIds = IntStream.range(0, fileGroupCount)
@@ -747,8 +751,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param convertMetadataFunction converter function to convert the respective metadata to List of HoodieRecords to be written to metadata table.
    */
   private void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
-    ValidationUtils.checkArgument(dataWriteConfig.isMetadataTableEnabled());
-
     Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     Set<String> inflightIndexes = getInflightMetadataPartitions(dataMetaClient.getTableConfig());
     // if indexing is inflight then do not trigger table service

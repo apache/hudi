@@ -86,7 +86,9 @@ public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertParti
         final String fileID = HoodieTableMetadataUtil.getFileGroupPrefix(record.getCurrentLocation().getFileId());
         fileIds.add(fileID);
       } else {
-        // Empty partition
+        // FileGroupPartitioner returns a fixed number of partition as part of numPartitions(). In the special case that recordsRDD has fewer
+        // records than fileGroupCount, some of these partitions (corresponding to fileGroups) will not have any data.
+        // But we still need to return a fileID for use within {@code BulkInsertMapFunction}
         fileIds.add("");
       }
       return fileIds.iterator();

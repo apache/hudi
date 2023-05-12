@@ -754,9 +754,9 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Enables the specified metadata table partition as inflight.
    *
-   * @param partition The list of partitions to enable as inflight.
+   * @param partitionTypes The list of partitions to enable as inflight.
    */
-  public void setMetadataPartitionsAsInflight(List<MetadataPartitionType> partitionTypes) {
+  public void setMetadataPartitionsInflight(List<MetadataPartitionType> partitionTypes) {
     Set<String> partitions = getMetadataPartitionsInflight();
     partitionTypes.forEach(t -> {
       ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),

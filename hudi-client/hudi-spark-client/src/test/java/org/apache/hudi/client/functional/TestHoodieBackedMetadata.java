@@ -136,6 +136,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -2541,6 +2542,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE));
     }
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileId() {
+    int index = new Random().nextInt(10000);
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index);
+    assertEquals(FILES.getFileIdPrefix(), HoodieTableMetadataUtil.getFileGroupPrefix(fileId) + "-");
+    assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
   }
 
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {

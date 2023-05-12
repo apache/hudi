@@ -1431,7 +1431,7 @@ public class HoodieTableMetadataUtil {
       LOG.debug("Metadata table partition " + partitionType + " not found at path " + metadataTablePartitionPath);
       return null;
     } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to check metadata table partition existence", e);
+      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s: ", partitionType, metadataTablePartitionPath), e);
     }
 
     if (backup) {
@@ -1459,7 +1459,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieTableMetaClient setMetadataInflightPartitions(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> partitionTypes) {
-    dataMetaClient.getTableConfig().setMetadataPartitionsAsInflight(partitionTypes);
+    dataMetaClient.getTableConfig().setMetadataPartitionsInflight(partitionTypes);
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
