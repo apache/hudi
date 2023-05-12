@@ -92,7 +92,7 @@ case class IncrementalRelation(override val sqlContext: SQLContext,
         }.toSeq
       }
 
-      buildSplits(fileSlices)
+      buildSplits(filterFileSlices(fileSlices, globPattern))
     }
   }
 }
