@@ -4,9 +4,49 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 26 Apr 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 10 May 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Top 3 Things You Can Do to Get Fast Upsert Performance in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi</link>
+            <guid>/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi</guid>
+            <pubDate>Wed, 10 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Amazon Athena now supports Apache Hudi 0.12.2]]></title>
+            <link>https://hudi.apache.org/blog/2023/05/09/amazon-athena-apache-hudi</link>
+            <guid>/2023/05/09/amazon-athena-apache-hudi</guid>
+            <pubDate>Tue, 09 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/about-aws/whats-new/2023/05/amazon-athena-apache-hudi/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Lakehouse at Fortune 1 Scale]]></title>
+            <link>https://hudi.apache.org/blog/2023/05/03/lakehouse-at-fortune-1-scale</link>
+            <guid>/2023/05/03/lakehouse-at-fortune-1-scale</guid>
+            <pubDate>Wed, 03 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/walmartglobaltech/lakehouse-at-fortune-1-scale-480bcb10391b">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[An Introduction to the Hudi and Flink Integration]]></title>
+            <link>https://hudi.apache.org/blog/2023/05/02/intro-to-hudi-and-flink</link>
+            <guid>/2023/05/02/intro-to-hudi-and-flink</guid>
+            <pubDate>Tue, 02 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/intro-to-hudi-and-flink">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Can you concurrently write data to Apache Hudi w/o any lock provider?]]></title>
+            <link>https://hudi.apache.org/blog/2023/04/29/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider</link>
+            <guid>/2023/04/29/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider</guid>
+            <pubDate>Sat, 29 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider-51ea55bf2dd6">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Delta, Hudi, and Iceberg: The Data Lakehouse Trifecta]]></title>
             <link>https://hudi.apache.org/blog/2023/04/26/the-lakehouse-trifecta</link>
@@ -14,6 +54,14 @@
             <pubDate>Wed, 26 Apr 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://dzone.com/articles/delta-hudi-and-iceberg-the-data-lakehouse-trifecta">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Getting Started: Incrementally process data with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/04/18/getting-started-incrementally-process-data-with-apache-hudi</link>
+            <guid>/2023/04/18/getting-started-incrementally-process-data-with-apache-hudi</guid>
+            <pubDate>Tue, 18 Apr 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/getting-started-incrementally-process-data-with-apache-hudi">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Speed up your write latencies using Bucket Index in Apache Hudi]]></title>
@@ -54,6 +102,14 @@
             <pubDate>Thu, 16 Mar 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://www.uber.com/blog/ubers-lakehouse-architecture/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Getting Started: Manage your Hudi tables with the admin Hudi-CLI tool]]></title>
+            <link>https://hudi.apache.org/blog/2023/02/22/Getting-Started-Manage-your-Hudi-tables-with-the-admin-Hudi-CLI-tool</link>
+            <guid>/2023/02/22/Getting-Started-Manage-your-Hudi-tables-with-the-admin-Hudi-CLI-tool</guid>
+            <pubDate>Wed, 22 Feb 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/getting-started-manage-your-hudi-tables-with-the-admin-hudi-cli-tool">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>

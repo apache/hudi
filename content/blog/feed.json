@@ -5,6 +5,58 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi",
+            "title": "Top 3 Things You Can Do to Get Fast Upsert Performance in Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-10T00:00:00.000Z",
+            "author": {
+                "name": "Nadine Farah"
+            }
+        },
+        {
+            "id": "/2023/05/09/amazon-athena-apache-hudi",
+            "content_html": "<div url=\"https://aws.amazon.com/about-aws/whats-new/2023/05/amazon-athena-apache-hudi/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/09/amazon-athena-apache-hudi",
+            "title": "Amazon Athena now supports Apache Hudi 0.12.2",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-09T00:00:00.000Z"
+        },
+        {
+            "id": "/2023/05/03/lakehouse-at-fortune-1-scale",
+            "content_html": "<div url=\"https://medium.com/walmartglobaltech/lakehouse-at-fortune-1-scale-480bcb10391b\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/03/lakehouse-at-fortune-1-scale",
+            "title": "Lakehouse at Fortune 1 Scale",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-03T00:00:00.000Z",
+            "author": {
+                "name": "Samuel Guleff"
+            }
+        },
+        {
+            "id": "/2023/05/02/intro-to-hudi-and-flink",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/intro-to-hudi-and-flink\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/02/intro-to-hudi-and-flink",
+            "title": "An Introduction to the Hudi and Flink Integration",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-02T00:00:00.000Z",
+            "author": {
+                "name": "Danny Chan"
+            }
+        },
+        {
+            "id": "/2023/04/29/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider",
+            "content_html": "<div url=\"https://medium.com/@simpsons/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider-51ea55bf2dd6\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/04/29/can-you-concurrently-write-data-to-apache-hudi-w-o-any-lock-provider",
+            "title": "Can you concurrently write data to Apache Hudi w/o any lock provider?",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-04-29T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
             "id": "/2023/04/26/the-lakehouse-trifecta",
             "content_html": "<div url=\"https://dzone.com/articles/delta-hudi-and-iceberg-the-data-lakehouse-trifecta\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/04/26/the-lakehouse-trifecta",
@@ -13,6 +65,17 @@
             "date_modified": "2023-04-26T00:00:00.000Z",
             "author": {
                 "name": "Andrey Gusarov"
+            }
+        },
+        {
+            "id": "/2023/04/18/getting-started-incrementally-process-data-with-apache-hudi",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/getting-started-incrementally-process-data-with-apache-hudi\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/04/18/getting-started-incrementally-process-data-with-apache-hudi",
+            "title": "Getting Started: Incrementally process data with Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-04-18T00:00:00.000Z",
+            "author": {
+                "name": "Raymond Xu"
             }
         },
         {
@@ -68,6 +131,17 @@
             "date_modified": "2023-03-16T00:00:00.000Z",
             "author": {
                 "name": "Vinoth Govindarajan"
+            }
+        },
+        {
+            "id": "/2023/02/22/Getting-Started-Manage-your-Hudi-tables-with-the-admin-Hudi-CLI-tool",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/getting-started-manage-your-hudi-tables-with-the-admin-hudi-cli-tool\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/02/22/Getting-Started-Manage-your-Hudi-tables-with-the-admin-Hudi-CLI-tool",
+            "title": "Getting Started: Manage your Hudi tables with the admin Hudi-CLI tool",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-02-22T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
             }
         },
         {
