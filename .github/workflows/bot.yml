@@ -145,12 +145,16 @@ jobs:
         include:
           - flinkProfile: 'flink1.16'
             sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.1'
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.2'
+            sparkRuntime: 'spark3.2.3'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark3.1'
+            sparkRuntime: 'spark3.1.3'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -172,7 +176,7 @@ jobs:
       - name: IT - Bundle Validation - OpenJDK 8
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -180,7 +184,7 @@ jobs:
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -189,6 +193,7 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
         run: |
