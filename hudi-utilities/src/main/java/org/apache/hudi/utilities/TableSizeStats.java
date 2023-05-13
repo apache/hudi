@@ -442,7 +442,7 @@ public class TableSizeStats implements Serializable {
     LOG.info(header);
     Snapshot snapshot = histogram.getSnapshot();
     LOG.info("Number of files: {}", snapshot.size());
-    LOG.info("Total table size: {}", getFileSizeUnit(Arrays.stream(snapshot.getValues()).sum()));
+    LOG.info("Total size: {}", getFileSizeUnit(Arrays.stream(snapshot.getValues()).sum()));
     LOG.info("Minimum file size: {}", getFileSizeUnit(snapshot.getMin()));
     LOG.info("Maximum file size: {}", getFileSizeUnit(snapshot.getMax()));
     LOG.info("Average file size: {}", getFileSizeUnit(snapshot.getMean()));
