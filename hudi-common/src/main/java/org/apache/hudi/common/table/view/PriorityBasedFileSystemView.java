@@ -168,6 +168,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Void loadAllPartitions() {
+    return execute(preferredView::loadAllPartitions, secondaryView::loadAllPartitions);
+  }
+
+  @Override
   public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
     return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
   }
