@@ -58,12 +58,8 @@ private[sql] object SchemaConverters {
 
   private val unionFieldMemberPrefix = "member"
 
-  private def extractDoc(doc: String): Option[String] = {
-    if(doc == null) Option.empty
-    else Option(doc)
-  }
   private def toSqlTypeHelper(avroSchema: Schema, existingRecordNames: Set[String]): SchemaType = {
-    (avroSchema.getType, extractDoc(avroSchema.getDoc)) match {
+    (avroSchema.getType, Option(avroSchema.getDoc)) match {
       case (INT, doc) => avroSchema.getLogicalType match {
         case _: Date => SchemaType(DateType, nullable = false, doc)
         case _ => SchemaType(IntegerType, nullable = false, doc)
