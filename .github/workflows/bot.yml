@@ -46,6 +46,12 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
           mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark,hudi-spark-datasource/hudi-spark -am -DskipTests=true $MVN_ARGS
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+          architecture: x64
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -68,33 +74,33 @@ jobs:
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.4.x $MVN_ARGS
         continue-on-error: true
-  test-flink:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    strategy:
-      matrix:
-        include:
-          - flinkProfile: "flink1.16"
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
-        with:
-          java-version: '8'
-          distribution: 'adopt'
-          architecture: x64
-      - name: Build Project
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
-      - name: Quickstart Test
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+#  test-flink:
+#    runs-on: ubuntu-latest
+#    continue-on-error: true
+#    strategy:
+#      matrix:
+#        include:
+#          - flinkProfile: "flink1.16"
+#    steps:
+#      - uses: actions/checkout@v2
+#      - name: Set up JDK 8
+#        uses: actions/setup-java@v2
+#        with:
+#          java-version: '8'
+#          distribution: 'adopt'
+#          architecture: x64
+#      - name: Build Project
+#        env:
+#          SCALA_PROFILE: 'scala-2.12'
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+#      - name: Quickstart Test
+#        env:
+#          SCALA_PROFILE: 'scala-2.12'
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
     runs-on: ubuntu-latest

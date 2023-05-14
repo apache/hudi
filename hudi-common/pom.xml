@@ -258,7 +258,7 @@
         </exclusion>
       </exclusions>
     </dependency>
-    
+
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-server</artifactId>
@@ -285,6 +285,13 @@
       </exclusions>
     </dependency>
 
+<!-- Force to use 2.11.0 since hbase-server requires 2.7+ -->
+   <dependency>
+     <groupId>commons-io</groupId>
+     <artifactId>commons-io</artifactId>
+     <version>${commons.io.version}</version>
+   </dependency>
+
     <!-- LZ4 Hash Utils -->
     <dependency>
       <groupId>org.lz4</groupId>
@@ -302,6 +309,13 @@
       <groupId>com.lmax</groupId>
       <artifactId>disruptor</artifactId>
       <version>${disruptor.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>
+      <scope>test</scope>
+      <version>${spark.version}</version>
     </dependency>
 
     <dependency>
