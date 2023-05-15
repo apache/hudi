@@ -174,8 +174,8 @@
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.version>3.2.15</scalatest.version>
-    <scalatest.spark3.version>3.2.15</scalatest.spark3.version>
+    <scalatest.version>3.1.0</scalatest.version>
+    <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
