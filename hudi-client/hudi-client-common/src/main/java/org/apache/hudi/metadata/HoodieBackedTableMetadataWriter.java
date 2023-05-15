@@ -145,13 +145,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.metrics = Option.empty();
     this.enabledPartitionTypes = new ArrayList<>();
 
+    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
+
     if (dataMetaClient.getTableConfig().isMetadataTableEnabled() || writeConfig.isMetadataTableEnabled()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
 
       try {
-        this.dataMetaClient =
-            HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
         enablePartitions();
         initRegistry();
 

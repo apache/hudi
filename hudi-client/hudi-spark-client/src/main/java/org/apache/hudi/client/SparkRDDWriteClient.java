@@ -324,11 +324,11 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected void initMetadataTable(Option<String> instantTime) {
+  protected void initMetadataTable(WriteOperationType operationType, Option<String> instantTime) {
     // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
     // if it didn't exist before
     // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
-    initializeMetadataTable(instantTime);
+    initializeMetadataTable(operationType, instantTime);
   }
 
   /**
@@ -337,7 +337,7 @@ public class SparkRDDWriteClient<T> extends
    *
    * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
    */
-  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+  private void initializeMetadataTable(WriteOperationType operationType, Option<String> inFlightInstantTimestamp) {
     if (!config.isMetadataTableEnabled()) {
       return;
     }
@@ -346,7 +346,7 @@ public class SparkRDDWriteClient<T> extends
             context, Option.empty(), inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
         // Optimize the metadata table which involves compacton. cleaning, etc. This should only be called from writers.
-        switch (getOperationType()) {
+        switch (operationType) {
           case INSERT:
           case INSERT_PREPPED:
           case UPSERT:
