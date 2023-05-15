@@ -18,11 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.VisibleForTesting;
+
 import org.apache.parquet.hadoop.ParquetFileWriter;
+import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
@@ -32,6 +36,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+import static org.apache.parquet.hadoop.ParquetOutputFormat.BLOOM_FILTER_ENABLED;
+import static org.apache.parquet.hadoop.ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV;
 import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED;
 import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_WRITER_VERSION;
 
@@ -39,7 +45,7 @@ import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_WRITER_VERSION;
  * Base class of Hudi's custom {@link ParquetWriter} implementations
  *
  * @param <R> target type of the object being written into Parquet files (for ex,
- *           {@code IndexedRecord}, {@code InternalRow})
+ *            {@code IndexedRecord}, {@code InternalRow})
  */
 public abstract class HoodieBaseParquetWriter<R> implements Closeable {
 
@@ -57,7 +63,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       }
 
       @Override
-      protected WriteSupport getWriteSupport(org.apache.hadoop.conf.Configuration conf) {
+      protected WriteSupport getWriteSupport(Configuration conf) {
         return parquetConfig.getWriteSupport();
       }
     };
@@ -71,9 +77,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withValidation(DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(DEFAULT_WRITER_VERSION);
     parquetWriterbuilder.withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    parquetWriterbuilder.withBloomFilterEnabled("b", true);
-
-
+    handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getHadoopConf());
 
     parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
@@ -83,6 +87,22 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.recordCountForNextSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+  }
+
+  protected void handleParquetBloomFilters(ParquetWriter.Builder parquetWriterbuilder, Configuration hadoopConf) {
+    parquetWriterbuilder.withBloomFilterEnabled(ParquetOutputFormat.getBloomFilterEnabled(hadoopConf));
+    // inspired from https://github.com/apache/parquet-mr/blob/master/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/ParquetOutputFormat.java#L458-L464
+    hadoopConf.forEach(conf -> {
+      String key = conf.getKey();
+      if (key.startsWith(BLOOM_FILTER_ENABLED)) {
+        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
+        parquetWriterbuilder.withBloomFilterEnabled(column, Boolean.valueOf(conf.getValue()));
+      }
+      if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
+        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
+        parquetWriterbuilder.withBloomFilterNDV(column, Long.valueOf(conf.getValue(), -1));
+      }
+    });
   }
 
   public boolean canWrite() {
