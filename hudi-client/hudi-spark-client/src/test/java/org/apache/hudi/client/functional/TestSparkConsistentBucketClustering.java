@@ -18,11 +18,14 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -33,10 +36,11 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -52,6 +56,7 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
@@ -147,6 +152,59 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
         Assertions.assertTrue(fs.getLogFiles().count() == 0);
       });
     });
+  }
+
+  /**
+   * Test running archival after clustering
+   * @throws IOException
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testLoadMetadata(boolean isCommitFilePresent) throws IOException {
+    final int maxFileSize = 5120;
+    final int targetBucketNum = 14;
+    setup(maxFileSize);
+    writeClient.getConfig().setValue(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4");
+    writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTime, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    writeClient.clean();
+    HoodieTimelineArchiver hoodieTimelineArchiver = new HoodieTimelineArchiver(writeClient.getConfig(), table);
+    hoodieTimelineArchiver.archiveIfRequired(context);
+    Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
+      if (!isCommitFilePresent) {
+        Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), p);
+        try {
+          Arrays.stream(table.getMetaClient().getFs().listStatus(metadataPath)).forEach(fl -> {
+            if (fl.getPath().getName().contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
+              try {
+                // delete commit marker to test recovery job
+                table.getMetaClient().getFs().delete(fl.getPath());
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            }
+          });
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
+      Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
+    });
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    Assertions.assertEquals(2080, readRecords(dataGen.getPartitionPaths()).size());
   }
 
   /**

@@ -27,7 +27,7 @@ import java.util.function.Supplier
 class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "cmd", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "cmd", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -88,7 +88,7 @@ class HelpProcedure extends BaseProcedure with ProcedureBuilder with Logging {
         result.append(tab)
           .append(lengthFormat(param.name)).append(tab)
           .append(lengthFormat(param.dataType.typeName)).append(tab)
-          .append(lengthFormat(param.default.toString)).append(tab)
+          .append(lengthFormat(String.valueOf(param.default))).append(tab)
           .append(lengthFormat(param.required.toString)).append(line)
       })
       result.append("outputType:").append(line)

@@ -124,7 +124,6 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
       lock.writeLock().unlock();
     }
     LOG.info(getLogMessage(LockState.ALREADY_RELEASED));
-    LOCK_INSTANCE_PER_BASEPATH.remove(basePath);
   }
 
   private String getLogMessage(LockState state) {

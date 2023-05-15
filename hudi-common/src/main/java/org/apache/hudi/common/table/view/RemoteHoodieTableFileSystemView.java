@@ -74,6 +74,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
   public static final String LATEST_SLICES_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
+  public static final String ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL =
+      String.format("%s/%s", BASE_URL, "slices/all/beforeoron/latest/");
 
   public static final String PENDING_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "compactions/pending/");
   public static final String PENDING_LOG_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "logcompactions/pending/");
@@ -115,6 +117,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
+  public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
 
   public static final String PARTITION_PARAM = "partition";
   public static final String BASEPATH_PARAM = "basepath";
@@ -357,6 +360,24 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(BASEPATH_PARAM, basePath);
+    paramsMap.put(MAX_INSTANT_PARAM, maxCommitTime);
+
+    try {
+      Map<String, List<FileSliceDTO>> fileSliceMap = executeRequest(ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
+          new TypeReference<Map<String, List<FileSliceDTO>>>() {}, RequestMethod.GET);
+      return fileSliceMap.entrySet().stream().collect(
+          Collectors.toMap(
+              Map.Entry::getKey,
+              entry -> entry.getValue().stream().map(FileSliceDTO::toFileSlice)));
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     try {
@@ -447,6 +468,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       // refresh the local timeline first.
       this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
       return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Void loadAllPartitions() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      executeRequest(LOAD_ALL_PARTITIONS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+      return null;
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

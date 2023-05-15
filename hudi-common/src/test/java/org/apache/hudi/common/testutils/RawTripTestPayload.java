@@ -20,19 +20,28 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificDatumWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,13 +50,20 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
  * src/test/resources/schema1.
  */
 public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
 
-  private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  public static final String JSON_DATA_SCHEMA_STR = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}";
+  public static final Schema JSON_DATA_SCHEMA = new Schema.Parser().parse(JSON_DATA_SCHEMA_STR);
+
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
   private byte[] jsonDataCompressed;
@@ -76,23 +92,52 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.dataSize = jsonData.length();
     Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
     this.rowKey = jsonRecordMap.get("_row_key").toString();
-    this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+    this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
+    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
+  }
+
+  public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
+    this.orderingVal = orderingVal;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out);
+      DatumWriter w = new SpecificDatumWriter<>(record.getSchema());
+      w.write(record, jsonEncoder);
+      jsonEncoder.flush();
+      out.flush();
+      String jsonData = out.toString("UTF-8");
+      Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
+      for (Schema.Field f : record.getSchema().getFields()) {
+        Object fieldValue = jsonRecordMap.get(f.name());
+        if (fieldValue instanceof Map) {
+          Object unionValue = ((Map<?, ?>) fieldValue).values().iterator().next();
+          jsonRecordMap.put(f.name(), unionValue);
+        }
+      }
+      jsonData = OBJECT_MAPPER.writeValueAsString(jsonRecordMap);
+      this.jsonDataCompressed = compressData(jsonData);
+      this.dataSize = jsonData.length();
+      this.rowKey = jsonRecordMap.get("_row_key").toString();
+      this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
+      this.isDeleted = false;
+    } catch (IOException e) {
+      throw new IllegalStateException("Fail to instantiate.", e);
+    }
   }
 
   /**
    * @deprecated PLEASE READ THIS CAREFULLY
-   *
+   * <p>
    * Converting properly typed schemas into JSON leads to inevitable information loss, since JSON
    * encodes only representation of the record (with no schema accompanying it), therefore occasionally
    * losing nuances of the original data-types provided by the schema (for ex, with 1.23 literal it's
    * impossible to tell whether original type was Double or Decimal).
-   *
+   * <p>
    * Multiplied by the fact that Spark 2 JSON schema inference has substantial gaps in it (see below),
    * it's **NOT RECOMMENDED** to use this method. Instead please consider using {@link AvroConversionUtils#createDataframe()}
    * method accepting list of {@link HoodieRecord} (as produced by the {@link HoodieTestDataGenerator}
    * to create Spark's {@code Dataframe}s directly.
-   *
+   * <p>
    * REFs
    * https://medium.com/swlh/notes-about-json-schema-handling-in-spark-sql-be1e7f13839d
    */
@@ -117,6 +162,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
     return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
         .collect(Collectors.toList());
+  }
+
+  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records) throws IOException {
+    return asDefaultPayloadRecords(records, false);
+  }
+
+  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records, boolean isDeleted) throws IOException {
+    List<HoodieRecord> convertedRecords = new ArrayList<>();
+    for (HoodieRecord r : records) {
+      GenericRecord avroData = (GenericRecord) ((RawTripTestPayload) r.getData()).getRecordToInsert(AVRO_SCHEMA);
+      avroData.put("_hoodie_is_deleted", isDeleted);
+      convertedRecords.add(
+          createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
+              "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
+              false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
+    }
+    return convertedRecords;
   }
 
   public String getPartitionPath() {
@@ -148,6 +210,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  @Override
+  public Comparable<?> getOrderingValue() {
+    return orderingVal;
+  }
+
   public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
     MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
     return jsonConverter.convert(getJsonData(), schema);
@@ -168,6 +235,10 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
 
   public String getJsonData() throws IOException {
     return unCompressData(jsonDataCompressed);
+  }
+
+  public Map<String, Object> getJsonDataAsMap() throws IOException {
+    return OBJECT_MAPPER.readValue(getJsonData(), Map.class);
   }
 
   private byte[] compressData(String jsonData) throws IOException {
@@ -196,4 +267,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  public HoodieRecord toHoodieRecord() {
+    return new HoodieAvroRecord(new HoodieKey(getRowKey(), getPartitionPath()), this);
+  }
+
+  public static String extractPartitionFromTimeField(String timeField) {
+    return timeField.split("T")[0].replace("-", "/");
+  }
 }

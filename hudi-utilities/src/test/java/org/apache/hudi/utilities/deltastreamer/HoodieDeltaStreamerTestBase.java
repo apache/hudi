@@ -320,10 +320,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+                                         String propsFileName, String parquetSourceRoot, boolean addCommonProps,
+                                         String partitionPath, String emptyBatchParam) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
+        partitionPath, emptyBatchParam, null);
+
+  }
+
+  protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
-                                       String partitionPath, String emptyBatchParam) throws IOException {
+                                       String partitionPath, String emptyBatchParam, TypedProperties extraProps) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
-    TypedProperties parquetProps = new TypedProperties();
+    TypedProperties parquetProps = new TypedProperties(extraProps);
 
     if (addCommonProps) {
       populateCommonProps(parquetProps, basePath);

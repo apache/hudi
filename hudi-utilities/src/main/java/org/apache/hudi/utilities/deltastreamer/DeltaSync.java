@@ -70,12 +70,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -106,8 +107,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -127,6 +130,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -150,6 +154,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
@@ -193,10 +198,7 @@ public class DeltaSync implements Serializable, Closeable {
    */
   private transient Option<Transformer> transformer;
 
-  /**
-   * Extract the key for the target table.
-   */
-  private KeyGenerator keyGenerator;
+  private String keyGenClassName;
 
   /**
    * Filesystem used.
@@ -260,7 +262,6 @@ public class DeltaSync implements Serializable, Closeable {
   private transient HoodieIngestionMetrics metrics;
   private transient HoodieMetrics hoodieMetrics;
 
-
   /**
    * Unique identifier of the deltastreamer
    * */
@@ -271,6 +272,8 @@ public class DeltaSync implements Serializable, Closeable {
    * NOT the last checkpoint in the timeline.
    */
   private transient String latestCheckpointWritten;
+
+  private final boolean autoGenerateRecordKeys;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
@@ -284,7 +287,8 @@ public class DeltaSync implements Serializable, Closeable {
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
-    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
+    this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     refreshTimeline();
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
@@ -365,7 +369,7 @@ public class DeltaSync implements Serializable, Closeable {
   private void initializeEmptyTable() throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
@@ -376,8 +380,7 @@ public class DeltaSync implements Serializable, Closeable {
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-        .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            keyGenerator.getClass().getName()))
+        .setKeyGeneratorClassProp(keyGenClassName)
         .setPreCombineField(cfg.sourceOrderingField)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
@@ -399,8 +402,9 @@ public class DeltaSync implements Serializable, Closeable {
 
     // Refresh Timeline
     refreshTimeline();
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt, instantTime);
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
@@ -424,15 +428,24 @@ public class DeltaSync implements Serializable, Closeable {
         }
       }
 
-      // complete the pending clustering before writing to sink
-      if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+      // complete the pending compaction before writing to sink
+      if (cfg.retryLastPendingInlineCompactionJob && getHoodieClientConfig(this.schemaProvider).inlineCompactionEnabled()) {
+        Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
+        if (pendingCompactionInstant.isPresent()) {
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
+          writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
+          refreshTimeline();
+          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
+        }
+      } else if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+        // complete the pending clustering before writing to sink
         Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
         if (pendingClusteringInstant.isPresent()) {
           writeClient.cluster(pendingClusteringInstant.get());
         }
       }
 
-      result = writeToSink(recordsFromSource,
+      result = writeToSink(instantTime, recordsFromSource,
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
 
@@ -448,6 +461,14 @@ public class DeltaSync implements Serializable, Closeable {
     return Option.empty();
   }
 
+  private Option<String> getLastPendingCompactionInstant(Option<HoodieTimeline> commitTimelineOpt) {
+    if (commitTimelineOpt.isPresent()) {
+      Option<HoodieInstant> pendingCompactionInstant = commitTimelineOpt.get().filterPendingCompactionTimeline().lastInstant();
+      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().getTimestamp()) : Option.empty();
+    }
+    return Option.empty();
+  }
+
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
@@ -456,14 +477,14 @@ public class DeltaSync implements Serializable, Closeable {
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitsTimelineOpt) throws IOException {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitsTimelineOpt, String instantTime) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
     } else {
       // initialize the table for the first time.
-      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -474,8 +495,7 @@ public class DeltaSync implements Serializable, Closeable {
           .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-              keyGenerator.getClass().getName()))
+          .setKeyGeneratorClassProp(keyGenClassName)
           .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
               HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .setShouldDropPartitionColumns(isDropPartitionColumns())
@@ -493,7 +513,7 @@ public class DeltaSync implements Serializable, Closeable {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
-        sourceDataToSync = fetchFromSource(resumeCheckpointStr);
+        sourceDataToSync = fetchFromSource(resumeCheckpointStr, instantTime);
       } catch (HoodieSourceTimeoutException e) {
         if (curRetryCount >= maxRetryCount) {
           throw e;
@@ -510,7 +530,7 @@ public class DeltaSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr) {
+  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr, String instantTime) {
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
         && HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
@@ -606,25 +626,42 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    Set<String> partitionColumns = getPartitionColumns(keyGenerator, props);
+    Set<String> partitionColumns = getPartitionColumns(props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
 
     JavaRDD<HoodieRecord> records;
     SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
     SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns() ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
     if (recordType == HoodieRecordType.AVRO) {
-      records = avroRDD.map(record -> {
-        GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(record, partitionColumns) : record;
-        HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-            (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
-                KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
-            : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-        return new HoodieAvroRecord<>(keyGenerator.getKey(record), payload);
-      });
+      records = avroRDD.mapPartitions(
+          (FlatMapFunction<Iterator<GenericRecord>, HoodieRecord>) genericRecordIterator -> {
+            if (autoGenerateRecordKeys) {
+              props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
+              props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
+            }
+            BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+            List<HoodieRecord> avroRecords = new ArrayList<>();
+            while (genericRecordIterator.hasNext()) {
+              GenericRecord genRec = genericRecordIterator.next();
+              HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
+              GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
+              HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+                  (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
+                      KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                      Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
+                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+              avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
+            }
+            return avroRecords.iterator();
+          });
     } else if (recordType == HoodieRecordType.SPARK) {
       // TODO we should remove it if we can read InternalRow from source.
       records = avroRDD.mapPartitions(itr -> {
+        if (autoGenerateRecordKeys) {
+          props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
+          props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
+        }
+        BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
         StructType baseStructType = AvroConversionUtils.convertAvroSchemaToStructType(processedAvroSchema.get());
         StructType targetStructType = isDropPartitionColumns() ? AvroConversionUtils
             .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
@@ -632,9 +669,8 @@ public class DeltaSync implements Serializable, Closeable {
 
         return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
           InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
-          SparkKeyGeneratorInterface keyGenerator = (SparkKeyGeneratorInterface) this.keyGenerator;
-          String recordKey = keyGenerator.getRecordKey(row, baseStructType).toString();
-          String partitionPath = keyGenerator.getPartitionPath(row, baseStructType).toString();
+          String recordKey = builtinKeyGenerator.getRecordKey(row, baseStructType).toString();
+          String partitionPath = builtinKeyGenerator.getPartitionPath(row, baseStructType).toString();
           return new HoodieSparkRecord(new HoodieKey(recordKey, partitionPath),
               HoodieInternalRowUtils.getCachedUnsafeProjection(baseStructType, targetStructType).apply(row), targetStructType, false);
         });
@@ -750,13 +786,14 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
+   * @param instantTime         instant time to use for ingest.
    * @param records             Input Records
    * @param checkpointStr       Checkpoint String
    * @param metrics             Metrics
    * @param overallTimerContext Timer Context
    * @return Option Compaction instant if one is scheduled
    */
-  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
+  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(String instantTime, JavaRDD<HoodieRecord> records, String checkpointStr,
                                                                  HoodieIngestionMetrics metrics,
                                                                  Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
@@ -766,9 +803,7 @@ public class DeltaSync implements Serializable, Closeable {
     }
 
     boolean isEmpty = records.isEmpty();
-
-    // try to start a new commit
-    String instantTime = startCommit();
+    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
     LOG.info("Starting commit  : " + instantTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
@@ -882,18 +917,20 @@ public class DeltaSync implements Serializable, Closeable {
    *
    * @return Instant time of the commit
    */
-  private String startCommit() {
+  private String startCommit(String instantTime, boolean retryEnabled) {
     final int maxRetries = 2;
     int retryNum = 1;
     RuntimeException lastException = null;
     while (retryNum <= maxRetries) {
       try {
-        String instantTime = HoodieActiveTimeline.createNewInstantTime();
         String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
         writeClient.startCommitWithTime(instantTime, commitActionType);
         return instantTime;
       } catch (IllegalArgumentException ie) {
         lastException = ie;
+        if (!retryEnabled) {
+          throw ie;
+        }
         LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
         retryNum++;
         try {
@@ -902,6 +939,7 @@ public class DeltaSync implements Serializable, Closeable {
           // No-Op
         }
       }
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
     }
     throw lastException;
   }
@@ -964,7 +1002,7 @@ public class DeltaSync implements Serializable, Closeable {
   private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, JavaRDD<HoodieRecord> records) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (isDropPartitionColumns()) {
-      targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(keyGenerator, props));
+      targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(props));
     }
     registerAvroSchemas(sourceSchema, targetSchema);
     final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
@@ -1195,12 +1233,11 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Get the partition columns as a set of strings.
    *
-   * @param keyGenerator KeyGenerator
    * @param props TypedProperties
    * @return Set of partition columns.
    */
-  private Set<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
+  private Set<String> getPartitionColumns(TypedProperties props) {
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
   }
 

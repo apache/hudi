@@ -21,6 +21,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
@@ -32,7 +33,6 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
@@ -515,7 +515,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     verifyShow(hudiIncDF2)
     verifyShow(hudiIncDF1Skipmerge)
 
-    val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
+    val record3 = dataGen.generateUpdatesWithTimestamp("003", hoodieRecords1, -1)
     val inputDF3 = toDataset(spark, record3)
     inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
@@ -1055,10 +1055,10 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.compact.inline" -> "false",
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
-      Config.TIMESTAMP_TYPE_FIELD_PROP -> "DATE_STRING",
-      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
-      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
-      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+      TIMESTAMP_TYPE_FIELD.key -> "DATE_STRING",
+      TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyy/MM/dd",
+      TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+8:00",
+      TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy-MM-dd"
     ) ++ writeOpts
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
