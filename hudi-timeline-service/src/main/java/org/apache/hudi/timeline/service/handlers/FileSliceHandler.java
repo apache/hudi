@@ -141,4 +141,9 @@ public class FileSliceHandler extends Handler {
     viewManager.clearFileSystemView(basePath);
     return true;
   }
+
+  public boolean loadAllPartitions(String basePath) {
+    viewManager.getFileSystemView(basePath).loadAllPartitions();
+    return true;
+  }
 }

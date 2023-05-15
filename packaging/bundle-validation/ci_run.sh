@@ -31,7 +31,7 @@ HUDI_VERSION=$1
 JAVA_RUNTIME_VERSION=$2
 
 # choose versions based on build profiles
-if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
+if [[ ${SPARK_RUNTIME} == 'spark2.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=2.3.9
   DERBY_VERSION=10.10.2.0
@@ -41,7 +41,7 @@ if [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1136hive239spark248
-elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
+elif [[ ${SPARK_RUNTIME} == 'spark3.1.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -51,7 +51,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1136hive313spark313
-elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
+elif [[ ${SPARK_RUNTIME} == 'spark3.2.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -61,7 +61,7 @@ elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1146hive313spark323
-elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
+elif [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -71,6 +71,16 @@ elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1153hive313spark331
+elif [[ ${SPARK_RUNTIME} == 'spark3.3.2' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.15.3
+  SPARK_VERSION=3.3.2
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1153hive313spark332
 fi
 
 # Copy bundle jars to temp dir for mounting
