@@ -969,6 +969,7 @@ public class DeltaSync implements Serializable, Closeable {
 
       //Collect exceptions in list because we want all sync to run. Then we can throw
       List<HoodieException> metaSyncExceptions = new ArrayList<>();
+      List<String> implsFailed = new ArrayList<>();
       for (String impl : syncClientToolClasses) {
         try {
           Timer.Context syncContext = metrics.getMetaSyncTimerContext();
@@ -978,10 +979,11 @@ public class DeltaSync implements Serializable, Closeable {
         } catch (HoodieException e) {
           LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
           metaSyncExceptions.add(e);
+          implsFailed.add(impl.trim());
         }
       }
       if (!metaSyncExceptions.isEmpty()) {
-        throw new HoodieDeltaStreamerMetaSyncException("Meta sync failure", SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
+        throw new HoodieDeltaStreamerMetaSyncException("Meta sync failure for " + String.join(",", implsFailed), SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
       }
     }
   }
