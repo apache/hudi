@@ -158,10 +158,14 @@ public class HoodieTestUtils {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+    if (keyGenerator != null) {
+      props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
+      props.put("hoodie.datasource.write.partitionpath.field", "datestr");
+    }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 

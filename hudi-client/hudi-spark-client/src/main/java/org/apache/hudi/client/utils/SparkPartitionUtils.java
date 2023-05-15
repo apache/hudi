@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.bootstrap;
+package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
@@ -29,11 +29,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
 import org.apache.spark.sql.internal.SQLConf;
 
-public class PartitionUtils {
+public class SparkPartitionUtils {
 
   public static Object[] getPartitionFieldVals(Option<String[]> partitionFields,
                                                String partitionPath,
-                                               String bootstrapBasePath,
+                                               String basePath,
                                                Schema writerSchema,
                                                Configuration hadoopConf) {
     if (!partitionFields.isPresent()) {
@@ -43,7 +43,7 @@ public class PartitionUtils {
     return HoodieSparkUtils.parsePartitionColumnValues(
         partitionFields.get(),
         partitionPath,
-        new CachingPath(bootstrapBasePath),
+        new CachingPath(basePath),
         AvroConversionUtils.convertAvroSchemaToStructType(writerSchema),
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
         sparkParsePartitionUtil,

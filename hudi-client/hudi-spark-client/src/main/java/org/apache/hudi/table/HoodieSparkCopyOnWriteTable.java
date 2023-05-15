@@ -30,7 +30,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.bootstrap.PartitionUtils;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -227,8 +227,8 @@ public class HoodieSparkCopyOnWriteTable<T>
       Object[] partitionValues = new Object[0];
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
         partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-        partitionValues = PartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-            getMetaClient().getTableConfig().getBootstrapBasePath().orElse(null),
+        partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
             upsertHandle.getWriterSchema(), getHadoopConf());
       }
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle, partitionFields, partitionValues);

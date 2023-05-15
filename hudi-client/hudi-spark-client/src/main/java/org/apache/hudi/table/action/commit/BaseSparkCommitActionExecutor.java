@@ -19,7 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.bootstrap.PartitionUtils;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -372,8 +372,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       Object[] partitionValues = new Object[0];
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
         partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
-        partitionValues = PartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-            table.getMetaClient().getTableConfig().getBootstrapBasePath().orElse(null),
+        partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+            table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
             upsertHandle.getWriterSchema(), table.getHadoopConf());
       }
 

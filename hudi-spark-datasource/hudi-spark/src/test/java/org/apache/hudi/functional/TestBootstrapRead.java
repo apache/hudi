@@ -97,7 +97,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     //TODO: add dash partitions false with [HUDI-4944]
-    Boolean[] dashPartitions = {true};
+    Boolean[] dashPartitions = {true/*,false*/};
     String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     String[] bootstrapType = {"full", "metadata", "mixed"};
     Integer[] nPartitions = {0, 1, 2};
