@@ -136,8 +136,12 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
     return Stream.of(
         Arguments.of(COPY_ON_WRITE, PartialUpdateAvroPayload.class),
         Arguments.of(COPY_ON_WRITE, DefaultHoodieRecordPayload.class),
+        Arguments.of(COPY_ON_WRITE, MySqlDebeziumAvroPayload.class),
+        Arguments.of(COPY_ON_WRITE, PostgresDebeziumAvroPayload.class),
         Arguments.of(MERGE_ON_READ, PartialUpdateAvroPayload.class),
-        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class)
+        Arguments.of(MERGE_ON_READ, DefaultHoodieRecordPayload.class),
+        Arguments.of(MERGE_ON_READ, MySqlDebeziumAvroPayload.class),
+        Arguments.of(MERGE_ON_READ, PostgresDebeziumAvroPayload.class)
     );
   }
 

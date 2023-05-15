@@ -97,7 +97,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     return isDebeziumDeleteRecord(record) || super.isDeleteRecord(record);
   }
 
-  private boolean isDebeziumDeleteRecord(GenericRecord record) {
+  private static boolean isDebeziumDeleteRecord(GenericRecord record) {
     Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
     return value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
   }
