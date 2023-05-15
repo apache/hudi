@@ -110,7 +110,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
 
-          checkAnswer(s"select id, name, price, ts from hudi_table_changes('$tableName', 'latest_state', '20170901080000')")(
+          checkAnswer(s"select id, name, price, ts from hudi_table_changes('$tableName', 'latest_state', 'earliest')")(
             Seq(1, "a1", 10.0, 1000),
             Seq(2, "a2", 20.0, 1000),
             Seq(3, "a3", 30.0, 1000)

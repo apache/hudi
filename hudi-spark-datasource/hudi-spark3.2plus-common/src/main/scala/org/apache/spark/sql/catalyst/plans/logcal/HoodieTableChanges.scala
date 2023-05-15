@@ -35,24 +35,31 @@ object HoodieTableChanges {
   val FUNC_NAME = "hudi_table_changes";
 
   def parseOptions(exprs: Seq[Expression]): (String, Map[String, String]) = {
-    val args = exprs.map(_.eval().toString)
+    val args: Array[String] = exprs.map(_.eval().toString)
 
-    if args.size < 3 {
+    if (args.size < 3) {
       throw new AnalysisException(s"Too few arguments for function `$FUNC_NAME`")
-    } else if args.size > 4 {
+    } else if (args.size > 4) {
       throw new AnalysisException(s"Too many arguments for function `$FUNC_NAME`")
     }
 
     val identifier = args.head
-    val queryMode = args(1)
-    val startInstantTime = args.(2)
-    val endInstantTime = args.drop(3).headOption.map(_ => Map("hoodie.datasource.read.end.instanttime" -> _))
+    val queryType = args(1)
+    val startInstantTime = args(2)
+    val endInstantTimeOpt = args.drop(3).headOption.map(x => "hoodie.datasource.read.end.instanttime" -> x)
 
-    val opts = queryType match {
+    val queryTypeOpt = queryType match {
       case "latest_state" | "cdc" => Map("hoodie.datasource.query.type" -> queryType)
       case _ =>
         throw new AnalysisException(s"'hudi_table_changes' doesn't support `$queryType`")
-    } ++ endOffset
+    }
+
+    val startInstantTimeOpt = startInstantTime match {
+      case "earliest" => Map.empty[String, String]
+      case _ => Map("hoodie.datasource.read.start.instanttime" -> startInstantTime)
+    }
+
+    val opts: Map[String, String] = queryTypeOpt ++ startInstantTimeOpt ++ endInstantTimeOpt
 
     (identifier, opts)
   }
