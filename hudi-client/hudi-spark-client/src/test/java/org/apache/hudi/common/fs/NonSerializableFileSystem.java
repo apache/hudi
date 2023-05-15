@@ -33,7 +33,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
- * A non-serializable file system for testing only. See {@link TestHoodieSerializableFileStatus}
+ * A non-serializable file system for testing only. See {@link TestHoodieFileStatusSerialization}
  * Can't make this an inner class as the outer class would also be non-serializable and invalidate
  * the purpose of testing
  */
