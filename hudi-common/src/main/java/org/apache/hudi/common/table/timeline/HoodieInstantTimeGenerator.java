@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
@@ -146,7 +147,8 @@ public class HoodieInstantTimeGenerator {
   }
 
   private static ZoneId getZoneId() {
-    return commitTimeZone.equals(HoodieTimelineTimeZone.LOCAL)
+    HoodieTimelineTimeZone timelineTimezone = new HoodieTableConfig().getTimelineTimezone();
+    return timelineTimezone.equals(HoodieTimelineTimeZone.LOCAL)
         ? ZoneId.systemDefault()
         : ZoneId.of(commitTimeZone.getTimeZone().toUpperCase());
   }
