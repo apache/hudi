@@ -151,7 +151,7 @@ public class TestKafkaOffsetGen {
   public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
-    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", 1000), 2));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     String lastCheckpointString = testTopicName + ",0:250,1:249";
     kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
