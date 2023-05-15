@@ -81,9 +81,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
-  private final HoodieTable<T, I, K, O> hoodieTable;
-  private final HoodieWriteConfig config;
-  private final transient HoodieEngineContext context;
+  private HoodieTable<T, I, K, O> hoodieTable;
+  private HoodieWriteConfig config;
+  private transient HoodieEngineContext context;
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -211,6 +211,21 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
     return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+  }
+
+  /**
+   *  Verify whether file slice exists in savepointedFiles, check both base file and log files
+   */
+  private boolean isFileSliceExistInSavepointedFiles(FileSlice fs, List<String> savepointedFiles) {
+    if (fs.getBaseFile().isPresent() && savepointedFiles.contains(fs.getBaseFile().get().getFileName())) {
+      return true;
+    }
+    for (HoodieLogFile hoodieLogFile : fs.getLogFiles().collect(Collectors.toList())) {
+      if (savepointedFiles.contains(hoodieLogFile.getFileName())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

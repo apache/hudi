@@ -27,9 +27,9 @@ import java.util.function.Supplier
 class CopyToTempView extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "query_type", DataTypes.StringType, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL),
-    ProcedureParameter.required(2, "view_name", DataTypes.StringType, None),
+    ProcedureParameter.required(2, "view_name", DataTypes.StringType),
     ProcedureParameter.optional(3, "begin_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(4, "end_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(5, "as_of_instant", DataTypes.StringType, ""),

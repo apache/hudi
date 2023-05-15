@@ -53,6 +53,11 @@ public class ConfigGroups {
         "Index Configs",
         "Configurations that control indexing behavior, "
             + "which tags incoming records as either inserts or updates to older records."),
+    KEY_GENERATOR(
+        "Key Generator Configs",
+        "Hudi maintains keys (record key + partition path) for uniquely identifying a "
+            + "particular record. These configs allow developers to setup the Key generator class "
+            + "that extracts these out of incoming records."),
     LOCK(
         "Lock Configs",
         "Configurations that control locking mechanisms required for concurrency control "

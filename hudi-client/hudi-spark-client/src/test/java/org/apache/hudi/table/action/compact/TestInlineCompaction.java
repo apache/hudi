@@ -135,7 +135,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       requestInstant = HoodieActiveTimeline.createNewInstantTime();
       try {
         scheduleCompaction(requestInstant, writeClient, cfg);
-        Assertions.fail();
+        Object fail = Assertions.fail();
       } catch (AssertionError error) {
         //should be here
       }

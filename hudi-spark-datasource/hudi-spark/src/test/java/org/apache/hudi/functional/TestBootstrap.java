@@ -247,7 +247,6 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             .build())
         .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
             .withBootstrapBasePath(bootstrapBasePath)
-            .withBootstrapKeyGenClass(keyGeneratorClass)
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
