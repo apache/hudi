@@ -86,7 +86,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
           "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_0) {
           "org.apache.spark.sql.hudi.Spark30ResolveHudiAlterTableCommand"
-        }else {
+        } else {
           throw new IllegalStateException("Unsupported Spark version")
         }
 

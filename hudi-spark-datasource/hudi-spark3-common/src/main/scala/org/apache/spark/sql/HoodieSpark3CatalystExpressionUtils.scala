@@ -18,11 +18,8 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression}
-
 abstract class HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
-
   def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
-
   def extractPredicatesWithinOutputSet(condition: Expression,
                                                 outputSet: AttributeSet): Option[Expression]
 }
