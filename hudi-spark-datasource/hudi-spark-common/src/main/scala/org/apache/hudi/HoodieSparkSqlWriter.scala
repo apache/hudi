@@ -1090,10 +1090,18 @@ object HoodieSparkSqlWriter {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
     val recordType = config.getRecordMerger.getRecordType
 
-    val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
-      operation.equals(WriteOperationType.UPSERT) ||
-      parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
+    val shouldCombine = if (WriteOperationType.isInsert(operation)) {
+      parameters(INSERT_DROP_DUPS.key()).toBoolean ||
+        parameters.getOrElse(
+            HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
+            HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
+          ).toBoolean
+    } else if (WriteOperationType.isUpsert(operation)) {
+      parameters.getOrElse(
+          HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key(),
+          HoodieWriteConfig.COMBINE_BEFORE_UPSERT.defaultValue()
+        ).toBoolean
+    } else {true}
 
     // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
     //       (due to containing cyclic refs), therefore we have to convert it to string before
