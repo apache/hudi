@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -267,8 +268,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
-        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
+        if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -339,7 +339,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
-          if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
+          if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
             continue;
           }
@@ -433,7 +433,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+        .filter(slice -> !isFileSliceExistInSavepointedFiles(slice, savepointedFiles))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
   }
