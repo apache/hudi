@@ -64,7 +64,8 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
-    Option<IndexedRecord> insertValue = getInsertRecord(schema);
+    Option<IndexedRecord> insertValue = (recordBytes.length == 0)
+        ? Option.empty() : Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
     if (!insertValue.isPresent()) {
       return Option.empty();
     }
@@ -81,8 +82,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     boolean delete = false;
     if (insertRecord instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertRecord;
-      Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
-      delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
+      delete = isDebeziumDeleteRecord(record);
     }
 
     return delete ? Option.empty() : Option.of(insertRecord);
@@ -90,5 +90,15 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   private Option<IndexedRecord> getInsertRecord(Schema schema) throws IOException {
     return super.getInsertValue(schema);
+  }
+
+  @Override
+  protected boolean isDeleteRecord(GenericRecord record) {
+    return isDebeziumDeleteRecord(record) || super.isDeleteRecord(record);
+  }
+
+  private static boolean isDebeziumDeleteRecord(GenericRecord record) {
+    Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
+    return value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
   }
 }
