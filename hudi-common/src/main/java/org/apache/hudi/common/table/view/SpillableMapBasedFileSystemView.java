@@ -195,12 +195,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
   @Override
   Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles() {
-    bootstrapMapLock.readLock().lock();
-    try {
-      return ((ExternalSpillableMap) fgIdToBootstrapBaseFile).valueStream();
-    } finally {
-      bootstrapMapLock.readLock().unlock();
-    }
+    return ((ExternalSpillableMap) fgIdToBootstrapBaseFile).valueStream();
   }
 
   @Override
