@@ -35,7 +35,7 @@ object HoodieTableChanges {
   val FUNC_NAME = "hudi_table_changes";
 
   def parseOptions(exprs: Seq[Expression]): (String, Map[String, String]) = {
-    val args: Array[String] = exprs.map(_.eval().toString)
+    val args = exprs.map(_.eval().toString)
 
     if (args.size < 3) {
       throw new AnalysisException(s"Too few arguments for function `$FUNC_NAME`")
