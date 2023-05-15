@@ -25,7 +25,6 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -40,18 +39,19 @@ import scala.collection.JavaConverters._
 /**
  * A serializer to serialize data in catalyst format to data in avro format.
  *
- * NOTE: This code is borrowed from Spark 3.1.2
+ * NOTE: This code is borrowed from Spark 3.0.2
  * This code is borrowed, so that we can better control compatibility w/in Spark minor
  * branches (3.2.x, 3.1.x, etc)
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroSerializer(rootCatalystType: DataType,
-                                  rootAvroType: Schema,
-                                  nullable: Boolean,
-                                  datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
+private[sql] class AvroSerializer(
+                                   rootCatalystType: DataType,
+                                   rootAvroType: Schema,
+                                   nullable: Boolean,
+                                   datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
 
-  def this(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) = {
+  def this(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) {
     this(rootCatalystType, rootAvroType, nullable,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(
         SQLConf.LEGACY_AVRO_REBASE_MODE_IN_WRITE)))
@@ -61,10 +61,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     converter.apply(catalystData)
   }
 
-  private val dateRebaseFunc = createDateRebaseFuncInWrite(
+  private val dateRebaseFunc = DataSourceUtils.creteDateRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
-  private val timestampRebaseFunc = createTimestampRebaseFuncInWrite(
+  private val timestampRebaseFunc = DataSourceUtils.creteTimestampRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Any = {
@@ -163,7 +163,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         // For backward compatibility, if the Avro type is Long and it is not logical type
         // (the `null` case), output the timestamp value as with millisecond precision.
         case null | _: TimestampMillis => (getter, ordinal) =>
-          DateTimeUtils.microsToMillis(timestampRebaseFunc(getter.getLong(ordinal)))
+          DateTimeUtils.toMillis(timestampRebaseFunc(getter.getLong(ordinal)))
         case _: TimestampMicros => (getter, ordinal) =>
           timestampRebaseFunc(getter.getLong(ordinal))
         case other => throw new IncompatibleSchemaException(
@@ -196,11 +196,6 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         val numFields = st.length
         (getter, ordinal) => structConverter(getter.getStruct(ordinal, numFields))
 
-      case (st: StructType, UNION) =>
-        val unionConverter = newUnionConverter(st, avroType)
-        val numFields = st.length
-        (getter, ordinal) => unionConverter(getter.getStruct(ordinal, numFields))
-
       case (MapType(kt, vt, valueContainsNull), MAP) if kt == StringType =>
         val valueConverter = newConverter(
           vt, resolveNullableType(avroType.getValueType, valueContainsNull))
@@ -228,19 +223,19 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     }
   }
 
-  private def newStructConverter(catalystStruct: StructType, avroStruct: Schema): InternalRow => Record = {
+  private def newStructConverter(
+                                  catalystStruct: StructType, avroStruct: Schema): InternalRow => Record = {
     if (avroStruct.getType != RECORD || avroStruct.getFields.size() != catalystStruct.length) {
       throw new IncompatibleSchemaException(s"Cannot convert Catalyst type $catalystStruct to " +
         s"Avro type $avroStruct.")
     }
-    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(avroStruct)
 
     val (avroIndices: Array[Int], fieldConverters: Array[Converter]) =
       catalystStruct.map { catalystField =>
-        val avroField = avroSchemaHelper.getFieldByName(catalystField.name) match {
-          case Some(f) => f
-          case None => throw new IncompatibleSchemaException(
-            s"Cannot find ${catalystField.name} in Avro schema")
+        val avroField = avroStruct.getField(catalystField.name)
+        if (avroField == null) {
+          throw new IncompatibleSchemaException(
+            s"Cannot convert Catalyst type $catalystStruct to Avro type $avroStruct.")
         }
         val converter = newConverter(catalystField.dataType, resolveNullableType(
           avroField.schema(), catalystField.nullable))
@@ -262,128 +257,20 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       result
   }
 
-  private def newUnionConverter(catalystStruct: StructType, avroUnion: Schema): InternalRow => Any = {
-    if (avroUnion.getType != UNION || !canMapUnion(catalystStruct, avroUnion)) {
-      throw new IncompatibleSchemaException(s"Cannot convert Catalyst type $catalystStruct to " +
-        s"Avro type $avroUnion.")
-    }
-    val nullable = avroUnion.getTypes.size() > 0 && avroUnion.getTypes.get(0).getType == Type.NULL
-    val avroInnerTypes = if (nullable) {
-      avroUnion.getTypes.asScala.tail
-    } else {
-      avroUnion.getTypes.asScala
-    }
-    val fieldConverters = catalystStruct.zip(avroInnerTypes).map {
-      case (f1, f2) => newConverter(f1.dataType, f2)
-    }
-    val numFields = catalystStruct.length
-    (row: InternalRow) =>
-      var i = 0
-      var result: Any = null
-      while (i < numFields) {
-        if (!row.isNullAt(i)) {
-          if (result != null) {
-            throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
-              s"Avro union $avroUnion. Record has more than one optional values set")
-          }
-          result = fieldConverters(i).apply(row, i)
-        }
-        i += 1
-      }
-      if (!nullable && result == null) {
-        throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
-          s"Avro union $avroUnion. Record has no values set, while should have exactly one")
-      }
-      result
-  }
-
-  private def canMapUnion(catalystStruct: StructType, avroStruct: Schema): Boolean = {
-    (avroStruct.getTypes.size() > 0 &&
-      avroStruct.getTypes.get(0).getType == Type.NULL &&
-      avroStruct.getTypes.size() - 1 == catalystStruct.length) || avroStruct.getTypes.size() == catalystStruct.length
-  }
-
-  /**
-   * Resolve a possibly nullable Avro Type.
-   *
-   * An Avro type is nullable when it is a [[UNION]] of two types: one null type and another
-   * non-null type. This method will check the nullability of the input Avro type and return the
-   * non-null type within when it is nullable. Otherwise it will return the input Avro type
-   * unchanged. It will throw an [[UnsupportedAvroTypeException]] when the input Avro type is an
-   * unsupported nullable type.
-   *
-   * It will also log a warning message if the nullability for Avro and catalyst types are
-   * different.
-   */
   private def resolveNullableType(avroType: Schema, nullable: Boolean): Schema = {
-    val (avroNullable, resolvedAvroType) = resolveAvroType(avroType)
-    warnNullabilityDifference(avroNullable, nullable)
-    resolvedAvroType
-  }
-
-  /**
-   * Check the nullability of the input Avro type and resolve it when it is nullable. The first
-   * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
-   * return value is the possibly resolved type.
-   */
-  private def resolveAvroType(avroType: Schema): (Boolean, Schema) = {
-    if (avroType.getType == Type.UNION) {
+    if (avroType.getType == Type.UNION && nullable) {
+      // avro uses union to represent nullable type.
       val fields = avroType.getTypes.asScala
+      assert(fields.length == 2)
       val actualType = fields.filter(_.getType != Type.NULL)
-      if (fields.length == 2 && actualType.length == 1) {
-        (true, actualType.head)
-      } else {
-        // This is just a normal union, not used to designate nullability
-        (false, avroType)
-      }
+      assert(actualType.length == 1)
+      actualType.head
     } else {
-      (false, avroType)
-    }
-  }
-
-  /**
-   * log a warning message if the nullability for Avro and catalyst types are different.
-   */
-  private def warnNullabilityDifference(avroNullable: Boolean, catalystNullable: Boolean): Unit = {
-    if (avroNullable && !catalystNullable) {
-      logWarning("Writing Avro files with nullable Avro schema and non-nullable catalyst schema.")
-    }
-    if (!avroNullable && catalystNullable) {
-      logWarning("Writing Avro files with non-nullable Avro schema and nullable catalyst " +
-        "schema will throw runtime exception if there is a record with null value.")
-    }
-  }
-}
-
-object AvroSerializer {
-
-  // NOTE: Following methods have been renamed in Spark 3.1.3 [1] making [[AvroDeserializer]] implementation
-  //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].
-  //       To make sure this implementation is compatible w/ all Spark versions w/in Spark 3.1.x branch,
-  //       we're preemptively cloned those methods to make sure Hudi is compatible w/ Spark 3.1.2 as well as
-  //       w/ Spark >= 3.1.3
-  //
-  // [1] https://github.com/apache/spark/pull/34978
-
-  def createDateRebaseFuncInWrite(rebaseMode: LegacyBehaviorPolicy.Value,
-                                  format: String): Int => Int = rebaseMode match {
-    case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
-      if (days < RebaseDateTime.lastSwitchGregorianDay) {
-        throw DataSourceUtils.newRebaseExceptionInWrite(format)
+      if (nullable) {
+        logWarning("Writing avro files with non-nullable avro schema with nullable catalyst " +
+          "schema will throw runtime exception if there is a record with null value.")
       }
-      days
-    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseGregorianToJulianDays
-    case LegacyBehaviorPolicy.CORRECTED => identity[Int]
-  }
-
-  def createTimestampRebaseFuncInWrite(rebaseMode: LegacyBehaviorPolicy.Value,
-                                       format: String): Long => Long = rebaseMode match {
-    case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
-      if (micros < RebaseDateTime.lastSwitchGregorianTs) {
-        throw DataSourceUtils.newRebaseExceptionInWrite(format)
-      }
-      micros
-    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseGregorianToJulianMicros
-    case LegacyBehaviorPolicy.CORRECTED => identity[Long]
+      avroType
+    }
   }
 }

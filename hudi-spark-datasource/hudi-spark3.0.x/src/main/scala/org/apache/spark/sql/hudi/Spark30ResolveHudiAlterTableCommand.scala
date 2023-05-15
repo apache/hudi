@@ -22,11 +22,11 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.connector.catalog.CatalogV2Util.failNullType
 import org.apache.spark.sql.connector.catalog.TableChange._
-import org.apache.spark.sql.connector.catalog.{CatalogV2Util, TableChange}
+import org.apache.spark.sql.connector.catalog.TableChange
 import org.apache.spark.sql.hudi.command.Spark30AlterTableCommand
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, NullType, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util.Locale
@@ -35,14 +35,14 @@ import scala.collection.mutable
 /**
   * Rule to mostly resolve, normalize and rewrite column names based on case sensitivity
   * for alter table column commands.
-  * TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
+  * TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
   */
 case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
   def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
     case add @ HoodieAlterTableAddColumnsStatement(asTable(table), cols) =>
       if (isHoodieTable(table) && schemaEvolutionEnabled){
-        cols.foreach(c => CatalogV2Util.failNullType(c.dataType))
+        cols.foreach(c => failNullType(c.dataType))
         val changes = cols.map { col =>
           TableChange.addColumn(
             col.name.toArray,
@@ -139,7 +139,7 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
         val parent = add.fieldNames().init
         if (parent.nonEmpty) {
           // Adding a nested field, need to normalize the parent column and position
-          val target = schema.findNestedField(parent, includeCollections = true, conf.resolver)
+          val target = schema.findNestedField(parent, includeCollections = true, SQLConf.get.resolver)
           if (target.isEmpty) {
             // Leave unresolved. Throws error in CheckAnalysis
             Some(add)
@@ -160,7 +160,7 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
       case typeChange: UpdateColumnType =>
         // Hive style syntax provides the column type, even if it may not have changed
         val fieldOpt = schema.findNestedField(
-          typeChange.fieldNames(), includeCollections = true, conf.resolver)
+          typeChange.fieldNames(), includeCollections = true, SQLConf.get.resolver)
 
         if (fieldOpt.isEmpty) {
           // We couldn't resolve the field. Leave it to CheckAnalysis
@@ -187,14 +187,14 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
           case after: After =>
             // Need to resolve column as well as position reference
             val fieldOpt = schema.findNestedField(
-              position.fieldNames(), includeCollections = true, conf.resolver)
+              position.fieldNames(), includeCollections = true, SQLConf.get.resolver)
 
             if (fieldOpt.isEmpty) {
               Some(position)
             } else {
               val (normalizedPath, field) = fieldOpt.get
               val targetCol = schema.findNestedField(
-                normalizedPath :+ after.column(), includeCollections = true, conf.resolver)
+                normalizedPath :+ after.column(), includeCollections = true, SQLConf.get.resolver)
               if (targetCol.isEmpty) {
                 // Leave unchanged to CheckAnalysis
                 Some(position)
@@ -245,7 +245,7 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
                                  fieldNames: Array[String],
                                  copy: Array[String] => TableChange): Option[TableChange] = {
     val fieldOpt = schema.findNestedField(
-      fieldNames, includeCollections = true, conf.resolver)
+      fieldNames, includeCollections = true, SQLConf.get.resolver)
     fieldOpt.map { case (path, field) => copy((path :+ field.name).toArray) }
   }
 
@@ -257,7 +257,7 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
     position match {
       case null => null
       case after: After =>
-        (struct.fieldNames ++ fieldsAdded).find(n => conf.resolver(n, after.column())) match {
+        (struct.fieldNames ++ fieldsAdded).find(n => SQLConf.get.resolver(n, after.column())) match {
           case Some(colName) =>
             ColumnPosition.after(colName)
           case None =>
@@ -278,6 +278,20 @@ case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) exten
             s"${parts} is not a valid TableIdentifier as it has more than 2 name parts.")
       }
       Some(sparkSession.sessionState.catalog.getTableMetadata(identifier))
+    }
+  }
+
+  private def failNullType(dt: DataType): Unit = {
+    def containsNullType(dt: DataType): Boolean = dt match {
+      case ArrayType(et, _) => containsNullType(et)
+      case MapType(kt, vt, _) => containsNullType(kt) || containsNullType(vt)
+      case StructType(fields) => fields.exists(f => containsNullType(f.dataType))
+      case _ => dt.isInstanceOf[NullType]
+    }
+
+    if (containsNullType(dt)) {
+      throw new AnalysisException(
+        s"Cannot create tables with ${NullType.simpleString} type.")
     }
   }
 }

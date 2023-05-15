@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.parser
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
+import org.apache.spark.sql.internal.SQLConf
 
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
-class HoodieSpark30SqlAstBuilder(sparkSession: SparkSession) extends SparkSqlAstBuilder {
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
+class HoodieSpark30SqlAstBuilder(conf: SQLConf) extends SparkSqlAstBuilder(conf) {
 
   /**
     * Parse a [[AlterTableAlterColumnStatement]] command to alter a column's property.

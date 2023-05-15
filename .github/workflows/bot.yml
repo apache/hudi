@@ -64,6 +64,10 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
 
           - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
+
+          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
             sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
 
@@ -159,6 +163,9 @@ jobs:
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark3.1'
             sparkRuntime: 'spark3.1.3'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark3.0'
+            sparkRuntime: 'spark3.0.2'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8

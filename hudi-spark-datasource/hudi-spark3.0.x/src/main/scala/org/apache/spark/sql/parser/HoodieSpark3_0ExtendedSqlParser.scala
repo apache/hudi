@@ -20,15 +20,14 @@ package org.apache.spark.sql.parser
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{SparkSqlAstBuilder, SparkSqlParser}
 
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
-class HoodieSpark3_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
+class HoodieSpark3_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser(session.sqlContext.conf)
   with HoodieExtendedParserInterface
   with Logging {
 
-  override val astBuilder: SparkSqlAstBuilder = new HoodieSpark30SqlAstBuilder(session)
+  override val astBuilder: SparkSqlAstBuilder = new HoodieSpark30SqlAstBuilder(session.sqlContext.conf)
 
   override def parseMultipartIdentifier(sqlText: String): Seq[String] = super[SparkSqlParser].parseMultipartIdentifier(sqlText)
 }

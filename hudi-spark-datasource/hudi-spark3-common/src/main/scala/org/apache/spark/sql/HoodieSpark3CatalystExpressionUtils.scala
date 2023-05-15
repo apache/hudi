@@ -17,16 +17,12 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Predicate, PredicateHelper}
-import org.apache.spark.sql.execution.datasources.DataSourceStrategy
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression}
 
-trait HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils
-  with PredicateHelper {
+abstract class HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
-  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
-    DataSourceStrategy.normalizeExprs(exprs, attributes)
+  def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
 
-  override def extractPredicatesWithinOutputSet(condition: Expression,
-                                                outputSet: AttributeSet): Option[Expression] =
-    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
+  def extractPredicatesWithinOutputSet(condition: Expression,
+                                                outputSet: AttributeSet): Option[Expression]
 }

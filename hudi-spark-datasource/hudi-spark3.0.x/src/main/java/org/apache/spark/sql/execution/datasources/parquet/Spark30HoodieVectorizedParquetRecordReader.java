@@ -65,11 +65,10 @@ public class Spark30HoodieVectorizedParquetRecordReader extends VectorizedParque
   public Spark30HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
-      String int96RebaseMode,
       boolean useOffHeap,
       int capacity,
       Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
-    super(convertTz, datetimeRebaseMode, int96RebaseMode, useOffHeap, capacity);
+    super(convertTz, datetimeRebaseMode, useOffHeap, capacity);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;

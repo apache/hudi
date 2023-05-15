@@ -216,10 +216,6 @@ class Spark30HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           None
         }
 
-      val int96RebaseMode = DataSourceUtils.int96RebaseMode(
-        footerFileMetaData.getKeyValueMetaData.get,
-        SQLConf.get.getConf(SQLConf.LEGACY_PARQUET_INT96_REBASE_MODE_IN_READ))
-
       val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
 
       // Clone new conf
@@ -256,7 +252,6 @@ class Spark30HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             new Spark30HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
-              int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity,
               typeChangeInfos)
@@ -264,7 +259,6 @@ class Spark30HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             new VectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
-              int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity)
           }
@@ -295,8 +289,7 @@ class Spark30HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         val readSupport = new ParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
-          datetimeRebaseMode,
-          int96RebaseMode)
+          datetimeRebaseMode)
         val reader = if (pushed.isDefined && enableRecordFilter) {
           val parquetFilter = FilterCompat.get(pushed.get, null)
           new ParquetRecordReader[InternalRow](readSupport, parquetFilter)

@@ -84,7 +84,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
           "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_1) {
           "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
-        } else {
+        } else if (HoodieSparkUtils.gteqSpark3_0) {
+          "org.apache.spark.sql.hudi.Spark30ResolveHudiAlterTableCommand"
+        }else {
           throw new IllegalStateException("Unsupported Spark version")
         }
 
@@ -132,6 +134,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_2) {
           "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_0) {
+          // spark 3.0
+          "org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning"
         } else {
           // spark 3.1
           "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"

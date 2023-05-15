@@ -19,13 +19,13 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.{HoodieBaseRelation, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, NamedExpression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, AttributeSet, Expression, NamedExpression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
-import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
 
 /**
  * Prunes unnecessary physical columns given a [[PhysicalOperation]] over a data source relation.
@@ -38,9 +38,8 @@ import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
  */
 class Spark30NestedSchemaPruning extends Rule[LogicalPlan] {
   import org.apache.spark.sql.catalyst.expressions.SchemaPruning._
-
   override def apply(plan: LogicalPlan): LogicalPlan =
-    if (conf.nestedSchemaPruningEnabled) {
+    if (SQLConf.get.nestedSchemaPruningEnabled) {
       apply0(plan)
     } else {
       plan
@@ -193,6 +192,20 @@ class Spark30NestedSchemaPruning extends Rule[LogicalPlan] {
       case struct: StructType =>
         struct.map(field => countLeaves(field.dataType)).sum
       case _ => 1
+    }
+  }
+
+  private def restoreOriginalOutputNames(
+                                  projectList: Seq[NamedExpression],
+                                  originalNames: Seq[String]): Seq[NamedExpression] = {
+    projectList.zip(originalNames).map {
+      case (attr: Attribute, name) => attr.withName(name)
+      case (alias: Alias, name) => if (name == alias.name) {
+        alias
+      } else {
+        AttributeReference(name, alias.dataType, alias.nullable, alias.metadata)(alias.exprId, alias.qualifier)
+      }
+      case (other, _) => other
     }
   }
 }
