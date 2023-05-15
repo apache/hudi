@@ -75,10 +75,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
-    // TODO Issue with setting this to true in spark 332
-    if (!HoodieSparkUtils.gteqSpark3_3_2) {
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
-    }
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],

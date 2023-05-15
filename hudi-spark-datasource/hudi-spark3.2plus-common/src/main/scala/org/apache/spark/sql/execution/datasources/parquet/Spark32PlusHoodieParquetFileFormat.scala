@@ -41,6 +41,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.execution.{FileSourceScanExec, WholeStageCodegenExec}
 import org.apache.spark.sql.execution.datasources.parquet.Spark32PlusHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
@@ -61,6 +62,20 @@ import java.net.URI
  * </ol>
  */
 class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+  }
+
+  def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    // Only output columnar if there is WSCG to read it.
+    val requiredWholeStageCodegenSettings =
+      conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
+    requiredWholeStageCodegenSettings &&
+      supportBatch(sparkSession, schema)
+  }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -95,11 +110,11 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     hadoopConf.setBoolean(
       SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
       sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
-    // Using string value of this conf to preserve compatibility across spark versions.
-    hadoopConf.setBoolean(
-      "spark.sql.legacy.parquet.nanosAsLong",
-      sparkSession.sessionState.conf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
-    )
+    // Below Configs Needed For Spark 3.4.0
+    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key,
+      sparkSession.sessionState.conf.parquetInferTimestampNTZEnabled)
+    hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+      sparkSession.sessionState.conf.legacyParquetNanosAsLong)
     val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here
@@ -126,7 +141,6 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
     val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
     // Whole stage codegen (PhysicalRDD) is able to deal with batches directly
-    val returningBatch = supportBatch(sparkSession, resultSchema)
     val pushDownDate = sqlConf.parquetFilterPushDownDate
     val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
     val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
@@ -136,7 +150,10 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     val parquetOptions = new ParquetOptions(options, sparkSession.sessionState.conf)
     val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
-
+    // Should always be set by FileSourceScanExec creating this.
+    // Check conf before checking option, to allow working around an issue by changing conf.
+    val returningBatch = sparkSession.sessionState.conf.parquetVectorizedReaderEnabled &&
+      supportsColumnar(sparkSession, resultSchema)
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
