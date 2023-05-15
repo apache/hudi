@@ -188,7 +188,9 @@ public class HiveTestUtil {
     if (zkServer != null) {
       zkServer.shutdown(true);
     }
-    fileSystem.close();
+    if (fileSystem != null) {
+      fileSystem.close();
+    }
   }
 
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,

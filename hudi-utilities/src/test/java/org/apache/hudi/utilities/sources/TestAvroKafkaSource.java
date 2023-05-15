@@ -159,8 +159,8 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
 
     props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", ByteArrayDeserializer.class.getName());
-    int numPartitions = 3;
-    int numMessages = 15;
+    int numPartitions = 2;
+    int numMessages = 30;
     testUtils.createTopic(topic,numPartitions);
     sendMessagesToKafka(topic, numMessages, numPartitions);
     AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
