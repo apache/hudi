@@ -80,4 +80,56 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test(s"Test hudi_table_changes Table-Valued Function") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000), (3, 'a3', 30, 1000)
+               | """.stripMargin
+          )
+
+          checkAnswer(s"select id, name, price, ts from hudi_table_changes('$tableName', 'latest_state', '20170901080000')")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a3", 30.0, 1000)
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
+               | """.stripMargin
+          )
+
+          checkAnswer(s"select id, name, price, ts from hudi_table_changes('$tableName', 'latest_state', '20170901080000')")(
+            Seq(1, "a1_1", 10.0, 1100),
+            Seq(2, "a2_2", 20.0, 1100),
+            Seq(3, "a3_3", 30.0, 1100)
+          )
+        }
+      }
+    }
+  }
 }
