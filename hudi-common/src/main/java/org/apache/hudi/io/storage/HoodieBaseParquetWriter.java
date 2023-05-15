@@ -26,11 +26,14 @@ import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED;
+import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_WRITER_VERSION;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
@@ -38,26 +41,41 @@ import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD
  * @param <R> target type of the object being written into Parquet files (for ex,
  *           {@code IndexedRecord}, {@code InternalRow})
  */
-public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
+public abstract class HoodieBaseParquetWriter<R> implements Closeable {
 
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
   private long recordCountForNextSizeCheck;
+  private final ParquetWriter parquetWriter;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE,
-        parquetConfig.getWriteSupport(),
-        parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(),
-        DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION,
-        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
+      @Override
+      protected ParquetWriter.Builder self() {
+        return this;
+      }
 
+      @Override
+      protected WriteSupport getWriteSupport(org.apache.hadoop.conf.Configuration conf) {
+        return parquetConfig.getWriteSupport();
+      }
+    };
+
+    parquetWriterbuilder.withWriteMode(ParquetFileWriter.Mode.CREATE);
+    parquetWriterbuilder.withCompressionCodec(parquetConfig.getCompressionCodecName());
+    parquetWriterbuilder.withRowGroupSize(parquetConfig.getBlockSize());
+    parquetWriterbuilder.withPageSize(parquetConfig.getPageSize());
+    parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
+    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
+    parquetWriterbuilder.withValidation(DEFAULT_IS_VALIDATING_ENABLED);
+    parquetWriterbuilder.withWriterVersion(DEFAULT_WRITER_VERSION);
+    parquetWriterbuilder.withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+    parquetWriterbuilder.withBloomFilterEnabled("b", true);
+
+
+
+    parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
@@ -70,7 +88,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   public boolean canWrite() {
     long writtenCount = getWrittenRecordCount();
     if (writtenCount >= recordCountForNextSizeCheck) {
-      long dataSize = getDataSize();
+      long dataSize = this.parquetWriter.getDataSize();
       // In some very extreme cases, like all records are same value, then it's possible
       // the dataSize is much lower than the writtenRecordCount(high compression ratio),
       // causing avgRecordSize to 0, we'll force the avgRecordSize to 1 for such cases.
@@ -88,9 +106,8 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     return true;
   }
 
-  @Override
   public void write(R object) throws IOException {
-    super.write(object);
+    this.parquetWriter.write(object);
     writtenRecordCount.incrementAndGet();
   }
 
@@ -101,5 +118,10 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   @VisibleForTesting
   protected long getRecordCountForNextSizeCheck() {
     return recordCountForNextSizeCheck;
+  }
+
+  @Override
+  public void close() throws IOException {
+    this.parquetWriter.close();
   }
 }

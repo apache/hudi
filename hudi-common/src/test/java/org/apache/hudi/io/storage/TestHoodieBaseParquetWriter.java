@@ -53,7 +53,6 @@ public class TestHoodieBaseParquetWriter {
       super(file, (HoodieParquetConfig) parquetConfig);
     }
 
-    @Override
     public long getDataSize() {
       return currentDataSize;
     }
