@@ -2548,8 +2548,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testGetFileGroupIndexFromFileId() {
     int index = new Random().nextInt(10000);
     String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index);
-    assertEquals(FILES.getFileIdPrefix(), HoodieTableMetadataUtil.getFileGroupPrefix(fileId) + "-");
+    assertEquals(fileId, HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
     assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
+
+    // Old style (before 0.10) where a -o suffix was addded to file groups
+    fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index) + "-0";
+    assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
+    assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
+
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-0"), "some-file-id");
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id"), "some-file-id");
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
   }
 
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {

@@ -757,13 +757,13 @@ public class HoodieTableConfig extends HoodieConfig {
    * @param partitionTypes The list of partitions to enable as inflight.
    */
   public void setMetadataPartitionsInflight(List<MetadataPartitionType> partitionTypes) {
-    Set<String> partitions = getMetadataPartitionsInflight();
+    Set<String> partitionsInflight = getMetadataPartitionsInflight();
     partitionTypes.forEach(t -> {
       ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
           "Metadata Table partition path cannot contain a comma: " + t.getPartitionPath());
-      partitions.add(t.getPartitionPath());
+      partitionsInflight.add(t.getPartitionPath());
     });
-    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
   }
 
   /**

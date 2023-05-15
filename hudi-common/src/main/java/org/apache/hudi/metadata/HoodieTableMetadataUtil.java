@@ -1488,7 +1488,7 @@ public class HoodieTableMetadataUtil {
    */
   public static int getFileGroupIndexFromFileId(String fileId) {
     final int endIndex = getFileIdLengthWithoutFileIndex(fileId);
-    final int fromIndex = fileId.lastIndexOf("-", endIndex);
+    final int fromIndex = fileId.lastIndexOf("-", endIndex - 1);
     return Integer.parseInt(fileId.substring(fromIndex + 1, endIndex));
   }
 
@@ -1496,7 +1496,7 @@ public class HoodieTableMetadataUtil {
    * Extract the fileID prefix from the fileID of a file group in the MDT partition. See {@code getFileIDForFileGroup} for the format of the fileID.
    *
    * @param fileId fileID of a file group.
-   * @return The index of file group
+   * @return The fileID without the file index
    */
   public static String getFileGroupPrefix(String fileId) {
     return fileId.substring(0, getFileIdLengthWithoutFileIndex(fileId));

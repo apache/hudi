@@ -33,7 +33,6 @@ import scala.Tuple2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -45,7 +44,7 @@ import java.util.stream.IntStream;
 
 class TestSparkHoodieMetadataBulkInsertPartitioner extends SparkClientFunctionalTestHarness {
   @Test
-  public void testPartitioner() throws IOException {
+  public void testPartitioner() {
     List<HoodieRecord> records = new ArrayList<>();
 
     BiConsumer<String, Integer> initRecords = (fileGroupId, count) -> {
