@@ -52,7 +52,7 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
 case class Spark30AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], changeType: ColumnChangeID) extends RunnableCommand with Logging {
   override def run(sparkSession: SparkSession): Seq[Row] = {
     changeType match {

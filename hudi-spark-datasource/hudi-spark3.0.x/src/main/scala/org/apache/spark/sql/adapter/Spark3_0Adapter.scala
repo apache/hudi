@@ -40,7 +40,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
 /**
- * Implementation of [[SparkAdapter]] for Spark 3.1.x
+ * Implementation of [[SparkAdapter]] for Spark 3.0.x
  */
 class Spark3_0Adapter extends BaseSpark3Adapter {
 
