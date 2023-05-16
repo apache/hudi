@@ -108,7 +108,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   public boolean canWrite() {
     long writtenCount = getWrittenRecordCount();
     if (writtenCount >= recordCountForNextSizeCheck) {
-      long dataSize = this.parquetWriter.getDataSize();
+      long dataSize = getDataSize();
       // In some very extreme cases, like all records are same value, then it's possible
       // the dataSize is much lower than the writtenRecordCount(high compression ratio),
       // causing avgRecordSize to 0, we'll force the avgRecordSize to 1 for such cases.
@@ -124,6 +124,10 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
           DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
     }
     return true;
+  }
+
+  public long getDataSize() {
+    return this.parquetWriter.getDataSize();
   }
 
   public void write(R object) throws IOException {
