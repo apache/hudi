@@ -145,7 +145,10 @@ public class TableSizeStats implements Serializable {
     @Parameter(names = {"--end-date", "-ed"}, description = "Consider files modified before this date.", required = false)
     public String endDate = null;
 
-    @Parameter(names = {"--enable-partition-stats", "-ps"}, description = "Show partition-level stats besides table-level stats.", required = false)
+    @Parameter(names = {"--enable-table-stats", "-fs"}, description = "Show file-level stats.", required = false)
+    public boolean tableStats = false;
+
+    @Parameter(names = {"--enable-partition-stats", "-ps"}, description = "Show partition-level stats.", required = false)
     public boolean partitionStats = false;
 
     @Parameter(names = {"--props-path", "-pp"}, description = "Properties file containing base paths one per line", required = false)
@@ -175,6 +178,7 @@ public class TableSizeStats implements Serializable {
           + "   --num-days " + numDays + ", \n"
           + "   --start-date " + startDate + ", \n"
           + "   --end-date " + endDate + ", \n"
+          + "   --enable-table-stats " + tableStats + ", \n"
           + "   --enable-partition-stats " + partitionStats + ", \n"
           + "   --parallelism " + parallelism + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
@@ -197,6 +201,7 @@ public class TableSizeStats implements Serializable {
           && Objects.equals(numDays, config.numDays)
           && Objects.equals(startDate, config.startDate)
           && Objects.equals(endDate, config.endDate)
+          && Objects.equals(tableStats, config.tableStats)
           && Objects.equals(partitionStats, config.partitionStats)
           && Objects.equals(parallelism, config.parallelism)
           && Objects.equals(sparkMaster, config.sparkMaster)
@@ -207,7 +212,7 @@ public class TableSizeStats implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, numDays, startDate, endDate, partitionStats, parallelism, sparkMaster, sparkMemory, propsFilePath, configs, help);
+      return Objects.hash(basePath, numDays, startDate, endDate, tableStats, partitionStats, parallelism, sparkMaster, sparkMemory, propsFilePath, configs, help);
     }
   }
 
@@ -247,13 +252,13 @@ public class TableSizeStats implements Serializable {
       if (cfg.propsFilePath != null) {
         List<String> filePaths = getFilePaths(cfg.propsFilePath, jsc.hadoopConfiguration());
         for (String filePath : filePaths) {
-          logTableStats(filePath, dateInterval, cfg.partitionStats);
+          logTableStats(filePath, dateInterval);
         }
       } else {
         if (cfg.basePath == null) {
           throw new HoodieIOException("Base path needs to be set.");
         }
-        logTableStats(cfg.basePath, dateInterval, cfg.partitionStats);
+        logTableStats(cfg.basePath, dateInterval);
       }
 
     } catch (Exception e) {
@@ -261,7 +266,7 @@ public class TableSizeStats implements Serializable {
     }
   }
 
-  private void logTableStats(String basePath, LocalDate[] dateInterval, boolean partitionStats) throws IOException {
+  private void logTableStats(String basePath, LocalDate[] dateInterval) throws IOException {
 
     LOG.warn("Processing table " + basePath);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -316,12 +321,13 @@ public class TableSizeStats implements Serializable {
         List<HoodieBaseFile> baseFiles = fileSystemView.getLatestBaseFiles(partition).collect(Collectors.toList());
 
         // No need to collect partition level stats if user hasn't requested partition-level stats or if there are no partitions in this table.
-        final Histogram partitionHistogram = partitionStats && partition.trim().length() > 0 ? new Histogram(new UniformReservoir(1_000_000)) : null;
+        final Histogram partitionHistogram = cfg.partitionStats && partition.trim().length() > 0 ? new Histogram(new UniformReservoir(1_000_000)) : null;
         baseFiles.forEach(baseFile -> {
           // Add file size to histogram since the file was modified within the specified date range.
           if (partitionHistogram != null) {
             partitionHistogram.update(baseFile.getFileSize());
           }
+
           tableHistogram.update(baseFile.getFileSize());
         });
 
@@ -332,8 +338,13 @@ public class TableSizeStats implements Serializable {
       }
     });
 
-    // Display file size distribution stats for entire table.
-    logStats("Table stats [path: " + basePath + "]", tableHistogram);
+    if (cfg.tableStats) {
+      // Display file size distribution stats for entire table.
+      logStats("Table stats [path: " + basePath + "]", tableHistogram);
+    } else {
+      // Display only total talbe size
+      LOG.info("Total size: {}", getFileSizeUnit(Arrays.stream(tableHistogram.getSnapshot().getValues()).sum()));
+    }
   }
 
   private static boolean isMetadataEnabled(String basePath, JavaSparkContext jsc) {
