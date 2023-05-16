@@ -58,7 +58,7 @@ class TestHoodieParquetBloomFilter {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[WriteOperationType], names = Array("BULK_INSERT", "INSERT"))
+  @EnumSource(value = classOf[WriteOperationType], names = Array("BULK_INSERT", "INSERT", "UPSERT", "INSERT_OVERWRITE"))
   def testBloomFilter(operation: WriteOperationType): Unit = {
     // setup hadoop conf with bloom col enabled
     spark.sparkContext.hadoopConfiguration.set("parquet.bloom.filter.enabled#bloom_col", "true")
