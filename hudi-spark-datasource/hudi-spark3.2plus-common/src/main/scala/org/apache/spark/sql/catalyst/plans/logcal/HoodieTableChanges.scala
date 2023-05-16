@@ -46,20 +46,26 @@ object HoodieTableChanges {
     val identifier = args.head
     val incrementalQueryFormat = args(1)
     val startInstantTime = args(2)
-    val endInstantTimeOpt = args.drop(3).headOption.map(x => "hoodie.datasource.read.end.instanttime" -> x)
+    val endInstantTime = args.drop(3).headOption
+
+    val incrementalQueryTypeOpt = Map("hoodie.datasource.query.type" -> "incremental")
 
     val incrementalQueryFormatOpt = incrementalQueryFormat match {
       case "latest_state" | "cdc" => Map("hoodie.datasource.query.incremental.format" -> incrementalQueryFormat)
-      case _ =>
-        throw new AnalysisException(s"'hudi_table_changes' doesn't support `$incrementalQueryFormat`")
+      case _ => throw new AnalysisException(s"'hudi_table_changes' doesn't support `$incrementalQueryFormat`")
     }
 
     val startInstantTimeOpt = startInstantTime match {
-      case "earliest" => Map.empty[String, String]
-      case _ => Map("hoodie.datasource.read.start.instanttime" -> startInstantTime)
+      case "earliest" => Map("hoodie.datasource.read.begin.instanttime" -> "000")
+      case _ => Map("hoodie.datasource.read.begin.instanttime" -> startInstantTime)
     }
 
-    val opts: Map[String, String] = incrementalQueryFormatOpt ++ startInstantTimeOpt ++ endInstantTimeOpt
+    val endInstantTimeOpt = endInstantTime match {
+      case Some(x) => Map("hoodie.datasource.read.end.instanttime" -> x)
+      case None => Map.empty[String, String]
+    }
+
+    val opts: Map[String, String] = incrementalQueryTypeOpt ++ incrementalQueryFormatOpt ++ startInstantTimeOpt ++ endInstantTimeOpt
 
     (identifier, opts)
   }
