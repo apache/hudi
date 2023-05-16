@@ -43,20 +43,55 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      val commits = spark.sql(s"""call show_commits(table => '$tableName')""").limit(2).collect()
+      var commits = spark.sql(s"""call show_commits(table => '$tableName')""").limit(2).collect()
       assertResult(2) {
         commits.length
       }
 
-      // Create savepoint using table name
+      // Create savepoint using table name and commit time
       val commitTime1 = commits.apply(0).getString(0)
       checkAnswer(s"""call create_savepoint('$tableName', '$commitTime1', 'admin', '1')""")(Seq(true))
 
-      // Create savepoint using table base path
+      // Create savepoint using table base path and commit time
       val commitTime2 = commits.apply(1).getString(0)
       checkAnswer(
         s"""call create_savepoint(path => '$tablePath', commit_time => '$commitTime2',
            | user => 'admin', comment => '2')""".stripMargin)(Seq(true))
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      commits = spark.sql(s"""call show_commits(table => '$tableName')""").limit(3).collect()
+      assertResult(3) {
+        commits.length
+      }
+
+      // Create savepoint using table name and latest commit
+      val commitTime3 = commits.apply(2).getString(0)
+      checkAnswer(s"""call create_savepoint('$tableName', '', 'admin', '3')""")(Seq(true))
+      var savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(3) {
+        savepoints.length
+      }
+      assertResult(commitTime3)(savepoints(2).getString(0))
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      commits = spark.sql(s"""call show_commits(table => '$tableName')""").limit(4).collect()
+      assertResult(4) {
+        commits.length
+      }
+
+      // Create savepoint using table base path and latest commit
+      val commitTime4 = commits.apply(3).getString(0)
+      checkAnswer(
+        s"""call create_savepoint(path => '$tablePath', user => 'admin', comment => '4')""".stripMargin)(Seq(true))
+      savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(4) {
+        savepoints.length
+      }
+      assertResult(commitTime4)(savepoints(3).getString(0))
     }
   }
 
@@ -129,30 +164,53 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
       val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
-      assertResult(3) {
+      assertResult(4) {
         commits.length
       }
 
-      // create 3 savepoints
+      // create 4 savepoints
       commits.foreach(r => {
         checkAnswer(s"""call create_savepoint('$tableName', '${r.getString(0)}')""")(Seq(true))
       })
 
-      // Delete a savepoint with table name
+      // Delete a savepoint with table name and instant time
       checkAnswer(s"""call delete_savepoint('$tableName', '${commits.apply(1).getString(0)}')""")(Seq(true))
-      // Delete a savepoint with table base path
+      // Delete a savepoint with table base path and instant time
       checkAnswer(
         s"""call delete_savepoint(path => '$tablePath',
            | instant_time => '${commits.apply(0).getString(0)}')""".stripMargin)(Seq(true))
 
+      // show_savepoints should return two savepoint
+      var savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(2) {
+        savepoints.length
+      }
+
+      assertResult(commits(2).getString(0))(savepoints(0).getString(0))
+      assertResult(commits(3).getString(0))(savepoints(1).getString(0))
+
+      // Delete a savepoint with table name and latest savepoint time
+      checkAnswer(s"""call delete_savepoint('$tableName', '')""")(Seq(true))
+
       // show_savepoints should return one savepoint
-      val savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
       assertResult(1) {
         savepoints.length
       }
-      assertResult(commits(2).getString(0))(savepoints(0).getString(0))
+
+      assertResult(commits(3).getString(0))(savepoints(0).getString(0))
+
+      // Delete a savepoint with table base path and latest savepoint time
+      checkAnswer(s"""call delete_savepoint(path => '$tablePath')""".stripMargin)(Seq(true))
+
+      // show_savepoints should return zero savepoint
+      savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(0) {
+        savepoints.length
+      }
     }
   }
 
@@ -180,27 +238,35 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
       val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
         .map(c => c.getString(0)).sorted
-      assertResult(3) {
+      assertResult(4) {
         commits.length
       }
 
-      // create 3 savepoints
-      checkAnswer(s"""call create_savepoint('$tableName', '${commits(0)}')""")(Seq(true))
-      checkAnswer(s"""call create_savepoint('$tableName', '${commits(1)}')""")(Seq(true))
+      // create 4 savepoints
+      commits.foreach(commit => {
+        checkAnswer(s"""call create_savepoint('$tableName', '$commit')""")(Seq(true))
+      })
 
-      // rollback to the second savepoint with the table name
-      checkAnswer(s"""call rollback_to_savepoint('$tableName', '${commits(1)}')""")(Seq(true))
+      // rollback to the fourth savepoint with the table name and instant time
+      checkAnswer(s"""call rollback_to_savepoint('$tableName', '${commits(3)}')""")(Seq(true))
       checkAnswer(
         s"""call delete_savepoint(path => '$tablePath',
-           | instant_time => '${commits(1)}')""".stripMargin)(Seq(true))
+           | instant_time => '${commits(3)}')""".stripMargin)(Seq(true))
 
-      // rollback to the first savepoint with the table base path
+      // rollback to the third savepoint with the table base path and instant time
       checkAnswer(
         s"""call rollback_to_savepoint(path => '$tablePath',
-           | instant_time => '${commits(0)}')""".stripMargin)(Seq(true))
+           | instant_time => '${commits(2)}')""".stripMargin)(Seq(true))
+
+      // rollback to the second savepoint with the table name and latest savepoint time
+      checkAnswer(s"""call rollback_to_savepoint('$tableName', '')""")(Seq(true))
+
+      // rollback to the first savepoint with the table base path and latest savepoint time
+      checkAnswer(s"""call rollback_to_savepoint(path => '$tablePath')""".stripMargin)(Seq(true))
     }
   }
 
