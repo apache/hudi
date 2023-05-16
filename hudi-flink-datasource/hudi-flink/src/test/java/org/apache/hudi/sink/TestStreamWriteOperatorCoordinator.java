@@ -19,7 +19,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieExtraMetadata;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -62,6 +64,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -430,6 +433,64 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
+  @Test
+  public void testCheckpointCompleteWithWatermark() throws IOException {
+    final CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    String instant = coordinator.getInstant();
+    final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
+    event0.setWatermark(System.currentTimeMillis());
+    coordinator.handleEventFromOperator(0, event0);
+    long timestamp = System.currentTimeMillis();
+    final WriteMetadataEvent event1 = createOperatorEvent(1, instant, "par1", false, 0.2);
+    event1.setWatermark(timestamp);
+    coordinator.handleEventFromOperator(1, event1);
+    final WriteMetadataEvent event2 = createOperatorEvent(2, instant, "par2", false, 0.2);
+    event2.setWatermark(System.currentTimeMillis());
+    coordinator.handleEventFromOperator(2, event2);
+    coordinator.notifyCheckpointComplete(1);
+
+    verifyWatermark(timestamp);
+  }
+
+  @Test
+  public void testCommitOnEmptyBatchWithWatermark() throws Exception {
+    final Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    final MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
+      coordinator.start();
+      coordinator.setExecutor(new MockCoordinatorExecutor(context));
+      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+
+      // Coordinator start the instant
+      final String instant = coordinator.getInstant();
+
+      long timestamp = System.currentTimeMillis();
+      final OperatorEvent event1 = WriteMetadataEvent.builder()
+          .taskID(0)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .watermark(timestamp)
+          .lastBatch(true)
+          .build();
+      final OperatorEvent event2 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .watermark(System.currentTimeMillis())
+          .lastBatch(true)
+          .build();
+      coordinator.handleEventFromOperator(0, event1);
+      coordinator.handleEventFromOperator(1, event2);
+
+      assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
+          "Commit the instant");
+      verifyWatermark(timestamp);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -480,5 +541,14 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
     MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
     assertTrue(context.isJobFailed(), message);
+  }
+
+  private void verifyWatermark(long timestamp) throws IOException {
+    final HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
+    final HoodieTimeline timeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+        timeline.getInstantDetails(timeline.lastInstant().get()).get(),
+        HoodieCommitMetadata.class);
+    assertEquals(String.valueOf(timestamp), commitMetadata.getExtraMetadata().get(HoodieExtraMetadata.WATERMARK.key()));
   }
 }

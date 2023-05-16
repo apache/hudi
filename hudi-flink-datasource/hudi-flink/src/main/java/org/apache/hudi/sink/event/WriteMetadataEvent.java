@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +56,11 @@ public class WriteMetadataEvent implements OperatorEvent {
   private boolean bootstrap;
 
   /**
+   * Watermark telling the progress in event time of a write function.
+   */
+  private long watermark;
+
+  /**
    * Creates an event.
    *
    * @param taskID        The task ID
@@ -65,6 +71,7 @@ public class WriteMetadataEvent implements OperatorEvent {
    *                      if true, the whole data set of the checkpoint
    *                      has been flushed successfully
    * @param bootstrap     Whether the event comes from the bootstrap
+   * @param watermark     The progress in event time
    */
   private WriteMetadataEvent(
       int taskID,
@@ -72,13 +79,15 @@ public class WriteMetadataEvent implements OperatorEvent {
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
       boolean endInput,
-      boolean bootstrap) {
+      boolean bootstrap,
+      long watermark) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
     this.endInput = endInput;
     this.bootstrap = bootstrap;
+    this.watermark = watermark;
   }
 
   // default constructor for efficient serialization
@@ -140,6 +149,14 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.lastBatch = lastBatch;
   }
 
+  public long getWatermark() {
+    return watermark;
+  }
+
+  public void setWatermark(long watermark) {
+    this.watermark = watermark;
+  }
+
   /**
    * Merges this event with given {@link WriteMetadataEvent} {@code other}.
    *
@@ -172,6 +189,7 @@ public class WriteMetadataEvent implements OperatorEvent {
         + ", lastBatch=" + lastBatch
         + ", endInput=" + endInput
         + ", bootstrap=" + bootstrap
+        + ", watermark=" + watermark
         + '}';
   }
 
@@ -208,12 +226,13 @@ public class WriteMetadataEvent implements OperatorEvent {
     private boolean lastBatch = false;
     private boolean endInput = false;
     private boolean bootstrap = false;
+    private long watermark = Watermark.UNINITIALIZED.getTimestamp();
 
     public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap, watermark);
     }
 
     public Builder taskID(int taskID) {
@@ -243,6 +262,11 @@ public class WriteMetadataEvent implements OperatorEvent {
 
     public Builder bootstrap(boolean bootstrap) {
       this.bootstrap = bootstrap;
+      return this;
+    }
+
+    public Builder watermark(long watermark) {
+      this.watermark = watermark;
       return this;
     }
   }

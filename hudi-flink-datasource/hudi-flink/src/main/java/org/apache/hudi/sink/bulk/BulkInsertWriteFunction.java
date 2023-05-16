@@ -32,6 +32,7 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -100,6 +101,11 @@ public class BulkInsertWriteFunction<I>
   private CkpMetadata ckpMetadata;
 
   /**
+   * Watermark for the current checkpoint.
+   */
+  private Watermark watermark;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -125,6 +131,11 @@ public class BulkInsertWriteFunction<I>
   }
 
   @Override
+  public void processWatermark(Watermark watermark) {
+    this.watermark = watermark;
+  }
+
+  @Override
   public void close() {
     if (this.writeClient != null) {
       this.writeClient.close();
@@ -143,6 +154,7 @@ public class BulkInsertWriteFunction<I>
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(true)
+        .watermark(getWatermark())
         .build();
     this.eventGateway.sendEventToCoordinator(event);
   }
@@ -207,5 +219,12 @@ public class BulkInsertWriteFunction<I>
       instant = lastPendingInstant();
     }
     return instant;
+  }
+
+  /**
+   * Returns the watermark for the current checkpoint.
+   */
+  public long getWatermark() {
+    return watermark == null ? Watermark.UNINITIALIZED.getTimestamp() : watermark.getTimestamp();
   }
 }

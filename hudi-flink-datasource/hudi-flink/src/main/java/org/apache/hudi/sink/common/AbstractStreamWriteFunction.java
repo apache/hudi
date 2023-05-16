@@ -42,6 +42,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +129,11 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient boolean inputEnded;
 
   /**
+   * Watermark for the current checkpoint.
+   */
+  protected Watermark watermark;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -157,6 +163,11 @@ public abstract class AbstractStreamWriteFunction<I>
     }
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+  }
+
+  @Override
+  public void processWatermark(Watermark watermark) {
+    this.watermark = watermark;
   }
 
   @Override
@@ -238,6 +249,7 @@ public abstract class AbstractStreamWriteFunction<I>
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
         .bootstrap(true)
+        .watermark(getWatermark())
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
@@ -293,5 +305,12 @@ public abstract class AbstractStreamWriteFunction<I>
    */
   private boolean invalidInstant(String instant, boolean hasData) {
     return instant.equals(this.currentInstant) && hasData;
+  }
+
+  /**
+   * Returns the watermark for the current checkpoint.
+   */
+  public long getWatermark() {
+    return watermark == null ? Watermark.UNINITIALIZED.getTimestamp() : watermark.getTimestamp();
   }
 }

@@ -133,6 +133,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
+        .watermark(getWatermark())
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     // nullify the write helper for next ckp
