@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestOverwriteWithLatestAvroPayload {
 
   private Schema schema;
+  private Schema schemaWithMeta;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -45,6 +46,13 @@ public class TestOverwriteWithLatestAvroPayload {
         new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
         new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
+    ));
+
+    schemaWithMeta = Schema.createRecord(Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+        new Schema.Field("_hoodie_operation", Schema.create(Type.STRING), "", null)
     ));
   }
 
@@ -98,6 +106,32 @@ public class TestOverwriteWithLatestAvroPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+  }
+
+  @Test
+  public void testDeletedRecordWithMeta() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schemaWithMeta);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_operation", "U");
+
+    GenericRecord delRecord1 = new GenericData.Record(schemaWithMeta);
+    delRecord1.put("id", "2");
+    delRecord1.put("partition", "partition1");
+    delRecord1.put("ts", 1L);
+    delRecord1.put("_hoodie_operation", "D");
+
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
+    assertEquals(payload1.preCombine(payload2), payload2);
+    assertEquals(payload2.preCombine(payload1), payload2);
+
+    assertEquals(record1, payload1.getInsertValue(schemaWithMeta).get());
+    assertFalse(payload2.getInsertValue(schemaWithMeta).isPresent());
+
+    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schemaWithMeta).get(), record1);
+    assertFalse(payload2.combineAndGetUpdateValue(record1, schemaWithMeta).isPresent());
   }
 
 }
