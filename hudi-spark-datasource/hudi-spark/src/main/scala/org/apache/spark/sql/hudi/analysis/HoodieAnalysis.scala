@@ -128,18 +128,18 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    if (HoodieSparkUtils.gteqSpark3_1) {
+    if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
         if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_2) {
           "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_0) {
-          // spark 3.0
-          "org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning"
-        } else {
+        } else if (HoodieSparkUtils.gteqSpark3_1) {
           // spark 3.1
           "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"
+        } else {
+          // spark 3.0
+          "org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning"
         }
 
       val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
