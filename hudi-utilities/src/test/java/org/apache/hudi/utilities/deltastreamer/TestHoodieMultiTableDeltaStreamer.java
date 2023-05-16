@@ -256,12 +256,13 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
           String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
           assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
           List<String> transformerClass = tableExecutionContext.getConfig().transformerClassNames;
-          assertEquals("org.apache.hudi.utilities.transform.SqlFileBasedTransformer", transformerClass.get(0)); // HUDI-4630
+          assertEquals(1, transformerClass.size());
+          assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestIdentityTransformer", transformerClass.get(0));
           break;
         default:
           String defaultKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
           assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), defaultKeyGeneratorClass);
-          assertNull(tableExecutionContext.getConfig().transformerClassNames);  //HUDI-4630
+          assertNull(tableExecutionContext.getConfig().transformerClassNames);
       }
     });
   }

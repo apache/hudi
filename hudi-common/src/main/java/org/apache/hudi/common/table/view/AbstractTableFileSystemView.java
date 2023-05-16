@@ -745,6 +745,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
+  public Void loadAllPartitions() {
+    try {
+      readLock.lock();
+      ensureAllPartitionsLoadedCorrectly();
+      return null;
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
   public final Stream<HoodieBaseFile> getAllBaseFiles(String partitionStr) {
     try {
       readLock.lock();

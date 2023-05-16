@@ -117,6 +117,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
+  public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
 
   public static final String PARTITION_PARAM = "partition";
   public static final String BASEPATH_PARAM = "basepath";
@@ -467,6 +468,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       // refresh the local timeline first.
       this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
       return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Void loadAllPartitions() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      executeRequest(LOAD_ALL_PARTITIONS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+      return null;
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

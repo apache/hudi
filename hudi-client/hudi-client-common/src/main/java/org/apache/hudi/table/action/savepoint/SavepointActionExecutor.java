@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -44,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
@@ -152,21 +152,4 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     }
   }
 
-  /**
-   * Whether to use batch lookup for listing the latest base files in metadata table.
-   * <p>
-   * Note that metadata table has to be enabled, and the storage type of the file system view
-   * cannot be EMBEDDED_KV_STORE or SPILLABLE_DISK (these two types are not integrated with
-   * metadata table, see HUDI-5612).
-   *
-   * @param config Write configs.
-   * @return {@code true} if using batch lookup; {@code false} otherwise.
-   */
-  private boolean shouldUseBatchLookup(HoodieWriteConfig config) {
-    FileSystemViewStorageType storageType =
-        config.getClientSpecifiedViewStorageConfig().getStorageType();
-    return config.getMetadataConfig().enabled()
-        && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
-        && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
-  }
 }
