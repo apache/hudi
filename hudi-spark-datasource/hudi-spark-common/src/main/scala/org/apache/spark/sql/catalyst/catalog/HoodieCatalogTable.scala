@@ -130,9 +130,20 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
 
   /**
-   * Table schema
+   * Firstly try to load table schema from meta directory on filesystem.
+   * If that fails then fallback to retrieving it from the Spark catalog.
    */
-  lazy val tableSchema: StructType = table.schema
+  lazy val tableSchema: StructType = {
+    val schemaFromMetaOpt = loadTableSchemaByMetaClient()
+    if (schemaFromMetaOpt.nonEmpty) {
+      schemaFromMetaOpt.get
+    } else if (table.schema.nonEmpty) {
+      addMetaFields(table.schema)
+    } else {
+      throw new AnalysisException(
+        s"$catalogTableName does not contains schema fields.")
+    }
+  }
 
   /**
    * The schema without hoodie meta fields
@@ -237,16 +248,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
           mapSqlOptionsToTableConfigs(sqlOptions) ++ currentTableConfig
 
-        val schemaFromMetaOpt = loadTableSchemaByMetaClient()
-        val schema = if (schemaFromMetaOpt.nonEmpty) {
-          schemaFromMetaOpt.get
-        } else if (table.schema.nonEmpty) {
-          addMetaFields(table.schema)
-        } else {
-          throw new AnalysisException(
-            s"Missing schema fields when applying CREATE TABLE clause for ${catalogTableName}")
-        }
-        (schema, options)
+        (tableSchema, options)
 
       case (_, false) =>
         checkArgument(table.schema.nonEmpty,
