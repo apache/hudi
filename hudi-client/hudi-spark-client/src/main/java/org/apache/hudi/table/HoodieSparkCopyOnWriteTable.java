@@ -223,15 +223,15 @@ public class HoodieSparkCopyOnWriteTable<T>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      Option<String[]> partitionFields = Option.empty();
-      Object[] partitionValues = new Object[0];
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
-        partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-        partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+        Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
+        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
             getMetaClient().getTableConfig().getBootstrapBasePath().get(),
             upsertHandle.getWriterSchema(), getHadoopConf());
+        upsertHandle.setPartitionFields(partitionFields);
+        upsertHandle.setPartitionValues(partitionValues);
       }
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle, partitionFields, partitionValues);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited

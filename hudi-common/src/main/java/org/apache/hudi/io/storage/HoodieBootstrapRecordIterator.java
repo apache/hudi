@@ -72,11 +72,11 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
     if (partitionFields.isPresent()) {
       for (int i = 0; i < partitionValues.length; i++) {
         int position = schema.getField(partitionFields.get()[i]).pos();
-        setThePartitionField(position, partitionValues[i], ret.getData());
+        setPartitionPathField(position, partitionValues[i], ret.getData());
       }
     }
     return ret;
   }
 
-  protected abstract void setThePartitionField(int position, Object fieldValue, T row);
+  protected abstract void setPartitionPathField(int position, Object fieldValue, T row);
 }

@@ -217,7 +217,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle, Option.empty(), new Object[0]);
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited

@@ -367,18 +367,16 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-
-      Option<String[]> partitionFields = Option.empty();
-      Object[] partitionValues = new Object[0];
       if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
-        partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
-        partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+        Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
+        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
             table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
             upsertHandle.getWriterSchema(), table.getHadoopConf());
+        upsertHandle.setPartitionFields(partitionFields);
+        upsertHandle.setPartitionValues(partitionValues);
       }
 
-
-      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle, partitionFields, partitionValues);
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited

@@ -65,7 +65,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
     ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(HoodieAvroUtils.removeMetadataFields(readerSchema), requestedSchema);
     return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, readerSchema, partitionFields, partitionValues) {
       @Override
-      protected void setThePartitionField(int position, Object fieldValue, T row) {
+      protected void setPartitionPathField(int position, Object fieldValue, T row) {
         setPartitionField(position, fieldValue, row);
       }
     };
@@ -76,7 +76,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
     ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(dataFileReader.getSchema());
     return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, schema, partitionFields, partitionValues) {
       @Override
-      protected void setThePartitionField(int position, Object fieldValue, T row) {
+      protected void setPartitionPathField(int position, Object fieldValue, T row) {
         setPartitionField(position, fieldValue, row);
       }
     };

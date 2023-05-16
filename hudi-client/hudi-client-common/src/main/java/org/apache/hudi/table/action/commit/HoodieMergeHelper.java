@@ -75,7 +75,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
   @Override
   public void runMerge(HoodieTable<?, ?, ?, ?> table,
-                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle, Option<String[]> partitionFields,  Object[] partitionValues) throws IOException {
+                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
@@ -121,10 +121,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         bootstrapFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath),
-            partitionFields,
-            partitionValues);
-
-
+            mergeHandle.getPartitionFields(),
+            mergeHandle.getPartitionValues());
         recordIterator = bootstrapFileReader.getRecordIterator(mergeHandle.getWriterSchemaWithMetaFields());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else {

@@ -278,7 +278,7 @@ public class HoodieJavaCopyOnWriteTable<T>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle,  Option.empty(), new Object[0]);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(yihua): This needs to be revisited
