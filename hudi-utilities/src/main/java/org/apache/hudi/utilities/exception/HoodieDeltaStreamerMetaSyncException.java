@@ -18,8 +18,17 @@
 
 package org.apache.hudi.utilities.exception;
 
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
+
+import java.util.List;
+
 public class HoodieDeltaStreamerMetaSyncException extends HoodieDeltaStreamerException {
   public HoodieDeltaStreamerMetaSyncException(String msg, Throwable e) {
     super(msg, e);
+  }
+
+  public HoodieDeltaStreamerMetaSyncException(List<String> implsFailed, List<HoodieException> metaSyncExceptions) {
+    super("Meta sync failure for " + String.join(",", implsFailed), SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
   }
 }

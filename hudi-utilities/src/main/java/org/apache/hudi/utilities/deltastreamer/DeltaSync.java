@@ -983,7 +983,7 @@ public class DeltaSync implements Serializable, Closeable {
         }
       }
       if (!metaSyncExceptions.isEmpty()) {
-        throw new HoodieDeltaStreamerMetaSyncException("Meta sync failure for " + String.join(",", implsFailed), SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
+        throw new HoodieDeltaStreamerMetaSyncException(implsFailed, metaSyncExceptions);
       }
     }
   }
@@ -1129,7 +1129,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
       return newWriteSchema;
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema from table ", e);
+      throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema from table", e);
     }
   }
 
