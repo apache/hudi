@@ -193,7 +193,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-        result.getPartitionToReplaceFileIds(), extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        result.getPartitionToReplaceFileIds(), extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType(), Option.of(context))));
   }
 
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result, List<HoodieWriteStat> writeStats) {

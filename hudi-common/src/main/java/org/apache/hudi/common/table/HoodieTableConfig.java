@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -314,12 +316,16 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
     final String checksum;
-    if (isValidChecksum(props)) {
+    final boolean isValidChecksum = isValidChecksum(props);
+    final String comment = String.format("Date=%s, host=%s, #properties=%d, hudi_version=%s",
+        Instant.now(), NetworkUtils.getHostname(), isValidChecksum ? props.size() : props.size() + 1, HoodieVersion.get());
+
+    if (isValidChecksum) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
-      props.store(outputStream, "Updated at " + Instant.now());
+      props.store(outputStream, comment);
     } else {
       Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
-      propsWithChecksum.store(outputStream, "Properties saved on " + Instant.now());
+      propsWithChecksum.store(outputStream, comment);
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }

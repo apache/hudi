@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -170,5 +171,12 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public void cancelAllJobs() {
     // no operation for now
+  }
+
+  @Override
+  public Map<String, String> getInfo() {
+    final Map<String, String> info = new HashMap<>();
+    System.getProperties().stringPropertyNames().forEach(property -> info.put(property, System.getProperty(property)));
+    return info;
   }
 }

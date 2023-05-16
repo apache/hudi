@@ -886,7 +886,7 @@ public class HoodieTestTable {
     }
     HoodieReplaceCommitMetadata replaceMetadata =
         (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
-            REPLACE_COMMIT_ACTION);
+            REPLACE_COMMIT_ACTION, Option.empty());
     addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
     return replaceMetadata;
   }

@@ -186,7 +186,8 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
           Option.empty(),
           WriteOperationType.CLUSTER,
           this.writeClient.getConfig().getSchema(),
-          HoodieTimeline.REPLACE_COMMIT_ACTION);
+          HoodieTimeline.REPLACE_COMMIT_ACTION,
+          Option.of(this.writeClient.getEngineContext()));
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     // commit the clustering

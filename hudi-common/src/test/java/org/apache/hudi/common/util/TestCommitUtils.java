@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -34,6 +37,7 @@ import java.util.Map;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,11 +54,13 @@ public class TestCommitUtils {
     List<String> replacedFileIds = new ArrayList<>();
     replacedFileIds.add("f0");
     partitionToReplaceFileIds.put("p1", replacedFileIds);
+    HoodieEngineContext context = new HoodieLocalEngineContext(new Configuration());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStats, partitionToReplaceFileIds,
         Option.empty(),
         WriteOperationType.INSERT,
         TRIP_SCHEMA,
-        HoodieTimeline.DELTA_COMMIT_ACTION);
+        HoodieTimeline.DELTA_COMMIT_ACTION,
+        Option.of(context));
 
     assertFalse(commitMetadata instanceof HoodieReplaceCommitMetadata);
     assertEquals(2, commitMetadata.getPartitionToWriteStats().size());
@@ -62,6 +68,11 @@ public class TestCommitUtils {
     assertEquals("f2", commitMetadata.getPartitionToWriteStats().get("p2").get(0).getFileId());
     assertEquals(WriteOperationType.INSERT, commitMetadata.getOperationType());
     assertEquals(TRIP_SCHEMA, commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+
+    // Hoodie version should be set
+    assertNotNull(commitMetadata.getMetadata(HoodieCommitMetadata.HOODIE_VERSION_KEY));
+    // Engine should be set
+    assertEquals(context.getClass().getSimpleName(), commitMetadata.getMetadata(HoodieCommitMetadata.ENGINE_KEY));
   }
 
   @Test
@@ -78,7 +89,8 @@ public class TestCommitUtils {
         Option.empty(),
         WriteOperationType.INSERT,
         TRIP_SCHEMA,
-        HoodieTimeline.REPLACE_COMMIT_ACTION);
+        HoodieTimeline.REPLACE_COMMIT_ACTION,
+        Option.empty());
 
     assertTrue(commitMetadata instanceof HoodieReplaceCommitMetadata);
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;

@@ -175,7 +175,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
     HoodieInstant clusteringInstant4 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime4);
     HoodieCommitMetadata commitMetadata =
-            CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION, Option.empty());
 
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
@@ -1429,7 +1430,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     replacedFileIds.add(fileId1);
     partitionToReplaceFileIds.put(partitionPath1, replacedFileIds);
     HoodieCommitMetadata commitMetadata =
-        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION, Option.empty());
     commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
     saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -1515,7 +1517,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     replacedFileIdsP2.add(fileId4);
     partitionToReplaceFileIds.put(partitionPath2, replacedFileIdsP2);
     HoodieCommitMetadata commitMetadata =
-        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION, Option.empty());
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
@@ -1687,7 +1690,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats1 = buildWriteStats(partitionToFile1, commitTime1);
 
     HoodieCommitMetadata commitMetadata1 =
-        CommitUtils.buildMetadata(writeStats1, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
+        CommitUtils.buildMetadata(writeStats1, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION, Option.empty());
     saveAsComplete(commitTimeline, instant1, Option.of(commitMetadata1.toJsonString().getBytes(StandardCharsets.UTF_8)));
     commitTimeline.reload();
 
@@ -1710,7 +1713,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats2 = buildWriteStats(partitionToFile2, commitTime2);
 
     HoodieCommitMetadata commitMetadata2 =
-        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata2.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     // another insert commit
@@ -1726,7 +1730,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     partitionToFile3.put(partitionPath, files3);
     List<HoodieWriteStat> writeStats3 = buildWriteStats(partitionToFile3, commitTime3);
     HoodieCommitMetadata commitMetadata3 =
-        CommitUtils.buildMetadata(writeStats3, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
+        CommitUtils.buildMetadata(writeStats3, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION, Option.empty());
     saveAsComplete(commitTimeline, instant3, Option.of(commitMetadata3.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     metaClient.reloadActiveTimeline();

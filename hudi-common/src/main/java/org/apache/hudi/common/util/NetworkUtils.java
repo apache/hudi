@@ -36,7 +36,10 @@ import java.util.stream.Collectors;
  */
 public class NetworkUtils {
 
-  public static synchronized String getHostname() {
+  /**
+   * Returns the IP address.
+   */
+  public static synchronized String getHostAddr() {
     InetAddress localAddress;
     try (DatagramSocket s = new DatagramSocket()) {
       // see https://stackoverflow.com/questions/9481865/getting-the-ip-address-of-the-current-machine-using-java
@@ -78,6 +81,18 @@ public class NetworkUtils {
       return localAddress.getHostAddress();
     } catch (SocketException e) {
       throw new HoodieException("Unable to find server port", e);
+    }
+  }
+
+  /**
+   * Returns the hostname or the IP address in case hostname could not be determined.
+   */
+  public static String getHostname() {
+    try {
+      InetAddress localMachine = InetAddress.getLocalHost();
+      return localMachine.getHostName();
+    } catch (UnknownHostException e) {
+      return getHostAddr();
     }
   }
 

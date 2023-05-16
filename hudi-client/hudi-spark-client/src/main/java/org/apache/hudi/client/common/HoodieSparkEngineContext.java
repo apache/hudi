@@ -240,4 +240,17 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public <T> JavaRDD<T> emptyRDD() {
     return javaSparkContext.emptyRDD();
   }
+
+  @Override
+  public Map<String, String> getInfo() {
+    Map<String, String> info = new HashMap<>();
+    info.put("spark.user", javaSparkContext.sparkUser());
+    info.put("spark.master", javaSparkContext.master());
+    info.put("spark.application", javaSparkContext.appName());
+    info.put("spark.version", javaSparkContext.version());
+    info.put("spark.defaultParallelism", String.valueOf(javaSparkContext.defaultParallelism()));
+    info.put("spark.defaultMinPartitions", String.valueOf(javaSparkContext.defaultMinPartitions()));
+    info.put("spark.executor.instances", String.valueOf(javaSparkContext.getConf().get("spark.executor.instances")));
+    return info;
+  }
 }

@@ -194,7 +194,7 @@ public class TestHoodieParquetInputFormat {
     File partitionDir = InputFormatTestUtil.prepareCustomizedTable(basePath, baseFileFormat, 10, "100", true, false,
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.COMMIT_ACTION, Option.empty());
     FileCreateUtils.createCommit(basePath.toString(), "100", Option.of(commitMetadata));
 
     // Add the paths

@@ -77,7 +77,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   private static FileSystem fs;
 
   @BeforeAll
-  public static void setUpClass() throws IOException, InterruptedException {
+  public static void setUpClass() throws IOException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
@@ -106,7 +106,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     List<File> partitionDirs = InputFormatTestUtil
         .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime, HoodieTableType.MERGE_ON_READ);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.COMMIT_ACTION, Option.empty());
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
@@ -188,7 +188,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.COMMIT_ACTION, Option.empty());
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
@@ -260,7 +260,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.COMMIT_ACTION, Option.empty());
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     String newCommitTime = "101";
@@ -330,7 +330,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.COMMIT_ACTION, Option.empty());
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     // insert 1000 update records to log file 0

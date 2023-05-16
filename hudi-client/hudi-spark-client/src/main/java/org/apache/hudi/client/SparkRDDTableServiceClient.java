@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -131,7 +132,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   @Override
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
+    CommitUtils.buildExtraMetadata(extraMetadata, Option.of(context)).forEach(metadata::addMetadata);
     completeCompaction(metadata, table, compactionInstantTime);
   }
 

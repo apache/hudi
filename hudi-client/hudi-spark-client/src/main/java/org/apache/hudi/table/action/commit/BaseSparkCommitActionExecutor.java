@@ -288,7 +288,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList(),
         result.getPartitionToReplaceFileIds(),
-        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType(), Option.of(context))));
   }
 
   @Override

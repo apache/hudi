@@ -260,7 +260,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType(), Option.of(context));
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;
