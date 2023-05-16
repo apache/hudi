@@ -179,4 +179,103 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test(s"Test hudi_table_changes_by_path Table-Valued Function") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               |)
+               |location '$tablePath'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000), (3, 'a3', 30, 1000)
+               | """.stripMargin
+          )
+
+          val firstInstant = spark.sql(s"select min(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+
+          checkAnswer(
+            s"""select id,
+               |name,
+               |price,
+               |ts
+               |from hudi_table_changes_by_path('$tablePath', 'latest_state', 'earliest')
+               |""".stripMargin
+          )(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a3", 30.0, 1000)
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
+               | """.stripMargin
+          )
+          val secondInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+
+          checkAnswer(
+            s"""select id,
+               |name,
+               |price,
+               |ts
+               |from hudi_table_changes_by_path(
+               |'$tablePath',
+               |'latest_state',
+               |'$firstInstant')
+               |""".stripMargin
+          )(
+            Seq(1, "a1_1", 10.0, 1100),
+            Seq(2, "a2_2", 20.0, 1100),
+            Seq(3, "a3_3", 30.0, 1100)
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1_1', 10, 1200), (2, 'a2_2', 20, 1200), (3, 'a3_3', 30, 1200)
+               | """.stripMargin
+          )
+          val thirdInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+
+          // should not include the first and latest instant
+          checkAnswer(
+            s"""select id,
+               | name,
+               | price,
+               | ts
+               | from hudi_table_changes_by_path(
+               | '$tablePath',
+               | 'latest_state',
+               | '$firstInstant',
+               | '$secondInstant')
+               | """.stripMargin
+          )(
+            Seq(1, "a1_1", 10.0, 1100),
+            Seq(2, "a2_2", 20.0, 1100),
+            Seq(3, "a3_3", 30.0, 1100)
+          )
+        }
+      }
+    }
+  }
 }
