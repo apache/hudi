@@ -625,7 +625,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
     if (savePointTimeline.empty()) {
-      throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
+      throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
     }
 
     String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
@@ -651,7 +651,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
     if (savePointTimeline.empty()) {
-      throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
+      throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
     }
 
     String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
