@@ -44,14 +44,14 @@ object HoodieTableChanges {
     }
 
     val identifier = args.head
-    val queryType = args(1)
+    val incrementalQueryFormat = args(1)
     val startInstantTime = args(2)
     val endInstantTimeOpt = args.drop(3).headOption.map(x => "hoodie.datasource.read.end.instanttime" -> x)
 
-    val queryTypeOpt = queryType match {
-      case "latest_state" | "cdc" => Map("hoodie.datasource.query.type" -> queryType)
+    val incrementalQueryFormatOpt = incrementalQueryFormat match {
+      case "latest_state" | "cdc" => Map("hoodie.datasource.query.incremental.format" -> incrementalQueryFormat)
       case _ =>
-        throw new AnalysisException(s"'hudi_table_changes' doesn't support `$queryType`")
+        throw new AnalysisException(s"'hudi_table_changes' doesn't support `$incrementalQueryFormat`")
     }
 
     val startInstantTimeOpt = startInstantTime match {
@@ -59,7 +59,7 @@ object HoodieTableChanges {
       case _ => Map("hoodie.datasource.read.start.instanttime" -> startInstantTime)
     }
 
-    val opts: Map[String, String] = queryTypeOpt ++ startInstantTimeOpt ++ endInstantTimeOpt
+    val opts: Map[String, String] = incrementalQueryFormatOpt ++ startInstantTimeOpt ++ endInstantTimeOpt
 
     (identifier, opts)
   }
