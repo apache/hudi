@@ -16,8 +16,28 @@ class HoodieTableFileSystemView:
             files = self.metaClient.fs.ls(partitionPath)
             self.partitionToFileGroupsMap[partition] = self._addFilesToView(files, partition)
 
-    def addPartition(self, partition: str):
-        self._ensurePartitionLoadedCorrectly(partition)
+    def _ensurePartitionsLoadedCorrectly(self):
+        partitions = self.metaClient.getPartitions()
+        for partition in partitions:
+            self._ensurePartitionLoadedCorrectly(partition)
+    
+    def _getLatestFilesInPartition(self, partition: str):
+        fileIdtoFileGroup = self.partitionToFileGroupsMap[partition]
+        fileSlices = [fileIdtoFileGroup[fileId].getLatestFileSlice() for fileId in fileIdtoFileGroup]
+        return [fileSlice.filePath for fileSlice in fileSlices if not fileSlice is None]
+    
+    def _getLatestFilesInPartitionBefore(self, partition: str, maxInstantTime: int):
+        fileIdtoFileGroup = self.partitionToFileGroupsMap[partition]
+        fileSlices = [fileIdtoFileGroup[fileId].getLatestFileSliceBefore(maxInstantTime) for fileId in fileIdtoFileGroup]
+        return [fileSlice.filePath for fileSlice in fileSlices if not fileSlice is None]
+    
+    def getLatestFiles(self):
+        self._ensurePartitionsLoadedCorrectly()
+        return [file for partition in self.partitionToFileGroupsMap for file in self._getLatestFilesInPartition(partition)]
+    
+    def getLatestFilesBefore(self, maxInstantTime: int):
+        self._ensurePartitionsLoadedCorrectly()
+        return [file for partition in self.partitionToFileGroupsMap for file in self._getLatestFilesInPartitionBefore(partition, maxInstantTime)]
 
     def _addFilesToView(self, files: list[str], partition: str):
         return self._buildFileGroups(self._convertFilesToBaseFiles(files), partition)
@@ -27,6 +47,9 @@ class HoodieTableFileSystemView:
             if fileName.endswith(extension):
                 return True
         return False
+    
+    def getPartitions(self): 
+        self.metaClient.getPartitions()
 
     def _convertFilesToBaseFiles(self, files: list[str]):
         return [HoodieBaseFile(file) for file in files if self._isBaseFilePath(file)]

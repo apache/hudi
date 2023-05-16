@@ -1,24 +1,35 @@
 from hoodieTableFileSystemView import HoodieTableFileSystemView
 import hoodieTableMetaClient
 from fsspec.implementations.local import LocalFileSystem
+import pyarrow.parquet as pq
+import pyarrow as pa
+import pandas as pd
 
 
+class Hoodie:
+    def __init__(self, basePath: str):
+        self._metaClient = hoodieTableMetaClient.HoodieTableMetaClient(LocalFileSystem(), basePath)
+        self._fs = HoodieTableFileSystemView(self._metaClient)
+
+
+    def read_table(self):
+        return pq.read_table(self._fs.getLatestFiles())
+    
+    def read_table_before(self, maxInstantTime: int):
+        return pq.read_table(self._fs.getLatestFilesBefore(maxInstantTime))
 
 
 
 
 
 def main():
-    metaClient = hoodieTableMetaClient.HoodieTableMetaClient(LocalFileSystem(), "/tmp/hudi_trips_cow")
-    files = metaClient.scanHoodieInstantsFromFileSystem()
-    fs = HoodieTableFileSystemView(metaClient)
-    fs.addPartition("americas/united_states/san_francisco")
-    fs.addPartition("asia/india/chennai")
-    fs.addPartition("americas/brazil/sao_paulo")
-    # for partition in fs.partitionToFileGroupsMap:
-    #     print("partition is " + partition)
-    #     print(fs.partitionToFileGroupsMap[partition])
-
+    hudi = Hoodie("/tmp/hudi_trips_cow")
+    arrowtable = hudi.read_table()
+    pd.set_option('display.max_columns', None)
+    pandasDf =  arrowtable.to_pandas()
+    pandasasofDf = hudi.read_table_before(20230513130351473).to_pandas()
+    print(pandasDf)
+    print(pandasasofDf)
 
 if __name__ == "__main__":
     main()

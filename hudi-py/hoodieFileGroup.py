@@ -18,4 +18,9 @@ class HoodieFileGroup:
         if self.lastInstant is None or maxInstantTime > self.lastInstant:
             return None
         return self.fileSlices[max(k for k in self.fileSlices if k <= maxInstantTime)]
+    
+    def getLatestFileSlice(self):
+        if self.lastInstant is None:
+            return None
+        return self.fileSlices[self.lastInstant]
         
