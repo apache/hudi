@@ -130,7 +130,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       val hoodieDataSource = new DefaultSource
       val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> path))
 
-      LogicalRelation(relation, catalogTable = None)
+      LogicalRelation(relation)
   }
 }
 
