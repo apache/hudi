@@ -971,6 +971,9 @@ object DataSourceOptionsHelper {
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
+    if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
+      missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())
+    }
     missingWriteConfigs.toMap
   }
 

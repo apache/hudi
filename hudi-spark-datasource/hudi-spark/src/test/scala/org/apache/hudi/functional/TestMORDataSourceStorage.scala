@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
@@ -32,12 +33,11 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConversions._
-
 
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
@@ -128,5 +128,55 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .load(basePath)
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
+  }
+
+  @Test
+  def testMergeOnReadStorageDefaultCompaction(): Unit = {
+    val preCombineField = "fare"
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+
+    var options: Map[String, String] = commonOpts
+    options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
+    val dataGen = new HoodieTestDataGenerator(0xDEEF)
+    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    // Bulk Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val hudiDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath)
+
+    assertEquals(100, hudiDF1.count())
+
+    // upsert
+    for ( a <- 1 to 5) {
+      val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+      val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+      inputDF2.write.format("org.apache.hudi")
+        .options(options)
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+    // compaction should have been completed
+    val metaClient = HoodieTableMetaClient.builder.setConf(fs.getConf).setBasePath(basePath)
+      .setLoadActiveTimelineOnLoad(true).build
+    assertEquals(1, metaClient.getActiveTimeline.getCommitTimeline.countInstants())
   }
 }
