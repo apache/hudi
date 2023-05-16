@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -194,6 +195,91 @@ public class ITTestHoodieFlinkClustering {
 
     env.execute("flink_hudi_clustering");
     TestData.checkWrittenData(tempFile, EXPECTED, 4);
+  }
+
+  @Test
+  public void testHoodieFlinkClusteringWithComplexType() throws Exception {
+    // Create hoodie table and insert into data.
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    // set parallelism
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    // use append mode
+    // ddl
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_array array<varchar(10)>")
+        .field("int_array array<int>")
+        .field("f_map map<varchar(20), int>")
+        .field("f_row row(f_nested_array array<varchar(10)>, f_nested_row row(f_row_f0 int, f_row_f1 varchar(10)))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value())
+        .option(FlinkOptions.INSERT_CLUSTER.key(), "false")
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.COMPLEX_NESTED_ROW_TYPE_INSERT_T1).await();
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+    // Make configuration and setAvroSchema.
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    cfg.targetPartitions = 4;
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    // create metaClient
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // set the table name
+    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+    // set record key field
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    // set partition field
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    // set table schema
+    CompactionUtil.setAvroSchema(conf, metaClient);
+    // judge whether have operation
+    // To compute the clustering instant time and do clustering.
+    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+    boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
+    assertTrue(scheduled, "The clustering plan should be scheduled");
+    // fetch the instant based on the configured execution sequence
+    table.getMetaClient().reloadActiveTimeline();
+    HoodieTimeline timeline = table.getActiveTimeline().filterPendingReplaceTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    // generate clustering plan
+    // should support configurable commit metadata
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
+        table.getMetaClient(), timeline.lastInstant().get());
+    HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
+    // Mark instant as clustering inflight
+    HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstantTime);
+    table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+    final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+    final RowType rowType = (RowType) rowDataType.getLogicalType();
+    DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan))
+        .name("clustering_source")
+        .uid("uid_clustering_source")
+        .rebalance()
+        .transform("clustering_task",
+            TypeInformation.of(ClusteringCommitEvent.class),
+            new ClusteringOperator(conf, rowType))
+        .setParallelism(clusteringPlan.getInputGroups().size());
+    ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+    dataStream
+        .addSink(new ClusteringCommitSink(conf))
+        .name("clustering_commit")
+        .uid("uid_clustering_commit")
+        .setParallelism(1);
+    env.execute("flink_hudi_clustering");
   }
 
   @Test
