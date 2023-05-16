@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSuppor
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges}
 import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery.parseOptions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -102,6 +102,18 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       LogicalRelation(relation, table)
 
     case q: HoodieQuery =>
+      val (tableName, opts) = parseOptions(q.args)
+
+      val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
+      val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+
+      val hoodieDataSource = new DefaultSource
+      val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+        catalogTable.location.toString))
+
+      LogicalRelation(relation, catalogTable)
+
+    case q: HoodieTableChanges =>
       val (tableName, opts) = parseOptions(q.args)
 
       val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
