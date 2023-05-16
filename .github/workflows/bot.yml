@@ -204,9 +204,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark2.4'
-            sparkArchive: 'spark-2.4.8/spark-2.4.8-bin-hadoop2.7.tgz'
+          - flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.2'
+            sparkArchive: 'spark-3.2.3/spark-3.2.3-bin-hadoop2.7.tgz'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -219,14 +219,14 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: 'scala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: 'scala-2.12'
         run:
           mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: 'scala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: 'scala-2.12'
         run:
           mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
@@ -234,7 +234,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: 'scala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: 'scala-2.12'
         run: |
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
