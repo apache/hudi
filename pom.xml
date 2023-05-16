@@ -174,8 +174,9 @@
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.version>3.1.0</scalatest.version>
+    <scalatest.spark2.version>3.0.1</scalatest.spark2.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
+    <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
@@ -2153,6 +2154,7 @@
         <sparkbundle.version>2.4</sparkbundle.version>
         <scala.version>${scala11.version}</scala.version>
         <scala.binary.version>2.11</scala.binary.version>
+        <scalatest.version>${scalatest.spark2.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2/>
@@ -2178,6 +2180,7 @@
         <sparkbundle.version>2.4</sparkbundle.version>
         <scala.version>${scala11.version}</scala.version>
         <scala.binary.version>2.11</scala.binary.version>
+        <scalatest.version>${scalatest.spark2.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2/>
