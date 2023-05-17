@@ -20,10 +20,6 @@ package org.apache.hudi.client.bootstrap.translator;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
-import org.apache.hudi.config.HoodieBootstrapConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 /**
  * URI decodes the partition path
@@ -32,10 +28,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 public class DecodedBootstrapPartitionPathTranslator extends BootstrapPartitionPathTranslator {
   public DecodedBootstrapPartitionPathTranslator(TypedProperties properties) {
     super(properties);
-    if (!properties.getOrDefault(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(),
-        "").equals("org.apache.hudi.keygen.SimpleKeyGenerator")) {
-      throw new HoodieException("Partition decoding should only be used with SimpleKeyGenerator");
-    }
   }
 
   @Override

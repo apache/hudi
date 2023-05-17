@@ -486,8 +486,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         var relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
-          if (StringUtils.countMatches(relativePath, "=") == 1 && StringUtils.countMatches(relativePath,"/") > 0){
+          val nEqualsSign = StringUtils.countMatches(relativePath, "=")
+          lazy val nSlashes = StringUtils.countMatches(relativePath,"/")
+          if (nEqualsSign == 1 && nSlashes > 0){
             relativePath = relativePath.replace("/", "%2F")
+          } else if (nEqualsSign > 1 && nEqualsSign < nSlashes) {
+            relativePath = HoodieSparkUtils.splitHiveSlashPartitions(relativePath.
+              split("/"), nEqualsSign, "%2F", hive = true).mkString("/")
           }
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
           InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))

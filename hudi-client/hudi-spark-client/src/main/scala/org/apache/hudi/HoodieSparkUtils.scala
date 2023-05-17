@@ -225,15 +225,21 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           }
           Array(UTF8String.fromString(partitionValue))
         } else {
-          // If the partition column size is not equal to the partition fragments size
-          // and the partition column size > 1, we do not know how to map the partition
-          // fragments to the partition columns and therefore return an empty tuple. We don't
-          // fail outright so that in some cases we can fallback to reading the table as non-partitioned
-          // one
-          logWarning(s"Failed to parse partition values: found partition fragments" +
-            s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
-            s" (${partitionColumns.mkString(",")})")
-          Array.empty
+          val prefix = s"${partitionColumns.head}="
+          if (partitionPath.startsWith(prefix)) {
+            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length, "/", hive = false).
+              map(p => UTF8String.fromString(p)).toArray
+          } else {
+            // If the partition column size is not equal to the partition fragments size
+            // and the partition column size > 1, we do not know how to map the partition
+            // fragments to the partition columns and therefore return an empty tuple. We don't
+            // fail outright so that in some cases we can fallback to reading the table as non-partitioned
+            // one
+            logWarning(s"Failed to parse partition values: found partition fragments" +
+              s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
+              s" (${partitionColumns.mkString(",")})")
+            Array.empty
+          }
         }
       } else {
         // If partitionSeqs.length == partitionSchema.fields.length
@@ -271,5 +277,28 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionCols
     ).toSeq(partitionSchema)
+  }
+
+  def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int, sep: String, hive: Boolean): Array[String] = {
+    val partitionVals = new Array[String](nPartitions)
+    var index = 0
+    var first = true
+    for (fragment <- partitionFragments) {
+      if (fragment.contains("=")) {
+        if (first) {
+          first = false
+        } else {
+          index += 1
+        }
+        partitionVals(index) = if (hive) {
+          fragment
+        } else {
+          fragment.substring(fragment.indexOf("=") + 1)
+        }
+      } else {
+        partitionVals(index) += sep + fragment
+      }
+    }
+    return partitionVals
   }
 }
