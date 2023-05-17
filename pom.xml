@@ -164,7 +164,7 @@
                (hudi.spark.common.modules.*) -->
     <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
     <hudi.spark.common.modules.2/>
-    <avro.version>1.8.2</avro.version>
+    <avro.version>1.11.1</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -2244,7 +2244,7 @@
       </modules>
       <properties>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-        <avro.version>1.8.2</avro.version>
+        <avro.version>1.11.1</avro.version>
       </properties>
       <activation>
         <activeByDefault>true</activeByDefault>
@@ -2265,7 +2265,7 @@
       <properties>
         <sparkbundle.version>2.4</sparkbundle.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-        <avro.version>1.8.2</avro.version>
+        <avro.version>1.11.1</avro.version>
       </properties>
       <activation>
         <property>
@@ -2351,7 +2351,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.10.1</parquet.version>
         <orc.spark.version>1.5.13</orc.spark.version>
-        <avro.version>1.8.2</avro.version>
+        <avro.version>1.11.1</avro.version>
         <antlr.version>4.8-1</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -2392,7 +2392,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
         <orc.spark.version>1.6.12</orc.spark.version>
-        <avro.version>1.10.2</avro.version>
+        <avro.version>1.11.1</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -2500,6 +2500,18 @@
         </property>
       </activation>
     </profile>
+    <profile>
+      <id>avro11</id>
+      <properties>
+        <avro.version>1.11.1</avro.version>
+      </properties>
+      <activation>
+        <property>
+          <name>avro11</name>
+        </property>
+      </activation>
+    </profile>
+
     <profile>
       <id>flink1.16</id>
       <properties>
