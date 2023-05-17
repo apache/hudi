@@ -224,6 +224,7 @@ public class TestAvroSchemaEvolutionUtils {
    */
   @Test
   public void testReWriteRecordWithTypeChanged() {
+    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils$\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
     Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
         + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
@@ -246,7 +247,7 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"col7\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null},"
         + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
         + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
-        + "{\"name\":\"enum\",\"type\":[\"null\",{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}],\"default\":null}"
+        + "{\"name\":\"enum\",\"type\":[\"null\"," + enumSchema + "],\"default\":null}"
         + "]}");
     // create a test record with avroSchema
     GenericData.Record avroRecord = new GenericData.Record(avroSchema);
@@ -275,7 +276,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("col8", false);
     ByteBuffer bb = ByteBuffer.wrap(new byte[] {97, 48, 53});
     avroRecord.put("col9", bb);
-    avroRecord.put("enum", Enum.ENUM1);
+    avroRecord.put("enum", new GenericData.EnumSymbol(new Schema.Parser().parse(enumSchema), Enum.ENUM1));
     Assertions.assertEquals(GenericData.get().validate(avroSchema, avroRecord), true);
     InternalSchema internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
     // do change type operation
@@ -302,6 +303,7 @@ public class TestAvroSchemaEvolutionUtils {
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getFullName());
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
 
+    Assertions.assertEquals("ENUM1", newRecord.get("enum"));
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
   }
 
