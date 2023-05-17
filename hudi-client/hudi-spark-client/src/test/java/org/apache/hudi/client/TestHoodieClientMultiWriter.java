@@ -599,21 +599,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       final int numRecords = 100;
       assertDoesNotThrow(() -> {
         writeStatus2.set(createCommitWithInserts(cfg, client2, "001", commitTime3, numRecords, false));
+        client2.getHeartbeatClient().stop(commitTime3);
       });
     });
 
     future1.get();
     future2.get();
 
-    final CountDownLatch commitCountDownLatch = new CountDownLatch(2);
+    final CountDownLatch commitCountDownLatch = new CountDownLatch(1);
     HoodieTableMetaClient tableMetaClient = client.getTableServiceClient().createMetaClient(true);
-
-    // Get inflight instant stream before commit
-    List<HoodieInstant> inflightInstants = client
-            .getTableServiceClient()
-            .getInflightTimelineExcludeCompactionAndClustering(tableMetaClient)
-            .getReverseOrderedInstants()
-            .collect(Collectors.toList());
 
     // Commit the instants and get instants to rollback in parallel
     future1 = executor.submit(() -> {
@@ -628,9 +622,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         //
       }
       List<String> instantsToRollback =
-              client.getTableServiceClient().getInstantsToRollbackForLazyCleanPolicy(tableMetaClient, inflightInstants.stream());
-      // No instants will be rollback though some instants may be detected as `expired`
-      assertTrue(instantsToRollback.size() == 1);
+          client.getTableServiceClient().getInstantsToRollback(tableMetaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+      // Only commit3 will be rollback, although commit2 is in the inflight timeline and has no heartbeat file
+      assertEquals(1, instantsToRollback.size());
+      assertEquals(commitTime3, instantsToRollback.get(0));
     });
 
     future1.get();

@@ -589,7 +589,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param metaClient
    * @return
    */
-  protected HoodieTimeline getInflightTimelineExcludeCompactionAndClustering(HoodieTableMetaClient metaClient) {
+  private HoodieTimeline getInflightTimelineExcludeCompactionAndClustering(HoodieTableMetaClient metaClient) {
     HoodieTimeline inflightTimelineWithReplaceCommit = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
     HoodieTimeline inflightTimelineExcludeClusteringCommit = inflightTimelineWithReplaceCommit.filter(instant -> {
       if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
@@ -767,7 +767,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
-  List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
+  private List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
                                                        Stream<HoodieInstant> inflightInstantsStream) {
     // Get expired instants, must store them into list before double-checking
     List<String> expiredInstants = inflightInstantsStream.filter(instant -> {
