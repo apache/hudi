@@ -21,6 +21,7 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.Partition;
@@ -90,10 +91,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final AWSGlue awsGlue;
   private final String databaseName;
 
+  private final Boolean skipTableArchive;
+
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
     this.awsGlue = AWSGlueClientBuilder.standard().build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
   }
 
   @Override
@@ -145,7 +149,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             LOG.warn("Partitions already exist in glue: " + result.getErrors());
           } else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + result.getErrors());
+                + " with error(s): " + result.getErrors());
           }
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
@@ -232,7 +236,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return;
     }
     try {
-      updateTableParameters(awsGlue, databaseName, tableName, tableProperties, false);
+      updateTableParameters(awsGlue, databaseName, tableName, tableProperties, false, skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update properties for table " + tableId(databaseName, tableName), e);
     }
@@ -261,6 +265,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request = new UpdateTableRequest()
           .withDatabaseName(databaseName)
+          .withSkipArchive(skipTableArchive)
           .withTableInput(updatedTableInput);
 
       awsGlue.updateTable(request);
@@ -271,12 +276,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName,
-      MessageType storageSchema,
-      String inputFormatClass,
-      String outputFormatClass,
-      String serdeClass,
-      Map<String, String> serdeProperties,
-      Map<String, String> tableProperties) {
+                          MessageType storageSchema,
+                          String inputFormatClass,
+                          String outputFormatClass,
+                          String serdeClass,
+                          Map<String, String> serdeProperties,
+                          Map<String, String> tableProperties) {
     if (tableExists(tableName)) {
       return;
     }
@@ -422,7 +427,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
     final String lastCommitTimestamp = getActiveTimeline().lastInstant().get().getTimestamp();
     try {
-      updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), false);
+      updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), false, skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
     }
@@ -477,7 +482,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private static void updateTableParameters(AWSGlue awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean shouldReplace) {
+  private static void updateTableParameters(AWSGlue awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean shouldReplace, boolean skipTableArchive) {
     final Map<String, String> newParams = new HashMap<>();
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -498,6 +503,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request = new UpdateTableRequest();
       request.withDatabaseName(databaseName)
+          .withSkipArchive(skipTableArchive)
           .withTableInput(updatedTableInput);
       awsGlue.updateTable(request);
     } catch (Exception e) {
