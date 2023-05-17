@@ -138,7 +138,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     // Should always be set by FileSourceScanExec creating this.
     // Check conf before checking option, to allow working around an issue by changing conf.
     val returningBatch = sparkSession.sessionState.conf.parquetVectorizedReaderEnabled &&
-      options.get(FileFormat.OPTION_RETURNING_BATCH)
+      options.get(FileFormat.OPTION_RETURNING_BATCH, "false")
         .getOrElse {
           throw new IllegalArgumentException(
             "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
