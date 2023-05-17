@@ -339,12 +339,37 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
+  /**
+   * This will manage partitions indexes. Users can activate/deactivate them on existing tables.
+   * Removing index definition, will result in dropping the indexe.
+   *
+   * reference doc for partition indexes:
+   * https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html#partition-index-getpartitions
+   *
+   * @param tableName
+   */
   public void managePartitionIndexes(String tableName) {
-    if (config.getBooleanOrDefault(META_SYNC_PARTITION_INDEX_FIELDS_ENABLE)) {
+    if (!config.getBooleanOrDefault(META_SYNC_PARTITION_INDEX_FIELDS_ENABLE)) {
+      // deactivate indexing if not enabled
+      getPartitionIndexEnable(tableName).ifPresent(enabled -> {
+        if (Boolean.valueOf(enabled)) {
+          updatePartitionIndexEnable(tableName, false);
+        }
+      });
+      // also drop all existing indexes
+      GetPartitionIndexesRequest indexesRequest = new GetPartitionIndexesRequest()
+          .withDatabaseName(databaseName).withTableName(tableName);
+      GetPartitionIndexesResult existingIdxs = awsGlue.getPartitionIndexes(indexesRequest);
+      existingIdxs.getPartitionIndexDescriptorList().forEach(existingIdx -> {
+          DeletePartitionIndexRequest idxToDelete = new DeletePartitionIndexRequest()
+              .withDatabaseName(databaseName).withTableName(tableName).withIndexName(existingIdx.getIndexName());
+          awsGlue.deletePartitionIndex(idxToDelete);
+      });
+    } else {
       // activate indexing usage
-      // add the property to the table
       getPartitionIndexEnable(tableName).ifPresent(enabled -> {
         if (!Boolean.valueOf(enabled)) {
+          // add the property to the table
           updatePartitionIndexEnable(tableName, true);
         }
       });
@@ -353,15 +378,15 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // get existing indexes
       GetPartitionIndexesRequest indexesRequest = new GetPartitionIndexesRequest()
           .withDatabaseName(databaseName).withTableName(tableName);
+      GetPartitionIndexesResult existingIdxs = awsGlue.getPartitionIndexes(indexesRequest);
 
       // for each existing index
-      // remove if not relevant
-      GetPartitionIndexesResult res = awsGlue.getPartitionIndexes(indexesRequest);
-      res.getPartitionIndexDescriptorList().forEach(existingIdx -> {
+      // remove if not relevant anymore
+      existingIdxs.getPartitionIndexDescriptorList().forEach(existingIdx -> {
         List<String> idxColumns = existingIdx.getKeys().stream().map(key -> key.getName()).collect(Collectors.toList());
         Boolean toBeRemoved = true;
         for (List<String> neededIdx : partitionsIndexNeeded) {
-          if (neededIdx.containsAll(idxColumns)) {
+          if (neededIdx.equals(idxColumns)) {
             toBeRemoved = false;
           }
         }
@@ -376,25 +401,19 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // create if not exist
       for (List<String> neededIdx : partitionsIndexNeeded) {
         Boolean toBeCreated = true;
-        for (PartitionIndexDescriptor existingIdx : res.getPartitionIndexDescriptorList()) {
+        for (PartitionIndexDescriptor existingIdx : existingIdxs.getPartitionIndexDescriptorList()) {
           List<String> collect = existingIdx.getKeys().stream().map(key -> key.getName()).collect(Collectors.toList());
-          if (collect.containsAll(neededIdx) && neededIdx.containsAll(collect)) {
+          if (collect.equals(neededIdx)) {
             toBeCreated = false;
           }
         }
         if (toBeCreated) {
           PartitionIndex newIdx = new PartitionIndex().withKeys(neededIdx);
-          CreatePartitionIndexRequest creationRequest = new CreatePartitionIndexRequest().withDatabaseName(databaseName).withTableName(tableName).withPartitionIndex(newIdx);
+          CreatePartitionIndexRequest creationRequest = new CreatePartitionIndexRequest()
+              .withDatabaseName(databaseName).withTableName(tableName).withPartitionIndex(newIdx);
           awsGlue.createPartitionIndex(creationRequest);
         }
       }
-    } else {
-      // deactivate indexing if not enabled
-      getPartitionIndexEnable(tableName).ifPresent(enabled -> {
-        if (Boolean.valueOf(enabled)) {
-          updatePartitionIndexEnable(tableName, false);
-        }
-      });
     }
   }
 
