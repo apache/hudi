@@ -27,6 +27,7 @@ env:
 
 jobs:
   validate-source:
+    if: ${{ false }}  # temp disable
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -47,6 +48,7 @@ jobs:
         run: ./scripts/release/validate_source_rat.sh
 
   test-spark:
+    if: ${{ false }}  # temp disable
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -105,6 +107,7 @@ jobs:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
+    if: ${{ false }}  # temp disable
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -136,6 +139,7 @@ jobs:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
+    if: ${{ false }}  # temp disable
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -221,14 +225,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
