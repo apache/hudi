@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.realtime.RealtimeCompactedRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.SparkSession;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,12 @@ public class TestHiveTableSchemaEvolution {
         .getOrCreate();
 
     sparkSession.sparkContext().setLogLevel("ERROR");
+  }
+
+  @AfterEach
+  public void cleanUp() {
+    sparkSession.stop();
+    sparkSession = null;
   }
 
   @Test
