@@ -30,6 +30,5 @@ class HoodieSpark3_0AvroDeserializer(rootAvroType: Schema, rootCatalystType: Dat
     new AvroDeserializer(rootAvroType, rootCatalystType, avroRebaseModeInRead)
   }
 
-
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)
 }

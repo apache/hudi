@@ -18,6 +18,7 @@ package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.util.DateTimeConstants
 import org.apache.spark.sql.internal.SQLConf
 
 import java.util.Locale
@@ -99,5 +100,16 @@ private[avro] object AvroUtils extends Logging {
           matches.map(_.name()).mkString("[", ", ", "]")
       )
     }
+  }
+
+  def microsToMillis(micros: Long): Long = {
+    // When the timestamp is negative i.e before 1970, we need to adjust the millseconds portion.
+    // Example - 1965-01-01 10:11:12.123456 is represented as (-157700927876544) in micro precision.
+    // In millis precision the above needs to be represented as (-157700927877).
+    Math.floorDiv(micros, DateTimeConstants.MICROS_PER_MILLIS)
+  }
+
+  def millisToMicros(millis: Long): Long = {
+    Math.multiplyExact(millis, DateTimeConstants.MICROS_PER_MILLIS)
   }
 }

@@ -19,10 +19,11 @@ package org.apache.spark.sql.avro
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
-import org.apache.avro.Schema.Type.{FLOAT, _}
+import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.catalyst.util._
@@ -41,7 +42,7 @@ import scala.collection.mutable.ArrayBuffer
 /**
  * A deserializer to deserialize data in avro format to data in catalyst format.
  *
- * NOTE: This code is borrowed from Spark 3.0.2
+ * NOTE: This code is borrowed from Spark 3.1.2
  *       This code is borrowed, so that we can better control compatibility w/in Spark minor
  *       branches (3.2.x, 3.1.x, etc)
  *
@@ -51,33 +52,34 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
                                     rootCatalystType: DataType,
                                     datetimeRebaseMode: LegacyBehaviorPolicy.Value) {
 
-  def this(rootAvroType: Schema, rootCatalystType: DataType) {
-    this(rootAvroType, rootCatalystType,
-      LegacyBehaviorPolicy.withName(
-        SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ)))
+  def this(rootAvroType: Schema, rootCatalystType: DataType) = {
+    this(
+      rootAvroType,
+      rootCatalystType,
+      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ)))
   }
 
   private lazy val decimalConversions = new DecimalConversion()
 
-  private val dateRebaseFunc = DataSourceUtils.creteDateRebaseFuncInRead(
+  private val dateRebaseFunc = createDateRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  private val timestampRebaseFunc = DataSourceUtils.creteTimestampRebaseFuncInRead(
+  private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  private val converter: Any => Any = rootCatalystType match {
+  private val converter: Any => Option[Any] = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      (data: Any) => InternalRow.empty
+      (data: Any) => Some(InternalRow.empty)
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
-      val writer = getRecordWriter(rootAvroType, st, Nil)
+      val writer = getRecordWriter(rootAvroType, st, Nil, applyFilters = _ => false)
       (data: Any) => {
         val record = data.asInstanceOf[GenericRecord]
-        writer(fieldUpdater, record)
-        resultRow
+        val skipRow = writer(fieldUpdater, record)
+        if (skipRow) None else Some(resultRow)
       }
 
     case _ =>
@@ -86,20 +88,19 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
       (data: Any) => {
         writer(fieldUpdater, 0, data)
-        tmpRow.get(0, rootCatalystType)
+        Some(tmpRow.get(0, rootCatalystType))
       }
   }
 
-  def deserialize(data: Any): Option[Any] = Option.apply(converter(data))
+  def deserialize(data: Any): Option[Any] = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
    * updater.
    */
-  private def newWriter(
-                         avroType: Schema,
-                         catalystType: DataType,
-                         path: List[String]): (CatalystDataUpdater, Int, Any) => Unit =
+  private def newWriter(avroType: Schema,
+                        catalystType: DataType,
+                        path: List[String]): (CatalystDataUpdater, Int, Any) => Unit =
     (avroType.getType, catalystType) match {
       case (NULL, NullType) => (updater, ordinal, _) =>
         updater.setNullAt(ordinal)
@@ -122,7 +123,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         // (the `null` case), the value is processed as timestamp type with millisecond precision.
         case null | _: TimestampMillis => (updater, ordinal, value) =>
           val millis = value.asInstanceOf[Long]
-          val micros = DateTimeUtils.fromMillis(millis)
+          val micros = AvroUtils.millisToMicros(millis)
           updater.setLong(ordinal, timestampRebaseFunc(micros))
         case _: TimestampMicros => (updater, ordinal, value) =>
           val micros = value.asInstanceOf[Long]
@@ -163,6 +164,8 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           case b: ByteBuffer =>
             val bytes = new Array[Byte](b.remaining)
             b.get(bytes)
+            // Do not forget to reset the position
+            b.rewind()
             bytes
           case b: Array[Byte] => b
           case other => throw new RuntimeException(s"$other is not a valid avro binary.")
@@ -182,7 +185,9 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         updater.setDecimal(ordinal, decimal)
 
       case (RECORD, st: StructType) =>
-        val writeRecord = getRecordWriter(avroType, st, path)
+        // Avro datasource doesn't accept filters with nested attributes. See SPARK-32328.
+        // We can always return `false` from `applyFilters` for nested records.
+        val writeRecord = getRecordWriter(avroType, st, path, applyFilters = _ => false)
         (updater, ordinal, value) =>
           val row = new SpecificInternalRow(st)
           writeRecord(new RowUpdater(row), value.asInstanceOf[GenericRecord])
@@ -254,7 +259,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           if (nonNullTypes.length == 1) {
             newWriter(nonNullTypes.head, catalystType, path)
           } else {
-            nonNullTypes.map(_.getType) match {
+            nonNullTypes.map(_.getType).toSeq match {
               case Seq(a, b) if Set(a, b) == Set(INT, LONG) && catalystType == LongType =>
                 (updater, ordinal, value) =>
                   value match {
@@ -318,48 +323,54 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     }
   }
 
-  private def getRecordWriter(
-                               avroType: Schema,
-                               sqlType: StructType,
-                               path: List[String]): (CatalystDataUpdater, GenericRecord) => Unit = {
+  private def getRecordWriter(avroType: Schema,
+                              sqlType: StructType,
+                              path: List[String],
+                              applyFilters: Int => Boolean): (CatalystDataUpdater, GenericRecord) => Boolean = {
     val validFieldIndexes = ArrayBuffer.empty[Int]
     val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Any) => Unit]
 
+    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(avroType)
     val length = sqlType.length
     var i = 0
     while (i < length) {
       val sqlField = sqlType.fields(i)
-      val avroField = avroType.getField(sqlField.name)
-      if (avroField != null) {
-        validFieldIndexes += avroField.pos()
+      avroSchemaHelper.getFieldByName(sqlField.name) match {
+        case Some(avroField) =>
+          validFieldIndexes += avroField.pos()
 
-        val baseWriter = newWriter(avroField.schema(), sqlField.dataType, path :+ sqlField.name)
-        val ordinal = i
-        val fieldWriter = (fieldUpdater: CatalystDataUpdater, value: Any) => {
-          if (value == null) {
-            fieldUpdater.setNullAt(ordinal)
-          } else {
-            baseWriter(fieldUpdater, ordinal, value)
+          val baseWriter = newWriter(avroField.schema(), sqlField.dataType, path :+ sqlField.name)
+          val ordinal = i
+          val fieldWriter = (fieldUpdater: CatalystDataUpdater, value: Any) => {
+            if (value == null) {
+              fieldUpdater.setNullAt(ordinal)
+            } else {
+              baseWriter(fieldUpdater, ordinal, value)
+            }
           }
-        }
-        fieldWriters += fieldWriter
-      } else if (!sqlField.nullable) {
-        throw new IncompatibleSchemaException(
-          s"""
-             |Cannot find non-nullable field ${path.mkString(".")}.${sqlField.name} in Avro schema.
-             |Source Avro schema: $rootAvroType.
-             |Target Catalyst type: $rootCatalystType.
-                                               """.stripMargin)
+          fieldWriters += fieldWriter
+        case None if !sqlField.nullable =>
+          val fieldStr = s"${path.mkString(".")}.${sqlField.name}"
+          throw new IncompatibleSchemaException(
+            s"""
+               |Cannot find non-nullable field $fieldStr in Avro schema.
+               |Source Avro schema: $rootAvroType.
+               |Target Catalyst type: $rootCatalystType.
+           """.stripMargin)
+        case _ => // nothing to do
       }
       i += 1
     }
 
     (fieldUpdater, record) => {
       var i = 0
-      while (i < validFieldIndexes.length) {
+      var skipRow = false
+      while (i < validFieldIndexes.length && !skipRow) {
         fieldWriters(i)(fieldUpdater, record.get(validFieldIndexes(i)))
+        skipRow = applyFilters(i)
         i += 1
       }
+      skipRow
     }
   }
 
@@ -443,6 +454,39 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     override def setFloat(ordinal: Int, value: Float): Unit = array.setFloat(ordinal, value)
 
     override def setDecimal(ordinal: Int, value: Decimal): Unit = array.update(ordinal, value)
+  }
+}
+
+object AvroDeserializer {
+
+  // NOTE: Following methods have been renamed in Spark 3.1.3 [1] making [[AvroDeserializer]] implementation
+  //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].
+  //       To make sure this implementation is compatible w/ all Spark versions w/in Spark 3.1.x branch,
+  //       we're preemptively cloned those methods to make sure Hudi is compatible w/ Spark 3.1.2 as well as
+  //       w/ Spark >= 3.1.3
+  //
+  // [1] https://github.com/apache/spark/pull/34978
+
+  def createDateRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
+                                 format: String): Int => Int = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
+      if (days < RebaseDateTime.lastSwitchJulianDay) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      days
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseJulianToGregorianDays
+    case LegacyBehaviorPolicy.CORRECTED => identity[Int]
+  }
+
+  def createTimestampRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
+                                      format: String): Long => Long = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
+      if (micros < RebaseDateTime.lastSwitchJulianTs) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      micros
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseJulianToGregorianMicros
+    case LegacyBehaviorPolicy.CORRECTED => identity[Long]
   }
 }
 
