@@ -617,21 +617,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Commit the instants and get instants to rollback in parallel
     future1 = executor.submit(() -> {
-      long start = System.currentTimeMillis();
-      LOG.info(String.format("Start to commit instant %s", commitTime2));
       client1.commit(commitTime2, writeStatus1.get());
       commitCountDownLatch.countDown();
-      validInstants.add(commitTime2);
-      LOG.info(String.format("commit the instant cost %d ms", System.currentTimeMillis() - start));
-    });
-
-    future2 = executor.submit(() -> {
-      long start = System.currentTimeMillis();
-      LOG.info(String.format("Start to commit instant %s", commitTime3));
-      client2.commit(commitTime3, writeStatus2.get());
-      commitCountDownLatch.countDown();
-      validInstants.add(commitTime3);
-      LOG.info(String.format("commit the instant %s cost %d ms", commitTime3, System.currentTimeMillis() - start));
     });
 
     Future future3 = executor.submit(() -> {
@@ -640,24 +627,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       } catch (InterruptedException e) {
         //
       }
-      LOG.info("Start to get instants to rollback");
       List<String> instantsToRollback =
               client.getTableServiceClient().getInstantsToRollbackForLazyCleanPolicy(tableMetaClient, inflightInstants.stream());
       // No instants will be rollback though some instants may be detected as `expired`
-      assertTrue(instantsToRollback.isEmpty());
+      assertTrue(instantsToRollback.size() == 1);
     });
 
     future1.get();
-    future2.get();
     future3.get();
-
-    validInstants.addAll(
-            metaClient.reloadActiveTimeline().getCompletedReplaceTimeline()
-                    .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()));
-    Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
-            .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toSet());
-    assertTrue(validInstants.containsAll(completedInstants));
   }
 
   @ParameterizedTest

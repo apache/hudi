@@ -767,8 +767,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
-  protected List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
-                                                              Stream<HoodieInstant> inflightInstantsStream) {
+  List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
+                                                       Stream<HoodieInstant> inflightInstantsStream) {
     // Get expired instants, must store them into list before double-checking
     List<String> expiredInstants = inflightInstantsStream.filter(instant -> {
       try {
@@ -780,7 +780,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
     if (!expiredInstants.isEmpty()) {
-      LOG.info("Found expired instants to rollback for lazy clean: " + String.join(",", expiredInstants));
       // Only return instants that haven't been completed by other writers
       metaClient.reloadActiveTimeline();
       HoodieTimeline latestInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
