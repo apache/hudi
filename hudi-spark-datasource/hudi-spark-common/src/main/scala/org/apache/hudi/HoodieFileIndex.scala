@@ -42,6 +42,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.text.SimpleDateFormat
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 

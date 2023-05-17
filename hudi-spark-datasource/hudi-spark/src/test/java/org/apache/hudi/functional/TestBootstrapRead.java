@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -227,12 +228,16 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     }
     Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
+    Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
+      compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
+    compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
     compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
