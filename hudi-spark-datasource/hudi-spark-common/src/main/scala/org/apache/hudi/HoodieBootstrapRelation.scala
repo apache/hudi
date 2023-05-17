@@ -132,8 +132,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       //       default Spark behavior: Spark by default strips partition-columns from the data schema and does
       //       NOT persist them in the data files, instead parsing them from partition-paths (on the fly) whenever
       //       table is queried
-      shouldAppendPartitionValuesOverride = Some(true),
-      shouldDecodeFilePathOverride = Some(false)
+      shouldAppendPartitionValuesOverride = Some(true)
     )
 
     val boostrapSkeletonFileReader = createBaseFileReader(
@@ -150,8 +149,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
       // NOTE: We override Spark to avoid injecting partition values into the records read from
       //       skeleton-file
-      shouldAppendPartitionValuesOverride = Some(false),
-      shouldDecodeFilePathOverride = Some(false)
+      shouldAppendPartitionValuesOverride = Some(false)
     )
 
     (bootstrapDataFileReader, boostrapSkeletonFileReader)

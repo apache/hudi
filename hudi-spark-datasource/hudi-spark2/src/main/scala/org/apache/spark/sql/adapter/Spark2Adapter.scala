@@ -142,8 +142,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean, decodeFilePath: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues, decodeFilePath))
+  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {

@@ -158,7 +158,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createHoodieParquetFileFormat(appendPartitionValues: Boolean, decodeFilePath: Boolean): Option[ParquetFileFormat]
+  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 
   /**
    * Create instance of [[InterpretedPredicate]]

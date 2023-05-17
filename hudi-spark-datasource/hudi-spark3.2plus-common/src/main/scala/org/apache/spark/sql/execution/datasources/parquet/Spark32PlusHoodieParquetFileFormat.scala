@@ -60,7 +60,7 @@ import java.net.URI
  *   <li>Schema on-read</li>
  * </ol>
  */
-class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean, private val shouldDecodeFilePath: Boolean) extends ParquetFileFormat {
+class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -136,11 +136,8 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
-      val filePath = if (shouldDecodeFilePath) {
-        new Path(new URI(file.filePath))
-      } else {
-        new Path(new URI(file.filePath).getRawPath)
-      }
+
+      val filePath = new Path(new URI(file.filePath))
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
       val sharedConf = broadcastedHadoopConf.value.value

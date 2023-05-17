@@ -46,7 +46,7 @@ class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
 
     sparkAdapter
-      .createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, decodeFilePath = true).get
+      .createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }
