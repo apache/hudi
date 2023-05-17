@@ -782,8 +782,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     if (!expiredInstants.isEmpty()) {
       // Only return instants that haven't been completed by other writers
       metaClient.reloadActiveTimeline();
-      HoodieTimeline latestInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
-      return expiredInstants.stream().filter(latestInflightTimeline::containsInstant).collect(Collectors.toList());
+      HoodieTimeline refreshedInflightTimeline = getInflightTimelineExcludeCompactionAndClustering(metaClient);
+      return expiredInstants.stream().filter(refreshedInflightTimeline::containsInstant).collect(Collectors.toList());
     } else {
       return Collections.emptyList();
     }
