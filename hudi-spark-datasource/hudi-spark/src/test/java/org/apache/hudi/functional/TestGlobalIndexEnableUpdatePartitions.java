@@ -74,7 +74,10 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       final int totalRecords = 4;
-      final String p1 = "p1", p2 = "p2", p3 = "p3", p4 = "p4";
+      final String p1 = "p1";
+      final String p2 = "p2";
+      final String p3 = "p3";
+      final String p4 = "p4";
 
       // 1st batch: inserts
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
@@ -129,7 +132,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       final int totalRecords = 4;
-      final String p1 = "p1", p2 = "p2";
+      final String p1 = "p1";
+      final String p2 = "p2";
 
       // 1st batch: inserts
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
