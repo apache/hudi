@@ -650,7 +650,7 @@ public class ParquetSchemaConverter {
             .addField(
                 Types
                     .repeatedGroup()
-                    .addField(convertToParquetType("key", keyType, repetition))
+                    .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
                     .addField(convertToParquetType("value", valueType, repetition))
                     .named("key_value"))
             .named(name);
