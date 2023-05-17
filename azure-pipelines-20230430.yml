@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# NOTE:
+# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.17 profiles.
+# PRs will need to keep in sync with master's version to trigger the CI runs.
+
 trigger:
   branches:
     include:
@@ -32,6 +36,7 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
+      - 'hudi-flink-datasource/hudi-flink1.17.x'
   - name: job2Modules
     type: object
     default:
@@ -60,6 +65,7 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
+      - '!hudi-flink-datasource/hudi-flink1.17.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark2'
@@ -81,9 +87,10 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
+      - '!hudi-flink-datasource/hudi-flink1.17.x'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.16'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.17'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
@@ -117,7 +124,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -126,7 +133,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -150,7 +157,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -174,7 +181,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -198,7 +205,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -207,7 +214,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -231,7 +238,7 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
-              publishJUnitResults: true
+              publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: AzureCLI@2

@@ -183,16 +183,16 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     if (!HoodieSparkUtils.gteqSpark3_0()) {
       return;
     }
+    String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
+        : NonpartitionedKeyGenerator.class.getCanonicalName();
 
     if (deltaCommit) {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, HoodieFileFormat.ORC);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, HoodieFileFormat.ORC, keyGeneratorClass);
     } else {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, HoodieFileFormat.ORC);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, HoodieFileFormat.ORC, keyGeneratorClass);
     }
 
     int totalRecords = 100;
-    String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
-        : NonpartitionedKeyGenerator.class.getCanonicalName();
     final String bootstrapModeSelectorClass;
     final String bootstrapCommitInstantTs;
     final boolean checkNumRawFiles;
@@ -229,15 +229,15 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
     long timestamp = Instant.now().toEpochMilli();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
+    HoodieWriteConfig config = getConfigBuilder(schema.toString(), partitioned)
         .withAutoCommit(true)
         .withSchema(schema.toString())
+        .withKeyGenerator(keyGeneratorClass)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .build())
         .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
             .withBootstrapBasePath(bootstrapBasePath)
-            .withBootstrapKeyGenClass(keyGeneratorClass)
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
@@ -462,11 +462,21 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
+    return getConfigBuilder(schemaStr, true);
+  }
+
+  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, boolean partitioned) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
         .withExternalSchemaTrasformation(true);
     TypedProperties properties = new TypedProperties();
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "datestr");
+    properties.setProperty(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitioned ? "datestr" : "");
+    if (!partitioned) {
+      properties.setProperty(
+          HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(),
+          NonpartitionedKeyGenerator.class.getCanonicalName());
+    }
     builder = builder.withProps(properties);
     return builder;
   }

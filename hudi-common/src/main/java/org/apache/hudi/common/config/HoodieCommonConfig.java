@@ -72,6 +72,14 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
+  public static final ConfigProperty<Boolean> READ_BY_STATE_TRANSITION_TIME = ConfigProperty
+      .key("hoodie.datasource.read.by.state.transition.time")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .withDocumentation("For incremental mode, whether to enable to pulling commits in range by state transition time(completion time) "
+          + "instead of commit time(start time). Please be aware that enabling this will result in"
+          + "`begin.instanttime` and `end.instanttime` using `stateTransitionTime` instead of the instant's commit time.");
+
   public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")

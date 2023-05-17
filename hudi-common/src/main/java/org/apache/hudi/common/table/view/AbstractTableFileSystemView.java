@@ -70,14 +70,19 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
 
 /**
- * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
- * Loading file-system views from underlying file-system (b) Pending compaction operations and changing file-system
- * views based on that (c) Thread-safety in loading and managing file system views for this table. (d) resetting
- * file-system views The actual mechanism of fetching file slices from different view storages is delegated to
- * sub-classes.
+ * Common thread-safe implementation for multiple TableFileSystemView Implementations.
+ * Provides uniform handling of:
+ * <ul>
+ *   <li>Loading file-system views from underlying file-system;</li>
+ *   <li>Pending compaction operations and changing file-system views based on that;</li>
+ *   <li>Thread-safety in loading and managing file system views for this table;</li>
+ *   <li>resetting file-system views.</li>
+ * </ul>
+ * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -741,6 +746,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
+  public Void loadAllPartitions() {
+    try {
+      readLock.lock();
+      ensureAllPartitionsLoadedCorrectly();
+      return null;
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
   public final Stream<HoodieBaseFile> getAllBaseFiles(String partitionStr) {
     try {
       readLock.lock();
@@ -841,6 +857,25 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
                     .findFirst()))
             .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
       }
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    try {
+      readLock.lock();
+      List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      return formattedPartitionList.stream().collect(Collectors.toMap(
+          Function.identity(),
+          partitionPath -> fetchAllStoredFileGroups(partitionPath)
+              .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
+              .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime))
+              .map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
+              .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
+              .map(this::addBootstrapBaseFileIfPresent)
+      ));
     } finally {
       readLock.unlock();
     }
@@ -952,6 +987,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
     return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
   }
 
   @Override
@@ -1301,6 +1341,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Returns the file slice with all the file slice log files merged.
+   * <p> CAUTION: the method requires that all the file slices must only contain log files.
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param maxInstantTime The max instant time
@@ -1378,6 +1419,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
 
     return HoodieTimeline.compareTimestamps(instant, GREATER_THAN_OR_EQUALS, hoodieInstantOption.get().getTimestamp());
+  }
+
+  private boolean isFileGroupReplacedAfterOrOn(HoodieFileGroupId fileGroupId, String instant) {
+    Option<HoodieInstant> hoodieInstantOption = getReplaceInstant(fileGroupId);
+    if (!hoodieInstantOption.isPresent()) {
+      return false;
+    }
+
+    return HoodieTimeline.compareTimestamps(instant, LESSER_THAN_OR_EQUALS, hoodieInstantOption.get().getTimestamp());
   }
 
   @Override

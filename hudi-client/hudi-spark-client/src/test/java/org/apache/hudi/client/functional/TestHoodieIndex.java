@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -39,19 +40,19 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
-import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -60,6 +61,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -70,17 +72,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,6 +103,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         {IndexType.SIMPLE, false, true},
         {IndexType.SIMPLE, false, false},
         {IndexType.GLOBAL_SIMPLE, true, true},
+        {IndexType.GLOBAL_SIMPLE, true, false},
         {IndexType.GLOBAL_SIMPLE, false, true},
         {IndexType.GLOBAL_SIMPLE, false, false},
         {IndexType.BUCKET, false, true},
@@ -109,32 +112,28 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     return Stream.of(data).map(Arguments::of);
   }
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.avsc", true);
-  private final Random random = new Random();
-  private IndexType indexType;
   private HoodieIndex index;
   private HoodieWriteConfig config;
 
   private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
-    setUp(indexType, populateMetaFields, true, enableMetadataIndex);
+    setUp(indexType, populateMetaFields, enableMetadataIndex, true);
   }
 
-  private void setUp(IndexType indexType, boolean populateMetaFields, boolean rollbackUsingMarkers, boolean enableMetadataIndex) throws Exception {
-    this.indexType = indexType;
+  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex, boolean rollbackUsingMarkers) throws Exception {
     initPath();
     initSparkContexts();
-    initTestDataGenerator();
     initFileSystem();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
         : getPropertiesForKeyGen());
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withIndexType(indexType);
-    if (indexType == IndexType.BUCKET) {
-      indexBuilder.withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE);
-    }
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
+        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(RawTripTestPayload.class.getName())
+            .withPayloadOrderingField("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
         .withAutoCommit(false)
@@ -149,9 +148,35 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     this.index = writeClient.getIndex();
   }
 
+  @Override
+  protected Properties getPropertiesForKeyGen() {
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put("hoodie.datasource.write.keygenerator.class", RawTripTestPayloadKeyGenerator.class.getName());
+    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    properties.put("hoodie.datasource.write.partitionpath.field", "time");
+    properties.put("hoodie.datasource.write.precombine.field", "number");
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
+    properties.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "number");
+    return properties;
+  }
+
   @AfterEach
   public void tearDown() throws IOException {
     cleanupResources();
+  }
+
+  private static List<HoodieRecord> getInserts() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
+    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
+    return Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
   @ParameterizedTest
@@ -159,8 +184,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = "001";
-    int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -168,17 +193,17 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Test tagLocation without any entries in index
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
 
     // Insert totalRecords records
     writeClient.startCommitWithTime(newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(writeStatues.collect());
+    assertNoWriteErrors(writeStatues.collect());
 
     // Now tagLocation for these records, index should not tag them since it was a failed
     // commit
     javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
     // Now commit this & update location of records inserted and validate no errors
     writeClient.commit(newCommitTime, writeStatues);
     // Now tagLocation for these records, index should tag them correctly
@@ -208,8 +233,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testLookupIndexWithOrWithoutColumnStats() throws Exception {
     setUp(IndexType.BLOOM, true, true);
     String newCommitTime = "001";
-    int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -217,16 +242,16 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Test tagLocation without any entries in index
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
 
     // Insert totalRecords records
     writeClient.startCommitWithTime(newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(writeStatues.collect());
+    assertNoWriteErrors(writeStatues.collect());
 
     // Now tagLocation for these records
     javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
     // Now commit this & update location of records inserted
     writeClient.commit(newCommitTime, writeStatues);
 
@@ -265,8 +290,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = "001";
-    int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -282,7 +307,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(writeStatues.collect());
+    assertNoWriteErrors(writeStatues.collect());
 
     // Now commit this & update location of records inserted and validate no errors
     writeClient.commit(newCommitTime, writeStatues);
@@ -313,10 +338,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   @ParameterizedTest
   @MethodSource("indexTypeParams")
   public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
-    setUp(indexType, populateMetaFields, false, enableMetadataIndex);
+    setUp(indexType, populateMetaFields, enableMetadataIndex, false);
     String newCommitTime = writeClient.startCommit();
-    int totalRecords = 20 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -324,7 +349,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     JavaRDD<WriteStatus> writeStatusesRDD = writeClient.upsert(writeRecords, newCommitTime);
     // NOTE: This will trigger an actual write
     List<WriteStatus> writeStatuses = writeStatusesRDD.collect();
-    Assertions.assertNoWriteErrors(writeStatuses);
+    assertNoWriteErrors(writeStatuses);
     // Commit
     writeClient.commit(newCommitTime, jsc.parallelize(writeStatuses));
 
@@ -361,8 +386,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
     javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 0);
-    assert (javaRDD.filter(record -> record.getCurrentLocation() != null).collect().size() == 0);
+    assertTrue(javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().isEmpty());
+    assertTrue(javaRDD.filter(record -> record.getCurrentLocation() != null).collect().isEmpty());
   }
 
   private static Stream<Arguments> regularIndexTypeParams() {
@@ -391,18 +416,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     // place same row key under a different partition.
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord record1 = new RawTripTestPayload(recordStr1).toHoodieRecord();
+    HoodieRecord record2 = new RawTripTestPayload(recordStr2).toHoodieRecord();
+    HoodieRecord record3 = new RawTripTestPayload(recordStr3).toHoodieRecord();
+    HoodieRecord record4 = new RawTripTestPayload(recordStr4).toHoodieRecord();
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -417,7 +434,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA), metadataWriter);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";
@@ -484,28 +501,15 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
   }
 
-  @Test
-  public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath() throws Exception {
-    setUp(IndexType.GLOBAL_SIMPLE, true, true);
-    config = getConfigBuilder()
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .withGlobalSimpleIndexUpdatePartitionPath(true)
-            .withBloomIndexUpdatePartitionPath(true)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMetadataIndexBloomFilter(true)
-            .withMetadataIndexColumnStats(true)
-            .build())
-        .build();
-    writeClient = getHoodieWriteClient(config);
-    index = writeClient.getIndex();
-
+  @ParameterizedTest
+  @EnumSource(value = IndexType.class, names = {"GLOBAL_BLOOM", "GLOBAL_SIMPLE"})
+  public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath(IndexType indexType) throws Exception {
+    setUp(indexType, true, true);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
         writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext());
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable.getMetaClient(),
-        SCHEMA, metadataWriter);
+        addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA), metadataWriter);
 
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";
@@ -515,9 +519,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // this record will be saved in table and will be tagged to an empty record
     RawTripTestPayload originalPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord originalRecord =
-        new HoodieAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
-            originalPayload);
+    HoodieRecord originalRecord = originalPayload.toHoodieRecord();
 
     /*
     This record has the same record key as originalRecord but different time so different partition
@@ -528,9 +530,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     */
     RawTripTestPayload incomingPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord incomingRecord =
-        new HoodieAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
-            incomingPayload);
+    HoodieRecord incomingRecord = incomingPayload.toHoodieRecord();
     /*
     This record has the same record key as originalRecord and the same partition
     Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
@@ -538,10 +538,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     */
     RawTripTestPayload incomingPayloadSamePartition =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
-    HoodieRecord incomingRecordSamePartition =
-        new HoodieAvroRecord(
-            new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
-            incomingPayloadSamePartition);
+    HoodieRecord incomingRecordSamePartition = incomingPayloadSamePartition.toHoodieRecord();
 
     final String file1P1C0 = UUID.randomUUID().toString();
     Map<String, List<Pair<String, Integer>>> c1PartitionToFilesNameLengthMap = new HashMap<>();
@@ -568,7 +565,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
           break;
         case p2:
           assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+          assertEquals(incomingPayload.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
           break;
         default:
           fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
@@ -584,7 +581,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
     assertEquals(p1, record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+    assertEquals(incomingPayloadSamePartition.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {

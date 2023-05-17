@@ -189,14 +189,14 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
-      .defaultValue("100")
+      .defaultValue("0")
       .markAdvanced()
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This limits the parallelism of fetching records from the base files of affected "
-          + "partitions. The index picks the configured parallelism if the number of base "
-          + "files is larger than this configured value; otherwise, the number of base files "
-          + "is used as the parallelism. If the indexing stage is slow due to the limited "
-          + "parallelism, you can increase this to tune the performance.");
+          + "partitions. By default, this is auto computed based on input workload characteristics. "
+          + "If the parallelism is explicitly configured by the user, the user-configured "
+          + "value is used in defining the actual parallelism. If the indexing stage is slow "
+          + "due to the limited parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
@@ -256,6 +256,13 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("true")
       .markAdvanced()
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
+
+  public static final ConfigProperty<String> GLOBAL_INDEX_RECONCILE_PARALLELISM = ConfigProperty
+      .key("hoodie.global.index.reconcile.parallelism")
+      .defaultValue("60")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is GLOBAL_BLOOM or GLOBAL_SIMPLE. "
+          + "This controls the parallelism for deduplication during indexing where more than 1 record could be tagged due to partition update.");
 
   /**
    * ***** Bucket Index Configs *****
@@ -653,6 +660,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
       hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
+    public Builder withGlobalIndexReconcileParallelism(int parallelism) {
+      hoodieIndexConfig.setValue(GLOBAL_INDEX_RECONCILE_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

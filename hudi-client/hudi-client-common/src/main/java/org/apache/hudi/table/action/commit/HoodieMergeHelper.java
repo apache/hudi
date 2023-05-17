@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -119,14 +118,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
         Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-        bootstrapFileReader =
-            HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath);
-
-        recordIterator = new MergingIterator<>(
-            baseFileRecordIterator,
-            bootstrapFileReader.getRecordIterator(),
-            (left, right) ->
-                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
+        bootstrapFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
+            baseFileReader,
+            HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath),
+            mergeHandle.getPartitionFields(),
+            mergeHandle.getPartitionValues());
+        recordIterator = bootstrapFileReader.getRecordIterator(mergeHandle.getWriterSchemaWithMetaFields());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
       } else {
         recordIterator = baseFileRecordIterator;
