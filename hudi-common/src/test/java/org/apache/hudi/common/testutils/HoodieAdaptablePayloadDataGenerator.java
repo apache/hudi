@@ -117,6 +117,18 @@ public class HoodieAdaptablePayloadDataGenerator {
     return updates;
   }
 
+  public static List<HoodieRecord> getUpdates(List<HoodieRecord> baseRecords, String newPartition, long ts, Class<?> payloadClass) throws IOException {
+    RecordGen recordGen = new RecordGen(payloadClass);
+    List<HoodieRecord> updates = new ArrayList<>();
+    Properties props = new Properties();
+    for (HoodieRecord r : baseRecords) {
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
+      updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
+    }
+    return updates;
+  }
+
   private static GenericRecord getUpdate(int id, String pt, long ts, RecordGen recordGen) {
     GenericRecord r = new GenericData.Record(SCHEMA);
     r.put("id", id);
@@ -131,6 +143,18 @@ public class HoodieAdaptablePayloadDataGenerator {
     for (HoodieRecord r : baseRecords) {
       GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
       GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), gr.get("pt").toString(), ts, recordGen);
+      deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
+    }
+    return deletes;
+  }
+
+  public static List<HoodieRecord> getDeletes(List<HoodieRecord> baseRecords, String newPartition, long ts, Class<?> payloadClass) throws IOException {
+    RecordGen recordGen = new RecordGen(payloadClass);
+    List<HoodieRecord> deletes = new ArrayList<>();
+    Properties props = new Properties();
+    for (HoodieRecord r : baseRecords) {
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
       deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
     }
     return deletes;
