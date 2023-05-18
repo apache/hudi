@@ -359,8 +359,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
     }
 
-    BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
-        config.getBootstrapPartitionPathTranslatorClass(), properties);
+    BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()
         .flatMap(p -> {
