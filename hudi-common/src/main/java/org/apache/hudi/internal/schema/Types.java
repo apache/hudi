@@ -527,7 +527,7 @@ public class Types {
     /**
      * Case-sensitive get field by name
      */
-    public Field fieldByName(String name) {
+    public synchronized Field fieldByName(String name) {
       if (nameToFields == null) {
         nameToFields = new HashMap<>();
         for (Field field : fields) {
@@ -537,7 +537,7 @@ public class Types {
       return nameToFields.get(name);
     }
 
-    public Field fieldByNameCaseInsensitive(String name) {
+    public synchronized Field fieldByNameCaseInsensitive(String name) {
       if (lowercaseNameToFields == null) {
         lowercaseNameToFields = new HashMap<>();
         for (Field field : fields) {
@@ -548,7 +548,7 @@ public class Types {
     }
 
     @Override
-    public Field field(int id) {
+    public synchronized Field field(int id) {
       if (idToFields == null) {
         idToFields = new HashMap<>();
         for (Field field : fields) {

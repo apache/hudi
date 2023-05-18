@@ -150,7 +150,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
                                                                           Types.RecordType partitionFields,
                                                                           Expression expression) throws IOException {
-    Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, false));
+    Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, caseSensitive));
     List<String> selectedPartitionPaths = getPartitionPathWithPathPrefixes(relativePathPrefixes);
 
     // Can only prune partitions if the number of partition levels matches partition fields

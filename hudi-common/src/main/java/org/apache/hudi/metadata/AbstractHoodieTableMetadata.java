@@ -45,6 +45,9 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
 
+  // TODO get this from HoodieConfig
+  protected final boolean caseSensitive = false;
+
   public AbstractHoodieTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String dataBasePath) {
     this.engineContext = engineContext;
     this.hadoopConf = conf;
