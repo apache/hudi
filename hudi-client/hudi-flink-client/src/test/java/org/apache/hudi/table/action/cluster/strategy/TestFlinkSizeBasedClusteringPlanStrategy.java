@@ -31,6 +31,8 @@ import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 
 import java.util.ArrayList;
@@ -57,8 +59,9 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
             .withPath("path1");
   }
 
-  @Test
-  public void testBuildClusteringGroupsForPartitionOnlyOneFile() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBuildClusteringGroupsForPartitionOnlyOneFile(boolean enableSingleGroupClustering) {
     String partition = "20221117";
     String fileId = "fg-1";
     List<FileSlice> fileSliceGroups = new ArrayList<>();
@@ -67,25 +70,26 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
     HoodieWriteConfig configWithSortEnabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
-          .withSingleGroupClusteringEnabled(false)
+          .withSingleGroupClusteringEnabled(enableSingleGroupClustering)
           .withClusteringSortColumns("f0")
           .build())
         .build();
     PartitionAwareClusteringPlanStrategy strategyWithSortEnabled = new FlinkSizeBasedClusteringPlanStrategy(table, context, configWithSortEnabled);
     Stream<HoodieClusteringGroup> groupStreamSort = strategyWithSortEnabled.buildClusteringGroupsForPartition(partition,fileSliceGroups);
-    assertEquals(1, groupStreamSort.count());
+    // even if sorting is enabled, we might skip clustering.
+    assertEquals(enableSingleGroupClustering ? 1 : 0, groupStreamSort.count());
 
     // test buildClusteringGroupsForPartition without ClusteringSortColumns config
     HoodieWriteConfig configWithSortDisabled = hoodieWriteConfigBuilder.withClusteringConfig(
         HoodieClusteringConfig.newBuilder()
           .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
-          .withSingleGroupClusteringEnabled(false)
+          .withSingleGroupClusteringEnabled(enableSingleGroupClustering)
           .withClusteringSortColumns("")
           .build())
         .build();
     PartitionAwareClusteringPlanStrategy strategyWithSortDisabled = new FlinkSizeBasedClusteringPlanStrategy(table, context, configWithSortDisabled);
     Stream<HoodieClusteringGroup> groupStreamWithOutSort = strategyWithSortDisabled.buildClusteringGroupsForPartition(partition,fileSliceGroups);
-    assertEquals(0, groupStreamWithOutSort.count());
+    assertEquals(enableSingleGroupClustering ? 1 : 0, groupStreamWithOutSort.count());
   }
 
   private FileSlice generateFileSlice(String partitionPath, String fileId, String baseInstant) {
