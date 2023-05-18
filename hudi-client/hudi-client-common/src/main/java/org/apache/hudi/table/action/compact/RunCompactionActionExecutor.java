@@ -35,10 +35,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -48,10 +52,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class RunCompactionActionExecutor<T> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
+  private static final Logger LOG = LoggerFactory.getLogger(LogCompactionExecutionHelper.class);
+
   private final HoodieCompactor compactor;
   private final HoodieCompactionHandler compactionHandler;
   private WriteOperationType operationType;
 
+  private final HoodieMetrics metrics;
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable table,
@@ -65,10 +72,14 @@ public class RunCompactionActionExecutor<T> extends
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
+    metrics = new HoodieMetrics(config);
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    LOG.info("Compaction start.");
+    metrics.emitCompactionStart();
+
     HoodieTimeline pendingMajorOrMinorCompactionTimeline = WriteOperationType.COMPACT.equals(operationType)
         ? table.getActiveTimeline().filterPendingCompactionTimeline()
         : table.getActiveTimeline().filterPendingLogCompactionTimeline();
@@ -116,6 +127,8 @@ public class RunCompactionActionExecutor<T> extends
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
+    LOG.info("Compaction stop.");
+    metrics.emitCompactionStop();
     return compactionMetadata;
   }
 }

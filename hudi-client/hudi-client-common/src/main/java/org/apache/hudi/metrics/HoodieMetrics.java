@@ -50,6 +50,8 @@ public class HoodieMetrics {
   private String conflictResolutionTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
+  private String compactionStartCounterName = null;
+  private String compactionStopCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -64,6 +66,8 @@ public class HoodieMetrics {
   private Timer conflictResolutionTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
+  private Counter compactionStartCounter = null;
+  private Counter compactionStopCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -82,6 +86,8 @@ public class HoodieMetrics {
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
+      this.compactionStartCounterName = getMetricsName("counter", "compaction.start");
+      this.compactionStopCounterName = getMetricsName("counter", "compaction.stop");
     }
   }
 
@@ -294,6 +300,20 @@ public class HoodieMetrics {
       LOG.info("Sending conflict resolution failure metric");
       conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
       conflictResolutionFailureCounter.inc();
+    }
+  }
+
+  public void emitCompactionStart() {
+    if (config.isMetricsOn()) {
+      compactionStartCounter = getCounter(compactionStartCounter, compactionStartCounterName);
+      compactionStartCounter.inc();
+    }
+  }
+
+  public void emitCompactionStop() {
+    if (config.isMetricsOn()) {
+      compactionStopCounter = getCounter(compactionStopCounter, compactionStopCounterName);
+      compactionStopCounter.inc();
     }
   }
 
