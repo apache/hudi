@@ -20,11 +20,11 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
-import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
@@ -135,6 +135,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
 
         // trigger clean so that partition deletion kicks in.
+        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
@@ -258,6 +259,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     spark.sql(s"alter table $tableName drop partition (dt='2021-10-01')")
 
     // trigger clean so that partition deletion kicks in.
+    spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
     spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
       .collect()
 
@@ -321,6 +323,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
         // trigger clean so that partition deletion kicks in.
+        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
@@ -473,7 +476,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         val hadoopConf = spark.sessionState.newHadoopConf()
         val metaClient = HoodieTableMetaClient.builder().setBasePath(s"${tmp.getCanonicalPath}/$tableName")
           .setConf(hadoopConf).build()
-        val lastInstant = metaClient.getActiveTimeline.lastInstant()
+        val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
         val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(
           lastInstant.get()).get(), classOf[HoodieCommitMetadata])
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)

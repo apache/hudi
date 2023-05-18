@@ -221,6 +221,9 @@ public class TestHoodieTableFactory {
     tableConf.setString(FlinkOptions.TABLE_NAME, "t2");
     tableConf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0,f1");
     tableConf.setString(FlinkOptions.PRECOMBINE_FIELD, "f2");
+    tableConf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    tableConf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, "my_payload");
+    tableConf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
 
     StreamerUtil.initTableIfNotExists(tableConf);
 
@@ -246,6 +249,14 @@ public class TestHoodieTableFactory {
         source1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
     assertThat("pre-combine key not provided, fallback to table config",
         sink1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
+    assertThat("table type not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.TABLE_TYPE), is(FlinkOptions.TABLE_TYPE_MERGE_ON_READ));
+    assertThat("table type not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.TABLE_TYPE), is(FlinkOptions.TABLE_TYPE_MERGE_ON_READ));
+    assertThat("payload class not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
+    assertThat("payload class not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
 
     // write config always has higher priority
     // set up a different primary key and pre_combine key with table config options

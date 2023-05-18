@@ -48,7 +48,7 @@ public final class ErrorTableUtils {
     Class<?>[] argClassArr = new Class[] {HoodieDeltaStreamer.Config.class,
         SparkSession.class, TypedProperties.class, JavaSparkContext.class, FileSystem.class};
     String errMsg = "Unable to instantiate ErrorTableWriter with arguments type " + Arrays.toString(argClassArr);
-    ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr), errMsg);
+    ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr, false), errMsg);
 
     try {
       return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassArr)

@@ -19,7 +19,8 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -30,7 +31,7 @@ import java.util.function.Supplier
 class CreateSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.required(1, "commit_time", DataTypes.StringType),
+    ProcedureParameter.optional(1, "commit_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "user", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "comments", DataTypes.StringType, ""),
     ProcedureParameter.optional(4, "path", DataTypes.StringType)
@@ -49,16 +50,18 @@ class CreateSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(4))
-    val commitTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    var commitTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val user = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
     val comments = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
-    val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
-    if (!activeTimeline.getCommitsTimeline.filterCompletedInstants.containsInstant(commitTime)) {
-      throw new HoodieException("Commit " + commitTime + " not found in Commits " + activeTimeline)
+    val completedTimeline: HoodieTimeline = metaClient.getCommitsTimeline.filterCompletedInstants
+    if (StringUtils.isNullOrEmpty(commitTime)) {
+      commitTime = completedTimeline.lastInstant.get.getTimestamp
+    } else if (!completedTimeline.containsInstant(commitTime)) {
+      throw new HoodieException("Commit " + commitTime + " not found in Commits " + completedTimeline)
     }
 
     val client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
