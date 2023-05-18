@@ -142,7 +142,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
         for (Entry<String, HoodieRecordGlobalLocation> e : recordIndexInfo.entrySet()) {
           // TODO: fix me. handle new inserts (no record location).
           // TODO: do we really need to check valid commit. since metadata read would have already resolved the inflight commits.
-          if (e.getValue().getInstantTime() != null && checkIfValidCommit(metaClient, e.getValue().getInstantTime())) {
+          if (e.getValue().getInstantTime() != null && checkIfValidCommit(hoodieTable.getMetaClient(), e.getValue().getInstantTime())) {
             HoodieRecord rec = taggedRecords.get(keyToIndexMap.get(e.getKey()));
             rec.unseal();
             rec.setCurrentLocation(e.getValue());
