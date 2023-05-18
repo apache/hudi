@@ -37,7 +37,6 @@ import com.google.protobuf.Message;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -177,17 +176,15 @@ public final class SourceFormatAdapter implements Closeable {
         InputBatch<Dataset<Row>> r = maybeSanitizeFieldNames(((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit));
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
-              RDD<GenericRecord> genericRecordRDD;
-              SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
-              genericRecordRDD = (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
-                  // If the source schema is specified through Avro schema,
-                  // pass in the schema for the Row-to-Avro conversion
-                  // to avoid nullability mismatch between Avro schema and Row schema
-                  ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
-                  org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getSourceSchema())
-              ) : HoodieSparkUtils.createRdd(rdd,
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty());
-                return genericRecordRDD.toJavaRDD();
+                SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+                return (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
+                    // If the source schema is specified through Avro schema,
+                    // pass in the schema for the Row-to-Avro conversion
+                    // to avoid nullability mismatch between Avro schema and Row schema
+                    ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
+                    org.apache.hudi.common.util.Option.ofNullable(r.getSchemaProvider().getSourceSchema())
+                ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
+                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
