@@ -246,7 +246,7 @@ public class HoodieTableMetadataUtil {
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         targetFields.stream().map(field -> {
           ColumnStats colStats = allColumnStats.get(field.name());
-          return HoodieColumnRangeMetadata.<Comparable>create(
+          HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
               field.name(),
               colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
@@ -259,6 +259,7 @@ public class HoodieTableMetadataUtil {
               0L,
               0L
           );
+          return hcrm;
         });
     return hoodieColumnRangeMetadataStream.collect(
         Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
