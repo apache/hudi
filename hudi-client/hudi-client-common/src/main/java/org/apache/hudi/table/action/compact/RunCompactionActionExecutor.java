@@ -59,6 +59,7 @@ public class RunCompactionActionExecutor<T> extends
   private WriteOperationType operationType;
 
   private final HoodieMetrics metrics;
+
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable table,
