@@ -44,6 +44,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.connector.catalog.{TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, DeleteColumn, RemoveProperty, SetProperty}
+import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -251,7 +252,8 @@ object AlterTableCommand extends Logging {
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,
-      path, table.identifier.table, HoodieWriterUtils.parametersWithWriteDefaults(table.storage.properties).asJava)
+      path, table.identifier.table, HoodieWriterUtils.parametersWithWriteDefaults(
+        HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties)).asJava)
 
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
