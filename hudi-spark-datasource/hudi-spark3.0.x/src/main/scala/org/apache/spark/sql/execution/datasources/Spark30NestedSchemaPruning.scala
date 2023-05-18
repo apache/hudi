@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
 
 /**
  * Prunes unnecessary physical columns given a [[PhysicalOperation]] over a data source relation.
@@ -208,4 +208,63 @@ class Spark30NestedSchemaPruning extends Rule[LogicalPlan] {
       case (other, _) => other
     }
   }
+
+
+  /**
+   * Prunes the nested schema by the requested fields. For example, if the schema is:
+   * `id int, s struct<a:int, b:int>`, and given requested field "s.a", the inner field "b"
+   * is pruned in the returned schema: `id int, s struct<a:int>`.
+   * Note that:
+   *   1. The schema field ordering at original schema is still preserved in pruned schema.
+   *   2. The top-level fields are not pruned here.
+   */
+  private def pruneDataSchema(
+                       dataSchema: StructType,
+                       requestedRootFields: Seq[RootField]): StructType = {
+    val resolver = SQLConf.get.resolver
+    // Merge the requested root fields into a single schema. Note the ordering of the fields
+    // in the resulting schema may differ from their ordering in the logical relation's
+    // original schema
+    val mergedSchema = requestedRootFields
+      .map { root: RootField => StructType(Array(root.field)) }
+      .reduceLeft(_ merge _)
+    val mergedDataSchema =
+      StructType(dataSchema.map(d => mergedSchema.find(m => resolver(m.name, d.name)).getOrElse(d)))
+    // Sort the fields of mergedDataSchema according to their order in dataSchema,
+    // recursively. This makes mergedDataSchema a pruned schema of dataSchema
+    sortLeftFieldsByRight(mergedDataSchema, dataSchema).asInstanceOf[StructType]
+  }
+
+  /**
+   * Sorts the fields and descendant fields of structs in left according to their order in
+   * right. This function assumes that the fields of left are a subset of the fields of
+   * right, recursively. That is, left is a "subschema" of right, ignoring order of
+   * fields.
+   */
+  private def sortLeftFieldsByRight(left: DataType, right: DataType): DataType =
+    (left, right) match {
+      case (ArrayType(leftElementType, containsNull), ArrayType(rightElementType, _)) =>
+        ArrayType(
+          sortLeftFieldsByRight(leftElementType, rightElementType),
+          containsNull)
+      case (MapType(leftKeyType, leftValueType, containsNull),
+      MapType(rightKeyType, rightValueType, _)) =>
+        MapType(
+          sortLeftFieldsByRight(leftKeyType, rightKeyType),
+          sortLeftFieldsByRight(leftValueType, rightValueType),
+          containsNull)
+      case (leftStruct: StructType, rightStruct: StructType) =>
+        val resolver = SQLConf.get.resolver
+        val filteredRightFieldNames = rightStruct.fieldNames
+          .filter(name => leftStruct.fieldNames.exists(resolver(_, name)))
+        val sortedLeftFields = filteredRightFieldNames.map { fieldName =>
+          val resolvedLeftStruct = leftStruct.find(p => resolver(p.name, fieldName)).get
+          val leftFieldType = resolvedLeftStruct.dataType
+          val rightFieldType = rightStruct(fieldName).dataType
+          val sortedLeftFieldType = sortLeftFieldsByRight(leftFieldType, rightFieldType)
+          StructField(fieldName, sortedLeftFieldType, nullable = resolvedLeftStruct.nullable)
+        }
+        StructType(sortedLeftFields)
+      case _ => left
+    }
 }
