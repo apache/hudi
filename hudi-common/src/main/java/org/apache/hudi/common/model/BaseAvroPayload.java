@@ -85,7 +85,7 @@ public abstract class BaseAvroPayload implements Serializable {
    */
   protected static boolean isDeleteRecord(GenericRecord genericRecord) {
     final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED_FIELD;
-    final String isDeleteKeyMeta = HoodieRecord.OPERATION_METADATA_FIELD;
+    final String operationKey = HoodieRecord.OPERATION_METADATA_FIELD;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
@@ -94,8 +94,8 @@ public abstract class BaseAvroPayload implements Serializable {
       return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
     }
 
-    if (genericRecord.getSchema().getField(isDeleteKeyMeta) != null) {
-      Object deleteMarker = genericRecord.get(isDeleteKeyMeta);
+    if (genericRecord.getSchema().getField(operationKey) != null) {
+      Object deleteMarker = genericRecord.get(operationKey);
       return (deleteMarker != null && "D".equals(deleteMarker.toString()));
     }
 
