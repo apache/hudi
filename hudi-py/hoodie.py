@@ -27,7 +27,7 @@ def main():
     arrowtable = hudi.read_table()
     pd.set_option('display.max_columns', None)
     pandasDf =  arrowtable.to_pandas()
-    pandasasofDf = hudi.read_table_before(20230513130351473).to_pandas()
+    pandasasofDf = hudi.read_table_before(20230517192402200).to_pandas()
     print(pandasDf)
     print(pandasasofDf)
 
