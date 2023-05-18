@@ -51,6 +51,8 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private NonThrownExecutor executor;
 
+  // don't run clean in open when offline compact/cluster
+  protected boolean runCleanInOpen = true;
   protected volatile boolean isCleaning;
 
   public CleanFunction(Configuration conf) {
@@ -60,18 +62,20 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    LOG.info(String.format("exec clean with instant time %s...", instantTime));
-    executor.execute(() -> {
-      this.isCleaning = true;
-      try {
-        this.writeClient.clean(instantTime);
-      } finally {
-        this.isCleaning = false;
-      }
-    }, "wait for cleaning finish");
+    if (runCleanInOpen) {
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
+      this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
+      LOG.info(String.format("exec clean with instant time %s...", instantTime));
+      executor.execute(() -> {
+        this.isCleaning = true;
+        try {
+          this.writeClient.clean(instantTime);
+        } finally {
+          this.isCleaning = false;
+        }
+      }, "wait for cleaning finish");
+    }
   }
 
   @Override

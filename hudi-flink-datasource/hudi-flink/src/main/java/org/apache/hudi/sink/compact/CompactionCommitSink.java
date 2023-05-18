@@ -85,6 +85,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
+    this.runCleanInOpen = false;
   }
 
   @Override
@@ -175,7 +176,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     this.writeClient.commitCompaction(instant, metadata, Option.empty());
 
     // Whether to clean up the old log file when compaction
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      LOG.info("Running inline clean");
       this.writeClient.clean();
     }
   }
