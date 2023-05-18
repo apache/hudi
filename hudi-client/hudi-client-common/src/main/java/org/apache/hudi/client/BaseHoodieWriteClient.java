@@ -1057,7 +1057,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
-  /***
+  /**
    * Schedules compaction inline.
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.

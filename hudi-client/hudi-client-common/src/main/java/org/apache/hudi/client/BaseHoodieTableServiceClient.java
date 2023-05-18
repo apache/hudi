@@ -205,7 +205,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         });
   }
 
-  /***
+  /**
    * Schedules compaction inline.
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
@@ -645,18 +645,18 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
       try {
         String action = rollbackPlan.getInstantToRollback().getAction();
+        String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
         if (ignoreCompactionAndClusteringInstants) {
           if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
             boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
                 && ClusteringUtils.getClusteringPlan(metaClient, new HoodieInstant(true, rollbackPlan.getInstantToRollback().getAction(),
                 rollbackPlan.getInstantToRollback().getCommitTime())).isPresent();
             if (!isClustering) {
-              String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
               infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
             }
           }
         } else {
-          infoMap.putIfAbsent(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
+          infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
         }
       } catch (Exception e) {
         LOG.warn("Processing rollback plan failed for " + rollbackInstant + ", skip the plan", e);
