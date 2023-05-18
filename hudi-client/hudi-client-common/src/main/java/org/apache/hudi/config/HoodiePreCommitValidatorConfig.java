@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.PreCommitValidatorTypes;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -44,6 +45,13 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
+
+  public static final ConfigProperty<String> VALIDATOR_TYPES = ConfigProperty
+      .key("hoodie.precommit.validators.types")
+      .defaultValue(PreCommitValidatorTypes.CUSTOM.name())
+      .markAdvanced()
+      .withDocumentation(PreCommitValidatorTypes.class);
+
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
@@ -105,6 +113,11 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
 
     public Builder withPreCommitValidator(String preCommitValidators) {
       preCommitValidatorConfig.setValue(VALIDATOR_CLASS_NAMES, preCommitValidators);
+      return this;
+    }
+
+    public Builder withPreCommitValidatorTypes(String preCommitValidatorTypes) {
+      preCommitValidatorConfig.setValue(VALIDATOR_TYPES, preCommitValidatorTypes);
       return this;
     }
 

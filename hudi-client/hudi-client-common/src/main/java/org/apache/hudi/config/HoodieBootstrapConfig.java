@@ -19,6 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.bootstrap.BootstrapMode;
+import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelectorType;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
@@ -66,6 +67,13 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
+
+  public static final ConfigProperty<String> MODE_SELECTOR_TYPE = ConfigProperty
+      .key("hoodie.bootstrap.mode.selector.type")
+      .defaultValue(BootstrapModeSelectorType.CUSTOM.name())
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation(BootstrapModeSelectorType.class);
 
   public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
@@ -207,6 +215,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public Builder withBootstrapModeSelector(String partitionSelectorClass) {
       bootstrapConfig.setValue(MODE_SELECTOR_CLASS_NAME, partitionSelectorClass);
+      return this;
+    }
+
+    public Builder withBootstrapModeSelectorType(String selectorType) {
+      bootstrapConfig.setValue(MODE_SELECTOR_TYPE, selectorType);
       return this;
     }
 
