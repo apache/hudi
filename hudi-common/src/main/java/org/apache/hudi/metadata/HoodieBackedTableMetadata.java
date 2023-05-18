@@ -151,13 +151,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                           Types.RecordType partitionFields,
                                                                           Expression expression) throws IOException {
     Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, false));
-    boolean hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
-    boolean urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
-    return getPartitionPathWithPathPrefixes(relativePathPrefixes)
-        .stream()
-        .filter(p -> (boolean) boundedExpr.eval(HoodieTableMetadata
-            .extractPartitionValues(partitionFields, p, hiveStylePartitioningEnabled, urlEncodePartitioningEnabled)))
-        .collect(Collectors.toList());
+    List<String> selectedPartitionPaths = getPartitionPathWithPathPrefixes(relativePathPrefixes);
+
+    // Can only prune partitions if the number of partition levels matches partition fields
+    // Here we'll check the first selected partition to see whether the numbers match.
+    if (hiveStylePartitioningEnabled
+        && getPathPartitionLevel(partitionFields, selectedPartitionPaths.get(0)) == partitionFields.fields().size()) {
+      return selectedPartitionPaths.stream()
+          .filter(p ->
+              (boolean) boundedExpr.eval(extractPartitionValues(partitionFields, p, urlEncodePartitioningEnabled)))
+          .collect(Collectors.toList());
+    }
+
+    return selectedPartitionPaths;
   }
 
   @Override
@@ -260,8 +266,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       });
 
       result = new HashMap<>(keys.size());
-      getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-      getEngineContext().map(partitionedKeys, keysList -> {
+      engineContext.setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      engineContext.map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }

@@ -25,6 +25,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Will try to bind all references, and convert unresolved references to AlwaysTrue.
+ *
+ * e.g. `year=2023 AND day=12`, if year and day both are provided to `recordType`,
+ * then the expression won't change, if day is not provided, the expression will be
+ * transformed to `year=2023 AND True`, which will be optimized to `year=2023`.
+ */
 public class PartialBindVisitor extends BindVisitor {
 
   public PartialBindVisitor(Types.RecordType recordType, boolean caseSensitive) {
@@ -37,8 +44,8 @@ public class PartialBindVisitor extends BindVisitor {
    */
   @Override
   public Expression visitNameReference(NameReference attribute) {
-    Types.Field field = caseSensitive ?
-        recordType.fieldByName(attribute.getName())
+    Types.Field field = caseSensitive
+        ? recordType.fieldByName(attribute.getName())
         : recordType.fieldByNameCaseInsensitive(attribute.getName());
 
     if (field == null) {

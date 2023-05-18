@@ -28,25 +28,19 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.utils.Conversions;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -147,46 +141,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                                                    String datasetBasePath,
                                                                    boolean reuse) {
     return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
-  }
-
-  static ArrayData extractPartitionValues(Types.RecordType partitionFields,
-                                          String relativePartitionPath,
-                                          boolean hiveStylePartitioningEnabled,
-                                          boolean urlEncodePartitioningEnabled) {
-    if (partitionFields.fields().size() == 1) {
-      // SinglePartPartitionValue, which might contain slashes.
-      String partitionValue;
-      if (hiveStylePartitioningEnabled) {
-        partitionValue = relativePartitionPath.split("=")[1];
-      } else {
-        partitionValue = relativePartitionPath;
-      }
-      return new ArrayData(Collections.singletonList(Conversions.fromPartitionString(
-          urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
-          partitionFields.field(0).type())));
-    }
-
-    List<Object> partitionValues;
-    String[] partitionFragments = relativePartitionPath.split("/");
-    if (hiveStylePartitioningEnabled) {
-      partitionValues = IntStream.range(0, partitionFragments.length)
-          .mapToObj(idx -> {
-            String partitionValue = partitionFragments[idx].split("=")[1];
-            return Conversions.fromPartitionString(
-                urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
-                partitionFields.field(idx).type());
-          }).collect(Collectors.toList());
-    } else {
-      partitionValues = IntStream.range(0, partitionFragments.length)
-          .mapToObj(idx -> {
-            String partitionValue = partitionFragments[idx];
-            return Conversions.fromPartitionString(
-                urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
-                partitionFields.field(idx).type());
-          }).collect(Collectors.toList());
-    }
-
-    return new ArrayData(partitionValues);
   }
 
   /**
