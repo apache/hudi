@@ -96,7 +96,7 @@ public abstract class BaseAvroPayload implements Serializable {
 
     if (genericRecord.getSchema().getField(operationKey) != null) {
       Object deleteMarker = genericRecord.get(operationKey);
-      return (deleteMarker != null && "D".equals(deleteMarker.toString()));
+      return (deleteMarker != null && HoodieOperation.DELETE.getName().equals(deleteMarker.toString()));
     }
 
     return false;
