@@ -24,7 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -132,8 +132,8 @@ public class HiveIncrPullSource extends AvroSource {
       sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch new data");
       return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
-    } catch (IOException ioe) {
-      throw new HoodieDeltaStreamerReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
+    } catch (Exception e) {
+      throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpointStr, e);
     }
   }
 }

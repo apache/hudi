@@ -71,7 +71,6 @@ import org.apache.hudi.utilities.HoodieIndexer;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaCompatibilityException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
@@ -2422,7 +2421,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
     //No change as this fails with Path not exist error
-    assertThrows(HoodieDeltaStreamerSchemaCompatibilityException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
+    assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
     TestHelpers.assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {

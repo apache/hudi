@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -49,7 +49,7 @@ public class RowBasedSchemaProvider extends SchemaProvider {
       return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME,
           HOODIE_RECORD_NAMESPACE);
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaFetchException("Failed to convert struct type to avro schema", e);
+      throw new HoodieSchemaException("Failed to convert struct type to avro schema", e);
     }
 
   }

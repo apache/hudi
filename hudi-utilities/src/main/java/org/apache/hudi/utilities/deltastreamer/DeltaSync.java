@@ -67,6 +67,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -86,10 +87,8 @@ import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerMetaSyncException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaCompatibilityException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerWriteException;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -683,12 +682,8 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
-    try {
-      return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-          Option.ofNullable(readerSchema)).toJavaRDD();
-    } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get transformed RDD", e);
-    }
+    return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+        Option.ofNullable(readerSchema)).toJavaRDD();
   }
 
   /**
@@ -976,14 +971,14 @@ public class DeltaSync implements Serializable, Closeable {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
           long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
           metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
-        } catch (HoodieException e) {
+        } catch (HoodieMetaSyncException e) {
           LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
           metaSyncExceptions.add(e);
           implsFailed.add(impl.trim());
         }
       }
       if (!metaSyncExceptions.isEmpty()) {
-        throw new HoodieDeltaStreamerMetaSyncException(implsFailed, metaSyncExceptions);
+        throw new HoodieMetaSyncException(String.join(",", implsFailed), SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
       }
     }
   }
@@ -1129,7 +1124,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
       return newWriteSchema;
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaFetchException("Failed to fetch schema from table", e);
+      throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
     }
   }
 

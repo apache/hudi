@@ -22,6 +22,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 
@@ -58,7 +59,7 @@ public class SyncUtilHelpers {
     try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat)) {
       syncTool.syncHoodieTable();
     } catch (Throwable e) {
-      throw new HoodieException("Could not sync using the meta sync class " + syncToolClassName, e);
+      throw new HoodieMetaSyncException("Could not sync using the meta sync class " + syncToolClassName, e);
     }
   }
 
@@ -116,6 +117,6 @@ public class SyncUtilHelpers {
       sb.append(e.getMessage());
       sb.append("\n");
     });
-    return new HoodieException(sb.toString());
+    return new HoodieMetaSyncException(sb.toString());
   }
 }

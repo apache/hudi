@@ -18,8 +18,14 @@
 
 package org.apache.hudi.utilities.exception;
 
-public class HoodieDeltaStreamerSchemaCompatibilityException extends HoodieDeltaStreamerException {
-  public HoodieDeltaStreamerSchemaCompatibilityException(String msg, Throwable e) {
+import org.apache.hudi.exception.HoodieException;
+
+public class HoodieTransformException extends HoodieException {
+  public HoodieTransformException(String msg, Throwable e) {
     super(msg, e);
+  }
+
+  public HoodieTransformException(String msg) {
+    super(msg);
   }
 }

@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig;
-import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -55,11 +54,6 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
       return sourceSchema;
     }
 
-    try {
-      sourceSchema = UtilHelpers.getJDBCSchema(options);
-    } catch (Exception e) {
-      throw new HoodieSchemaProviderException("Failed to get Schema through jdbc. ", e);
-    }
-    return sourceSchema;
+    return UtilHelpers.getJDBCSchema(options);
   }
 }

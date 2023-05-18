@@ -18,13 +18,15 @@
 
 package org.apache.hudi.utilities.exception;
 
-public class HoodieDeltaStreamerReadFromSourceException extends HoodieDeltaStreamerException {
+import org.apache.hudi.exception.HoodieException;
 
-  public HoodieDeltaStreamerReadFromSourceException(String msg) {
+public class HoodieReadFromSourceException extends HoodieException {
+
+  public HoodieReadFromSourceException(String msg) {
     super(msg);
   }
 
-  public HoodieDeltaStreamerReadFromSourceException(String msg, Throwable e) {
+  public HoodieReadFromSourceException(String msg, Throwable e) {
     super(msg, e);
   }
 }

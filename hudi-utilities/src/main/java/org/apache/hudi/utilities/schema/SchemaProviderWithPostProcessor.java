@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaFetchException;
 
 /**
  * A schema provider which applies schema post process hook on schema.
@@ -39,23 +38,14 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    try {
-      return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getSourceSchema()))
-          .orElse(schemaProvider.getSourceSchema());
-    } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaFetchException("Failed to process source schema", e);
-    }
-
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getSourceSchema()))
+        .orElse(schemaProvider.getSourceSchema());
   }
 
   @Override
   public Schema getTargetSchema() {
-    try {
-      return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getTargetSchema()))
-          .orElse(schemaProvider.getTargetSchema());
-    } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaFetchException("Failed to process target schema", e);
-    }
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getTargetSchema()))
+        .orElse(schemaProvider.getTargetSchema());
   }
 
   public SchemaProvider getOriginalSchemaProvider() {

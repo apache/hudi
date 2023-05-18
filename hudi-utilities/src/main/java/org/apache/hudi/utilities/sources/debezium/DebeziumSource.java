@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerReadFromSourceException;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -53,7 +53,6 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -92,7 +91,7 @@ public abstract class DebeziumSource extends RowSource {
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieDeltaStreamerReadFromSourceException(error, e);
+      throw new HoodieReadFromSourceException(error, e);
     }
 
     // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
@@ -125,9 +124,9 @@ public abstract class DebeziumSource extends RowSource {
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
         return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
-      } catch (IOException exc) {
-        LOG.error("Fatal error reading and parsing incoming debezium event", exc);
-        throw new HoodieDeltaStreamerReadFromSourceException("Fatal error reading and parsing incoming debezium event", exc);
+      } catch (Exception e) {
+        LOG.error("Fatal error reading and parsing incoming debezium event", e);
+        throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
       }
     }
   }

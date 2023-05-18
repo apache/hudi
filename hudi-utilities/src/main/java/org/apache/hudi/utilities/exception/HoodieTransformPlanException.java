@@ -18,13 +18,13 @@
 
 package org.apache.hudi.utilities.exception;
 
-public class HoodieDeltaStreamerTransformPlanException extends HoodieDeltaStreamerException {
+public class HoodieTransformPlanException extends HoodieTransformException {
 
-  public HoodieDeltaStreamerTransformPlanException(String msg) {
+  public HoodieTransformPlanException(String msg) {
     super(msg);
   }
 
-  public HoodieDeltaStreamerTransformPlanException(String msg, Throwable e) {
+  public HoodieTransformPlanException(String msg, Throwable e) {
     super(msg, e);
   }
 }

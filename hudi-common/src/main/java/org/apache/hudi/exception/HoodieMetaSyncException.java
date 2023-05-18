@@ -16,15 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.exception;
+package org.apache.hudi.exception;
 
-public class HoodieDeltaStreamerSchemaFetchException extends HoodieDeltaStreamerException {
-
-  public HoodieDeltaStreamerSchemaFetchException(String msg) {
-    super(msg);
+public class HoodieMetaSyncException extends HoodieException {
+  public HoodieMetaSyncException(String msg, Throwable e) {
+    super(msg, e);
   }
 
-  public HoodieDeltaStreamerSchemaFetchException(String msg, Throwable e) {
-    super(msg, e);
+  public HoodieMetaSyncException(String msg) {
+    super(msg);
   }
 }

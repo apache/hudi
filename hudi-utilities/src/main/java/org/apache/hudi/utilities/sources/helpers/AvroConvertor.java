@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerSchemaCompatibilityException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
@@ -114,7 +114,7 @@ public class AvroConvertor implements Serializable {
       initJsonConvertor();
       return jsonConverter.convert(json, schema);
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to convert schema from json to avro", e);
+      throw new HoodieSchemaException("Failed to convert schema from json to avro", e);
     }
   }
 
@@ -132,7 +132,7 @@ public class AvroConvertor implements Serializable {
     try {
       return new Schema.Parser().parse(schemaStr);
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to parse json schema", e);
+      throw new HoodieSchemaException("Failed to parse json schema", e);
     }
   }
 
@@ -142,7 +142,7 @@ public class AvroConvertor implements Serializable {
       initInjection();
       return recordInjection.invert(avroBinary).get();
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get avro schema from avro binary", e);
+      throw new HoodieSchemaException("Failed to get avro schema from avro binary", e);
     }
 
   }
@@ -152,7 +152,7 @@ public class AvroConvertor implements Serializable {
       initSchema();
       return ProtoConversionUtil.convertToAvro(schema, message);
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerSchemaCompatibilityException("Failed to get avro schema from proto message", e);
+      throw new HoodieSchemaException("Failed to get avro schema from proto message", e);
     }
   }
 

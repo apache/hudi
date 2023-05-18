@@ -18,8 +18,16 @@
 
 package org.apache.hudi.utilities.exception;
 
-public class HoodieDeltaStreamerTransformExecutionException extends HoodieDeltaStreamerException {
-  public HoodieDeltaStreamerTransformExecutionException(String msg, Throwable e) {
+/*
+ * Thrown when a schema provider is unable to fetch the schema
+ */
+public class HoodieSchemaFetchException extends HoodieSchemaProviderException {
+
+  public HoodieSchemaFetchException(String msg) {
+    super(msg);
+  }
+
+  public HoodieSchemaFetchException(String msg, Throwable e) {
     super(msg, e);
   }
 }
