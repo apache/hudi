@@ -44,10 +44,12 @@ public class HoodieHFileConfig {
   private final BloomFilter bloomFilter;
   private final CellComparator hfileComparator;
   private final String keyFieldName;
+  private final boolean allowDuplicatesToBeInserted;
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, String keyFieldName, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
-                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter, CellComparator hfileComparator) {
+                           boolean allowDuplicatesToBeInserted, long maxFileSize, String keyFieldName,
+                           boolean prefetchBlocksOnOpen, boolean cacheDataInL1, boolean dropBehindCacheCompaction,
+                           BloomFilter bloomFilter, CellComparator hfileComparator) {
     this.hadoopConf = hadoopConf;
     this.compressionAlgorithm = compressionAlgorithm;
     this.blockSize = blockSize;
@@ -58,6 +60,7 @@ public class HoodieHFileConfig {
     this.bloomFilter = bloomFilter;
     this.hfileComparator = hfileComparator;
     this.keyFieldName = keyFieldName;
+    this.allowDuplicatesToBeInserted = allowDuplicatesToBeInserted;
   }
 
   public Configuration getHadoopConf() {
@@ -102,5 +105,9 @@ public class HoodieHFileConfig {
 
   public String getKeyFieldName() {
     return keyFieldName;
+  }
+
+  public boolean allowDuplicatesToBeInserted() {
+    return allowDuplicatesToBeInserted;
   }
 }

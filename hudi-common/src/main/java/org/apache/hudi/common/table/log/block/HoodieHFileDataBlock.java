@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,7 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
@@ -44,6 +45,8 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -64,7 +67,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHFileDataBlock.class);
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
   private final Option<Compression.Algorithm> compressionAlgorithm;
@@ -135,8 +138,13 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       }
 
       final byte[] recordBytes = serializeRecord(record, writerSchema);
-      ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
-          "Writing multiple records with same key not supported for " + this.getClass().getName());
+      if (sortedRecordsMap.containsKey(recordKey)) {
+        LOG.error("Found duplicate record with recordKey: " + recordKey);
+        printRecord("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
+        printRecord("Current record", recordBytes, writerSchema);
+        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for %s",
+            recordKey, this.getClass().getName()));
+      }
       sortedRecordsMap.put(recordKey, recordBytes);
     }
 
@@ -210,5 +218,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       record.truncateRecordKey(schema, new Properties(), keyField.get().name());
     }
     return HoodieAvroUtils.recordToBytes(record, schema).get();
+  }
+
+  /**
+   * Print the record in json format
+   */
+  private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
+    byte[] json = HoodieAvroUtils.avroToJson(record, true);
+    LOG.error(String.format("%s: %s", msg, new String(json)));
   }
 }

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -167,5 +169,27 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieAvroUtils.getRecordKeySchema());
+    return new ClosableIterator<String>() {
+      @Override
+      public boolean hasNext() {
+        return recordKeyIterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        Object obj = recordKeyIterator.next();
+        return ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      }
+
+      @Override
+      public void close() {
+        recordKeyIterator.close();
+      }
+    };
   }
 }

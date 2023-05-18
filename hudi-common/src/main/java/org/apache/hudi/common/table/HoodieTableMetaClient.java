@@ -683,12 +683,19 @@ public class HoodieTableMetaClient implements Serializable {
     initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath.toString(), getFs());
   }
 
+  /**
+   * Reload table config and cache.
+   */
+  public synchronized void reloadTableConfig() {
+    this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), this.tableConfig.getPayloadClass(), this.tableConfig.getRecordMergerStrategy());
+  }
+
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
       String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, HoodieMetaserverConfig metaserverConfig) {
     return metaserverConfig.isMetaserverEnabled()
         ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
-        new Class<?>[] {Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaserverConfig.class},
+        new Class<?>[]{Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaserverConfig.class},
         conf, basePath, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
         metaserverConfig.getDatabaseName(), metaserverConfig.getTableName(), metaserverConfig)
         : new HoodieTableMetaClient(conf, basePath,

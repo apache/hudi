@@ -118,8 +118,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
               context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
               () -> new HoodieBackedTestDelayedTableMetadata(
-                  context, config.getMetadataConfig(), basePath,
-                  config.getViewStorageConfig().getSpillableDir(), true)));
+                  context, config.getMetadataConfig(), basePath, true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
       LOG.info("Started timeline server on port: " + timelineServicePort);
