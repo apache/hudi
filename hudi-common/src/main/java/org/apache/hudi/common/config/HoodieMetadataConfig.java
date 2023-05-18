@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -246,6 +247,55 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
           + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
 
+  public static final ConfigProperty<Boolean> RECORD_INDEX_CREATE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.create")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Create the HUDI Record Index within the Metadata Table");
+
+  public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
+      .defaultValue(10)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Minimum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.max.filegroup.count")
+      .defaultValue(1000)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
+      .defaultValue(1024 * 1024 * 1024)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum size in bytes of a single file group. Large file group takes longer to compact.");
+
+  public static final ConfigProperty<Float> RECORD_INDEX_GROWTH_FACTOR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.growth.factor")
+      .defaultValue(2.0f)
+      .sinceVersion("0.14.0")
+      .withDocumentation("The current number of records are multiplied by this number when estimating the number of "
+          + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
+
+  public static final ConfigProperty<Long> MAX_READER_MEMORY_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.memory")
+      .defaultValue(1024 * 1024 * 1024L)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Max memory to use for the reader to read from metadata");
+
+  public static final ConfigProperty<Integer> MAX_READER_BUFFER_SIZE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.buffer.size")
+      .defaultValue(10 * 1024 * 1024)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Max memory to use for the reader buffer while merging log blocks");
+
+  public static final ConfigProperty<String> SPILLABLE_MAP_DIR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".spillable.dir")
+      .defaultValue(FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())
+      .sinceVersion("0.10.0")
+      .withDocumentation("Directory where the spillable maps are saved");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -328,6 +378,38 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getMaxNumDeltacommitsWhenPending() {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
+  }
+
+  public boolean createRecordIndex() {
+    return enabled() && getBoolean(RECORD_INDEX_CREATE_PROP);
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return getInt(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return getInt(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return getFloat(RECORD_INDEX_GROWTH_FACTOR_PROP);
+  }
+
+  public int getRecordIndexMaxFileGroupSizeBytes() {
+    return getInt(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
+  }
+
+  public String getSplliableMapDir() {
+    return getString(SPILLABLE_MAP_DIR_PROP);
+  }
+
+  public long getMaxReaderMemory() {
+    return getLong(MAX_READER_MEMORY_PROP);
+  }
+
+  public int getMaxReaderBufferSize() {
+    return getInt(MAX_READER_BUFFER_SIZE_PROP);
   }
 
   /**
@@ -467,6 +549,42 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxNumDeltacommitsWhenPending(int maxNumDeltaCommitsWhenPending) {
       metadataConfig.setValue(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING, String.valueOf(maxNumDeltaCommitsWhenPending));
+      return this;
+    }
+
+    public Builder withCreateRecordIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_INDEX_CREATE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
+      metadataConfig.setValue(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
+      metadataConfig.setValue(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
+      return this;
+    }
+
+    public Builder withRecordIndexGrowthFactor(float factor) {
+      metadataConfig.setValue(RECORD_INDEX_GROWTH_FACTOR_PROP, String.valueOf(factor));
+      return this;
+    }
+
+    public Builder withRecordIndexMaxFileGroupSizeBytes(long sizeInBytes) {
+      metadataConfig.setValue(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
+    public Builder withSpillableMapDir(String dir) {
+      metadataConfig.setValue(SPILLABLE_MAP_DIR_PROP, dir);
+      return this;
+    }
+
+    public Builder withMaxReaderMemory(long mem) {
+      metadataConfig.setValue(MAX_READER_MEMORY_PROP, String.valueOf(mem));
+      return this;
+    }
+
+    public Builder withMaxReaderBufferSize(long mem) {
+      metadataConfig.setValue(MAX_READER_BUFFER_SIZE_PROP, String.valueOf(mem));
       return this;
     }
 

@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -103,8 +101,6 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   @Override
   public Option<HoodieIndexCommitMetadata> execute() {
-    HoodieTimer indexTimer = HoodieTimer.start();
-
     HoodieInstant indexInstant = validateAndGetIndexInstant();
     // read HoodieIndexPlan
     HoodieIndexPlan indexPlan;
@@ -351,6 +347,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                 .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
             instant = currentInstant.orElse(instant);
             // so that timeline is not reloaded very frequently
+            // TODO: this does not handle the case that the commit has indeed failed. Maybe use HB detection here.
             Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
           } catch (InterruptedException e) {
             throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
@@ -374,11 +371,15 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               case HoodieTimeline.COMMIT_ACTION:
               case HoodieTimeline.DELTA_COMMIT_ACTION:
               case HoodieTimeline.REPLACE_COMMIT_ACTION:
-                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                    table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                // Indexes may require WriteStatus which cannot be read from the HoodieCommitMetadata. So if the original commit has not
+                // written to the MDT then we cannot sync that commit here
+                // TODO: maybe the above check for timeout should be based on HB rather than busy loop forever.
+                throw new HoodieIndexException(String.format("Cannot sync instant to MDT: %s", instant));
+                //HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+                //    table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
                 // do not trigger any table service as partition is not fully built out yet
-                metadataWriter.update(commitMetadata, instant.getTimestamp());
-                break;
+                //metadataWriter.update(commitMetadata, instant.getTimestamp());
+                //break;
               case CLEAN_ACTION:
                 HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(table.getMetaClient(), instant);
                 metadataWriter.update(cleanMetadata, instant.getTimestamp());

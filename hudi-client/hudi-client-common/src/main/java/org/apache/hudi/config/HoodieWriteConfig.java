@@ -2035,6 +2035,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
   }
 
+  public boolean hfileWriterToAllowDuplicates() {
+    return getBoolean(HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES);
+  }
+
   public int getHFileBlockSize() {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
@@ -2344,6 +2348,26 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isLogCompactionEnabledOnMetadata() {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
+  }
+
+  public boolean createMetadataRecordIndex() {
+    return metadataConfig.createRecordIndex();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public int getRecordIndexMaxFileGroupSizeBytes() {
+    return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
   }
 
   /**

@@ -261,7 +261,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           }
         }
         table.getMetaClient().reloadActiveTimeline();
-        if (config.isMetadataTableEnabled()) {
+        if (table.getMetaClient().getTableConfig().isMetadataTableEnabled()) {
           table.getHoodieView().sync();
         }
       }

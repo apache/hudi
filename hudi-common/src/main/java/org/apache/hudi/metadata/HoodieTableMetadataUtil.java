@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -110,6 +111,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_FILES = "files";
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+  public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
 
   // Suffix to use for compaction
   private static final String COMPACTION_TIMESTAMP_SUFFIX = "001";
@@ -322,6 +324,7 @@ public class HoodieTableMetadataUtil {
     records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
 
     // Update files listing records for each individual partition
+    int[] newFileCount = {0};
     List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
         commitMetadata.getPartitionToWriteStats().entrySet()
             .stream()
@@ -357,6 +360,7 @@ public class HoodieTableMetadataUtil {
                       },
                       CollectionUtils::combine);
 
+              newFileCount[0] += updatedFilesToSizesMapping.size();
               return HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(updatedFilesToSizesMapping),
                   Option.empty());
             })
@@ -364,8 +368,8 @@ public class HoodieTableMetadataUtil {
 
     records.addAll(updatedPartitionFilesRecords);
 
-    LOG.info("Updating at " + instantTime + " from Commit/" + commitMetadata.getOperationType()
-        + ". #partitions_updated=" + records.size());
+    LOG.info(String.format("Updating at %s from Commit/%s. #partitions_updated=%d, #files_added=%d", instantTime, commitMetadata.getOperationType(),
+        records.size(), newFileCount[0]));
 
     return records;
   }
@@ -1545,11 +1549,7 @@ public class HoodieTableMetadataUtil {
    * @return The fileID
    */
   public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index) {
-    if (partitionType == MetadataPartitionType.FILES) {
-      return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
-    } else {
-      return String.format("%s%04d", partitionType.getFileIdPrefix(), index);
-    }
+    return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
   }
 
   /**
@@ -1619,5 +1619,73 @@ public class HoodieTableMetadataUtil {
    */
   public static String createLogCompactionTimestamp(String timestamp) {
     return timestamp + LOG_COMPACTION_TIMESTAMP_SUFFIX;
+  }
+
+  /**
+   * Estimates the file group count to use for a MDT partition.
+   *
+   * @param partitionType         Type of the partition for which the file group count is to be estimated.
+   * @param recordCount           The number of records expected to be written.
+   * @param averageRecordSize     Average size of each record to be writen.
+   * @param minFileGroupCount     Minimum number of file groups to use.
+   * @param maxFileGroupCount     Maximum number of file groups to use.
+   * @param growthFactor          By what factor are the records (recordCount) expected to grow?
+   * @param maxFileGroupSizeBytes Maximum size of the file group.
+   * @return The estimated number of file groups.
+   */
+  public static int estimateFileGroupCount(MetadataPartitionType partitionType, long recordCount, int averageRecordSize, int minFileGroupCount,
+      int maxFileGroupCount, float growthFactor, int maxFileGroupSizeBytes) {
+    int fileGroupCount;
+
+    // If a fixed number of file groups are desired
+    if ((minFileGroupCount == maxFileGroupCount) && (minFileGroupCount != 0)) {
+      fileGroupCount = minFileGroupCount;
+    } else {
+      // Number of records to estimate for
+      final long expectedNumRecords = (long) Math.ceil((float) recordCount * growthFactor);
+      // Maximum records that should be written to each file group so that it does not go over the size limit required
+      final long maxRecordsPerFileGroup = maxFileGroupSizeBytes / Math.max(averageRecordSize, 1L);
+      final long estimatedFileGroupCount = expectedNumRecords / maxRecordsPerFileGroup;
+
+      if (estimatedFileGroupCount >= maxFileGroupCount) {
+        fileGroupCount = maxFileGroupCount;
+      } else if (estimatedFileGroupCount <= minFileGroupCount) {
+        fileGroupCount = minFileGroupCount;
+      } else {
+        fileGroupCount = Math.max(1, (int) estimatedFileGroupCount);
+      }
+    }
+
+    LOG.info(String.format("Estimated file group count for MDT partition %s is %d "
+            + "[recordCount=%d, avgRecordSize=%d, minFileGroupCount=%d, maxFileGroupCount=%d, growthFactor=%f, "
+            + "maxFileGroupSizeBytes=%d]", partitionType, fileGroupCount, recordCount, averageRecordSize, minFileGroupCount,
+        maxFileGroupCount, growthFactor, maxFileGroupSizeBytes));
+    return fileGroupCount;
+  }
+
+  /**
+   * Returns true if any enabled metadata partition in the given hoodie table requires WriteStatus to track the written records.
+   *
+   * @param config     MDT config
+   * @param metaClient {@code HoodieTableMetaClient} of the data table
+   * @return true if WriteStatus should track the written records else false.
+   */
+  public static boolean needsWriteStatusTracking(HoodieMetadataConfig config, HoodieTableMetaClient metaClient) {
+    // Does any enabled partition need to track the written records
+    if (MetadataPartitionType.needWriteStatusTracking().stream().anyMatch(p -> metaClient.getTableConfig().isMetadataPartitionEnabled(p))) {
+      return true;
+    }
+
+    // Does any inflight partitions need to track the written records
+    Set<String> metadataPartitionsInflight = metaClient.getTableConfig().getMetadataPartitionsInflight();
+    if (MetadataPartitionType.needWriteStatusTracking().stream().anyMatch(p -> metadataPartitionsInflight.contains(p.getPartitionPath()))) {
+      return true;
+    }
+
+    // Does any enabled partition being enabled need to track the written records
+    if (config.createRecordIndex()) {
+      return true;
+    }
+    return false;
   }
 }

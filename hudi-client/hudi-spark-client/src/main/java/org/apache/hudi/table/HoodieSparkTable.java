@@ -94,7 +94,7 @@ public abstract class HoodieSparkTable<T>
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
       Option<R> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
+    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableEnabled()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.

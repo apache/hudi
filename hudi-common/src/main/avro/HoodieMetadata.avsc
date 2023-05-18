@@ -358,6 +358,46 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "recordIndexMetadata",
+            "doc": "Metadata Index that contains information about record keys and their location in the dataset",
+            "type": [
+                "null",
+                 {
+                   "type": "record",
+                   "name": "HoodieRecordIndexInfo",
+                    "fields": [
+                        {
+                            "name": "partition",
+                            "type": "string",
+                            "doc": "Partition which contains the record",
+                            "avro.java.string": "String"
+                        },
+                        {
+                            "name": "fileIdHighBits",
+                            "type": "long",
+                            "doc": "fileId which contains the record (high 64 bits)"
+                        },
+                        {
+                            "name": "fileIdLowBits",
+                            "type": "long",
+                            "doc": "fileId which contains the record (low 64 bits)"
+                        },
+                        {
+                            "name": "fileIndex",
+                            "type": "int",
+                            "doc": "index of the file"
+                        },
+                        {
+                            "name": "instantTime",
+                            "type": "long",
+                            "doc": "Timestamp at which record was added"
+                        }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }

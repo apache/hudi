@@ -164,13 +164,13 @@ public class FileSystemViewManager {
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePathV2());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    if (metadataConfig.enabled()) {
+    if (metaClient.getTableConfig().isMetadataTableEnabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
       return new HoodieMetadataFileSystemView(metaClient, timeline, metadataSupplier.get());
     }
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
-          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
+          new Class<?>[]{HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
           metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
@@ -189,12 +189,12 @@ public class FileSystemViewManager {
                                                                                    HoodieMetadataConfig metadataConfig,
                                                                                    HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (metadataConfig.enabled()) {
+    if (metaClient.getTableConfig().isMetadataTableEnabled()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
-          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
+          new Class<?>[]{HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
           metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
@@ -229,7 +229,7 @@ public class FileSystemViewManager {
                                                         final HoodieCommonConfig commonConfig,
                                                         final String basePath) {
     return createViewManager(context, metadataConfig, config, commonConfig,
-        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir(), true));
+        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, true));
   }
 
   /**
