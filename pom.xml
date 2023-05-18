@@ -2104,7 +2104,7 @@
       <id>scala-2.12</id>
       <properties>
         <scala.version>${scala12.version}</scala.version>
-        <scala.binary.version>2.12</scala.binary.version>
+        <scala.binary.version>2.11</scala.binary.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
       </properties>
       <activation>
