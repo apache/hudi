@@ -40,6 +40,7 @@ import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
+import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
@@ -310,33 +311,35 @@ public class ParquetUtils extends BaseFileUtils {
     Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
         Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
 
-    // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
-          .flatMap(blockMetaData ->
-              blockMetaData.getColumns().stream()
-                .filter(f -> cols.contains(f.getPath().toDotString()))
-                .map(columnChunkMetaData -> {
-                  Statistics stats = columnChunkMetaData.getStatistics();
-                  return HoodieColumnRangeMetadata.<Comparable>create(
-                      parquetFilePath.getName(),
-                      columnChunkMetaData.getPath().toDotString(),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMin()),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMax()),
-                      // NOTE: In case when column contains only nulls Parquet won't be creating
-                      //       stats for it instead returning stubbed (empty) object. In that case
-                      //       we have to equate number of nulls to the value count ourselves
-                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
-                      columnChunkMetaData.getValueCount(),
-                      columnChunkMetaData.getTotalSize(),
-                      columnChunkMetaData.getTotalUncompressedSize());
-                })
-          )
-          .collect(groupingByCollector);
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = new HashMap<>();
+
+    for (BlockMetaData blockMetaData: metadata.getBlocks()) {
+      for (ColumnChunkMetaData columnChunkMetaData: blockMetaData.getColumns()) {
+        if (!cols.contains(columnChunkMetaData.getPath().toDotString())) {
+          continue;
+        }
+        Statistics stats = columnChunkMetaData.getStatistics();
+        HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.<Comparable>create(
+            parquetFilePath.getName(),
+            columnChunkMetaData.getPath().toDotString(),
+            convertToNativeJavaType(
+                columnChunkMetaData.getPrimitiveType(),
+                stats.genericGetMin()),
+            convertToNativeJavaType(
+                columnChunkMetaData.getPrimitiveType(),
+                stats.genericGetMax()),
+            // NOTE: In case when column contains only nulls Parquet won't be creating
+            //       stats for it instead returning stubbed (empty) object. In that case
+            //       we have to equate number of nulls to the value count ourselves
+            stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+            columnChunkMetaData.getValueCount(),
+            columnChunkMetaData.getTotalSize(),
+            columnChunkMetaData.getTotalUncompressedSize());
+        List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
+            columnToStatsListMap.computeIfAbsent(columnRangeMetadata.getColumnName(), k -> new ArrayList<>());
+        columnRangeMetadataList.add(columnRangeMetadata);
+      }
+    }
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer

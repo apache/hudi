@@ -91,7 +91,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.42.1</maven-docker-plugin.version>
 
-    <java.version>1.8</java.version>
+    <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
@@ -168,12 +168,12 @@
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
     <scala11.version>2.11.12</scala11.version>
-    <scala12.version>2.12.10</scala12.version>
+    <scala12.version>2.12.15</scala12.version>
     <scala.version>${scala11.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
-    <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
+    <scala-maven-plugin.version>4.8.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>

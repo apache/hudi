@@ -83,8 +83,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -183,27 +181,27 @@ public class HoodieTableMetadataUtil {
       });
     });
 
-    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, HoodieColumnRangeMetadata<Comparable>>> collector =
-        Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
+    Map<String, HoodieColumnRangeMetadata<Comparable>> result = new HashMap<>();
 
-    return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
-        .map(field -> {
-          ColumnStats colStats = allColumnStats.get(field.name());
-          return HoodieColumnRangeMetadata.<Comparable>create(
-              filePath,
-              field.name(),
-              colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
-              colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
-              colStats == null ? 0 : colStats.nullCount,
-              colStats == null ? 0 : colStats.valueCount,
-              // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
-              //       mixing up those provided by Parquet with the ones from other encodings,
-              //       since those are not directly comparable
-              0,
-              0
-          );
-        })
-        .collect(collector);
+    for (Schema.Field field : targetFields) {
+      ColumnStats colStats = allColumnStats.get(field.name());
+      HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.<Comparable>create(
+          filePath,
+          field.name(),
+          colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
+          colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
+          colStats == null ? 0 : colStats.nullCount,
+          colStats == null ? 0 : colStats.valueCount,
+          // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+          //       mixing up those provided by Parquet with the ones from other encodings,
+          //       since those are not directly comparable
+          0,
+          0
+      );
+      result.put(columnRangeMetadata.getColumnName(), columnRangeMetadata);
+    }
+
+    return result;
   }
 
   /**
