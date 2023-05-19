@@ -209,7 +209,9 @@ class Spark30NestedSchemaPruning extends Rule[LogicalPlan] {
     }
   }
 
-
+  // NOTE: `pruneDataSchema` and `sortLeftFieldsByRight` functions are copied from Spark 3.1.2,
+  // as these functions in `SchemaPruning` have bugs in Spark 3.0.2 (see SPARK-35096,
+  // https://github.com/apache/spark/commit/2bbe0a4151f2af00f1105489d5757be28ff278d6)
   /**
    * Prunes the nested schema by the requested fields. For example, if the schema is:
    * `id int, s struct<a:int, b:int>`, and given requested field "s.a", the inner field "b"

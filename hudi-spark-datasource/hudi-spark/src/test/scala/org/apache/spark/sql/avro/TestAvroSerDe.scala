@@ -25,7 +25,7 @@ import org.apache.spark.sql.avro.SchemaConverters.SchemaType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-class TestAvroSerDe extends SparkAdapterSupport with Logging {
+class TestAvroSerDe extends SparkAdapterSupport {
 
   @Test
   def testAvroUnionSerDe(): Unit = {

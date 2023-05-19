@@ -35,7 +35,7 @@ import scala.collection.mutable
 /**
   * Rule to mostly resolve, normalize and rewrite column names based on case sensitivity
   * for alter table column commands.
-  * TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
+  * TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0.x
   */
 case class Spark30ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._

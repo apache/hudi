@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.internal.SQLConf
 
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0.x
 class HoodieSpark30SqlAstBuilder(conf: SQLConf) extends SparkSqlAstBuilder(conf) {
 
   /**

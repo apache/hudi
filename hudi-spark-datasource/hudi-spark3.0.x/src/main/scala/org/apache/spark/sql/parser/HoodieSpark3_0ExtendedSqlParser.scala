@@ -22,7 +22,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.execution.{SparkSqlAstBuilder, SparkSqlParser}
 
-// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0x
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.0.x
 class HoodieSpark3_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser(session.sqlContext.conf)
   with HoodieExtendedParserInterface
   with Logging {

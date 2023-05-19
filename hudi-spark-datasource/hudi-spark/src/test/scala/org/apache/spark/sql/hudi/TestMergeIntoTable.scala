@@ -115,8 +115,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   /**
-   * For spark3.0.x didn't support 'UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE statement'
-   * details: org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable
+   * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
+   * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
    *
    */
   test("Test MergeInto with more than once update actions for spark >= 3.1.x") {

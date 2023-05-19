@@ -22,7 +22,7 @@ import org.apache.spark.sql.catalyst.expressions.{Add, AnsiCast, Attribute, Attr
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.types.DataType
 
-object HoodieSpark33CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper{
+object HoodieSpark33CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper {
 
   override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
     DataSourceStrategy.normalizeExprs(exprs, attributes)

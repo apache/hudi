@@ -26,5 +26,4 @@ object HoodieSpark30CatalogUtils extends HoodieSpark3CatalogUtils {
       case BucketTransform(numBuckets, ref) => Some(numBuckets, Seq(ref), Seq.empty)
       case _ => None
     }
-
 }
