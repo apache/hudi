@@ -49,10 +49,10 @@ Finally, Hudi's broad support for different catalogs and wide integration across
 
 ## **Future Opportunities**
 
-We're adding new capabilities in the 0.x release line, but we can also turn the core of Hudi into a more general-purpose database experience for the lake. As the first kid on the lakehouse block (we called it "transactional data lakes" or "streaming data lakes" 
+We have been adding new capabilities in the 0.x release line, but we can also turn the core of Hudi into a more general-purpose database experience for the lake. As the first kid on the lakehouse block (we called it "transactional data lakes" or "streaming data lakes" 
 to speak the warehouse users' and data engineers' languages, respectively), we made some conservative choices based on the ecosystem at that time. However, revisiting those choices is important to see if they still hold up.
 
-*   **Deep Query Engine Integrations:** Back then, query engines like Presto, Spark, Trino and Hive were getting good at queries on columnar data files but painfully hard to integrate into. Over time, we expected clear API abstractions 
+*   **Deep Query Engine Integrations:** Back then, query engines like Presto, Spark, Flink, Trino and Hive were getting good at queries on columnar data files but painfully hard to integrate into. Over time, we expected clear API abstractions 
 around indexing/metadata/table snapshots in the parquet/orc read paths that a project like Hudi can tap into to easily leverage innovations like Velox/PrestoDB. However, most engines preferred a separate integration - leading to Hudi maintaining its own Spark Datasource, 
 Presto and Trino connectors. However, this now opens up the opportunity to fully leverage Hudi's multi-modal indexing capabilities during query planning and execution.
 *   **Generalized Data Model:** While Hudi supported keys, we focused on updating Hudi tables as if they were a key-value store, while SQL queries ran on top, blissfully unchanged and unaware. Back then, generalizing the support for 
@@ -118,7 +118,7 @@ Currently, there are potentially many candidate designs for this idea, and we wo
 Shared components include replication, loading, and various utilities, complete with a catalog or metadata server. Most databases hide the underlying format/storage complexities, providing users 
 with many data management tools. Hudi is no exception. Hudi has battle-hardened bulk and continuous data loading utilities (deltastreamer, flinkstreamer tools, along with Kafka Connect Sink), 
 a comprehensive set of table services (cleaning, archival, compaction, clustering, indexing, ..), admin CLI and much much more. The community has been working on new server components 
-like a [metaserver](https://github.com/apache/hudi/pull/4718) that could expand to indexing the table metadata using advanced data structures like zone maps/interval trees or a [table management service](https://github.com/apache/hudi/pull/4309) to manage Hudi tables 
+like a [metaserver](https://github.com/apache/hudi/pull/4718) that could expand to indexing the table metadata using advanced data structures like zone maps/interval trees or a [table service manager](https://github.com/apache/hudi/pull/4309) to manage Hudi tables 
 centrally. We would love to evolve towards having a set of horizontally scalable, highly available metaservers, that can provide both these functionalities as well as some of the lock management capabilities. 
 Another interesting direction to pursue would be a reverse loader/streamer utility that can also move data out of Hudi into other external storage systems.
 
@@ -136,7 +136,7 @@ In short, we propose Hudi 1.0 try and achieve the following.
 2. Put up new APIs, if any, across - Table metadata, snapshots, index/metadata table, key generation, record merger,...
 3. Get internal code layering/abstractions in place - e.g. HoodieData, FileGroup Reader/Writer, Storage,...
 4. Land all major, outstanding "needle mover" PRs, in a safe manner guarded by configs.
-5. Integrate some/all of the existing indexes for Spark/Presto, and validate intended functionality and performance gains.
+5. Integrate some/all of the existing indexes for Spark/Flink/Presto, and validate intended functionality and performance gains.
 
 
 All changes should be backward compatible and not require rewriting of base/parquet files in existing tables. However, full compaction of the logs or planned downtime to rewrite the 
