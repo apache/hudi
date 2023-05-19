@@ -33,7 +33,7 @@ public class HoodieTimer {
   private final Deque<TimeInfo> timeInfoDeque = new ArrayDeque<>(1);
 
   /**
-   * @deprecated please use either {@link HoodieTimer#start} or {@link HoodieTimer#delayed} APIs
+   * @deprecated please use either {@link HoodieTimer#start} or {@link HoodieTimer#create} APIs
    */
   @Deprecated
   public HoodieTimer() {
@@ -93,7 +93,7 @@ public class HoodieTimer {
   /**
    * Creates an instance of {@link HoodieTimer} that is NOT started
    */
-  public static HoodieTimer delayed() {
+  public static HoodieTimer create() {
     return new HoodieTimer(false);
   }
 }
