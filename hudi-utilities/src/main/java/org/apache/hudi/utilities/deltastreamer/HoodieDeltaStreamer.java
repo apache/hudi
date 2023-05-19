@@ -405,6 +405,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
     public Boolean retryLastPendingInlineClusteringJob = false;
 
+    @Parameter(names = {"--retry-last-pending-inline-compaction"}, description = "Retry last pending inline compaction plan before writing to sink.")
+    public Boolean retryLastPendingInlineCompactionJob = false;
+
     @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingWeight = 1;

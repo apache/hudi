@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.junit.jupiter.api.Assertions;
@@ -34,22 +35,22 @@ public class TestKeyGenUtils {
   public void testInferKeyGeneratorType() {
     assertEquals(
         KeyGeneratorType.SIMPLE,
-        KeyGenUtils.inferKeyGeneratorType("col1", "partition1"));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1"));
     assertEquals(
         KeyGeneratorType.COMPLEX,
-        KeyGenUtils.inferKeyGeneratorType("col1", "partition1,partition2"));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1,partition2"));
     assertEquals(
         KeyGeneratorType.COMPLEX,
-        KeyGenUtils.inferKeyGeneratorType("col1,col2", "partition1"));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1"));
     assertEquals(
         KeyGeneratorType.COMPLEX,
-        KeyGenUtils.inferKeyGeneratorType("col1,col2", "partition1,partition2"));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1,partition2"));
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
-        KeyGenUtils.inferKeyGeneratorType("col1,col2", ""));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), ""));
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
-        KeyGenUtils.inferKeyGeneratorType("col1,col2", null));
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), null));
   }
 
   @Test

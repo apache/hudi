@@ -326,6 +326,8 @@ public class SparkBootstrapCommitActionExecutor<T>
       if (!(selector instanceof FullRecordBootstrapModeSelector)) {
         FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
         result.putAll(fullRecordBootstrapModeSelector.select(folders));
+      } else {
+        result.putAll(selector.select(folders));
       }
     } else {
       result = selector.select(folders);

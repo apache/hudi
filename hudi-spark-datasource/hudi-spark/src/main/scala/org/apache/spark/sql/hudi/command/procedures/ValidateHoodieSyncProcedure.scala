@@ -35,11 +35,11 @@ import scala.collection.JavaConverters._
 class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "src_table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "dst_table", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "mode", DataTypes.StringType, "complete"),
-    ProcedureParameter.required(3, "hive_server_url", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "hive_pass", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "src_table", DataTypes.StringType),
+    ProcedureParameter.required(1, "dst_table", DataTypes.StringType),
+    ProcedureParameter.required(2, "mode", DataTypes.StringType),
+    ProcedureParameter.required(3, "hive_server_url", DataTypes.StringType),
+    ProcedureParameter.required(4, "hive_pass", DataTypes.StringType),
     ProcedureParameter.optional(5, "src_db", DataTypes.StringType, "rawdata"),
     ProcedureParameter.optional(6, "target_db", DataTypes.StringType, "dwh_hoodie"),
     ProcedureParameter.optional(7, "partition_cnt", DataTypes.IntegerType, 5),

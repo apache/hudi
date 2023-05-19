@@ -42,7 +42,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.TestCleaner;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -530,6 +529,77 @@ public class TestCleanPlanExecutor extends TestCleaner {
     assertTrue(testTable.logFileExists(p0, "001", file1P0, 3));
     assertTrue(testTable.baseFileExists(p0, "002", file1P0));
     assertTrue(testTable.logFileExists(p0, "002", file1P0, 4));
+  }
+
+  /** Test clean delete partition with KEEP_LATEST_COMMITS policy. */
+  @Test
+  public void testKeepLatestCommitWithDeletePartition() throws Exception {
+    testCleanDeletePartition(
+            HoodieCleanConfig.newBuilder()
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .retainCommits(1)
+                    .build());
+  }
+
+  /** Test clean delete partition with KEEP_LATEST_BY_HOURS policy. */
+  @Test
+  public void testKeepXHoursWithDeletePartition() throws Exception {
+    testCleanDeletePartition(
+            HoodieCleanConfig.newBuilder()
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
+                    .cleanerNumHoursRetained(30)
+                    .build());
+  }
+
+  /** Test clean delete partition with KEEP_LATEST_FILE_VERSIONS policy. */
+  @Test
+  public void testKeepFileVersionsWithDeletePartition() throws Exception {
+    testCleanDeletePartition(
+            HoodieCleanConfig.newBuilder()
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                    .build());
+  }
+
+  private void testCleanDeletePartition(HoodieCleanConfig cleanConfig) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withCleanConfig(cleanConfig)
+            .build();
+
+    long now = System.currentTimeMillis();
+    String commitInstant = HoodieActiveTimeline.formatDate(new Date(now - 49 * 3600 * 1000));
+    String deleteInstant1 = HoodieActiveTimeline.formatDate(new Date(now - 48 * 3600 * 1000));
+    String deleteInstant2 = HoodieActiveTimeline.formatDate(new Date(now - 24 * 3600 * 1000));
+
+    String p1 = "part_1";
+    String file1P1 = UUID.randomUUID().toString();
+    String file2P1 = UUID.randomUUID().toString();
+
+    String p2 = "part_2";
+    String file1P2 = UUID.randomUUID().toString();
+    String file2P2 = UUID.randomUUID().toString();
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.withPartitionMetaFiles(p1, p2);
+
+    testTable.forCommit(commitInstant)
+            .withBaseFilesInPartition(p1, file1P1, file2P1)
+            .withBaseFilesInPartition(p2, file1P2, file2P2);
+    testTable.addDeletePartitionCommit(deleteInstant1, p1, Arrays.asList(file1P1, file2P1));
+    testTable.addDeletePartitionCommit(deleteInstant2, p2, Arrays.asList(file1P2, file2P2));
+
+    runCleaner(config);
+
+    assertFalse(testTable.baseFileExists(p1, commitInstant, file1P1), "p1 cleaned");
+    assertFalse(testTable.baseFileExists(p1, commitInstant, file2P1), "p1 cleaned");
+
+    String policy = cleanConfig.getString(HoodieCleanConfig.CLEANER_POLICY);
+    if (HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name().equals(policy)) {
+      assertFalse(testTable.baseFileExists(p2, commitInstant, file1P2), "p2 cleaned");
+      assertFalse(testTable.baseFileExists(p2, commitInstant, file2P2), "p2 cleaned");
+    } else {
+      assertTrue(testTable.baseFileExists(p2, commitInstant, file1P2), "p2 retained");
+      assertTrue(testTable.baseFileExists(p2, commitInstant, file2P2), "p2 retained");
+    }
   }
 
   /**

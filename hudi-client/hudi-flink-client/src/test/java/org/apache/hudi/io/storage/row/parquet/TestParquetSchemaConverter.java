@@ -56,7 +56,7 @@ public class TestParquetSchemaConverter {
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
         + "    repeated group key_value {\n"
-        + "      optional int32 key;\n"
+        + "      required int32 key;\n"
         + "      optional binary value (STRING);\n"
         + "    }\n"
         + "  }\n"

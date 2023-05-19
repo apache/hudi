@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -67,6 +68,16 @@ public class FileSliceHandler extends Handler {
     return viewManager.getFileSystemView(basePath)
         .getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
+  }
+
+  public Map<String, List<FileSliceDTO>> getAllLatestFileSlicesBeforeOrOn(String basePath, String maxInstantTime) {
+    return viewManager.getFileSystemView(basePath)
+        .getAllLatestFileSlicesBeforeOrOn(maxInstantTime)
+        .entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue().map(FileSliceDTO::fromFileSlice).collect(Collectors.toList())
+        ));
   }
 
   public List<FileSliceDTO> getLatestUnCompactedFileSlices(String basePath, String partitionPath) {
@@ -113,6 +124,12 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
+
+  public List<FileGroupDTO> getReplacedFileGroupsAfterOrOn(String basePath, String minCommitTime, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsAfterOrOn(minCommitTime, partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
     List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)
@@ -128,6 +145,11 @@ public class FileSliceHandler extends Handler {
 
   public boolean refreshTable(String basePath) {
     viewManager.clearFileSystemView(basePath);
+    return true;
+  }
+
+  public boolean loadAllPartitions(String basePath) {
+    viewManager.getFileSystemView(basePath).loadAllPartitions();
     return true;
   }
 }
