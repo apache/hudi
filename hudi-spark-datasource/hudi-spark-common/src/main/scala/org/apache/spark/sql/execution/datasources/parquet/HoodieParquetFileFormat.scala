@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -46,7 +47,7 @@ class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
 
     sparkAdapter
-      .createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, decodeFilePath = true).get
+      .createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }

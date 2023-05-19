@@ -227,7 +227,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         } else {
           val prefix = s"${partitionColumns.head}="
           if (partitionPath.startsWith(prefix)) {
-            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length, "/", hive = false).
+            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length).
               map(p => UTF8String.fromString(p)).toArray
           } else {
             // If the partition column size is not equal to the partition fragments size
@@ -279,7 +279,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     ).toSeq(partitionSchema)
   }
 
-  def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int, sep: String, hive: Boolean): Array[String] = {
+  def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int): Array[String] = {
     val partitionVals = new Array[String](nPartitions)
     var index = 0
     var first = true
@@ -290,13 +290,10 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         } else {
           index += 1
         }
-        partitionVals(index) = if (hive) {
-          fragment
-        } else {
-          fragment.substring(fragment.indexOf("=") + 1)
-        }
+        partitionVals(index) = fragment.substring(fragment.indexOf("=") + 1)
+
       } else {
-        partitionVals(index) += sep + fragment
+        partitionVals(index) += "/" + fragment
       }
     }
     return partitionVals

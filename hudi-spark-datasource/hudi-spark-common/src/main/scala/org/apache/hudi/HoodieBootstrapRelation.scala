@@ -18,11 +18,13 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
 import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.hadoop.CachingPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -31,6 +33,8 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+
+import java.net.URI
 
 case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile] = None) extends HoodieFileSplit
 
@@ -64,6 +68,8 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
+  private lazy val bootstrapBasePath = new Path(metaClient.getTableConfig.getBootstrapBasePath.get)
+
   override val mandatoryFields: Seq[String] = Seq.empty
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
@@ -73,9 +79,14 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       val baseFile = fileSlice.getBaseFile.get()
 
       if (baseFile.getBootstrapBaseFile.isPresent) {
-        val partitionValues =
-          getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
+            bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
+        val filePath = if (isPartitioned) {
+          encodePartitionPath(baseFile.getBootstrapBaseFile.get.getFileStatus)
+        } else {
+          baseFile.getBootstrapBaseFile.get.getPath
+        }
+        val dataFile = PartitionedFile(partitionValues, filePath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)
@@ -132,8 +143,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       //       default Spark behavior: Spark by default strips partition-columns from the data schema and does
       //       NOT persist them in the data files, instead parsing them from partition-paths (on the fly) whenever
       //       table is queried
-      shouldAppendPartitionValuesOverride = Some(true),
-      shouldDecodeFilePathOverride = Some(false)
+      shouldAppendPartitionValuesOverride = Some(true)
     )
 
     val boostrapSkeletonFileReader = createBaseFileReader(
@@ -150,8 +160,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf(),
       // NOTE: We override Spark to avoid injecting partition values into the records read from
       //       skeleton-file
-      shouldAppendPartitionValuesOverride = Some(false),
-      shouldDecodeFilePathOverride = Some(false)
+      shouldAppendPartitionValuesOverride = Some(false)
     )
 
     (bootstrapDataFileReader, boostrapSkeletonFileReader)
@@ -190,6 +199,14 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
+
+  private def encodePartitionPath(file: FileStatus): String = {
+    val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(bootstrapBasePath)
+    val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
+    val filePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath)
+    val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+    CachingPath.concatPathUnsafe(CachingPath.concatPathUnsafe(tablePathWithoutScheme, PartitionPathEncodeUtils.escapePathName(relativePath)), filePathWithoutScheme.getName).toString
+  }
 }
 
 

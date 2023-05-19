@@ -97,9 +97,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
+    String[] bootstrapType = {"full", "metadata", "mixed"};
     Boolean[] dashPartitions = {true,false};
     String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
-    String[] bootstrapType = {"full", "metadata", "mixed"};
     Integer[] nPartitions = {0, 1, 2};
     for (String tt : tableType) {
       for (Boolean dash : dashPartitions) {
@@ -224,17 +224,12 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   protected void compareTables() {
     Map<String,String> readOpts = new HashMap<>();
-    if (nPartitions > 1 && !dashPartitions) {
-      //see https://hudi.apache.org/releases/release-0.13.0/#lazy-file-index-in-spark
-      readOpts.put("hoodie.datasource.read.file.index.listing.mode", "eager");
-    }
-    Dataset<Row> bootstrapDf = sparkSession.read().options(readOpts).format("hudi").load(bootstrapTargetPath);
     if (tableType.equals("MERGE_ON_READ")) {
       //Bootstrap MOR currently only has read optimized queries implemented
       readOpts.put(DataSourceReadOptions.QUERY_TYPE().key(),DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL());
     }
+    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
-
     if (nPartitions == 0) {
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;

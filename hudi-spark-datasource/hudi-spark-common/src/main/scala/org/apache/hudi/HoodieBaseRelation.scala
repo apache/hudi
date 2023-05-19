@@ -238,7 +238,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case HoodieFileFormat.PARQUET =>
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
-        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, decodeFilePath = true).get
+        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
         (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
@@ -474,26 +474,18 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
 
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file, shouldExtractPartitionValuesFromPartitionPath)
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
 
-  protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus,
+  protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus, basePath: Path,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
       if (extractPartitionValuesFromPartitionPath) {
-        val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(metaClient.getBasePathV2)
+        val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
         val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
-        var relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+        val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
-          val nEqualsSign = StringUtils.countMatches(relativePath, "=")
-          lazy val nSlashes = StringUtils.countMatches(relativePath,"/")
-          if (nEqualsSign == 1 && nSlashes > 0){
-            relativePath = relativePath.replace("/", "%2F")
-          } else if (nEqualsSign > 1 && nEqualsSign < nSlashes) {
-            relativePath = HoodieSparkUtils.splitHiveSlashPartitions(relativePath.
-              split("/"), nEqualsSign, "%2F", hive = true).mkString("/")
-          }
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
           InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
         } else {
@@ -536,8 +528,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
                                      hadoopConf: Configuration,
-                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None,
-                                     shouldDecodeFilePathOverride: Option[Boolean] = None): BaseFileReader = {
+                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None): BaseFileReader = {
     val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
     // NOTE: PLEASE READ CAREFULLY
@@ -558,9 +549,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             hadoopConf = hadoopConf,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
-            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath),
-            decodeFilePath = shouldDecodeFilePathOverride.getOrElse(true)
-
+            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading

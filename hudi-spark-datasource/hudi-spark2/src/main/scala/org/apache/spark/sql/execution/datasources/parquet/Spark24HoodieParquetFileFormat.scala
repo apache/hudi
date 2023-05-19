@@ -50,7 +50,7 @@ import java.net.URI
  *   <li>Avoiding appending partition values to the rows read from the data file</li>
  * </ol>
  */
-class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean, private val shouldDecodeFilePath: Boolean) extends ParquetFileFormat {
+class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -112,14 +112,8 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
-      val path = if (shouldDecodeFilePath) {
-        new Path(new URI(file.filePath))
-      } else {
-        new Path(new URI(file.filePath).getRawPath)
-      }
-
       val fileSplit =
-        new FileSplit(path, file.start, file.length, Array.empty)
+        new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)
       val filePath = fileSplit.getPath
 
       val split =
