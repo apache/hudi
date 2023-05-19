@@ -1,56 +1,38 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-COMMIT_ACTION = "commit"
-DELTA_COMMIT_ACTION = "deltacommit"
-CLEAN_ACTION = "clean"
-ROLLBACK_ACTION = "rollback"
-SAVEPOINT_ACTION = "savepoint"
-REPLACE_COMMIT_ACTION = "replacecommit"
-INFLIGHT_EXTENSION = ".inflight"
-COMPACTION_ACTION = "compaction"
-LOG_COMPACTION_ACTION = "logcompaction"
-REQUESTED_EXTENSION = ".requested"
-RESTORE_ACTION = "restore"
-INDEXING_ACTION = "indexing"
-SCHEMA_COMMIT_ACTION = "schemacommit"
+from hoodieInstant import *
 
-VALID_ACTIONS_IN_TIMELINE = [COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, 
-                             SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-                             COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION]
 
-COMMIT_EXTENSION = "." + COMMIT_ACTION
-DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION
-CLEAN_EXTENSION = "." + CLEAN_ACTION
-ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION
-SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION
-INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION
-REQUESTED_COMMIT_EXTENSION = "." + COMMIT_ACTION + REQUESTED_EXTENSION
-REQUESTED_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + REQUESTED_EXTENSION
-INFLIGHT_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + INFLIGHT_EXTENSION
-INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION
-REQUESTED_CLEAN_EXTENSION = "." + CLEAN_ACTION + REQUESTED_EXTENSION
-INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION
-REQUESTED_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + REQUESTED_EXTENSION
-INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION
-REQUESTED_COMPACTION_SUFFIX = COMPACTION_ACTION + REQUESTED_EXTENSION
-REQUESTED_COMPACTION_EXTENSION = "." + REQUESTED_COMPACTION_SUFFIX
-INFLIGHT_COMPACTION_EXTENSION = "." + COMPACTION_ACTION + INFLIGHT_EXTENSION
-REQUESTED_RESTORE_EXTENSION = "." + RESTORE_ACTION + REQUESTED_EXTENSION
-INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION
-RESTORE_EXTENSION = "." + RESTORE_ACTION
-INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION
-REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION
-REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION
-INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION
-REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION
-INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION
-SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION
-INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + INFLIGHT_EXTENSION
-REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + REQUESTED_EXTENSION
-REQUESTED_LOG_COMPACTION_SUFFIX = LOG_COMPACTION_ACTION + REQUESTED_EXTENSION
-REQUESTED_LOG_COMPACTION_EXTENSION = "." + REQUESTED_LOG_COMPACTION_SUFFIX
-INFLIGHT_LOG_COMPACTION_EXTENSION = "." + LOG_COMPACTION_ACTION + INFLIGHT_EXTENSION
+class HoodieTimeline:
+    def __init__(self, instants: list[HoodieInstant]) -> None:
+        self._instants = instants
+        if (len(instants) > 0):
+            self._start = instants[0].timestamp
+            self._end = instants[-1].timestamp
 
-INVALID_INSTANT_TS = "0"
-INIT_INSTANT_TS = "00000000000000"
-METADATA_BOOTSTRAP_INSTANT_TS = "00000000000001"
-FULL_BOOTSTRAP_INSTANT_TS = "00000000000002"
+    def getInstants(self):
+        return self._instants
+    
+    def filter(self, filterfunc):
+        return HoodieTimeline([instant for instant in self._instants if filterfunc(instant)])
+
+    def getCompletedInstants(self):
+        return HoodieTimeline([instant for instant in self._instants if instant.state == COMPLETED_STATE])
+    
+    def last(self):
+        return self._instants[-1]

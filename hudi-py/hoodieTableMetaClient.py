@@ -1,28 +1,67 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 import fsspec
 from hoodieInstant import HoodieInstant
-from hoodieActiveTimeline import VALID_EXTENSIONS_IN_ACTIVE_TIMELINE
+from hoodieInstant import VALID_EXTENSIONS_IN_ACTIVE_TIMELINE
+from hoodieTimeline import HoodieTimeline
 
 
 class HoodieTableMetaClient:
     def  __init__(self, fs: fsspec.AbstractFileSystem, basePath):
         self.fs = fs
         self.basePath = basePath
+        self._activeTimeline = self._initActiveTimeline()
 
-    def scanHoodieInstantsFromFileSystem(self):
+    def _scanHoodieInstantsFromFileSystem(self):
         files = self.fs.ls(self.basePath + "/.hoodie")
         instants = []
         for file in files:
-            extension = HoodieInstant.getTimelineFileExtension(file)
-            if extension is not None and extension in VALID_EXTENSIONS_IN_ACTIVE_TIMELINE:
-                instants.append(file)
+            instant = HoodieInstant(file, self.fs)
+            if instant.valid  and instant.extension in VALID_EXTENSIONS_IN_ACTIVE_TIMELINE:
+                instants.append(instant)
         return instants
     
-    #{'name': '/tmp/hudi_trips_cow/americas', 'size': 128, 'type': 'directory', 'created': 1683997424.349733, 'islink': False, 'mode': 16877, 'uid': 501, 'gid': 0, 'mtime': 1683997424.349733, 'ino': 67754073, 'nlink': 4}
+    def _initActiveTimeline(self):
+        instants = self._scanHoodieInstantsFromFileSystem()
+        list.sort(instants, key=HoodieInstant.sort_key)
+        return HoodieTimeline(instants)
+    
+
+    def getActiveTimeline(self):
+        return self._activeTimeline
+    
+    def getInvalidFilegroupsAsOf(self, timestamp: str) -> dict[str, set[str]]:
+        invalidFilegroups: dict[str, set[str]] = {}
+        def filterFunc(instant: HoodieInstant):
+            return instant.isAsOf(timestamp) and instant.isCompleted() and instant.isReplaceCommit() 
+        for replaceCommit in self.getActiveTimeline().filter(filterFunc).getInstants():
+            for partition in replaceCommit.invalidFiles:
+                if not partition in invalidFilegroups:
+                    invalidFilegroups[partition] = replaceCommit.invalidFiles[partition]
+                else:
+                    invalidFilegroups[partition].union(replaceCommit.invalidFiles[partition])
+        return invalidFilegroups
+                    
+    
     def getPartitions(self):
         pathsToList = self.fs.ls(self.basePath, True)
         return [partitionPath for path in pathsToList if path["type"] == "directory" and not path["name"].endswith(".hoodie") for partitionPath in self._getRestOfPath(path)]
         
-
 
     def _getRestOfPath(self, path):
         subPaths = self.fs.ls(path["name"], True)
