@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieInvalidInstantException;
 
 import org.apache.hadoop.fs.FileStatus;
 
@@ -70,14 +71,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public static String extractTimestamp(String fileName) throws IllegalArgumentException {
-    Objects.requireNonNull(fileName);
-
     Matcher matcher = NAME_FORMAT.matcher(fileName);
     if (matcher.find()) {
       return matcher.group(1);
     }
 
-    throw new IllegalArgumentException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+    throw new HoodieInvalidInstantException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
   }
 
   public static String getTimelineFileExtension(String fileName) {
@@ -136,7 +135,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       stateTransitionTime =
           HoodieInstantTimeGenerator.formatDate(new Date(fileStatus.getModificationTime()));
     } else {
-      throw new IllegalArgumentException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+      throw new HoodieInvalidInstantException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
   }
 
@@ -238,7 +237,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
           : HoodieTimeline.makeSchemaFileName(timestamp);
     }
-    throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
+    throw new HoodieInvalidInstantException("Cannot get file name for unknown action " + action);
   }
 
   private static final Map<String, String> createComparableActionsMap() {
