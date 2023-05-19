@@ -28,9 +28,10 @@ import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.text.SimpleDateFormat
+import java.util
 
 class TestTimeTravelQuery extends HoodieSparkClientTestBase {
   var spark: SparkSession =_
@@ -60,8 +61,8 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testTimeTravelQuery(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("tableTypeAndStateTransitionTimeEnabled"))
+  def testTimeTravelQuery(tableType: HoodieTableType, readByStateTransitionTime: String): Unit = {
     initMetaClient(tableType)
     val _spark = spark
     import _spark.implicits._
@@ -102,6 +103,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of firstCommitTime
     val result1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, firstCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version")
       .take(1)(0)
@@ -110,6 +112,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of secondCommitTime
     val result2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version")
       .take(1)(0)
@@ -118,6 +121,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of thirdCommitTime
     val result3 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version")
       .take(1)(0)
@@ -125,8 +129,8 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testTimeTravelQueryForPartitionedTable(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("tableTypeAndStateTransitionTimeEnabled"))
+  def testTimeTravelQueryForPartitionedTable(tableType: HoodieTableType, readByStateTransitionTime: String): Unit = {
     initMetaClient(tableType)
     val _spark = spark
     import _spark.implicits._
@@ -173,6 +177,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // query as of firstCommitTime (using 'yyyy-MM-dd HH:mm:ss' format)
     val result1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, defaultDateTimeFormat(firstCommit))
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "dt")
       .take(1)(0)
@@ -181,6 +186,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // query as of secondCommitTime (using 'yyyyMMddHHmmss' format)
     val result2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "dt")
       .take(1)(0)
@@ -189,6 +195,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // query as of thirdCommitTime
     val result3 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "dt")
       .take(1)(0)
@@ -197,6 +204,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // query by 'yyyy-MM-dd' format
     val result4 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, defaultDateFormat(thirdCommit))
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "dt")
       .collect()
@@ -217,8 +225,8 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testTimeTravelQueryWithSchemaEvolution(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("tableTypeAndStateTransitionTimeEnabled"))
+  def testTimeTravelQueryWithSchemaEvolution(tableType: HoodieTableType, readByStateTransitionTime: String): Unit = {
     initMetaClient(tableType)
     val _spark = spark
     import _spark.implicits._
@@ -265,6 +273,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of firstCommitTime
     val result1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, firstCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version")
       .take(1)(0)
@@ -276,6 +285,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of secondCommitTime
     val result2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "year")
       .take(1)(0)
@@ -287,6 +297,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     // Query as of thirdCommitTime
     val result3 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
+      .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), readByStateTransitionTime)
       .load(basePath)
       .select("id", "name", "value", "version", "year", "month")
       .take(1)(0)
@@ -295,4 +306,14 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     assertNotNull(schema3.getField("year"))
     assertNotNull(schema3.getField("month"))
   }
+}
+
+object TestTimeTravelQuery {
+
+  def tableTypeAndStateTransitionTimeEnabled: util.List[Arguments] =
+    util.Arrays.asList(
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, "true"),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, "false"),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, "true"),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, "false"))
 }
