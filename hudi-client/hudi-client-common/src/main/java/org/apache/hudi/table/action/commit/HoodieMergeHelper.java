@@ -123,12 +123,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
+        recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
         recordIterator = new ClosableMergingIterator<>(
             baseFileRecordIterator,
-            (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(),
-            (left, right) ->
-                left.joinWith(right, mergeHandle.getWriterSchemaWithMetaFields()));
-        recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
+            (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema),
+            (left, right) -> left.joinWith(right, recordSchema));
       } else {
         recordIterator = baseFileRecordIterator;
         recordSchema = isPureProjection ? writerSchema : readerSchema;
