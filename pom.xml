@@ -2249,7 +2249,6 @@
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.0.x</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
-        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
