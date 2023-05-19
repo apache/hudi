@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
@@ -50,6 +51,10 @@ public interface Transformer {
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   default Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
-    return Option.empty();
+    Dataset<Row> emptyDataset = sparkSession.createDataFrame(sparkSession.emptyDataFrame().rdd(),
+        AvroConversionUtils.convertAvroSchemaToStructType(incomingSchema));
+    Dataset<Row> transformedDataset = this.apply(jsc, sparkSession, emptyDataset, properties);
+    return Option.of(
+        AvroConversionUtils.convertStructTypeToAvroSchema(transformedDataset.schema(), incomingSchema.getName(), incomingSchema.getNamespace()));
   }
 }
