@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-63: Hudi bundle standards
+# RFC-67: Hudi bundle standards
 
 ## Proposers
 
