@@ -93,12 +93,12 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
-  private static final int MAX_PARTITIONS_PER_REQUEST = 100;
-  private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
-  private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
-  private final AWSGlue awsGlue;
-  private final String databaseName;
+  private static final Logger  LOG                         = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
+  private static final int     MAX_PARTITIONS_PER_REQUEST  = 100;
+  private static final long    BATCH_REQUEST_SLEEP_MILLIS  = 1000L;
+  private static final String  GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
+  private final        AWSGlue awsGlue;
+  private final        String  databaseName;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
@@ -117,8 +117,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             .withTableName(tableName)
             .withNextToken(nextToken));
         partitions.addAll(result.getPartitions().stream()
-            .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
-            .collect(Collectors.toList()));
+                                .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
+                                .collect(Collectors.toList()));
         nextToken = result.getNextToken();
       } while (nextToken != null);
       return partitions;
@@ -155,7 +155,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             LOG.warn("Partitions already exist in glue: " + result.getErrors());
           } else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
-                + " with error(s): " + result.getErrors());
+                                              + " with error(s): " + result.getErrors());
           }
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
@@ -191,7 +191,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         BatchUpdatePartitionResult result = awsGlue.batchUpdatePartition(request);
         if (CollectionUtils.nonEmpty(result.getErrors())) {
           throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + result.getErrors());
+                                            + " with error(s): " + result.getErrors());
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
       }
@@ -224,7 +224,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         BatchDeletePartitionResult result = awsGlue.batchDeletePartition(batchDeletePartitionRequest);
         if (CollectionUtils.nonEmpty(result.getErrors())) {
           throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + result.getErrors());
+                                            + " with error(s): " + result.getErrors());
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
       }
@@ -327,11 +327,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .withLastAccessTime(now)
           .withLastAnalyzedTime(now);
       request.withDatabaseName(databaseName)
-          .withTableInput(tableInput);
+             .withTableInput(tableInput);
 
       CreateTableResult result = awsGlue.createTable(request);
       LOG.info("Created table " + tableId(databaseName, tableName) + " : " + result);
-      managePartitionIndexes(tableName);
     } catch (AlreadyExistsException e) {
       LOG.warn("Table " + tableId(databaseName, tableName) + " already exists.", e);
     } catch (Exception e) {
@@ -342,7 +341,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   /**
    * This will manage partitions indexes. Users can activate/deactivate them on existing tables.
    * Removing index definition, will result in dropping the indexe.
-   *
+   * <p>
    * reference doc for partition indexes:
    * https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html#partition-index-getpartitions
    *
@@ -361,18 +360,22 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .withDatabaseName(databaseName).withTableName(tableName);
       GetPartitionIndexesResult existingIdxs = awsGlue.getPartitionIndexes(indexesRequest);
       existingIdxs.getPartitionIndexDescriptorList().forEach(existingIdx -> {
-          DeletePartitionIndexRequest idxToDelete = new DeletePartitionIndexRequest()
-              .withDatabaseName(databaseName).withTableName(tableName).withIndexName(existingIdx.getIndexName());
-          awsGlue.deletePartitionIndex(idxToDelete);
+        DeletePartitionIndexRequest idxToDelete = new DeletePartitionIndexRequest()
+            .withDatabaseName(databaseName).withTableName(tableName).withIndexName(existingIdx.getIndexName());
+        awsGlue.deletePartitionIndex(idxToDelete);
       });
     } else {
       // activate indexing usage
-      getPartitionIndexEnable(tableName).ifPresent(enabled -> {
-        if (!Boolean.valueOf(enabled)) {
-          // add the property to the table
-          updatePartitionIndexEnable(tableName, true);
-        }
-      });
+      if (!getPartitionIndexEnable(tableName).isPresent()) {
+        updatePartitionIndexEnable(tableName, true);
+      } else {
+        getPartitionIndexEnable(tableName).ifPresent(enabled -> {
+          if (!Boolean.valueOf(enabled)) {
+            // add the property to the table
+            updatePartitionIndexEnable(tableName, true);
+          }
+        });
+      }
       // get indexes to be created
       List<List<String>> partitionsIndexNeeded = parsePartitionsIndexConfig();
       // get existing indexes
@@ -408,7 +411,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           }
         }
         if (toBeCreated) {
-          PartitionIndex newIdx = new PartitionIndex().withKeys(neededIdx);
+          PartitionIndex newIdx = new PartitionIndex()
+              .withIndexName(String.format("%s_%s_%s", databaseName, tableName, neededIdx.toString()))
+              .withKeys(neededIdx);
           CreatePartitionIndexRequest creationRequest = new CreatePartitionIndexRequest()
               .withDatabaseName(databaseName).withTableName(tableName).withPartitionIndex(newIdx);
           awsGlue.createPartitionIndex(creationRequest);
@@ -420,7 +425,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   protected List<List<String>> parsePartitionsIndexConfig() {
     String rawPartitionIndex = config.getStringOrDefault(META_SYNC_PARTITION_INDEX_FIELDS);
     List<List<String>> indexes = Arrays.stream(rawPartitionIndex.split(";")).map(idx -> Arrays.stream(idx.split(","))
-        .collect(Collectors.toList())).collect(Collectors.toList());
+                                                                                              .collect(Collectors.toList())).collect(Collectors.toList());
     if (indexes.size() > 3) {
       throw new HoodieGlueSyncException("Only 3 partitions indexes are supported on glue");
     }
@@ -438,6 +443,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   public void updatePartitionIndexEnable(String tableName, Boolean enable) {
     try {
+      LOG.error("updating {}", Collections.singletonMap(GLUE_PARTITION_INDEX_ENABLE, enable.toString()));
       updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(GLUE_PARTITION_INDEX_ENABLE, enable.toString()), false);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update parameter " + GLUE_PARTITION_INDEX_ENABLE + " time for " + tableId(databaseName, tableName), e);
@@ -618,7 +624,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request = new UpdateTableRequest();
       request.withDatabaseName(databaseName)
-          .withTableInput(updatedTableInput);
+             .withTableInput(updatedTableInput);
       awsGlue.updateTable(request);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + newParams, e);
