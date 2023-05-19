@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.{DataSourceOptionsHelper, DataSourceUtils}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
@@ -46,8 +46,11 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.connector.catalog.{TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, DeleteColumn, RemoveProperty, SetProperty}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.command.AlterTableCommand.getTableLocation
 import org.apache.spark.sql.types.StructType
 
+import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -58,9 +61,11 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
       case ColumnChangeID.DELETE => applyDeleteAction(sparkSession)
       case ColumnChangeID.UPDATE => applyUpdateAction(sparkSession)
       case ColumnChangeID.PROPERTY_CHANGE if (changes.filter(_.isInstanceOf[SetProperty]).size == changes.size) =>
-        applyPropertySet(sparkSession)
+        val properties = changes.map(_.asInstanceOf[SetProperty]).map(f => f.property -> f.value).toMap
+        AlterHoodieTableSetPropertiesCommand.applyPropertySet(sparkSession, table.identifier, properties)
       case ColumnChangeID.PROPERTY_CHANGE if (changes.filter(_.isInstanceOf[RemoveProperty]).size == changes.size) =>
-        applyPropertyUnset(sparkSession)
+        val propKeys = changes.map(_.asInstanceOf[RemoveProperty]).map(_.property())
+        AlterHoodieTableUnsetPropertiesCommand.applyPropertyUnset(sparkSession, table.identifier, propKeys)
       case ColumnChangeID.REPLACE => applyReplaceAction(sparkSession)
       case other => throw new RuntimeException(s"find unsupported alter command type: ${other}")
     }
@@ -177,37 +182,6 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     }
     AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column update finished")
-  }
-
-  // to do support unset default value to columns, and apply them to internalSchema
-  def applyPropertyUnset(sparkSession: SparkSession): Unit = {
-    val catalog = sparkSession.sessionState.catalog
-    val propKeys = changes.map(_.asInstanceOf[RemoveProperty]).map(_.property())
-    // ignore NonExist unset
-    propKeys.foreach { k =>
-      if (!table.properties.contains(k) && k != TableCatalog.PROP_COMMENT) {
-        logWarning(s"find non exist unset property: ${k} , ignore it")
-      }
-    }
-    val tableComment = if (propKeys.contains(TableCatalog.PROP_COMMENT)) None else table.comment
-    val newProperties = table.properties.filter { case (k, _) => !propKeys.contains(k) }
-    val newTable = table.copy(properties = newProperties, comment = tableComment)
-    catalog.alterTable(newTable)
-    logInfo("table properties change finished")
-  }
-
-  // to do support set default value to columns, and apply them to internalSchema
-  def applyPropertySet(sparkSession: SparkSession): Unit = {
-    val catalog = sparkSession.sessionState.catalog
-    val properties = changes.map(_.asInstanceOf[SetProperty]).map(f => f.property -> f.value).toMap
-    // This overrides old properties and update the comment parameter of CatalogTable
-    // with the newly added/modified comment since CatalogTable also holds comment as its
-    // direct property.
-    val newTable = table.copy(
-      properties = table.properties ++ properties,
-      comment = properties.get(TableCatalog.PROP_COMMENT).orElse(table.comment))
-    catalog.alterTable(newTable)
-    logInfo("table properties change finished")
   }
 
   def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
