@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.Types;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -27,12 +28,34 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.UUID;
 
 public class Conversions {
 
   private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
   private static final LocalDate EPOCH_DAY = EPOCH.toLocalDate();
+
+  private static final HashSet<Type.TypeID> SUPPORTED_PARTITION_TYPES = new HashSet<>(
+      Arrays.asList(Type.TypeID.INT,
+          Type.TypeID.LONG,
+          Type.TypeID.BOOLEAN,
+          Type.TypeID.FLOAT,
+          Type.TypeID.DECIMAL,
+          Type.TypeID.DOUBLE,
+          Type.TypeID.UUID,
+          Type.TypeID.DATE,
+          Type.TypeID.STRING));
+
+  public static boolean isSchemaSupportedConversion(Types.RecordType schema) {
+    for (Types.Field field: schema.fields()) {
+      if (!SUPPORTED_PARTITION_TYPES.contains(field.type().typeId())) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   public static Object fromPartitionString(String partitionValue, Type type) {
     switch (type.typeId()) {

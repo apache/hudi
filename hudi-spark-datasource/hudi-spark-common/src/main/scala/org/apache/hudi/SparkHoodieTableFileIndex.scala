@@ -32,6 +32,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
 import org.apache.hudi.internal.schema.Types.RecordType
+import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
@@ -312,9 +313,30 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         .map(colName => (colName, (staticPartitionColumnValuesMap(colName)._1, staticPartitionColumnValuesMap(colName)._2.get)))
     }
 
-     if (staticPartitionColumnNameValuePairs.isEmpty) {
+    val partitionRecordType = Try {
+      SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
+    } match {
+      case Success(partitionRecordType)
+        if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size
+          && Conversions.isSchemaSupportedConversion(partitionRecordType) =>
+        Some(partitionRecordType)
+      case _ =>
+        None
+    }
+
+    (staticPartitionColumnNameValuePairs.isEmpty, partitionRecordType) match {
+      case (true, Some(partitionSchema)) =>
+        val convertedFilters = SparkFilterHelper.convertFilters(
+          partitionColumnPredicates.flatMap {
+            expr => sparkAdapter.translateFilter(expr)
+          })
+        listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionRecordType, convertedFilters).asScala
+    }
+    if (staticPartitionColumnNameValuePairs.isEmpty && partitionRecordType.isEmpty) {
       logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
       getAllQueryPartitionPaths.asScala
+    } else if (staticPartitionColumnNameValuePairs.isEmpty) {
+
     } else {
       // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
       // prefix to try to reduce the scope of the required file-listing
