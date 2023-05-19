@@ -200,6 +200,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
+  //TODO: This should be unnecessary with spark 3.4 [SPARK-41970]
   private def encodePartitionPath(file: FileStatus): String = {
     val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(bootstrapBasePath)
     val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)

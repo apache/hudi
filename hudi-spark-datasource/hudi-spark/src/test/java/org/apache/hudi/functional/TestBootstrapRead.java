@@ -228,8 +228,8 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       //Bootstrap MOR currently only has read optimized queries implemented
       readOpts.put(DataSourceReadOptions.QUERY_TYPE().key(),DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL());
     }
-    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
+    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     if (nPartitions == 0) {
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;
