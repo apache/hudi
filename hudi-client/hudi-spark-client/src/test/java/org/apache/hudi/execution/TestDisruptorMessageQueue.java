@@ -281,16 +281,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   @Timeout(value = 60)
   public void testException() throws Exception {
     final int numRecords = 1000;
-    final int numProducers = 40;
-
-    final DisruptorMessageQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
-            "BLOCKING_WAIT", numProducers, new Runnable() {
-              @Override
-          public void run() {
-              // do nothing.
-              }
-            });
 
     List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
 
@@ -307,8 +297,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
         }));
       }
     }
-
-
+    
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 

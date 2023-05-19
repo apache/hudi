@@ -203,6 +203,12 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public List<WriteStatus> close() {
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
 
       if (fileWriter != null) {
         fileWriter.close();
