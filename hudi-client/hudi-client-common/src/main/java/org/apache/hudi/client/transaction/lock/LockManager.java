@@ -54,6 +54,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
+  private boolean lockAcquired = false;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
     this(writeConfig, fs, writeConfig.getProps());
@@ -82,6 +83,7 @@ public class LockManager implements Serializable, AutoCloseable {
               + getLockProvider().getCurrentOwnerLockInfo());
         }
         metrics.updateLockAcquiredMetric();
+        lockAcquired = true;
         return true;
       } catch (InterruptedException e) {
         throw new HoodieLockException(e);
@@ -95,7 +97,10 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public void unlock() {
     getLockProvider().unlock();
-    metrics.updateLockHeldTimerMetrics();
+    if (lockAcquired) {
+      metrics.updateLockHeldTimerMetrics();
+      lockAcquired = false;
+    }
     close();
   }
 
