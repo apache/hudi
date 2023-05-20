@@ -59,7 +59,6 @@ import java.util.Set;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * CLI commands to operate on the Metadata Table.
@@ -150,9 +149,8 @@ public class MetadataCommand {
     }
 
     LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
-    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
-    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), EMPTY_STRING);
-    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    HoodieTableConfig.delete(metaClient.getFs(), new Path(metaClient.getMetaPath()), new HashSet<>(Arrays
+        .asList(TABLE_METADATA_PARTITIONS.key(), TABLE_METADATA_PARTITIONS_INFLIGHT.key())));
 
     return String.format("Removed Metadata Table from %s", metadataPath);
   }
