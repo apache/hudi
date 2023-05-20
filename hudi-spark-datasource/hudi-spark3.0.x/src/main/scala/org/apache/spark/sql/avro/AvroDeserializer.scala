@@ -56,8 +56,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     this(
       rootAvroType,
       rootCatalystType,
-      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ,
-        LegacyBehaviorPolicy.CORRECTED.toString)))
+      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ)))
   }
 
   private lazy val decimalConversions = new DecimalConversion()
