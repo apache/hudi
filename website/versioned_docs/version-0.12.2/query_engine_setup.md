@@ -71,20 +71,37 @@ Beginning query by connecting hive metastore with presto client. The presto clie
 
 ## Trino
 
-Just like PrestoDB, there are two ways to query Hudi tables using Trino i.e. either using Hive connector or the native 
-Hudi connector. If you're on Trino version **398** or higher, it is recommended to use the Hudi connector. To learn more 
-about the usage of Hudi connector, please check out the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
-Both the connectors are on par in terms of query support, i.e. 'Snapshot' queries for Copy-On-Write tables and 
-'Read Optimized' queries for Merge-On-Read tables.  
+Just like PrestoDB, there are two ways to query Hudi tables using Trino i.e. either using [Hive](https://trino.io/docs/current/connector/hive.html) connector or the native
+[Hudi](https://trino.io/docs/current/connector/hudi.html) connector (available since version 398). However, since version 411, Hive connector redirects to Hudi catalog for reading Hudi tables.
 
-:::note
-[Trino](https://trino.io/) (formerly PrestoSQL) was forked off of PrestoDB a few years ago. Hudi supports 'Snapshot' queries for Copy-On-Write tables and 'Read Optimized' queries
-for Merge-On-Read tables. This is through the initial input format based integration in PrestoDB (pre forking). This approach has
-known performance limitations with very large tables, which has been since fixed on PrestoDB. 
-We recommend using the new Hudi connector in Trino (released since Trino version 398).
-:::
+### Hive Connector
 
-To query Hudi tables on Trino, please place the `hudi-trino-bundle` jar into the Hive connector installation `<trino_install>/plugin/hive-hadoop2`.
+| **Trino Version** | **Installation description** | **Query types supported** |
+|-------------------|------------------------------|---------------------------|
+| < 406             | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| > = 406           | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. **Redirection to Hudi catalog also supported.** |
+| > = 411           | NA | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
+
+If you are using Trino version 411 or greater, and also using Hive connector to query Hudi tables, please set the below config to support table redirection.
+```
+hive.hudi-catalog-name=hudi
+```
+It is recommended to use `hudi-trino-bundle` version 0.12.2 or later for optimal query performance with Hive connector.
+
+### Hudi Connector
+
+| **Trino Version** | **Installation description** | **Query types supported** |
+|-------------------|------------------------------|---------------------------|
+| < 398             | NA - can only use Hive connector to query Hudi tables | Same as that of Hive connector version < 406. |
+| > = 398           | NA - no need to place bundle jars manually, as they are compile-time dependency | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+
+To learn more about the usage of Hudi connector, please check out
+the [connector documentation](https://trino.io/docs/current/connector/hudi.html). Both the connectors are on par in
+terms of query support, i.e. 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR
+tables. We have an active [PR](https://github.com/trinodb/trino/pull/16034) under review to bring the performance of
+Hudi connector on par with Hive connector. Furthermore, we
+expect [MOR table snapshot query](https://github.com/trinodb/trino/pull/14786) support will soon be added to the Hudi
+connector.
 
 ## Hive
 
