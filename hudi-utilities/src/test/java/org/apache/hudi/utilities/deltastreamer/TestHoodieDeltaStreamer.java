@@ -144,6 +144,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
@@ -654,6 +656,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }, "Should error out when pointed out at a dir thats not a table");
     // expected
     LOG.debug("Expected error during table creation", e);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testTableCreationContainsHiveStylePartitioningEnable(boolean configFlag) throws Exception {
+    String tablePath = basePath + "/url_encode_and_hive_style_partitioning_enable_" + configFlag;
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    // Update DeltaStreamer configs for with parameterized test input
+    cfg.configs.add(HIVE_STYLE_PARTITIONING_ENABLE.key() + "=" + configFlag);
+    cfg.configs.add(URL_ENCODE_PARTITIONING.key() + "=" + configFlag);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    // Create new metaClient from tablePath
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get())
+        .setBasePath(tablePath).build();
+    assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
+    assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
   }
 
   @ParameterizedTest
