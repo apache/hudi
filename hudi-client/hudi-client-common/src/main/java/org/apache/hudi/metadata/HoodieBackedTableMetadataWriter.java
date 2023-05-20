@@ -255,8 +255,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
-  private HoodieWriteConfig createMetadataWriteConfig(
+  public static HoodieWriteConfig createMetadataWriteConfig(
       HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
     // Create the write config for the metadata table by borrowing options from the main write config.
