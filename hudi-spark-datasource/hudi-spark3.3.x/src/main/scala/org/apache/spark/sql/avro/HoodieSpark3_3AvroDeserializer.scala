@@ -25,7 +25,7 @@ class HoodieSpark3_3AvroDeserializer(rootAvroType: Schema, rootCatalystType: Dat
   extends HoodieAvroDeserializer {
 
   private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType,
-    SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_READ, "CORRECTED"))
+    SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_READ, LegacyBehaviorPolicy.CORRECTED.toString))
 
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)
 }
