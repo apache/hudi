@@ -17,21 +17,16 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression}
-abstract class HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Predicate, PredicateHelper}
+import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 
-  /**
-   * The attribute name may differ from the one in the schema if the query analyzer
-   * is case insensitive. We should change attribute names to match the ones in the schema,
-   * so we do not need to worry about case sensitivity anymore
-   */
-  def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression]
+trait HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils
+  with PredicateHelper {
 
-  /**
-   * Returns a filter that its reference is a subset of `outputSet` and it contains the maximum
-   * constraints from `condition`. This is used for predicate push-down
-   * When there is no such filter, `None` is returned.
-   */
-  def extractPredicatesWithinOutputSet(condition: Expression,
-                                                outputSet: AttributeSet): Option[Expression]
+  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
+    DataSourceStrategy.normalizeExprs(exprs, attributes)
+
+  override def extractPredicatesWithinOutputSet(condition: Expression,
+                                                outputSet: AttributeSet): Option[Expression] =
+    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
 }
