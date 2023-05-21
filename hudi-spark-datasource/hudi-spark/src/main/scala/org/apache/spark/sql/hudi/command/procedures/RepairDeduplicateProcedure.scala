@@ -30,9 +30,9 @@ import scala.util.{Failure, Success, Try}
 
 class RepairDeduplicateProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "duplicated_partition_path", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "repaired_output_path", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "duplicated_partition_path", DataTypes.StringType),
+    ProcedureParameter.required(2, "repaired_output_path", DataTypes.StringType),
     ProcedureParameter.optional(3, "dry_run", DataTypes.BooleanType, true),
     ProcedureParameter.optional(4, "dedupe_type", DataTypes.StringType, "insert_type")
   )

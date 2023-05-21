@@ -44,6 +44,7 @@ public class TestHoodieInternalWriteStatus {
     // verification
     assertEquals(fileId, status.getFileId());
     assertEquals(partitionPath, status.getPartitionPath());
+    assertEquals(1000, status.getTotalErrorRecords());
     assertTrue(status.getFailedRecordKeys().size() > 0);
     assertTrue(status.getFailedRecordKeys().size() < 150); // 150 instead of 100, to prevent flaky test
     assertTrue(status.hasErrors());
@@ -66,6 +67,7 @@ public class TestHoodieInternalWriteStatus {
       // verification
       assertEquals(fileId, status.getFileId());
       assertEquals(partitionPath, status.getPartitionPath());
+      assertEquals(1000, status.getTotalErrorRecords());
       assertEquals(1000, status.getFailedRecordKeys().size());
       assertTrue(status.hasErrors());
       if (trackSuccess) {

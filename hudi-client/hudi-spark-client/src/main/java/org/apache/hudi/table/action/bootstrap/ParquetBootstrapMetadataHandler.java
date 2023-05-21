@@ -78,11 +78,12 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
                                   Schema schema) throws Exception {
-    HoodieExecutor<Void> wrapper = null;
     HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
 
     HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordMerger.getRecordType())
             .getFileReader(table.getHadoopConf(), sourceFilePath);
+
+    HoodieExecutor<Void> executor = null;
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
         String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
@@ -92,21 +93,22 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             //       it since these records will be inserted into the queue later.
             .copy();
       };
-
       ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
-      wrapper = ExecutorFactory.create(config, recordIterator,
+      executor = ExecutorFactory.create(config, recordIterator,
           new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
-
-      wrapper.execute();
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      reader.close();
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        bootstrapHandle.close();
       }
-      bootstrapHandle.close();
     }
   }
 

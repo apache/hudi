@@ -56,7 +56,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
-import static org.apache.hudi.config.HoodieBootstrapConfig.KEYGEN_CLASS_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
@@ -234,9 +233,11 @@ public class BootstrapExecutor implements Serializable {
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     if (!StringUtils.isNullOrEmpty(partitionColumns)) {
-      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
+      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(
+          props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
     } else {
-      builder.setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
+      builder.setKeyGeneratorClassProp(props.getString(
+          HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
     }
 
     builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
