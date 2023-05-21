@@ -34,7 +34,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 import scala.collection.JavaConversions._
@@ -42,7 +42,7 @@ import scala.collection.JavaConversions._
 /**
  * Tests around Dag execution for Spark DataSource.
  */
-class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAssertionSupport {
+class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
   var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -54,7 +54,7 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
+    HoodieMetadataConfig.ENABLE.key -> "false"
   )
   val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName)
 
@@ -68,7 +68,7 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
     )
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -77,7 +77,7 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
@@ -85,15 +85,35 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
     System.gc()
   }
 
-  /**
-   * Validates that clustering dag is triggered only once.
-   * We leverage spark event listener to validate it.
-   */
-  @Test
-  def testValidateClusteringForRepeatedDag(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array(
+    "upsert,org.apache.hudi.client.SparkRDDWriteClient.commit",
+    "insert,org.apache.hudi.client.SparkRDDWriteClient.commit",
+    "bulk_insert,org.apache.hudi.HoodieSparkSqlWriter$.bulkInsertAsRow"))
+  def testWriteOperationDoesNotTriggerRepeatedDAG(operation: String, event: String): Unit = {
     // register stage event listeners
-    val sm = new StageEventManager("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
-    spark.sparkContext.addSparkListener(sm)
+    val stageListener = new StageListener(event)
+    spark.sparkContext.addSparkListener(stageListener)
+
+    var structType: StructType = null
+    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 10)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    structType = inputDF.schema
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // verify that operation is not trigered more than once.
+    assertEquals(1, stageListener.triggerCount)
+  }
+
+  @Test
+  def testClusteringDoesNotTriggerRepeatedDAG(): Unit = {
+    // register stage event listeners
+    val stageListener = new StageListener("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
+    spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null
     for (i <- 1 to 2) {
@@ -103,7 +123,6 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
       inputDF.write.format("hudi")
         .options(commonOpts)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
-        .option("hoodie.metadata.enable", "false")
         .mode(if (i == 1) SaveMode.Overwrite else SaveMode.Append)
         .save(basePath)
     }
@@ -118,74 +137,18 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
       .option("hoodie.parquet.small.file.limit", "0")
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "2")
-      .option("hoodie.metadata.enable", "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
     // verify that clustering is not trigered more than once.
-    assertEquals(sm.triggerCount, 1)
+    assertEquals(1, stageListener.triggerCount)
   }
 
-  /**
-   * Validates that bulk insert dag is triggered only once.
-   * We leverage spark event listener to validate it.
-   */
   @Test
-  def testValidateBulkInsertForRepeatedDag(): Unit = {
+  def testCompactionDoesNotTriggerRepeatedDAG(): Unit = {
     // register stage event listeners
-    val sm = new StageEventManager("org.apache.hudi.HoodieSparkSqlWriter$.bulkInsertAsRow")
-    spark.sparkContext.addSparkListener(sm)
-
-    var structType: StructType = null
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 100)).toList
-    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    structType = inputDF.schema
-    inputDF.write.format("hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
-      .option("hoodie.metadata.enable", "false")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    // verify that bulk insert is not trigered more than once.
-    assertEquals(sm.triggerCount, 1)
-  }
-
-  /**
-   * Validates that insert and upsert dag is triggered only once.
-   * We leverage spark event listener to validate it.
-   */
-  @ParameterizedTest
-  @ValueSource(strings = Array("upsert", "insert"))
-  def testValidateInsertAndUpsertForRepeatedDag(operation: String): Unit = {
-    // register stage event listeners
-    val sm = new StageEventManager("org.apache.hudi.client.SparkRDDWriteClient.commit")
-    spark.sparkContext.addSparkListener(sm)
-
-    var structType: StructType = null
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(1), 100)).toList
-    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    structType = inputDF.schema
-    inputDF.write.format("hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, operation)
-      .option("hoodie.metadata.enable", "false")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    // verify that operation is not trigered more than once.
-    assertEquals(sm.triggerCount, 1)
-  }
-
-  /**
-   * Validates that compaction dag is triggered only once.
-   * We leverage spark event listener to validate it.
-   */
-  @Test
-  def testValidateCompactionForRepeatedDag(): Unit = {
-    // register stage event listeners
-    val sm = new StageEventManager("org.apache.hudi.table.action.compact.RunCompactionActionExecutor.execute")
-    spark.sparkContext.addSparkListener(sm)
+    val stageListener = new StageListener("org.apache.hudi.table.action.compact.RunCompactionActionExecutor.execute")
+    spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null
     for (i <- 1 to 2) {
@@ -196,7 +159,6 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
         .options(commonOpts)
         .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-        .option("hoodie.metadata.enable", "false")
         .mode(if (i == 1) SaveMode.Overwrite else SaveMode.Append)
         .save(basePath)
     }
@@ -210,16 +172,15 @@ class TestDagExecutionDataSource extends HoodieSparkClientTestBase with ScalaAss
       .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option("hoodie.compact.inline.max.delta.commits", "1")
       .option("hoodie.compact.inline", "true")
-      .option("hoodie.metadata.enable", "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
     // verify that compaction is not trigered more than once.
-    assertEquals(sm.triggerCount, 1)
+    assertEquals(1, stageListener.triggerCount)
   }
 
   /** ************ Stage Event Listener ************* */
-  class StageEventManager(eventToTrack: String) extends SparkListener() {
+  class StageListener(eventToTrack: String) extends SparkListener() {
     var triggerCount = 0
 
     override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {

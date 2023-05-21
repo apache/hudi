@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
@@ -387,19 +388,19 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
                                               String inlineClusterMaxCommit, String asyncCluster, String asyncClusterMaxCommit) {
     List<String> configs = new ArrayList<>();
     configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
-    if (!StringUtils.isNullOrEmpty(autoClean)) {
+    if (nonEmpty(autoClean)) {
       configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), autoClean));
     }
-    if (!StringUtils.isNullOrEmpty(inlineCluster)) {
+    if (nonEmpty(inlineCluster)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(), inlineCluster));
     }
-    if (!StringUtils.isNullOrEmpty(inlineClusterMaxCommit)) {
+    if (nonEmpty(inlineClusterMaxCommit)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), inlineClusterMaxCommit));
     }
-    if (!StringUtils.isNullOrEmpty(asyncCluster)) {
+    if (nonEmpty(asyncCluster)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), asyncCluster));
     }
-    if (!StringUtils.isNullOrEmpty(asyncClusterMaxCommit)) {
+    if (nonEmpty(asyncClusterMaxCommit)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), asyncClusterMaxCommit));
     }
     return configs;
