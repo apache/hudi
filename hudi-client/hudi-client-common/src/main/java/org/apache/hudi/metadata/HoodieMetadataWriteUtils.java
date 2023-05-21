@@ -46,6 +46,9 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 
+/**
+ * Metadata table write utils.
+ */
 public class HoodieMetadataWriteUtils {
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
