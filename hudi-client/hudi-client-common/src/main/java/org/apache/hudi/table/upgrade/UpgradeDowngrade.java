@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
-import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -116,8 +116,8 @@ public class UpgradeDowngrade {
         if (metaClient.getFs().exists(new Path(metadataTablePath))) {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
               .setConf(metaClient.getHadoopConf()).setBasePath(metadataTablePath).build();
-          HoodieWriteConfig mdtWriteConfig = HoodieBackedTableMetadataWriter.createMetadataWriteConfig(
-              config, HoodieFailedWritesCleaningPolicy.LAZY);
+          HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+              config, HoodieFailedWritesCleaningPolicy.EAGER);
           new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
               .run(toVersion, instantTime);
         }
