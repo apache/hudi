@@ -835,7 +835,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (numDeltaCommits > maxNumDeltaCommitsWhenPending) {
       throw new HoodieMetadataException(String.format("Metadata table's deltacommits exceeded %d: "
               + "this is likely caused by a pending instant in the data table. Resolve the pending instant "
-              + "or adjust `%s`, the restart the pipeline.",
+              + "or adjust `%s`, then restart the pipeline.",
           maxNumDeltaCommitsWhenPending, HoodieMetadataConfig.METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING.key()));
     }
   }
