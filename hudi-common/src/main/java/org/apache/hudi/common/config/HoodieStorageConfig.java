@@ -173,8 +173,10 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> HOODIE_AVRO_WRITE_SUPPORT_CLASS = ConfigProperty
       .key("hoodie.avro.write.support.class")
       .defaultValue("org.apache.hudi.avro.HoodieAvroWriteSupport")
-      .withDocumentation("Different write support classes can be loaded at runtime. This is only required when trying to "
-          + " override the existing write context.");
+      .markAdvanced()
+      .withDocumentation("Provided write support class should extend HoodieAvroWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to "
+          + "override the existing write context.");
 
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead
