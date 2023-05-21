@@ -1937,7 +1937,7 @@
             <configuration combine.self="override">
               <skip>${skipITs}</skip>
               <includes>
-                <include>**/IT*.java</include>
+                <include>**/ITTestBase.java</include>
               </includes>
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
