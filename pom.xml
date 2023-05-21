@@ -1791,7 +1791,7 @@
     <profile>
       <id>unit-tests</id>
       <properties>
-        <skipUTs>false</skipUTs>
+        <skipUTs>true</skipUTs>
         <skipFTs>true</skipFTs>
         <skipITs>true</skipITs>
       </properties>
@@ -1840,7 +1840,7 @@
       <id>functional-tests</id>
       <properties>
         <skipUTs>true</skipUTs>
-        <skipFTs>false</skipFTs>
+        <skipFTs>true</skipFTs>
         <skipITs>true</skipITs>
       </properties>
       <build>

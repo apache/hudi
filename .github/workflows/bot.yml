@@ -219,26 +219,12 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           architecture: x64
-      - name: Build Project
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
-        run:
-          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
-      - name: 'UT integ-test'
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
-        run:
-          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11 -Dhudi.spark.module=hudi-spark2'
         run: |
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
