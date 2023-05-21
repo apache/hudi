@@ -53,7 +53,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -1203,28 +1202,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertFalse(meta.getFs().exists(new Path(replacedFilePath)));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
-  }
-
-  private List<String> getAsyncServicesConfigs(int totalRecords, String autoClean, String inlineCluster,
-                                               String inlineClusterMaxCommit, String asyncCluster, String asyncClusterMaxCommit) {
-    List<String> configs = new ArrayList<>();
-    configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
-    if (!StringUtils.isNullOrEmpty(autoClean)) {
-      configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), autoClean));
-    }
-    if (!StringUtils.isNullOrEmpty(inlineCluster)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(), inlineCluster));
-    }
-    if (!StringUtils.isNullOrEmpty(inlineClusterMaxCommit)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), inlineClusterMaxCommit));
-    }
-    if (!StringUtils.isNullOrEmpty(asyncCluster)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), asyncCluster));
-    }
-    if (!StringUtils.isNullOrEmpty(asyncClusterMaxCommit)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), asyncClusterMaxCommit));
-    }
-    return configs;
   }
 
   private List<String> getAllMultiWriterConfigs() {
