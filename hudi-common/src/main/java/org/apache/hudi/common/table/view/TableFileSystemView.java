@@ -203,6 +203,11 @@ public interface TableFileSystemView {
   Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath);
 
   /**
+   * Stream all the replaced file groups after or on minCommitTime.
+   */
+  Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath);
+
+  /**
    * Stream all the replaced file groups for given partition.
    */
   Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath);
@@ -211,4 +216,10 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+
+  /**
+   * Load all partition and file slices into view
+   */
+  Void loadAllPartitions();
 }

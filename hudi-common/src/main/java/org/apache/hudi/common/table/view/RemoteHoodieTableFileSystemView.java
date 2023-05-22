@@ -104,6 +104,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String ALL_REPLACED_FILEGROUPS_BEFORE =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/before/");
 
+  public static final String ALL_REPLACED_FILEGROUPS_AFTER_OR_ON =
+          String.format("%s/%s", BASE_URL, "filegroups/replaced/afteroron/");
+
   public static final String ALL_REPLACED_FILEGROUPS_PARTITION =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/partition/");
   
@@ -117,11 +120,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
+  public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
 
   public static final String PARTITION_PARAM = "partition";
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
+  public static final String MIN_INSTANT_PARAM = "mininstant";
   public static final String INSTANTS_PARAM = "instants";
   public static final String FILEID_PARAM = "fileid";
   public static final String LAST_INSTANT_TS = "lastinstantts";
@@ -450,6 +455,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MIN_INSTANT_PARAM, minCommitTime);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_AFTER_OR_ON, paramsMap,
+              new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
+      return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
@@ -467,6 +484,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       // refresh the local timeline first.
       this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
       return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Void loadAllPartitions() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      executeRequest(LOAD_ALL_PARTITIONS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+      return null;
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

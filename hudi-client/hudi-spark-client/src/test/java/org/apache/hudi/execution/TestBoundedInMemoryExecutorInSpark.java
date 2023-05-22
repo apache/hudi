@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
@@ -154,15 +153,15 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
   @Test
   public void testExecutorTermination() {
-    Iterator<GenericRecord> unboundedRecordIter = new Iterator<GenericRecord>() {
+    Iterator<HoodieRecord> unboundedRecordIter = new Iterator<HoodieRecord>() {
       @Override
       public boolean hasNext() {
         return true;
       }
 
       @Override
-      public GenericRecord next() {
-        return dataGen.generateGenericRecord();
+      public HoodieRecord next() {
+        return dataGen.generateInserts(instantTime, 1).get(0);
       }
     };
 

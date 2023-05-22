@@ -226,6 +226,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.");
 
+  public static final ConfigProperty<Integer> METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING = ConfigProperty
+      .key(METADATA_PREFIX + ".max.deltacommits.when_pending")
+      .defaultValue(1000)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
+          + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -304,6 +312,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean doEnableOptimizedLogBlocksScan() {
     return getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
+  }
+
+  public int getMaxNumDeltacommitsWhenPending() {
+    return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
   }
 
   /**
@@ -428,6 +440,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       metadataConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, String.valueOf(enableOptimizedLogBlocksScan));
+      return this;
+    }
+
+    public Builder withMaxNumDeltacommitsWhenPending(int maxNumDeltaCommitsWhenPending) {
+      metadataConfig.setValue(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING, String.valueOf(maxNumDeltaCommitsWhenPending));
       return this;
     }
 

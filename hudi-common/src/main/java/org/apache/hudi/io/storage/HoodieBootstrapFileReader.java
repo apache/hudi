@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -64,35 +63,21 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   public ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(readerSchema, requestedSchema);
     ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(HoodieAvroUtils.removeMetadataFields(readerSchema), requestedSchema);
-    return new ClosableIterator<HoodieRecord<T>>() {
+    return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, readerSchema, partitionFields, partitionValues) {
       @Override
-      public void close() {
-        skeletonIterator.close();
-        dataFileIterator.close();
+      protected void setPartitionPathField(int position, Object fieldValue, T row) {
+        setPartitionField(position, fieldValue, row);
       }
+    };
+  }
 
+  public ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema schema) throws IOException {
+    ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema);
+    ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(dataFileReader.getSchema());
+    return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, schema, partitionFields, partitionValues) {
       @Override
-      public boolean hasNext() {
-        return skeletonIterator.hasNext() && dataFileIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord<T> next() {
-        HoodieRecord<T> dataRecord = dataFileIterator.next();
-        HoodieRecord<T> skeletonRecord = skeletonIterator.next();
-        HoodieRecord<T> ret = dataRecord.prependMetaFields(readerSchema, readerSchema,
-            new MetadataValues().setCommitTime(skeletonRecord.getRecordKey(readerSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD))
-                .setCommitSeqno(skeletonRecord.getRecordKey(readerSchema, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD))
-                .setRecordKey(skeletonRecord.getRecordKey(readerSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD))
-                .setPartitionPath(skeletonRecord.getRecordKey(readerSchema, HoodieRecord.PARTITION_PATH_METADATA_FIELD))
-                .setFileName(skeletonRecord.getRecordKey(readerSchema, HoodieRecord.FILENAME_METADATA_FIELD)), null);
-        if (partitionFields.isPresent()) {
-          for (int i = 0; i < partitionValues.length; i++) {
-            int position = readerSchema.getField(partitionFields.get()[i]).pos();
-            setPartitionField(position, partitionValues[i], ret.getData());
-          }
-        }
-        return ret;
+      protected void setPartitionPathField(int position, Object fieldValue, T row) {
+        setPartitionField(position, fieldValue, row);
       }
     };
   }
