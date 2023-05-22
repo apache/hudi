@@ -105,7 +105,6 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
           }
         }
       }
-
     }
   }
 }
