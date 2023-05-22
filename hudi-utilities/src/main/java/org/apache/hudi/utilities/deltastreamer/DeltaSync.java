@@ -141,6 +141,8 @@ import scala.collection.JavaConversions;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
+import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
@@ -289,7 +291,6 @@ public class DeltaSync implements Serializable, Closeable {
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames));
 
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
@@ -306,6 +307,9 @@ public class DeltaSync implements Serializable, Closeable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
+
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), this.errorTableWriter.isPresent());
+
   }
 
   /**
@@ -385,6 +389,10 @@ public class DeltaSync implements Serializable, Closeable {
         .setCDCSupplementalLoggingMode(props.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(),
             HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.defaultValue()))
         .setShouldDropPartitionColumns(isDropPartitionColumns())
+        .setHiveStylePartitioningEnable(props.getBoolean(HIVE_STYLE_PARTITIONING_ENABLE.key(),
+            Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
+        .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
+            Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
   }
@@ -495,6 +503,10 @@ public class DeltaSync implements Serializable, Closeable {
           .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
               HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .setShouldDropPartitionColumns(isDropPartitionColumns())
+          .setHiveStylePartitioningEnable(props.getBoolean(HIVE_STYLE_PARTITIONING_ENABLE.key(),
+              Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
+          .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
+              Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 

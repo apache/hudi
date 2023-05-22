@@ -76,6 +76,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
 
+  private boolean closed = false;
+
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
@@ -173,6 +175,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   public void write(HoodieRecord record, Schema schema, TypedProperties props) {
     doWrite(record, schema, props);
+  }
+
+  protected boolean isClosed() {
+    return closed;
+  }
+
+  protected void markClosed() {
+    this.closed = true;
   }
 
   public abstract List<WriteStatus> close();

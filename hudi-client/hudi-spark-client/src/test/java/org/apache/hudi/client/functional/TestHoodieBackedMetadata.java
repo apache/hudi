@@ -2438,6 +2438,27 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  public void testMetadataTableWithLongLog() throws Exception {
+    init(COPY_ON_WRITE, false);
+    final int maxNumDeltacommits = 3;
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    testTable.addRequestedCommit(String.format("%016d", 0));
+    for (int i = 1; i <= maxNumDeltacommits; i++) {
+      doWriteOperation(testTable, String.format("%016d", i));
+    }
+    int instant = maxNumDeltacommits + 1;
+    Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
+    assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
+  }
+
+  @Test
   public void testNonPartitioned() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);

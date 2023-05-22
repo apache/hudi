@@ -70,11 +70,12 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
-    HoodieExecutor<Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
-    try (RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema))) {
-      wrapper = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
+    HoodieExecutor<Void> executor = null;
+    RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema));
+    try {
+      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {
             String recKey = keyGenerator.getKey(inp).getRecordKey();
             GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
@@ -82,16 +83,20 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
             HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
             return rec;
-        }, table.getPreExecuteRunnable());
-      wrapper.execute();
+          }, table.getPreExecuteRunnable());
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        bootstrapHandle.close();
       }
-      bootstrapHandle.close();
     }
   }
 }
