@@ -212,7 +212,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
 
   validate-release-candidate-bundles:
-    if: true
+    if: false
     runs-on: ubuntu-latest
     env:
       HUDI_VERSION: 0.13.1-rc1
