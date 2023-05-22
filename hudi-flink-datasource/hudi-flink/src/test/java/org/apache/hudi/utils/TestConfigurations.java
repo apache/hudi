@@ -90,6 +90,9 @@ public class TestConfigurations {
           DataTypes.FIELD("gender", DataTypes.CHAR(1)), // removed field
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()))),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -102,6 +105,11 @@ public class TestConfigurations {
           DataTypes.FIELD("last_name", DataTypes.VARCHAR(10)), // new field
           DataTypes.FIELD("salary", DataTypes.DOUBLE()), // new field
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("f3", DataTypes.STRING()))), // new field added at the end of struct
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 

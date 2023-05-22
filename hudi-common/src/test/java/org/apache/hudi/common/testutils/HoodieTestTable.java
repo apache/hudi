@@ -22,6 +22,9 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -31,6 +34,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -465,6 +469,47 @@ public class HoodieTestTable {
     createRequestedCompaction(basePath, instantTime);
     createInflightCompaction(basePath, instantTime);
     return addCommit(instantTime, Option.of(commitMetadata));
+  }
+
+  public HoodieTestTable addDeletePartitionCommit(String instantTime, String partition, List<String> fileIds) throws Exception {
+    forReplaceCommit(instantTime);
+    WriteOperationType operationType = WriteOperationType.DELETE_PARTITION;
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> metas =
+            generateReplaceCommitMetadata(instantTime, partition, fileIds, Option.empty(), operationType);
+    return addReplaceCommit(instantTime, Option.of(metas.getLeft()), Option.empty(), metas.getRight());
+  }
+
+  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
+          String instantTime, String partition, List<String> replacedFileIds, Option<String> newFileId, WriteOperationType operationType) {
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    requestedReplaceMetadata.setOperationType(operationType.toString());
+    requestedReplaceMetadata.setVersion(1);
+    List<HoodieSliceInfo> sliceInfos = replacedFileIds.stream()
+            .map(replacedFileId -> HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build())
+            .collect(Collectors.toList());
+    List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
+    clusteringGroups.add(HoodieClusteringGroup.newBuilder()
+            .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
+            .setSlices(sliceInfos).build());
+    requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
+    requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
+            .setVersion(1).setExtraMetadata(Collections.emptyMap())
+            .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
+            .setInputGroups(clusteringGroups).build());
+
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    replacedFileIds.forEach(replacedFileId -> replaceMetadata.addReplaceFileId(partition, replacedFileId));
+    replaceMetadata.setOperationType(operationType);
+    if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setPartitionPath(partition);
+      writeStat.setPath(partition + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", newFileId.get()));
+      writeStat.setFileId(newFileId.get());
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
+      replaceMetadata.addWriteStat(partition, writeStat);
+    }
+    return Pair.of(requestedReplaceMetadata, replaceMetadata);
   }
 
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {

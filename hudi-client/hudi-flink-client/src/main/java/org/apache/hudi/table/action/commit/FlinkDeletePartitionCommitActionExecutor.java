@@ -66,7 +66,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
     DeletePartitionUtils.checkForPendingTableServiceActions(table, partitions);
 
     try {
-      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieTimer timer = HoodieTimer.start();
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
       Map<String, List<String>> partitionToReplaceFileIds =
           context.parallelize(partitions).distinct().collectAsList()

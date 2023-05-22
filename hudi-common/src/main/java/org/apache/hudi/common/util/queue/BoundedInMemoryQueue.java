@@ -271,6 +271,11 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
   }
 
   @Override
+  public Throwable getThrowable() {
+    return this.hasFailed.get();
+  }
+
+  @Override
   public boolean isEmpty() {
     return this.queue.size() == 0;
   }

@@ -46,7 +46,7 @@ public class ChainedTransformer implements Transformer {
   // Delimiter used to separate class name and the property key suffix. The suffix comes first.
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
-  private final List<TransformerInfo> transformers;
+  protected final List<TransformerInfo> transformers;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
@@ -111,7 +111,7 @@ public class ChainedTransformer implements Transformer {
     }
   }
 
-  private static class TransformerInfo {
+  protected static class TransformerInfo {
     private final Transformer transformer;
     private final Option<String> idOpt;
 
@@ -125,7 +125,7 @@ public class ChainedTransformer implements Transformer {
       this.idOpt = Option.empty();
     }
 
-    private Transformer getTransformer() {
+    protected Transformer getTransformer() {
       return transformer;
     }
 
@@ -133,7 +133,7 @@ public class ChainedTransformer implements Transformer {
       return idOpt.isPresent();
     }
 
-    private TypedProperties getProperties(TypedProperties properties) {
+    protected TypedProperties getProperties(TypedProperties properties) {
       TypedProperties transformerProps = properties;
       if (idOpt.isPresent()) {
         // Transformer specific property keys end with the id associated with the transformer.

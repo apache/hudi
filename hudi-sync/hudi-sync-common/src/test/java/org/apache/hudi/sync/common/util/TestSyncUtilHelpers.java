@@ -112,8 +112,8 @@ public class TestSyncUtilHelpers {
   }
 
   public static class DummySyncTool2 extends HoodieSyncTool {
-    public DummySyncTool2(Properties props, Configuration hadoopConf) {
-      super(props, hadoopConf);
+    public DummySyncTool2(Properties props) {
+      super(props);
     }
 
     @Override

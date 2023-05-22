@@ -62,6 +62,7 @@ import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -191,9 +192,11 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt) throws IOException {
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Boolean isErrorTableWriterEnabled) throws IOException {
     try {
-      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : new ChainedTransformer(classNames));
+      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : 
+          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames) : new ChainedTransformer(classNames)
+      );
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);
     }
