@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.bootstrap.translator;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 
 /**
@@ -26,8 +25,8 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
  *
  */
 public class DecodedBootstrapPartitionPathTranslator extends BootstrapPartitionPathTranslator {
-  public DecodedBootstrapPartitionPathTranslator(TypedProperties properties) {
-    super(properties);
+  public DecodedBootstrapPartitionPathTranslator() {
+    super();
   }
 
   @Override
