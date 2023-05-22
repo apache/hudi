@@ -508,8 +508,10 @@ public class HiveSchemaUtil {
     }
 
     // Append serdeClass, inputFormatClass, outputFormatClass
-    sb.append(getRowFormat(config, serdeClass, serdeProperties,
-        inputFormatClass, outputFormatClass));
+    sb.append(getRowFormat(serdeClass, serdeProperties, inputFormatClass, outputFormatClass));
+
+    // Append location
+    sb.append(getLocationBlock(config.getAbsoluteBasePath()));
 
     // Append TBLPROPERTIES
     if (!tableProperties.isEmpty()) {
@@ -557,7 +559,7 @@ public class HiveSchemaUtil {
   /**
    * Get the RowFormat information of the table.
    */
-  private static String getRowFormat(HiveSyncConfig config, String serdeClass,
+  private static String getRowFormat(String serdeClass,
       Map<String, String> serdeParams, String inputFormatClass, String outputFormatClass) {
     StringBuilder rowFormat = new StringBuilder();
     rowFormat.append("\n ROW FORMAT SERDE \n")
@@ -568,8 +570,6 @@ public class HiveSchemaUtil {
     }
     rowFormat.append("STORED AS INPUTFORMAT \n  '" + inputFormatClass + "' \n")
         .append("OUTPUTFORMAT \n  '" + outputFormatClass + "'");
-    // Append location
-    rowFormat.append(getLocationBlock(config.getAbsoluteBasePath()));
     return rowFormat.toString();
   }
 
