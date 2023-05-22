@@ -233,7 +233,7 @@ jobs:
             sparkProfile: 'spark3.1'
             sparkRuntime: 'spark3.1.3'
           - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark2'
+            sparkProfile: 'spark'
             sparkRuntime: 'spark2.4.8'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark2.4'
