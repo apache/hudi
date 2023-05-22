@@ -215,7 +215,7 @@ jobs:
     if: false
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 0.13.1-rc1
+      HUDI_VERSION: 0.13.1-rcx
       STAGING_REPO_NUM: 1123
     strategy:
       matrix:
