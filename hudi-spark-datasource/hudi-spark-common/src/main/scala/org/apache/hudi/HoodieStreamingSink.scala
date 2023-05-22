@@ -74,6 +74,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
   private val ignoreFailedBatch = options.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
     STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
+  private val disableCompaction = options.getOrDefault(STREAMING_DISABLE_COMPACTION.key,
+    STREAMING_DISABLE_COMPACTION.defaultValue).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
@@ -120,7 +122,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
-          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
+          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient,
+          if (disableCompaction) None else Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
           extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
             override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
               val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
