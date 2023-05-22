@@ -29,8 +29,9 @@
 
 HUDI_VERSION=$1
 JAVA_RUNTIME_VERSION=$2
-
+STAGING_REPO_NUM=$3
 echo "HUDI_VERSION: $HUDI_VERSION JAVA_RUNTIME_VERSION: $JAVA_RUNTIME_VERSION"
+echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
 
 # choose versions based on build profiles
 if [[ ${SPARK_RUNTIME} == 'spark2.4.8' ]]; then
@@ -154,7 +155,7 @@ else
   fi
 
   echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."
-  REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$REPO_BASE_URL/org/apache/hudi
+  REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$STAGING_REPO_NUM/org/apache/hudi
   wget -q $REPO_BASE_URL/$HUDI_FLINK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_FLINK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
