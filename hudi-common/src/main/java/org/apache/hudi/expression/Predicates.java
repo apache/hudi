@@ -236,7 +236,7 @@ public class Predicates {
 
     @Override
     public Object eval(StructLike data) {
-      return getLeft().eval(data).toString().startsWith(getRight().eval(data).toString());
+      return getLeft().eval(data).toString().contains(getRight().eval(data).toString());
     }
   }
 
