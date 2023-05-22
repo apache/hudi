@@ -244,21 +244,19 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
 
-      // If publish the rollback to the timeline, we first write the rollback metadata
-      // to metadata table
+      // If publish the rollback to the timeline, we first write the rollback metadata to metadata table
+      // Then transition the inflight rollback to completed state.
       if (!skipTimelinePublish) {
         writeTableMetadata(rollbackMetadata);
-      }
-
-      // If publish the rollback to the timeline, we finally transition the inflight rollback
-      // to complete in the data table timeline
-      if (!skipTimelinePublish) {
         table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
             TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
 
-      // Then we delete the inflight instant in the data table timeline if enabled
+      // Commit to rollback instant files are deleted after the rollback commit is transitioned from inflight to completed
+      // If job were to fail after transitioning rollback from inflight to complete and before delete the instant files,
+      // then subsequent retries of the rollback for this instant will see if there is a completed rollback present for this instant
+      // and then directly delete the files and abort.
       deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
 
     } catch (IOException e) {
