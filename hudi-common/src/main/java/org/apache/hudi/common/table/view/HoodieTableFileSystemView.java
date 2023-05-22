@@ -54,6 +54,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFileSystemView.class);
 
+  //TODO: [HUDI-6249] change the maps below to implement ConcurrentMap
+  
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
 
