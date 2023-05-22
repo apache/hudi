@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.SparkException
@@ -174,7 +175,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val msg = "Should fail with Path does not exist"
     tableType match {
       case HoodieTableType.COPY_ON_WRITE =>
-        assertThrows(classOf[AnalysisException], new Executable {
+        assertThrows(classOf[HoodieIncrementalPathNotFoundException], new Executable {
           override def execute(): Unit = {
             fn()
           }
