@@ -227,8 +227,6 @@ public class Predicates {
 
     StringContains(Expression left, Expression right) {
       super(left, Operator.CONTAINS, right);
-      assert left.getDataType().typeId() == Type.TypeID.STRING;
-      assert right.getDataType().typeId() == Type.TypeID.STRING;
     }
 
     @Override
