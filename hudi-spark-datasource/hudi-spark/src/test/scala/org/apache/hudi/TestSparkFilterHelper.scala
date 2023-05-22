@@ -136,6 +136,18 @@ class TestSparkFilterHelper extends HoodieClientTestHarness with SparkAdapterSup
   }
 
   @Test
+  def testConvertContainsExpression(): Unit = {
+    val filter = sparkAdapter.translateFilter(Contains(AttributeReference("col2", StringType)(), Literal("prefix")))
+    val result = convertFilter(filter.get).get
+
+    val expected = Predicates.contains(
+      new NameReference("col2"),
+      HLiteral.from("prefix").asInstanceOf[Expression])
+
+    Assertions.assertEquals(result.toString, expected.toString)
+  }
+
+  @Test
   def testConvertAndExpression(): Unit = {
     val filter = sparkAdapter.translateFilter(And(
       EqualTo(AttributeReference("col1", IntegerType)(), Literal(1)),

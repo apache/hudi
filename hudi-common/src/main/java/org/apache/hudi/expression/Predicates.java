@@ -65,8 +65,8 @@ public class Predicates {
     return new BinaryComparison(left, Expression.Operator.LT_EQ, right);
   }
 
-  public static BinaryComparison startsWith(Expression left, Expression right) {
-    return new BinaryComparison(left, Expression.Operator.STARTS_WITH, right);
+  public static StringStartsWith startsWith(Expression left, Expression right) {
+    return new StringStartsWith(left, right);
   }
 
   public static StringContains contains(Expression left, Expression right) {
@@ -220,6 +220,23 @@ public class Predicates {
     @Override
     public String toString() {
       return "(" + getLeft() + " " + getOperator().symbol + " " + getRight() + ")";
+    }
+  }
+
+  public static class StringStartsWith extends BinaryExpression implements Predicate {
+
+    StringStartsWith(Expression left, Expression right) {
+      super(left, Operator.STARTS_WITH, right);
+    }
+
+    @Override
+    public String toString() {
+      return getLeft().toString() + ".startWith(" + getRight().toString() + ")";
+    }
+
+    @Override
+    public Object eval(StructLike data) {
+      return getLeft().eval(data).toString().startsWith(getRight().eval(data).toString());
     }
   }
 
@@ -388,8 +405,6 @@ public class Predicates {
           return comparator.compare(getLeft().eval(data), getRight().eval(data)) < 0;
         case LT_EQ:
           return comparator.compare(getLeft().eval(data), getRight().eval(data)) <= 0;
-        case STARTS_WITH:
-          return String.valueOf(getLeft().eval(data)).startsWith(String.valueOf(getRight().eval(data)));
         default:
           throw new IllegalArgumentException("The operation " + getOperator() + " doesn't support binary comparison");
       }

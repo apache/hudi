@@ -118,6 +118,21 @@ public class PartialBindVisitor extends BindVisitor {
           .orElse(alwaysTrue());
     }
 
+    if (predicate instanceof Predicates.StringStartsWith) {
+      Predicates.StringStartsWith startsWith = (Predicates.StringStartsWith) predicate;
+      Expression left = startsWith.getLeft().accept(this);
+      if (left == null) {
+        return alwaysTrue();
+      } else {
+        Expression right = startsWith.getRight().accept(this);
+        if (right == null) {
+          return alwaysTrue();
+        }
+
+        return Predicates.startsWith(left, right);
+      }
+    }
+
     if (predicate instanceof Predicates.StringContains) {
       Predicates.StringContains contains = (Predicates.StringContains) predicate;
       Expression left = contains.getLeft().accept(this);

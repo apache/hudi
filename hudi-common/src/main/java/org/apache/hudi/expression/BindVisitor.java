@@ -168,6 +168,13 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
       return Predicates.isNotNull(isNotNull.child.accept(this));
     }
 
+    if (predicate instanceof Predicates.StringStartsWith) {
+      Predicates.StringStartsWith contains = (Predicates.StringStartsWith) predicate;
+      Expression left = contains.getLeft().accept(this);
+      Expression right = contains.getRight().accept(this);
+      return Predicates.startsWith(left, right);
+    }
+
     if (predicate instanceof Predicates.StringContains) {
       Predicates.StringContains contains = (Predicates.StringContains) predicate;
       Expression left = contains.getLeft().accept(this);
