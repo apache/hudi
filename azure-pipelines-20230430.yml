@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# NOTE:
+# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.17 profiles.
+# PRs will need to keep in sync with master's version to trigger the CI runs.
+
 trigger:
   branches:
     include:

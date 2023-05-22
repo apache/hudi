@@ -20,12 +20,14 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
@@ -39,6 +41,7 @@ import org.apache.avro.specific.SpecificDatumWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +49,9 @@ import java.util.stream.Collectors;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
@@ -156,6 +162,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
     return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
         .collect(Collectors.toList());
+  }
+
+  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records) throws IOException {
+    return asDefaultPayloadRecords(records, false);
+  }
+
+  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records, boolean isDeleted) throws IOException {
+    List<HoodieRecord> convertedRecords = new ArrayList<>();
+    for (HoodieRecord r : records) {
+      GenericRecord avroData = (GenericRecord) ((RawTripTestPayload) r.getData()).getRecordToInsert(AVRO_SCHEMA);
+      avroData.put("_hoodie_is_deleted", isDeleted);
+      convertedRecords.add(
+          createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
+              "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
+              false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
+    }
+    return convertedRecords;
   }
 
   public String getPartitionPath() {

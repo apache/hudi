@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -47,6 +48,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
+  private AtomicReference<Throwable> throwable = new AtomicReference<>(null);
 
   private boolean isShutdown = false;
   private boolean isStarted = false;
@@ -89,7 +91,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public void markAsFailed(Throwable e) {
+    this.throwable.compareAndSet(null, e);
     // no-op
+  }
+
+  @Override
+  public Throwable getThrowable() {
+    return this.throwable.get();
   }
 
   @Override

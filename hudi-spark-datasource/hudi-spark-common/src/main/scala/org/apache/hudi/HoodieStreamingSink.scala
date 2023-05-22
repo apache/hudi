@@ -103,7 +103,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     checkArgument(queryId != null, "queryId is null")
     if (metaClient.isDefined && canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
+      // scalastyle:off return
       return
+      // scalastyle:on return
     }
 
 
