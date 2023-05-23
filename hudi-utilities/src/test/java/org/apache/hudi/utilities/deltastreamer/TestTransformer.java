@@ -19,10 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.StructUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -33,17 +30,19 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -115,21 +114,35 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testTransformerSchemaValidationFailsWhenTransformedSchemaNotProvided() {
-    String expectedErrorMsg = "Expected target schema not provided for transformer org.apache.hudi.utilities.transform.FlatteningTransformer";
+  public void testTransformerSchemaValidationPassesWithDefaultTransformedSchema() throws Exception {
     List<String> transformerClassNames = Arrays.asList(
-        // transformedSchema not implemented for FlatteningTransformer
+        // Flattens the nested schema
         FlatteningTransformer.class.getName(),
+        // No change to schema
+        TimestampTransformer.class.getName(),
+        // Adds a new column named random in the schema
+        AddColumnTransformer.class.getName());
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames);
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFailsWhenTransformedSchemaNotProvided() {
+    String expectedErrorMsg = "Expected target schema not provided for transformer "
+        + "org.apache.hudi.utilities.deltastreamer.TestTransformer$FlatteningTransformerWithoutTransformedSchema";
+    List<String> transformerClassNames = Arrays.asList(
+        // transformedSchema not implemented for FlatteningTransformerWithoutTransformedSchema
+        FlatteningTransformerWithoutTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
         AddColumnTransformerWithTransformedSchema.class.getName());
     testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
 
-    expectedErrorMsg = "Expected target schema not provided for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$AddColumnTransformer";
+    expectedErrorMsg = "Expected target schema not provided for transformer "
+        + "org.apache.hudi.utilities.deltastreamer.TestTransformer$AddColumnTransformerWithoutTransformedSchema";
     transformerClassNames = Arrays.asList(
         FlatteningTransformerWithTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
-        // transformedSchema not implemented for AddColumnTransformer
-        AddColumnTransformer.class.getName());
+        // transformedSchema not implemented for FlatteningTransformerWithoutTransformedSchema
+        AddColumnTransformerWithoutTransformedSchema.class.getName());
     testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
   }
 
@@ -167,12 +180,14 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames, String targetSchemaFile) throws Exception {
     // Create source using TRIP_EXAMPLE_SCHEMA
     boolean useSchemaProvider = true;
-    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs";
+    FileIOUtils.deleteDirectory(new File(new URI(PARQUET_SOURCE_ROOT).getPath()));
     int parquetRecordsCount = 10;
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
     prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
-    String tableBasePath = basePath + "/testTransformerSchemaValidation" + testNum;
+    String tableBasePath = basePath + "testTransformerSchemaValidation";
+    FileIOUtils.deleteDirectory(new File(new URI(tableBasePath).getPath()));
     HoodieDeltaStreamer.Config config = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
         ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
         100000, false, null, null, "timestamp", null);
@@ -212,8 +227,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class FlatteningTransformerWithTransformedSchema extends FlatteningTransformer {
 
     @Override
-    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
-      StructType incomingStruct = AvroConversionUtils.convertAvroSchemaToStructType(incomingSchema);
+    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
       String flattenedSelect = flattenSchema(incomingStruct, null);
       String[] cols = flattenedSelect.split(",");
       List<Pair<String, String>> replacements = new LinkedList<>();
@@ -224,21 +238,30 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
         }
       }
 
-      Schema newSchema = SerializableSchema.newCopy(incomingSchema);
-      List<Schema.Field> fields = new LinkedList<>();
-      Set<String> fieldsToRemove = new HashSet<>();
+      List<StructField> incomingFields = Arrays.asList(incomingStruct.fields());
+      List<StructField> transformedFields = new LinkedList<>(incomingFields);
+      Set<StructField> fieldsToRemove = new HashSet<>();
       for (Pair<String, String> replacement : replacements) {
-        fieldsToRemove.add(replacement.getKey().replaceAll("\\..*", ""));
-        fields.add(new Schema.Field(
-            replacement.getValue(),
-            Schema.create(HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema(incomingSchema, replacement.getKey()).getType()),
-            "",
-            JsonProperties.NULL_VALUE));
+        String fieldToRemoveName = replacement.getKey().replaceAll("\\..*", "");
+        StructField fieldToAdd = StructUtils.getField(incomingStruct, replacement.getKey()).get();
+        StructField fieldToRemove = transformedFields.stream().filter(f -> f.name().equals(fieldToRemoveName)).findAny().get();
+        fieldsToRemove.add(fieldToRemove);
+        transformedFields.add(transformedFields.indexOf(fieldToRemove), new StructField(replacement.getKey().replaceAll("\\.", "_"),
+            fieldToAdd.dataType(), fieldToAdd.nullable(), fieldToAdd.metadata()));
       }
+      transformedFields.removeAll(fieldsToRemove);
 
-      newSchema = AvroSchemaUtils.appendFieldsToSchema(newSchema, fields);
-      newSchema = HoodieAvroUtils.removeFields(newSchema, fieldsToRemove);
-      return Option.of(newSchema);
+      return Option.of(new StructType(transformedFields.toArray(new StructField[0])));
+    }
+  }
+
+  /**
+   * Does not provide transformedSchema implementation for FlatteningTransformer.
+   */
+  public static class FlatteningTransformerWithoutTransformedSchema extends FlatteningTransformer {
+    @Override
+    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      return Option.empty();
     }
   }
 
@@ -260,15 +283,20 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class AddColumnTransformerWithTransformedSchema extends AddColumnTransformer {
 
     @Override
-    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
-      List<Schema.Field> fields = new LinkedList<>();
-      fields.add(new Schema.Field(
-          "random",
-          Schema.create(Schema.Type.LONG),
-          "",
-          JsonProperties.NULL_VALUE));
-      Schema newSchema = AvroSchemaUtils.appendFieldsToSchema(incomingSchema, fields);
-      return Option.of(newSchema);
+    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      StructField newField = new StructField("random", DataTypes.LongType, true, Metadata.empty());
+      return Option.of(incomingStruct.add(newField));
+    }
+  }
+
+  /**
+   * Does not provide transformedSchema implementation for AddColumnTransformer.
+   */
+  public static class AddColumnTransformerWithoutTransformedSchema extends AddColumnTransformer {
+
+    @Override
+    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      return Option.empty();
     }
   }
 
@@ -278,15 +306,9 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class AddColumnTransformerWithWrongTransformedSchema extends AddColumnTransformer {
 
     @Override
-    public Option<Schema> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, Schema incomingSchema, TypedProperties properties) {
-      List<Schema.Field> fields = new LinkedList<>();
-      fields.add(new Schema.Field(
-          "random1",
-          Schema.create(Schema.Type.LONG),
-          "",
-          JsonProperties.NULL_VALUE));
-      Schema newSchema = AvroSchemaUtils.appendFieldsToSchema(incomingSchema, fields);
-      return Option.of(newSchema);
+    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      StructField newField = new StructField("random1", DataTypes.LongType, true, Metadata.empty());
+      return Option.of(incomingStruct.add(newField));
     }
   }
 }
