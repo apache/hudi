@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -30,6 +31,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
@@ -48,11 +52,13 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -951,6 +957,56 @@ public class TestHiveSyncTool {
                 "Table " + snapshotTableName
                         + " should exist after sync completes");
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieSyncTableStrategy.class, names = {"RO", "RT"})
+  public void testSyncMergeOnReadWithStrategyWhenTableExist(HoodieSyncTableStrategy strategy) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_TABLE_STRATEGY.key(), strategy.name());
+
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, true);
+
+    reInitHiveSyncClient();
+    MessageType schema = hiveClient.getStorageSchema(true);
+
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+            "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+
+    String initInputFormatClassName = strategy.equals(HoodieSyncTableStrategy.RO)
+            ? HoodieParquetRealtimeInputFormat.class.getName()
+            : HoodieParquetInputFormat.class.getName();
+
+    String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(HoodieFileFormat.PARQUET);
+    String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(HoodieFileFormat.PARQUET);
+
+    // Create table 'test1'.
+    hiveClient.createDatabase(HiveTestUtil.DB_NAME);
+    hiveClient.createTable(HiveTestUtil.TABLE_NAME, schema, initInputFormatClassName,
+            outputFormatClassName, serDeFormatClassName, new HashMap<>(), new HashMap<>());
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+            "Table " + HiveTestUtil.TABLE_NAME + " should exist initially");
+
+    String targetInputFormatClassName = strategy.equals(HoodieSyncTableStrategy.RO)
+            ? HoodieParquetInputFormat.class.getName()
+            : HoodieParquetRealtimeInputFormat.class.getName();
+
+    StorageDescriptor storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
+    assertEquals(initInputFormatClassName, storageDescriptor.getInputFormat(),
+            "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
+    assertFalse(storageDescriptor.getSerdeInfo().getParameters().containsKey(ConfigUtils.IS_QUERY_AS_RO_TABLE),
+            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should not exist");
+
+    reSyncHiveTable();
+    storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
+    assertEquals(targetInputFormatClassName,
+            storageDescriptor.getInputFormat(),
+            "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
+    assertEquals(storageDescriptor.getSerdeInfo().getParameters().get(ConfigUtils.IS_QUERY_AS_RO_TABLE),
+            strategy.equals(HoodieSyncTableStrategy.RO) ? "true" : "false",
+            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should be ");
+
   }
 
   @ParameterizedTest
