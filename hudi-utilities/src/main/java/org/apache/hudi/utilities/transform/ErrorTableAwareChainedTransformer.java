@@ -20,7 +20,10 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.ErrorTableUtils;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -34,8 +37,9 @@ import java.util.List;
  * if that column is not dropped in any of the transformations.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
-  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, int... ignore) {
-    super(configuredTransformers);
+  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt,
+                                           boolean enableSchemaValidation) {
+    super(configuredTransformers, sourceSchemaOpt, enableSchemaValidation);
   }
 
   public ErrorTableAwareChainedTransformer(List<Transformer> transformers) {

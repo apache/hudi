@@ -52,8 +52,8 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
-  private final Option<Schema> sourceSchemaOpt = Option.empty();
-  private final boolean enableSchemaValidation = false;
+  private final Option<Schema> sourceSchemaOpt;
+  private final boolean enableSchemaValidation;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());

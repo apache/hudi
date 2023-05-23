@@ -199,7 +199,7 @@ public class UtilHelpers {
 
     try {
       Function<List<String>, Transformer> chainedTransformerFunction = classNames ->
-          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames)
+          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchema, enableTransformerSchemaValidation)
               : new ChainedTransformer(classNames, sourceSchema, enableTransformerSchemaValidation);
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : chainedTransformerFunction.apply(classNames));
     } catch (Throwable e) {
