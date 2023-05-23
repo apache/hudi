@@ -374,7 +374,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
-  /***
+  /**
    * @return A list of relative partition paths of all partitions.
    * @throws IOException upon error.
    */

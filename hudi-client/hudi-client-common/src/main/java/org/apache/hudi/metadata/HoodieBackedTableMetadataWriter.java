@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
-import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -31,11 +30,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -44,35 +41,26 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
-import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
+
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -92,20 +80,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.RECORD_KEY_FIELD_NAME;
+import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
@@ -122,10 +110,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
   public static final String METADATA_COMPACTION_TIME_SUFFIX = "001";
-
-  // Virtual keys support for metadata table. This Field is
-  // from the metadata payload schema.
-  private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
@@ -244,124 +228,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   protected abstract void initRegistry();
-
-  /**
-   * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
-   * indexer only.
-   *
-   * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
-   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
-   */
-  private HoodieWriteConfig createMetadataWriteConfig(
-      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
-    int parallelism = writeConfig.getMetadataInsertParallelism();
-
-    // Create the write config for the metadata table by borrowing options from the main write config.
-    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
-        .withEngineType(writeConfig.getEngineType())
-        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
-        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
-            .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
-            .withInitialConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getInitialConsistencyCheckIntervalMs())
-            .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
-            .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
-            .build())
-        .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
-        .withAutoCommit(true)
-        .withAvroSchemaValidate(false)
-        .withEmbeddedTimelineServerEnabled(false)
-        .withMarkersType(MarkerType.DIRECT.name())
-        .withRollbackUsingMarkers(false)
-        .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
-        .withSchema(HoodieMetadataRecord.getClassSchema().toString())
-        .forTable(tableName)
-        // we will trigger cleaning manually, to control the instant times
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
-            .withAutoClean(false)
-            .withCleanerParallelism(parallelism)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
-            .build())
-        // we will trigger archive manually, to ensure only regular writer invokes it
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(
-                writeConfig.getMinCommitsToKeep(), writeConfig.getMaxCommitsToKeep())
-            .withAutoArchive(false)
-            .build())
-        // we will trigger compaction manually, to control the instant times
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
-            .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
-            // Compaction on metadata table is used as a barrier for archiving on main dataset and for validating the
-            // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
-            // partitions together requiring UnBoundedCompactionStrategy.
-            .withCompactionStrategy(new UnBoundedCompactionStrategy())
-            .build())
-        .withParallelism(parallelism, parallelism)
-        .withDeleteParallelism(parallelism)
-        .withRollbackParallelism(parallelism)
-        .withFinalizeWriteParallelism(parallelism)
-        .withAllowMultiWriteOnSameInstant(true)
-        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
-        .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
-        .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled());
-
-    // RecordKey properties are needed for the metadata table records
-    final Properties properties = new Properties();
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
-    properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
-    builder.withProperties(properties);
-
-    if (writeConfig.isMetricsOn()) {
-      // Table Name is needed for metric reporters prefix
-      Properties commonProperties = new Properties();
-      commonProperties.put(HoodieWriteConfig.TBL_NAME.key(), tableName);
-
-      builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
-          .fromProperties(commonProperties)
-          .withReporterType(writeConfig.getMetricsReporterType().toString())
-          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
-          .on(true).build());
-      switch (writeConfig.getMetricsReporterType()) {
-        case GRAPHITE:
-          builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-              .onGraphitePort(writeConfig.getGraphiteServerPort())
-              .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
-          break;
-        case JMX:
-          builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-              .onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost())
-              .build());
-          break;
-        case PROMETHEUS_PUSHGATEWAY:
-          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
-              .withPushgatewayJobname(writeConfig.getPushGatewayJobName())
-              .withPushgatewayRandomJobnameSuffix(writeConfig.getPushGatewayRandomJobNameSuffix())
-              .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
-              .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
-              .withPushgatewayHostName(writeConfig.getPushGatewayHost())
-              .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
-          builder.withProperties(prometheusConfig.getProps());
-          break;
-        case DATADOG:
-        case PROMETHEUS:
-        case CONSOLE:
-        case INMEMORY:
-        case CLOUDWATCH:
-          break;
-        default:
-          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
-      }
-    }
-    return builder.build();
-  }
 
   public HoodieWriteConfig getWriteConfig() {
     return metadataWriteConfig;
@@ -822,6 +688,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         });
   }
 
+  private static void checkNumDeltaCommits(HoodieTableMetaClient metaClient, int maxNumDeltaCommitsWhenPending) {
+    final HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
+    Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
+        .filter(s -> s.getAction().equals(COMPACTION_ACTION)).lastInstant();
+    int numDeltaCommits = lastCompaction.isPresent()
+        ? activeTimeline.getDeltaCommitTimeline().findInstantsAfter(lastCompaction.get().getTimestamp()).countInstants()
+        : activeTimeline.getDeltaCommitTimeline().countInstants();
+    if (numDeltaCommits > maxNumDeltaCommitsWhenPending) {
+      throw new HoodieMetadataException(String.format("Metadata table's deltacommits exceeded %d: "
+              + "this is likely caused by a pending instant in the data table. Resolve the pending instant "
+              + "or adjust `%s`, then restart the pipeline.",
+          maxNumDeltaCommitsWhenPending, HoodieMetadataConfig.METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING.key()));
+    }
+  }
+
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
     return new MetadataRecordsGenerationParams(
         dataMetaClient,
@@ -1081,6 +962,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
     if (!pendingInstants.isEmpty()) {
+      checkNumDeltaCommits(metadataMetaClient, dataWriteConfig.getMetadataConfig().getMaxNumDeltacommitsWhenPending());
       LOG.info(String.format(
           "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
           pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));

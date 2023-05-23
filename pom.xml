@@ -156,6 +156,7 @@
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>5.17.2</rocksdbjni.version>
     <spark31.version>3.1.3</spark31.version>
+    <spark30.version>3.0.2</spark30.version>
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
@@ -2234,6 +2235,44 @@
       <activation>
         <property>
           <name>spark3</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>spark3.0</id>
+      <properties>
+        <spark3.version>${spark30.version}</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>3.0</sparkbundle.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3.0.x</hudi.spark.module>
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.10.1</parquet.version>
+        <orc.spark.version>1.5.13</orc.spark.version>
+        <avro.version>1.8.2</avro.version>
+        <antlr.version>4.8-1</antlr.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark3.0.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
+      </modules>
+      <activation>
+        <property>
+          <name>spark3.0</name>
         </property>
       </activation>
     </profile>

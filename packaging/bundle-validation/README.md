@@ -51,3 +51,19 @@ only one layer is generated to limit the size of the image. However, this makes 
 image. If you need faster iteration for local build, you may use the `Dockerfile` under `base-dev/`, which uses `ADD`
 instruction for downloads, which provides caching across builds. This increases the size of the generated image compared
 to `base/` and the image should only be used for development only and not be pushed to remote.
+
+## Running Bundle Validation on a Release Candidate
+
+The bundle validation on a release candidate is specified in the Github Action job `validate-release-candidate-bundles`
+in `.github/workflows/bot.yml`. By default, this is disabled.
+
+To enable the bundle validation on a particular release candidate, makes the following changes to the job by fipping the
+flag and adding the release candidate version and staging repo number:
+
+```shell
+if: true
+env:
+  HUDI_VERSION: 0.13.1-rc1
+  STAGING_REPO_NUM: 1123
+```
+

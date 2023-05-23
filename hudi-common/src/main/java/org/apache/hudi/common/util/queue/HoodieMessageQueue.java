@@ -50,6 +50,8 @@ public interface HoodieMessageQueue<I, O> extends Closeable {
    */
   void markAsFailed(Throwable e);
 
+  Throwable getThrowable();
+
   boolean isEmpty();
 
   /**

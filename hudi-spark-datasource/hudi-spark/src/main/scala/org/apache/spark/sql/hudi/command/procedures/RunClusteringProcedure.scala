@@ -100,7 +100,9 @@ class RunClusteringProcedure extends BaseProcedure
       logInfo("No partition selected")
     } else if (selectedPartitions.isEmpty) {
       logInfo("No partition matched")
+      // scalastyle:off return
       return Seq()
+      // scalastyle:on return
     } else {
       confs = confs ++ Map(
         HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
