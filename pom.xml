@@ -155,8 +155,8 @@
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>5.17.2</rocksdbjni.version>
-    <spark31.version>3.1.3</spark31.version>
     <spark30.version>3.0.2</spark30.version>
+    <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
@@ -175,7 +175,7 @@
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.spark2.version>3.0.1</scalatest.spark2.version>
+    <scalatest.spark_pre31.version>3.0.1</scalatest.spark_pre31.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
@@ -2160,7 +2160,7 @@
         <sparkbundle.version>2.4</sparkbundle.version>
         <scala.version>${scala11.version}</scala.version>
         <scala.binary.version>2.11</scala.binary.version>
-        <scalatest.version>${scalatest.spark2.version}</scalatest.version>
+        <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2/>
@@ -2187,7 +2187,7 @@
         <sparkbundle.version>2.4</sparkbundle.version>
         <scala.version>${scala11.version}</scala.version>
         <scala.binary.version>2.11</scala.binary.version>
-        <scalatest.version>${scalatest.spark2.version}</scalatest.version>
+        <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2/>
@@ -2272,6 +2272,8 @@
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.0.x</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2/>
+        <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
@@ -2310,6 +2312,7 @@
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2/>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
