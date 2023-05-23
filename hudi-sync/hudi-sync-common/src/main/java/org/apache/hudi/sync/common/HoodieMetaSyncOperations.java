@@ -43,6 +43,7 @@ public interface HoodieMetaSyncOperations {
    * @param serdeClass        The serde class of this table.
    * @param serdeProperties   The serde properties of this table.
    * @param tableProperties   The table properties for this table.
+   * @param hiveBucketingSpec Optional bucketing spec.
    */
   default void createTable(String tableName,
                            MessageType storageSchema,
@@ -50,7 +51,8 @@ public interface HoodieMetaSyncOperations {
                            String outputFormatClass,
                            String serdeClass,
                            Map<String, String> serdeProperties,
-                           Map<String, String> tableProperties) {
+                           Map<String, String> tableProperties,
+                           Option<HiveBucketingSpec> hiveBucketingSpec) {
 
   }
 

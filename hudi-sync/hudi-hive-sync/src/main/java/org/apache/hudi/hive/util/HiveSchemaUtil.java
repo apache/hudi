@@ -18,9 +18,11 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.parquet.schema.DecimalMetadata;
@@ -44,7 +46,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
@@ -462,7 +463,7 @@ public class HiveSchemaUtil {
 
   public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
                                          String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
-                                         Map<String, String> tableProperties) throws IOException {
+                                         Map<String, String> tableProperties, Option<HiveBucketingSpec> hiveBucketingSpec) throws IOException {
     Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
     String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
 
@@ -486,9 +487,9 @@ public class HiveSchemaUtil {
     if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
       sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
-    if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
-      sb.append(' ' + config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) + ' ');
-    }
+    hiveBucketingSpec.ifPresent(spec ->
+      sb.append(String.format(" CLUSTERED BY (%s) INTO %s BUCKETS ", String.join(",", spec.getBucketColumns()), spec.getBucketNumber()))
+    );
     sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
     if (serdeProperties != null && !serdeProperties.isEmpty()) {
       sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");

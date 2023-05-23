@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 
@@ -106,11 +107,11 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
       String outputFormatClass, String serdeClass,
-      Map<String, String> serdeProperties, Map<String, String> tableProperties) {
+      Map<String, String> serdeProperties, Map<String, String> tableProperties, Option<HiveBucketingSpec> hiveBucketingSpec) {
     try {
       LOG.info("Creating table:{}", tableName);
       String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema,
-          config, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+          config, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties, hiveBucketingSpec);
       executeAdbSql(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieException("Fail to create table:" + tableName, e);

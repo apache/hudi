@@ -21,11 +21,13 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.HiveBucketingSpec;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
@@ -101,7 +103,7 @@ public class HMSDDLExecutor implements DDLExecutor {
 
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
-                          Map<String, String> tableProperties) {
+                          Map<String, String> tableProperties, Option<HiveBucketingSpec> hiveBucketingSpec) {
     try {
       LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
 
@@ -121,6 +123,10 @@ public class HMSDDLExecutor implements DDLExecutor {
       storageDescriptor.setInputFormat(inputFormatClass);
       storageDescriptor.setOutputFormat(outputFormatClass);
       storageDescriptor.setLocation(syncConfig.getString(META_SYNC_BASE_PATH));
+      hiveBucketingSpec.ifPresent(spec -> {
+        spec.getBucketColumns().forEach(bucketColumn -> storageDescriptor.addToBucketCols(bucketColumn));
+        storageDescriptor.setNumBuckets(spec.getBucketNumber());
+      });
       serdeProperties.put("serialization.format", "1");
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
       newTb.setSd(storageDescriptor);
