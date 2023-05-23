@@ -147,27 +147,25 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
-    return fileIdToPendingCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingCompaction);
   }
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingLogCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingLogCompaction) {
-    return fileIdToPendingLogCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingLogCompaction);
   }
 
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
-    return fileGroupIdBootstrapBaseFileMap;
+    return new ConcurrentHashMap<>(fileGroupIdBootstrapBaseFileMap);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
-    return replacedFileGroupsMap;
+    return new ConcurrentHashMap<>(replacedFileGroups);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
-    Map<HoodieFileGroupId, HoodieInstant> fgInpendingClustering = new ConcurrentHashMap<>(fileGroupsInClustering);
-    return fgInpendingClustering;
+    return new ConcurrentHashMap<>(fileGroupsInClustering);
   }
 
   /**
@@ -201,7 +199,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     // Build fileId to Pending Compaction Instants
     this.fgIdToPendingCompaction = createFileIdToPendingCompactionMap(operations.map(entry ->
-      Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toConcurrentMap(Pair::getKey, Pair::getValue)));
+      Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
   }
 
   @Override
@@ -234,7 +232,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void resetPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     // Build fileId to Pending Log Compaction Instants
     this.fgIdToPendingLogCompaction = createFileIdToPendingLogCompactionMap(operations.map(entry ->
-        Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toConcurrentMap(Pair::getKey, Pair::getValue)));
+        Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
   }
 
   @Override
@@ -335,7 +333,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   void resetBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
     // Build fileId to bootstrap Data File
     this.fgIdToBootstrapBaseFile = createFileIdToBootstrapBaseFileMap(bootstrapBaseFileStream
-        .collect(Collectors.toConcurrentMap(BootstrapBaseFileMapping::getFileGroupId, x -> x)));
+        .collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, x -> x)));
   }
 
   @Override
