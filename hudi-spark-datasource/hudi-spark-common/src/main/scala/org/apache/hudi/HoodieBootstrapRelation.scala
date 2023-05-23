@@ -202,9 +202,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
 
 object HoodieBootstrapRelation {
-
-  val USE_FAST_BOOTSTRAP_READ = "hoodie.bootstrap.relation.use.fast.bootstrap.read"
-
   private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
     val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq

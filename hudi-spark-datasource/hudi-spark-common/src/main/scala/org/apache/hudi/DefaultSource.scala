@@ -285,10 +285,9 @@ object DefaultSource {
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
     if (!enableFileIndex || isSchemaEvolutionEnabledOnRead
       || globPaths.nonEmpty || !parameters.getOrElse(DATA_QUERIES_ONLY.key, DATA_QUERIES_ONLY.defaultValue).toBoolean) {
-      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters + (DATA_QUERIES_ONLY.key() -> "false"))
     } else {
-      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters +
-        (HoodieBootstrapRelation.USE_FAST_BOOTSTRAP_READ -> "true")).toHadoopFsRelation
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
 
