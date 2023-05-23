@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -96,18 +97,17 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    //TODO: add dash partitions false with [HUDI-4944]
-    Boolean[] dashPartitions = {true/*,false*/};
-    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     String[] bootstrapType = {"full", "metadata", "mixed"};
+    Boolean[] dashPartitions = {true,false};
+    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     Integer[] nPartitions = {0, 1, 2};
-
     for (String tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
           for (Integer n : nPartitions) {
             //can't be mixed bootstrap if it's nonpartitioned
-            if (!bt.equals("mixed") || n > 0) {
+            //don't need to test slash partitions if it's nonpartitioned
+            if ((!bt.equals("mixed") && dash) || n > 0) {
               b.add(Arguments.of(bt, dash, tt, n));
             }
           }
@@ -173,7 +173,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
-
+    if (!dashPartitions) {
+      options.put(HoodieBootstrapConfig.PARTITION_PATH_TRANSLATOR_CLASS_NAME.key(), DecodedBootstrapPartitionPathTranslator.class.getName());
+    }
     switch (bootstrapType) {
       case "metadata":
         options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), MetadataOnlyBootstrapModeSelector.class.getName());
@@ -210,6 +212,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(hudiBasePath);
     if (bootstrapType.equals("mixed")) {
       //mixed tables have a commit for each of the metadata and full bootstrap modes
+      //so to align with the regular hudi table, we need to compact after 4 commits instead of 3
       nCompactCommits = "4";
     }
     updates.write().format("hudi")
