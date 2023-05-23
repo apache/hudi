@@ -27,7 +27,7 @@ import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.{SparkInternalSchemaConverter, SparkPartitionUtils}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -487,7 +487,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
-          InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
+          if (tableConfig.isBootstrapPartitionColumnTypeInferenceEnabled) {
+            InternalRow.fromSeq(SparkPartitionUtils.getPartitionFieldValsStruct(partitionColumns, relativePath, basePath.toString,  fileIndex.schema, metaClient.getHadoopConf, true))
+          } else {
+            InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
+          }
         } else {
           if (partitionColumns.length == 1) {
             InternalRow.fromSeq(Seq(UTF8String.fromString(relativePath)))

@@ -205,7 +205,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  schema: StructType,
                                  timeZoneId: String,
                                  sparkParsePartitionUtil: SparkParsePartitionUtil,
-                                 shouldValidatePartitionCols: Boolean): Array[Object] = {
+                                 shouldValidatePartitionCols: Boolean,
+                                 typeInference: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -259,7 +260,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         val pathWithPartitionName = new CachingPath(basePath, CachingPath.createRelativePathUnsafe(partitionWithName))
         val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
-          sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
+          sparkParsePartitionUtil, basePath, shouldValidatePartitionCols, typeInference)
         partitionValues.map(_.asInstanceOf[Object]).toArray
       }
     }
@@ -267,11 +268,11 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
   private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType, timeZoneId: String,
                                  sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: Path,
-                                 shouldValidatePartitionCols: Boolean): Seq[Any] = {
+                                 shouldValidatePartitionCols: Boolean, typeInference: Boolean): Seq[Any] = {
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
     sparkParsePartitionUtil.parsePartition(
       partitionPath,
-      typeInference = false,
+      typeInference,
       Set(basePath),
       partitionDataTypes,
       getTimeZone(timeZoneId),

@@ -53,6 +53,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
@@ -217,6 +218,9 @@ public class BootstrapExecutor implements Serializable {
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)
+        .setBootstrapPartitionColumnTypeInference(
+            props.getBoolean(BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE.key(),
+                Boolean.parseBoolean(BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE.defaultValue())))
         .setHiveStylePartitioningEnable(props.getBoolean(
             HIVE_STYLE_PARTITIONING_ENABLE.key(),
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())

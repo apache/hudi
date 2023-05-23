@@ -2265,6 +2265,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieBootstrapConfig.BASE_PATH);
   }
 
+  public Boolean isBootstrapPartitionColumnTypeInferenceEnabled() {
+    return getBoolean(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE);
+  }
+
   public String getBootstrapModeSelectorClass() {
     return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME);
   }

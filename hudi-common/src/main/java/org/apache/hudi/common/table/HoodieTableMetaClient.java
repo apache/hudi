@@ -800,6 +800,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
+    private Boolean bootstrapPartitionTypeInferenceEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
     private Boolean hiveStylePartitioningEnable;
@@ -911,6 +912,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setBootstrapIndexEnable(Boolean bootstrapIndexEnable) {
       this.bootstrapIndexEnable = bootstrapIndexEnable;
+      return this;
+    }
+
+    public PropertyBuilder setBootstrapPartitionColumnTypeInference(Boolean inferenceEnabled) {
+      this.bootstrapPartitionTypeInferenceEnable = inferenceEnabled;
       return this;
     }
 
@@ -1038,6 +1044,11 @@ public class HoodieTableMetaClient implements Serializable {
         setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
       }
 
+      if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE)) {
+        setBootstrapPartitionColumnTypeInference(
+            hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE));
+      }
+
       if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)) {
         setPreCombineField(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
       }
@@ -1138,6 +1149,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != bootstrapBasePath) {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
+        if (null != bootstrapPartitionTypeInferenceEnable) {
+          tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE,
+              Boolean.toString(bootstrapPartitionTypeInferenceEnable));
+        }
       }
 
       if (StringUtils.nonEmpty(preCombineField)) {

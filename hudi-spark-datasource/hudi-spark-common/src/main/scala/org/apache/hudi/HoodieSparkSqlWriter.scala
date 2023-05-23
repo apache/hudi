@@ -37,6 +37,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -749,6 +750,7 @@ object HoodieSparkSqlWriter {
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)
+          .setBootstrapPartitionColumnTypeInference(hoodieConfig.getStringOrDefault(BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE).toBoolean)
           .setBootstrapBasePath(bootstrapBasePath)
           .setPartitionFields(partitionColumns)
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))

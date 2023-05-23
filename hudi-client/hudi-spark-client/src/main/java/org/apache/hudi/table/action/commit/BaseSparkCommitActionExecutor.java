@@ -371,7 +371,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
         Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
         Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
             table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), table.getHadoopConf());
+            upsertHandle.getWriterSchema(), table.getHadoopConf(),
+            table.getMetaClient().getTableConfig().isBootstrapPartitionColumnTypeInferenceEnabled());
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }

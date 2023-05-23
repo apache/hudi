@@ -110,6 +110,8 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Implementation to use, for mapping a skeleton base file to a bootstrap base file.");
 
+  public static final ConfigProperty<String> PARTITION_COLUMN_TYPE_INFERENCE = HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE;
+
   /**
    * @deprecated Use {@link #BASE_PATH} and its methods instead
    */
@@ -233,6 +235,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public Builder withBootstrapModeForRegexMatch(BootstrapMode modeForRegexMatch) {
       bootstrapConfig.setValue(PARTITION_SELECTOR_REGEX_MODE, modeForRegexMatch.name());
+      return this;
+    }
+
+    public Builder withPartitionColumnTypeInference(Boolean inferenceEnabled) {
+      bootstrapConfig.setValue(PARTITION_COLUMN_TYPE_INFERENCE, inferenceEnabled.toString());
       return this;
     }
 

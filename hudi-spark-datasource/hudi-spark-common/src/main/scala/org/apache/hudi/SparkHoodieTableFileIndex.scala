@@ -340,7 +340,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
     HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+      sparkParsePartitionUtil, shouldValidatePartitionColumns(spark),
+      metaClient.getTableConfig.isBootstrapPartitionColumnTypeInferenceEnabled)
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =

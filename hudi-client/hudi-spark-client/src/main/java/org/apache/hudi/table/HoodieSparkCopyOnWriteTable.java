@@ -227,7 +227,7 @@ public class HoodieSparkCopyOnWriteTable<T>
         Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
         Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
             getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), getHadoopConf());
+            upsertHandle.getWriterSchema(), getHadoopConf(), getMetaClient().getTableConfig().isBootstrapPartitionColumnTypeInferenceEnabled());
         upsertHandle.setPartitionFields(partitionFields);
         upsertHandle.setPartitionValues(partitionValues);
       }

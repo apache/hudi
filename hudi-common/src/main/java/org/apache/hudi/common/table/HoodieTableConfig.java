@@ -192,6 +192,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
+  public static final ConfigProperty<String> BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE = ConfigProperty
+      .key("hoodie.bootstrap.partition.column.type.inference.enabled")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When disabled, partition columns are assumed to be strings when schema is not set.");
+
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
       .defaultValue(true)
@@ -589,6 +596,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Option<String> getBootstrapBasePath() {
     return Option.ofNullable(getString(BOOTSTRAP_BASE_PATH));
+  }
+
+  public Boolean isBootstrapPartitionColumnTypeInferenceEnabled() {
+    return getBoolean(BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE);
   }
 
   public Option<Schema> getTableCreateSchema() {

@@ -41,6 +41,7 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -95,6 +96,56 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     cleanupTestDataGenerator();
   }
 
+  private static Stream<Arguments> testPartitionInferenceArgs() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    String[] bootstrapType = {"metadata", "mixed"};
+    Boolean[] dashPartitions = {true};
+    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
+    Integer[] nPartitions = {1, 2};
+    for (String tt : tableType) {
+      for (Boolean dash : dashPartitions) {
+        for (String bt : bootstrapType) {
+          for (Integer n : nPartitions) {
+            //can't be mixed bootstrap if it's nonpartitioned
+            //don't need to test slash partitions if it's nonpartitioned
+            if ((!bt.equals("mixed") && dash) || n > 0) {
+              b.add(Arguments.of(bt, dash, tt, n));
+            }
+          }
+        }
+      }
+    }
+    return b.build();
+  }
+
+
+  @ParameterizedTest
+  @MethodSource("testPartitionInferenceArgs")
+  public void testPartitionInference(String bootstrapType, Boolean dashPartitions, String tableType, Integer nPartitions) {
+    this.bootstrapType = bootstrapType;
+    this.dashPartitions = dashPartitions;
+    this.tableType = tableType;
+    this.nPartitions = nPartitions;
+    setupDirs();
+
+    //do bootstrap
+    Map<String, String> options = setBootstrapOptions();
+    Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
+    bootstrapDf.write().format("hudi")
+        .options(options)
+        .option(HoodieBootstrapConfig.PARTITION_COLUMN_TYPE_INFERENCE.key(), "true")
+        .mode(SaveMode.Overwrite)
+        .save(bootstrapTargetPath);
+    verifyPartitionInference();
+
+    options = basicOptions();
+    doUpdate(options, "001");
+    compareTables();
+
+
+
+  }
+
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     String[] bootstrapType = {"full", "metadata", "mixed"};
@@ -119,7 +170,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void runTests(String bootstrapType,Boolean dashPartitions, String tableType, Integer nPartitions) {
+  public void runTests(String bootstrapType, Boolean dashPartitions, String tableType, Integer nPartitions) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
@@ -220,6 +271,17 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), nCompactCommits)
         .mode(SaveMode.Append)
         .save(bootstrapTargetPath);
+  }
+
+  protected void doParquetUpdate(Map<String,String> options, String instantTime) {
+    doUpdate(options, instantTime);
+    sparkSession.read().format("")
+  }
+
+  protected void verifyPartitionInference() {
+    Dataset<Row> parquetDf = sparkSession.read().format("parquet").load(bootstrapBasePath);
+    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
+    compareDf(bootstrapDf.select("_row_key",partitionCols), parquetDf.select("_row_key",partitionCols));
   }
 
   protected void compareTables() {
