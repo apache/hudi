@@ -34,7 +34,6 @@ import org.apache.hudi.utils.FlinkMiniCluster;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.TableResult;
@@ -43,7 +42,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Preconditions;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,13 +55,17 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
 import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_AFTER;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
@@ -173,6 +175,7 @@ public class ITTestSchemaEvolution {
         + "  gender char,"
         + "  age int,"
         + "  ts timestamp,"
+        + "  f_struct row<f0 int, f1 string>,"
         + "  `partition` string"
         + ") partitioned by (`partition`) with (" + tableOptions + ")"
     );
@@ -184,17 +187,19 @@ public class ITTestSchemaEvolution {
         + "  cast(gender as char),"
         + "  cast(age as int),"
         + "  cast(ts as timestamp),"
+        + "  cast(f_struct as row<f0 int, f1 string>),"
         + "  cast(`partition` as string) "
         + "from (values "
-        + "  ('id1', 'Danny', 'M', 23, '2000-01-01 00:00:01', 'par1'),"
-        + "  ('id2', 'Stephen', 'M', 33, '2000-01-01 00:00:02', 'par1'),"
-        + "  ('id3', 'Julian', 'M', 53, '2000-01-01 00:00:03', 'par2'),"
-        + "  ('id4', 'Fabian', 'M', 31, '2000-01-01 00:00:04', 'par2'),"
-        + "  ('id5', 'Sophia', 'F', 18, '2000-01-01 00:00:05', 'par3'),"
-        + "  ('id6', 'Emma', 'F', 20, '2000-01-01 00:00:06', 'par3'),"
-        + "  ('id7', 'Bob', 'M', 44, '2000-01-01 00:00:07', 'par4'),"
-        + "  ('id8', 'Han', 'M', 56, '2000-01-01 00:00:08', 'par4')"
-        + ") as A(uuid, name, gender, age, ts, `partition`)"
+        + "  ('id0', 'Indica', 'F', 12, '2000-01-01 00:00:00', cast(null as row<f0 int, f1 string>), 'par0'),"
+        + "  ('id1', 'Danny', 'M', 23, '2000-01-01 00:00:01', row(1, 's1'), 'par1'),"
+        + "  ('id2', 'Stephen', 'M', 33, '2000-01-01 00:00:02', row(2, 's2'), 'par1'),"
+        + "  ('id3', 'Julian', 'M', 53, '2000-01-01 00:00:03', row(3, 's3'), 'par2'),"
+        + "  ('id4', 'Fabian', 'M', 31, '2000-01-01 00:00:04', row(4, 's4'), 'par2'),"
+        + "  ('id5', 'Sophia', 'F', 18, '2000-01-01 00:00:05', row(5, 's5'), 'par3'),"
+        + "  ('id6', 'Emma', 'F', 20, '2000-01-01 00:00:06', row(6, 's6'), 'par3'),"
+        + "  ('id7', 'Bob', 'M', 44, '2000-01-01 00:00:07', row(7, 's7'), 'par4'),"
+        + "  ('id8', 'Han', 'M', 56, '2000-01-01 00:00:08', row(8, 's8'), 'par4')"
+        + ") as A(uuid, name, gender, age, ts, f_struct, `partition`)"
     ).await();
   }
 
@@ -204,6 +209,7 @@ public class ITTestSchemaEvolution {
         Option<String> compactionInstant = writeClient.scheduleCompaction(Option.empty());
         writeClient.compact(compactionInstant.get());
       }
+      Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
       Schema doubleType = SchemaBuilder.unionOf().nullType().and().doubleType().endUnion();
       Schema stringType = SchemaBuilder.unionOf().nullType().and().stringType().endUnion();
       writeClient.addColumn("salary", doubleType, null, "name", AFTER);
@@ -212,6 +218,11 @@ public class ITTestSchemaEvolution {
       writeClient.updateColumnType("age", Types.StringType.get());
       writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
+      // add a field in the middle of the `f_struct` column
+      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", "f_struct.f0", AFTER);
+      // add a field at the end of `f_struct` column
+      writeClient.addColumn("f_struct.f3", stringType);
+
     }
   }
 
@@ -231,6 +242,7 @@ public class ITTestSchemaEvolution {
         + "  last_name string,"
         + "  salary double,"
         + "  ts timestamp,"
+        + "  f_struct row<f0 int, f2 int, f1 string, f3 string>,"
         + "  `partition` string"
         + ") partitioned by (`partition`) with (" + tableOptions + ")"
     );
@@ -243,12 +255,13 @@ public class ITTestSchemaEvolution {
         + "  cast(last_name as string),"
         + "  cast(salary as double),"
         + "  cast(ts as timestamp),"
+        + "  cast(f_struct as row<f0 int, f2 int, f1 string, f3 string>),"
         + "  cast(`partition` as string) "
         + "from (values "
-        + "  ('id1', '23', 'Danny', '', 10000.1, '2000-01-01 00:00:01', 'par1'),"
-        + "  ('id9', 'unknown', 'Alice', '', 90000.9, '2000-01-01 00:00:09', 'par1'),"
-        + "  ('id3', '53', 'Julian', '', 30000.3, '2000-01-01 00:00:03', 'par2')"
-        + ") as A(uuid, age, first_name, last_name, salary, ts, `partition`)"
+        + "  ('id1', '23', 'Danny', '', 10000.1, '2000-01-01 00:00:01', row(1, 1, 's1', 't1'), 'par1'),"
+        + "  ('id9', 'unknown', 'Alice', '', 90000.9, '2000-01-01 00:00:09', row(9, 9, 's9', 't9'), 'par1'),"
+        + "  ('id3', '53', 'Julian', '', 30000.3, '2000-01-01 00:00:03', row(3, 3, 's3', 't3'), 'par2')"
+        + ") as A(uuid, age, first_name, last_name, salary, ts, f_struct, `partition`)"
     ).await();
   }
 
@@ -278,7 +291,7 @@ public class ITTestSchemaEvolution {
 
   private void checkAnswerEvolved(String... expectedResult) throws Exception {
     //language=SQL
-    checkAnswer("select first_name, salary, age from t1", expectedResult);
+    checkAnswer("select first_name, salary, age, f_struct from t1", expectedResult);
   }
 
   private void checkAnswerCount(String... expectedResult) throws Exception {
@@ -303,22 +316,43 @@ public class ITTestSchemaEvolution {
         + "  last_name string,"
         + "  salary double,"
         + "  ts timestamp,"
+        + "  f_struct row<f0 int, f2 int, f1 string, f3 string>,"
         + "  `partition` string"
         + ") partitioned by (`partition`) with (" + tableOptions + ")"
     );
     //language=SQL
-    checkAnswer("select `_hoodie_record_key`, first_name, salary from t1", expectedResult);
+    checkAnswer("select `_hoodie_record_key`, first_name, salary, f_struct from t1", expectedResult);
   }
 
-  private void checkAnswer(String query, String... expectedResult) throws Exception {
+  private void checkAnswer(String query, String... expectedResult) {
     TableResult actualResult = tEnv.executeSql(query);
     Set<String> expected = new HashSet<>(Arrays.asList(expectedResult));
-    Set<String> actual = new HashSet<>(expected.size());
-    try (CloseableIterator<Row> iterator = actualResult.collect()) {
-      for (int i = 0; i < expected.size() && iterator.hasNext(); i++) {
-        actual.add(iterator.next().toString());
+    Set<String> actual = new HashSet<>();
+
+    // create a runnable to handle reads (especially useful for streaming reads as they are unbounded)
+    Runnable runnable = () -> {
+      try (CloseableIterator<Row> iterator = actualResult.collect()) {
+        while (iterator.hasNext()) {
+          actual.add(iterator.next().toString());
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
+    };
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future future = executor.submit(runnable);
+    try {
+      // allow result collector to run for a short period of time
+      future.get(5, TimeUnit.SECONDS);
+    } catch (TimeoutException e) {
+      future.cancel(true);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    } finally {
+      executor.shutdownNow();
     }
+
     assertEquals(expected, actual);
   }
 
@@ -366,97 +400,105 @@ public class ITTestSchemaEvolution {
 
   private static final ExpectedResult EXPECTED_MERGED_RESULT = new ExpectedResult(
       new String[] {
-          "+I[Danny, 10000.1, 23]",
-          "+I[Stephen, null, 33]",
-          "+I[Julian, 30000.3, 53]",
-          "+I[Fabian, null, 31]",
-          "+I[Sophia, null, 18]",
-          "+I[Emma, null, 20]",
-          "+I[Bob, null, 44]",
-          "+I[Han, null, 56]",
-          "+I[Alice, 90000.9, unknown]",
+          "+I[Indica, null, 12, null]",
+          "+I[Danny, 10000.1, 23, +I[1, 1, s1, t1]]",
+          "+I[Stephen, null, 33, +I[2, null, s2, null]]",
+          "+I[Julian, 30000.3, 53, +I[3, 3, s3, t3]]",
+          "+I[Fabian, null, 31, +I[4, null, s4, null]]",
+          "+I[Sophia, null, 18, +I[5, null, s5, null]]",
+          "+I[Emma, null, 20, +I[6, null, s6, null]]",
+          "+I[Bob, null, 44, +I[7, null, s7, null]]",
+          "+I[Han, null, 56, +I[8, null, s8, null]]",
+          "+I[Alice, 90000.9, unknown, +I[9, 9, s9, t9]]",
       },
       new String[] {
-          "+I[uuid:id1, Danny, 10000.1]",
-          "+I[uuid:id2, Stephen, null]",
-          "+I[uuid:id3, Julian, 30000.3]",
-          "+I[uuid:id4, Fabian, null]",
-          "+I[uuid:id5, Sophia, null]",
-          "+I[uuid:id6, Emma, null]",
-          "+I[uuid:id7, Bob, null]",
-          "+I[uuid:id8, Han, null]",
-          "+I[uuid:id9, Alice, 90000.9]",
+          "+I[uuid:id0, Indica, null, null]",
+          "+I[uuid:id1, Danny, 10000.1, +I[1, 1, s1, t1]]",
+          "+I[uuid:id2, Stephen, null, +I[2, null, s2, null]]",
+          "+I[uuid:id3, Julian, 30000.3, +I[3, 3, s3, t3]]",
+          "+I[uuid:id4, Fabian, null, +I[4, null, s4, null]]",
+          "+I[uuid:id5, Sophia, null, +I[5, null, s5, null]]",
+          "+I[uuid:id6, Emma, null, +I[6, null, s6, null]]",
+          "+I[uuid:id7, Bob, null, +I[7, null, s7, null]]",
+          "+I[uuid:id8, Han, null, +I[8, null, s8, null]]",
+          "+I[uuid:id9, Alice, 90000.9, +I[9, 9, s9, t9]]",
       },
       new String[] {
           "+I[1]",
-          "-U[1]",
           "+U[2]",
-          "-U[2]",
           "+U[3]",
-          "-U[3]",
           "+U[4]",
-          "-U[4]",
           "+U[5]",
-          "-U[5]",
           "+U[6]",
-          "-U[6]",
           "+U[7]",
-          "-U[7]",
           "+U[8]",
-          "-U[8]",
           "+U[9]",
+          "+U[10]",
+          "-U[1]",
+          "-U[2]",
+          "-U[3]",
+          "-U[4]",
+          "-U[5]",
+          "-U[6]",
+          "-U[7]",
+          "-U[8]",
+          "-U[9]",
       }
   );
 
   private static final ExpectedResult EXPECTED_UNMERGED_RESULT = new ExpectedResult(
       new String[] {
-          "+I[Danny, null, 23]",
-          "+I[Stephen, null, 33]",
-          "+I[Julian, null, 53]",
-          "+I[Fabian, null, 31]",
-          "+I[Sophia, null, 18]",
-          "+I[Emma, null, 20]",
-          "+I[Bob, null, 44]",
-          "+I[Han, null, 56]",
-          "+I[Alice, 90000.9, unknown]",
-          "+I[Danny, 10000.1, 23]",
-          "+I[Julian, 30000.3, 53]",
+          "+I[Indica, null, 12, null]",
+          "+I[Danny, null, 23, +I[1, null, s1, null]]",
+          "+I[Stephen, null, 33, +I[2, null, s2, null]]",
+          "+I[Julian, null, 53, +I[3, null, s3, null]]",
+          "+I[Fabian, null, 31, +I[4, null, s4, null]]",
+          "+I[Sophia, null, 18, +I[5, null, s5, null]]",
+          "+I[Emma, null, 20, +I[6, null, s6, null]]",
+          "+I[Bob, null, 44, +I[7, null, s7, null]]",
+          "+I[Han, null, 56, +I[8, null, s8, null]]",
+          "+I[Alice, 90000.9, unknown, +I[9, 9, s9, t9]]",
+          "+I[Danny, 10000.1, 23, +I[1, 1, s1, t1]]",
+          "+I[Julian, 30000.3, 53, +I[3, 3, s3, t3]]",
       },
       new String[] {
-          "+I[uuid:id1, Danny, null]",
-          "+I[uuid:id2, Stephen, null]",
-          "+I[uuid:id3, Julian, null]",
-          "+I[uuid:id4, Fabian, null]",
-          "+I[uuid:id5, Sophia, null]",
-          "+I[uuid:id6, Emma, null]",
-          "+I[uuid:id7, Bob, null]",
-          "+I[uuid:id8, Han, null]",
-          "+I[uuid:id9, Alice, 90000.9]",
-          "+I[uuid:id1, Danny, 10000.1]",
-          "+I[uuid:id3, Julian, 30000.3]",
+          "+I[uuid:id0, Indica, null, null]",
+          "+I[uuid:id1, Danny, null, +I[1, null, s1, null]]",
+          "+I[uuid:id2, Stephen, null, +I[2, null, s2, null]]",
+          "+I[uuid:id3, Julian, null, +I[3, null, s3, null]]",
+          "+I[uuid:id4, Fabian, null, +I[4, null, s4, null]]",
+          "+I[uuid:id5, Sophia, null, +I[5, null, s5, null]]",
+          "+I[uuid:id6, Emma, null, +I[6, null, s6, null]]",
+          "+I[uuid:id7, Bob, null, +I[7, null, s7, null]]",
+          "+I[uuid:id8, Han, null, +I[8, null, s8, null]]",
+          "+I[uuid:id9, Alice, 90000.9, +I[9, 9, s9, t9]]",
+          "+I[uuid:id1, Danny, 10000.1, +I[1, 1, s1, t1]]",
+          "+I[uuid:id3, Julian, 30000.3, +I[3, 3, s3, t3]]",
       },
       new String[] {
           "+I[1]",
-          "-U[1]",
           "+U[2]",
-          "-U[2]",
           "+U[3]",
-          "-U[3]",
           "+U[4]",
-          "-U[4]",
           "+U[5]",
-          "-U[5]",
           "+U[6]",
-          "-U[6]",
           "+U[7]",
-          "-U[7]",
           "+U[8]",
-          "-U[8]",
           "+U[9]",
-          "-U[9]",
           "+U[10]",
           "-U[10]",
           "+U[11]",
+          "-U[11]",
+          "+U[12]",
+          "-U[1]",
+          "-U[2]",
+          "-U[3]",
+          "-U[4]",
+          "-U[5]",
+          "-U[6]",
+          "-U[7]",
+          "-U[8]",
+          "-U[9]",
       }
   );
 }

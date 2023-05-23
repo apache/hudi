@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -366,6 +367,15 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
+      if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+        Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
+        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
+            table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+            upsertHandle.getWriterSchema(), table.getHadoopConf());
+        upsertHandle.setPartitionFields(partitionFields);
+        upsertHandle.setPartitionValues(partitionValues);
+      }
+
       HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 

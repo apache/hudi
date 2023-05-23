@@ -391,8 +391,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       }
       // if there are no valid file groups
       // and no pending data files under the partition [IMPORTANT],
+      // and no subsequent replace commit after the earliest retained commit
       // mark it to be deleted
-      if (fileGroups.isEmpty() && !hasPendingFiles(partitionPath)) {
+      if (fileGroups.isEmpty()
+          && !hasPendingFiles(partitionPath)
+          && noSubsequentReplaceCommit(earliestCommitToRetain.getTimestamp(), partitionPath)) {
         toDeletePartition = true;
       }
     }
@@ -595,5 +598,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private boolean isFileGroupInPendingMajorOrMinorCompaction(HoodieFileGroup fg) {
     return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId())
         || fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
+  }
+
+  private boolean noSubsequentReplaceCommit(String earliestCommitToRetain, String partitionPath) {
+    return !fileSystemView.getReplacedFileGroupsAfterOrOn(earliestCommitToRetain, partitionPath).findAny().isPresent();
   }
 }

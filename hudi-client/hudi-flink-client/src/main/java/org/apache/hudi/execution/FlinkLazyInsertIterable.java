@@ -56,20 +56,20 @@ public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor = null;
+    HoodieExecutor<List<WriteStatus>> executor = null;
     try {
-      final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
+      Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      executor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
           getTransformer(schema, hoodieConfig));
-      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
+      final List<WriteStatus> result = executor.execute();
       checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != bufferedIteratorExecutor) {
-        bufferedIteratorExecutor.shutdownNow();
-        bufferedIteratorExecutor.awaitTermination();
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
       }
     }
   }

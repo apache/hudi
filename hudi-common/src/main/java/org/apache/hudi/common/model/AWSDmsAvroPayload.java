@@ -62,7 +62,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
     boolean delete = false;
     if (insertValue instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertValue;
-      delete = record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
+      delete = isDMSDeleteRecord(record);
     }
 
     return delete ? Option.empty() : Option.of(insertValue);
@@ -93,5 +93,14 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
     return handleDeleteOperation(insertValue.get());
+  }
+
+  @Override
+  protected boolean isDeleteRecord(GenericRecord record) {
+    return isDMSDeleteRecord(record) || super.isDeleteRecord(record);
+  }
+
+  private static boolean isDMSDeleteRecord(GenericRecord record) {
+    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
   }
 }

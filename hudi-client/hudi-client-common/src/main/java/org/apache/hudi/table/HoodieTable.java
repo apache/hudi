@@ -132,6 +132,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
+  private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -140,6 +141,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.config = config;
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
@@ -151,6 +153,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
+  }
+
+  public boolean isMetadataTable() {
+    return isMetadataTable;
   }
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
@@ -823,6 +829,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public void validateUpsertSchema() throws HoodieUpsertException {
+    if (isMetadataTable) {
+      return;
+    }
+    // validate only for data table.
     try {
       validateSchema();
     } catch (HoodieException e) {
@@ -831,6 +841,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public void validateInsertSchema() throws HoodieInsertException {
+    if (isMetadataTable) {
+      return;
+    }
+    // validate only for data table
     try {
       validateSchema();
     } catch (HoodieException e) {
@@ -981,7 +995,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
     // (3) The completed metadata partitions in table config contains this partition.
     // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
-    if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePath()) || !config.isMetadataTableEnabled()) {
+    if (isMetadataTable() || !config.isMetadataTableEnabled()) {
       return false;
     }
     boolean metadataIndexDisabled;
