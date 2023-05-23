@@ -316,7 +316,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
       // Load table schema from meta on filesystem, and fill in 'comment'
       // information from Spark catalog.
-      val fields = originSchema.fields.map { f =>
+      // Hoodie newly added columns are positioned after partition columns,
+      // so it's necessary to reorder fields.
+      val (partFields, dataFields) = originSchema.fields.map { f =>
         val nullableField: StructField = f.copy(nullable = true)
         val catalogField = findColumnByName(table.schema, nullableField.name, resolver)
         if (catalogField.isDefined) {
@@ -324,8 +326,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         } else {
           nullableField
         }
-      }
-      StructType(fields)
+      }.partition(f => partitionFields.contains(f.name))
+      StructType(dataFields ++ partFields)
     })
   }
 
