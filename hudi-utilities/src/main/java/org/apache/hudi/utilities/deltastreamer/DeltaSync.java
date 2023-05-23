@@ -156,6 +156,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
+import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
@@ -974,23 +975,20 @@ public class DeltaSync implements Serializable, Closeable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      //Collect exceptions in list because we want all sync to run. Then we can throw
-      List<HoodieException> metaSyncExceptions = new ArrayList<>();
-      List<String> implsFailed = new ArrayList<>();
+      Map<String,HoodieException> failedMetaSyncs = new HashMap<>();
+      Timer.Context syncContext = metrics.getMetaSyncTimerContext();
       for (String impl : syncClientToolClasses) {
         try {
-          Timer.Context syncContext = metrics.getMetaSyncTimerContext();
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
-          long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-          metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
         } catch (HoodieMetaSyncException e) {
-          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
-          metaSyncExceptions.add(e);
-          implsFailed.add(impl.trim());
+          LOG.warn("SyncTool class " + impl.trim() + " failed with exception", e);
+          failedMetaSyncs.put(impl, e);
         }
+        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
-      if (!metaSyncExceptions.isEmpty()) {
-        throw new HoodieMetaSyncException(String.join(",", implsFailed), SyncUtilHelpers.getExceptionFromList(metaSyncExceptions));
+      if (!failedMetaSyncs.isEmpty()) {
+        throw getHoodieMetaSyncException(failedMetaSyncs);
       }
     }
   }

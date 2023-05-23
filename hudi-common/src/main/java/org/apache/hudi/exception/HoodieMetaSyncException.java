@@ -18,12 +18,18 @@
 
 package org.apache.hudi.exception;
 
+import java.util.Map;
+
 public class HoodieMetaSyncException extends HoodieException {
+
+  public Map<String,HoodieException> failedMetaSyncs;
+
   public HoodieMetaSyncException(String msg, Throwable e) {
     super(msg, e);
   }
 
-  public HoodieMetaSyncException(String msg) {
+  public HoodieMetaSyncException(String msg, Map<String,HoodieException> failedMetaSyncs) {
     super(msg);
+    this.failedMetaSyncs = failedMetaSyncs;
   }
 }
