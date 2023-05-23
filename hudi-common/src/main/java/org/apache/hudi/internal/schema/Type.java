@@ -34,7 +34,7 @@ public interface Type extends Serializable {
    */
   enum TypeID {
     RECORD, ARRAY, MAP, FIXED, STRING, BINARY,
-    INT, LONG, FLOAT, DOUBLE, DATE, BOOLEAN, TIME, TIMESTAMP, DECIMAL, UUID;
+    INT, LONG, FLOAT, DOUBLE, DATE, BOOLEAN, TIME, TIMESTAMP, DECIMAL, UUID, BIGINT;
     private String name;
 
     TypeID() {

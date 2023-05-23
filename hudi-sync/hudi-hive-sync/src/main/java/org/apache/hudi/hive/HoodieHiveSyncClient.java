@@ -133,7 +133,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
-          + tableName, e);
+          + tableId(databaseName, tableName), e);
     }
   }
 
@@ -152,7 +152,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
             !parameters.containsKey(e.getKey()) || !parameters.get(e.getKey()).equals(e.getValue()));
         if (!different) {
-          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
+          LOG.debug("Table {} serdeProperties already up to date, skip update serde properties.",
+              tableId(databaseName, tableName));
           return;
         }
       }
@@ -163,7 +164,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table serde info for table: "
-          + tableName, e);
+          + tableId(databaseName, tableName), e);
     }
   }
 
@@ -180,7 +181,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
           .collect(Collectors.toList());
     } catch (TException e) {
-      throw new HoodieHiveSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
+      throw new HoodieHiveSyncException("Failed to get all partitions for table "
+          + tableId(databaseName, tableName), e);
     }
   }
 
@@ -218,7 +220,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     try {
       return client.tableExists(databaseName, tableName);
     } catch (TException e) {
-      throw new HoodieHiveSyncException("Failed to check if table exists " + tableName, e);
+      throw new HoodieHiveSyncException("Failed to check if table exists "
+          + tableId(databaseName, tableName), e);
     }
   }
 
@@ -257,17 +260,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       Table table = client.getTable(databaseName, tableName);
       return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
-      LOG.warn("the said table not found in hms " + tableId(databaseName, tableName));
+      LOG.warn("the said table {} not found in hms.", tableId(databaseName, tableName));
       return Option.empty();
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);
+      throw new HoodieHiveSyncException("Failed to get the last replicated time from the table "
+          + tableId(databaseName, tableName), e);
     }
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
     if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
-          "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
+          "Not a valid completed timestamp " + timeStamp + " for table "
+          + tableId(databaseName, tableName));
     }
     try {
       Table table = client.getTable(databaseName, tableName);
@@ -275,7 +280,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       client.alter_table(databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to update last replicated time to " + timeStamp + " for " + tableName, e);
+          "Failed to update last replicated time to " + timeStamp + " for " +
+          tableId(databaseName, tableName), e);
     }
   }
 

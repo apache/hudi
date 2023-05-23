@@ -101,6 +101,27 @@ public class Types {
   }
 
   /**
+   * Long primitive type.
+   */
+  public static class BigIntType extends PrimitiveType {
+    private static final BigIntType INSTANCE = new BigIntType();
+
+    public static BigIntType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.BIGINT;
+    }
+
+    @Override
+    public String toString() {
+      return "bigint";
+    }
+  }
+
+  /**
    * Float primitive type.
    */
   public static class FloatType extends PrimitiveType {

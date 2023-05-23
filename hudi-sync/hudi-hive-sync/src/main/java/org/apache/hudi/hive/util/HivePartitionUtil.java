@@ -76,4 +76,12 @@ public class HivePartitionUtil {
     }
     return newPartition != null;
   }
+
+  public static void dropPartition(String databaseName, String tableName, String dropPartition,
+      PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config, IMetaStoreClient client) throws TException {
+    if (partitionExists(client, tableName, dropPartition, partitionValueExtractor, config)) {
+      String partitionClause = getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
+      client.dropPartition(databaseName, tableName, partitionClause, false);
+    }
+  }
 }
