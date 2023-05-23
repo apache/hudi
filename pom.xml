@@ -155,8 +155,8 @@
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>5.17.2</rocksdbjni.version>
-    <spark31.version>3.1.3</spark31.version>
     <spark30.version>3.0.2</spark30.version>
+    <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
