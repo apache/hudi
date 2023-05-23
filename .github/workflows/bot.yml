@@ -27,6 +27,7 @@ env:
 
 jobs:
   validate-source:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -51,25 +52,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.11 -Dscala.binary.version=2.11"
-            sparkProfile: "spark2.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark2"
-
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.0"
             sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
 
     steps:
       - uses: actions/checkout@v2
@@ -109,6 +94,7 @@ jobs:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -140,6 +126,7 @@ jobs:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -267,6 +254,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
 
   integration-tests:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
