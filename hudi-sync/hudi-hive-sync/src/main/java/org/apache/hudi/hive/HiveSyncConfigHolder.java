@@ -155,5 +155,5 @@ public class HiveSyncConfigHolder {
       .defaultValue(HoodieSyncTableStrategy.ALL.name())
       .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.");
+      .withDocumentation("Hive table synchronization strategy. Available option: RO, RT, ALL.");
 }
