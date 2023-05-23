@@ -330,9 +330,9 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
-    raf.setLength(length);
-    raf.close();
+    try (RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw")) {
+      raf.setLength(length);
+    }
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
