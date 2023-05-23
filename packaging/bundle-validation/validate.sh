@@ -89,6 +89,7 @@ test_spark_hadoop_mr_bundles () {
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     use_default_java_runtime
+    if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
