@@ -23,6 +23,9 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, MetadataBuilder, StructF
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * Tests tp validate the behavior of StructType and StructField in Spark.
+ */
 class TestStructType {
   @Test
   def testStructTypeEqual(): Unit = {
