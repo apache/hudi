@@ -28,6 +28,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
 
@@ -58,5 +59,10 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
       ErrorTableUtils.validate(dataset);
     }
     return dataset;
+  }
+
+  @Override
+  public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    return super.transformedSchema(jsc, sparkSession, incomingStruct, properties);
   }
 }

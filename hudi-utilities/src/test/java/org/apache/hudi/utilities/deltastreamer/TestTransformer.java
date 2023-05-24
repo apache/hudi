@@ -126,24 +126,19 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testTransformerSchemaValidationFailsWhenTransformedSchemaNotProvided() {
-    String expectedErrorMsg = "Expected target schema not provided for transformer "
-        + "org.apache.hudi.utilities.deltastreamer.TestTransformer$FlatteningTransformerWithoutTransformedSchema";
+  public void testTransformerSchemaValidationFailsWithInvalidTransformer() {
+    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformer";
     List<String> transformerClassNames = Arrays.asList(
-        // transformedSchema not implemented for FlatteningTransformerWithoutTransformedSchema
-        FlatteningTransformerWithoutTransformedSchema.class.getName(),
-        TimestampTransformer.class.getName(),
-        AddColumnTransformerWithTransformedSchema.class.getName());
-    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
-
-    expectedErrorMsg = "Expected target schema not provided for transformer "
-        + "org.apache.hudi.utilities.deltastreamer.TestTransformer$AddColumnTransformerWithoutTransformedSchema";
-    transformerClassNames = Arrays.asList(
         FlatteningTransformerWithTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
-        // transformedSchema not implemented for FlatteningTransformerWithoutTransformedSchema
-        AddColumnTransformerWithoutTransformedSchema.class.getName());
-    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
+        // InvalidAddColumnTransformer uses a non_existent column in the transformation
+        // The transformedSchema API adds field random1 whereas transformation adds field random
+        InvalidAddColumnTransformer.class.getName());
+    Throwable t = testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
+    assertTrue(Arrays.stream(t.getCause().getStackTrace())
+        .anyMatch(ste -> ste.toString().contains("org.apache.hudi.utilities.transform.Transformer.transformedSchema")));
+    assertTrue(t.getMessage().contains("Missing Input Columns: {'non_existent}"), t.getMessage());
+    assertTrue(t.getMessage().contains("New Columns: ['random]"), t.getMessage());
   }
 
   @Test
@@ -163,14 +158,20 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
   }
 
-  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String expectedErrorMsg) {
-    Throwable t = assertThrows(HoodieSchemaException.class, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses));
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, Option<String> targetSchemaFile,
+                                                    String expectedErrorMsg, Class<? extends Throwable> errorClass) {
+    Throwable t = assertThrows(errorClass, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses,
+        targetSchemaFile.orElse("target-flattened-addcolumn-transformer.avsc")));
     assertTrue(t.getMessage().contains(expectedErrorMsg), "Expected error \n" + expectedErrorMsg + "\nbut got\n" + t.getMessage());
+    return t;
   }
 
-  private void testTransformerSchemaValidationFails(List<String> transformerClasses, String targetSchemaFile, String expectedErrorMsg) {
-    Throwable t = assertThrows(HoodieSchemaException.class, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses, targetSchemaFile));
-    assertTrue(t.getMessage().contains(expectedErrorMsg), "Expected error \n" + expectedErrorMsg + "\nbut got\n" + t.getMessage());
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, String expectedErrorMsg) {
+    return testTransformerSchemaValidationFails(transformerClasses, Option.empty(), expectedErrorMsg, HoodieSchemaException.class);
+  }
+
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, String targetSchemaFile, String expectedErrorMsg) {
+    return testTransformerSchemaValidationFails(transformerClasses, Option.of(targetSchemaFile), expectedErrorMsg, HoodieSchemaException.class);
   }
 
   private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames) throws Exception {
@@ -210,7 +211,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
-      String[] suffixes = ((String) properties.get("transformer.suffix")).split(",");
+      String[] suffixes = Option.ofNullable((String) properties.get("transformer.suffix")).map(s -> s.split(",")).orElse(new String[0]);
       for (String suffix : suffixes) {
         // verify no configs with suffix are in properties
         properties.keySet().forEach(k -> assertFalse(((String) k).endsWith(suffix)));
@@ -227,7 +228,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class FlatteningTransformerWithTransformedSchema extends FlatteningTransformer {
 
     @Override
-    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
       String flattenedSelect = flattenSchema(incomingStruct, null);
       String[] cols = flattenedSelect.split(",");
       List<Pair<String, String>> replacements = new LinkedList<>();
@@ -251,17 +252,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
       }
       transformedFields.removeAll(fieldsToRemove);
 
-      return Option.of(new StructType(transformedFields.toArray(new StructField[0])));
-    }
-  }
-
-  /**
-   * Does not provide transformedSchema implementation for FlatteningTransformer.
-   */
-  public static class FlatteningTransformerWithoutTransformedSchema extends FlatteningTransformer {
-    @Override
-    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
-      return Option.empty();
+      return new StructType(transformedFields.toArray(new StructField[0]));
     }
   }
 
@@ -283,20 +274,9 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class AddColumnTransformerWithTransformedSchema extends AddColumnTransformer {
 
     @Override
-    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
       StructField newField = new StructField("random", DataTypes.LongType, true, Metadata.empty());
-      return Option.of(incomingStruct.add(newField));
-    }
-  }
-
-  /**
-   * Does not provide transformedSchema implementation for AddColumnTransformer.
-   */
-  public static class AddColumnTransformerWithoutTransformedSchema extends AddColumnTransformer {
-
-    @Override
-    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
-      return Option.empty();
+      return incomingStruct.add(newField);
     }
   }
 
@@ -306,9 +286,21 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   public static class AddColumnTransformerWithWrongTransformedSchema extends AddColumnTransformer {
 
     @Override
-    public Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
       StructField newField = new StructField("random1", DataTypes.LongType, true, Metadata.empty());
-      return Option.of(incomingStruct.add(newField));
+      return incomingStruct.add(newField);
     }
   }
+
+  /**
+   * Provides a wrong implementation for transformedSchema of AddColumnTransformer.
+   */
+  public static class InvalidAddColumnTransformer extends AddColumnTransformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("non_existent")));
+    }
+  }
+
 }

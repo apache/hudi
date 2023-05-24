@@ -22,7 +22,6 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -49,9 +48,9 @@ public interface Transformer {
   Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  default Option<StructType> transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+  default StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
     Dataset<Row> emptyDataset = sparkSession.createDataFrame(sparkSession.emptyDataFrame().rdd(), incomingStruct);
     Dataset<Row> transformedDataset = this.apply(jsc, sparkSession, emptyDataset, properties);
-    return Option.of(transformedDataset.schema());
+    return transformedDataset.schema();
   }
 }
