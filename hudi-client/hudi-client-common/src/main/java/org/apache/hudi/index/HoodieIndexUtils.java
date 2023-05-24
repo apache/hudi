@@ -20,6 +20,8 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -29,7 +31,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -194,24 +195,7 @@ public class HoodieIndexUtils {
    * @return                true if the commit timestamp is valid for the timeline
    */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
-    if (commitTimeline.empty()) {
-      return false;
-    }
-
-    // Check for 0.8+ timestamps which have msec granularity
-    if (commitTimeline.containsOrBeforeTimelineStarts(commitTs)) {
-      return true;
-    }
-
-    // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
-    if (commitTs.length() == HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH && commitTs.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
-      final String actualOlderFormatTs = commitTs.substring(0, commitTs.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
-      if (commitTimeline.containsOrBeforeTimelineStarts(actualOlderFormatTs)) {
-        return true;
-      }
-    }
-
-    return false;
+    return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
   public static HoodieIndex createUserDefinedIndex(HoodieWriteConfig config) {
