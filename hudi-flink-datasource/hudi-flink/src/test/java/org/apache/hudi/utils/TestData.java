@@ -391,6 +391,38 @@ public class TestData {
     return inserts;
   }
 
+  /**
+   * Updates the rows with given value {@code val} at field index {@code idx}.
+   * All the target rows specified with range {@code targets} would be updated.
+   *
+   * <p>NOTE: only INT type is supported.
+   *
+   * @param dataset The rows to update
+   * @param idx     The target field index
+   * @param val     The new value
+   * @param targets The target row numbers to update, the number starts from 0
+   *
+   * @return Copied rows with new values setup.
+   */
+  public static List<RowData> update(List<RowData> dataset, int idx, int val, int... targets) {
+    List<RowData> copied = dataset.stream().map(TestConfigurations.SERIALIZER::copy).collect(Collectors.toList());
+    Arrays.stream(targets).forEach(target -> {
+      BinaryRowData rowData = (BinaryRowData) copied.get(target);
+      rowData.setInt(idx, val);
+    });
+    return copied;
+  }
+
+  /**
+   * Returns a copy of the given rows excluding the rows at indices {@code targets}.
+   */
+  public static List<RowData> delete(List<RowData> dataset, int... targets) {
+    Set<Integer> exclude = Arrays.stream(targets).boxed().collect(Collectors.toSet());
+    return IntStream.range(0, dataset.size())
+        .filter(i -> !exclude.contains(i))
+        .mapToObj(i -> TestConfigurations.SERIALIZER.copy(dataset.get(i))).collect(Collectors.toList());
+  }
+
   public static List<RowData> filterOddRows(List<RowData> rows) {
     return filterRowsByIndexPredicate(rows, i -> i % 2 != 0);
   }
