@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.functional;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.spark.sql.Column;
@@ -132,7 +133,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
       ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")));
       fail();
     } catch (Exception e) {
-      assertTrue(e instanceof IllegalArgumentException, e.getMessage());
+      assertTrue(e instanceof HoodieTransformException, e.getMessage());
     }
   }
 

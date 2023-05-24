@@ -22,7 +22,11 @@ import java.util.Map;
 
 public class HoodieMetaSyncException extends HoodieException {
 
-  public Map<String,HoodieException> failedMetaSyncs;
+  private Map<String,HoodieException> failedMetaSyncs;
+
+  public Map<String,HoodieException> getFailedMetaSyncs() {
+    return failedMetaSyncs;
+  }
 
   public HoodieMetaSyncException(String msg, Throwable e) {
     super(msg, e);

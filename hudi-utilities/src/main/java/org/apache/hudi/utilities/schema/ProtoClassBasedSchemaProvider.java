@@ -88,7 +88,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
         Schema.Parser parser = new Schema.Parser();
         schema = parser.parse(schemaString);
       } catch (Exception e) {
-        throw new HoodieSchemaException("Failed to parse schema", e);
+        throw new HoodieSchemaException("Failed to parse schema: " + schemaString, e);
       }
 
     }

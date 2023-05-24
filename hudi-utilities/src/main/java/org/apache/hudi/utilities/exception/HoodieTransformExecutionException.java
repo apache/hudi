@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.exception;
 
+/**
+ * Exception that occurs during transformer execution
+ */
 public class HoodieTransformExecutionException extends HoodieTransformException {
   public HoodieTransformExecutionException(String msg, Throwable e) {
     super(msg, e);

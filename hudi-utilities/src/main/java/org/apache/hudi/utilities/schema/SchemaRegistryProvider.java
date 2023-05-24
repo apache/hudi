@@ -98,7 +98,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
           : s -> s;
       return new Schema.Parser().parse(converter.convert(schema));
     } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to parse schema from registry", e);
+      throw new HoodieSchemaException("Failed to parse schema from registry: " + schema, e);
     }
   }
 
@@ -202,7 +202,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Error reading target schema from registry :" + registryUrl, e);
+      throw new HoodieSchemaFetchException("Error reading target schema from registry :" + targetRegistryUrl, e);
     }
   }
 }

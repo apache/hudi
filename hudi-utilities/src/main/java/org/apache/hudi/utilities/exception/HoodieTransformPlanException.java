@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.exception;
 
+/**
+ * Exception that occurs during planning of transformation
+ */
 public class HoodieTransformPlanException extends HoodieTransformException {
 
   public HoodieTransformPlanException(String msg) {

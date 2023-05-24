@@ -20,6 +20,9 @@ package org.apache.hudi.utilities.exception;
 
 import org.apache.hudi.exception.HoodieException;
 
+/**
+ * general exception in transformer
+ */
 public class HoodieTransformException extends HoodieException {
   public HoodieTransformException(String msg, Throwable e) {
     super(msg, e);

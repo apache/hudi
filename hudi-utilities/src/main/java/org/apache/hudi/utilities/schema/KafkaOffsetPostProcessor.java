@@ -70,7 +70,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
       Schema newSchema = Schema.createRecord(schema.getName() + "_processed", schema.getDoc(), schema.getNamespace(), false, newFieldList);
       return newSchema;
     } catch (Exception e) {
-      throw new HoodieSchemaException("Kafka offset post processor failed", e);
+      throw new HoodieSchemaException("Kafka offset post processor failed with schema: " + schema, e);
     }
 
   }

@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 import scala.util.Either;
 import scala.util.Left;
@@ -114,7 +115,11 @@ public class AvroConvertor implements Serializable {
       initJsonConvertor();
       return jsonConverter.convert(json, schema);
     } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to convert schema from json to avro", e);
+      if (json != null) {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
+      } else {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
+      }
     }
   }
 
@@ -132,7 +137,7 @@ public class AvroConvertor implements Serializable {
     try {
       return new Schema.Parser().parse(schemaStr);
     } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to parse json schema", e);
+      throw new HoodieSchemaException("Failed to parse json schema: " + schemaStr, e);
     }
   }
 
@@ -142,7 +147,11 @@ public class AvroConvertor implements Serializable {
       initInjection();
       return recordInjection.invert(avroBinary).get();
     } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to get avro schema from avro binary", e);
+      if (avroBinary != null) {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary: " + Arrays.toString(avroBinary), e);
+      } else {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary. Binary is null", e);
+      }
     }
 
   }

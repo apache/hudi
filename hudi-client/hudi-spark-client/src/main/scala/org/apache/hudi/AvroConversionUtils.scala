@@ -144,7 +144,7 @@ object AvroConversionUtils {
       val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
       getAvroSchemaWithDefaults(avroSchema, structType)
     } catch {
-      case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema", e)
+      case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
     }
   }
 
@@ -158,7 +158,7 @@ object AvroConversionUtils {
         case (dataType, _) => dataType.asInstanceOf[StructType]
       }
     } catch {
-      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type", e)
+      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
     }
   }
 
