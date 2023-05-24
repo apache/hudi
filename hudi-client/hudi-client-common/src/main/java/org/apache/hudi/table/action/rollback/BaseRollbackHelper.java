@@ -197,14 +197,21 @@ public class BaseRollbackHelper implements Serializable {
             // if first rollback attempt failed and retried again, chances that some files are already deleted.
             isDeleted = true;
           }
+
+          if (!isDeleted) {
+            // ensure the file does not exist
+            if (metaClient.getFs().exists(fullDeletePath)) {
+              throw new HoodieRollbackException("Failed to delete file " + fullDeletePath);
+            }
+            isDeleted = true;
+          }
         }
         return HoodieRollbackStat.newBuilder()
             .withPartitionPath(partitionPath)
             .withDeletedFileResult(fullDeletePath.toString(), isDeleted)
             .build();
       } catch (IOException e) {
-        LOG.error("Fetching file status for ");
-        throw new HoodieIOException("Fetching file status for " + fileToDelete + " failed ", e);
+        throw new HoodieIOException("Deleting file " + fileToDelete + " failed ", e);
       }
     }).collect(Collectors.toList());
   }
