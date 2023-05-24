@@ -33,9 +33,11 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.streaming.Source
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
+import org.apache.spark.sql.hudi.streaming.{HoodieOffsetRangeLimit, HoodieStreamSource}
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -185,5 +187,14 @@ class Spark2Adapter extends SparkAdapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  override def createHoodieStreamSource(
+      sqlContext: SQLContext,
+      metadataPath: String,
+      schema: Option[StructType],
+      parameters: Map[String, String],
+      offsetRangeLimit: HoodieOffsetRangeLimit): Source = {
+    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
   }
 }

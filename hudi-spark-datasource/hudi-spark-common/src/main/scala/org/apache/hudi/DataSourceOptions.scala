@@ -209,6 +209,27 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
+  val STREAM_MAX_FILES_PER_TRIGGER: ConfigProperty[Integer] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.files.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("0.14.0")
+    .withDocumentation("Number of max files per trigger to pull data from hoodie streaming source.")
+
+  val STREAM_MAX_BYTES_PER_TRIGGER: ConfigProperty[Integer] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.bytes.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("0.14.0")
+    .withDocumentation("Number of max bytes per trigger to pull data from hoodie streaming source.")
+
+  val STREAM_MAX_ROWS_PER_TRIGGER: ConfigProperty[Integer] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.rows.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("0.14.0")
+    .withDocumentation("Number of max rows per trigger to pull data from hoodie streaming source.")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()

@@ -217,7 +217,7 @@ class DefaultSource extends RelationProvider
         HoodieSpecifiedOffsetRangeLimit(instantTime)
     }
 
-    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
+    sparkAdapter.createHoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
   }
 }
 

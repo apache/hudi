@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieCommitMetadata, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
@@ -32,9 +32,13 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.hudi.streaming.HoodieStreamSourceOffset
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
+import java.util.ArrayList
+
+import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator, seqAsJavaList}
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 
@@ -45,7 +49,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
                                           override val optParams: Map[String, String],
                                           override val metaClient: HoodieTableMetaClient,
                                           private val userSchema: Option[StructType],
-                                          private val prunedDataSchema: Option[StructType] = None)
+                                          private val prunedDataSchema: Option[StructType] = None,
+                                          private val start: Option[HoodieStreamSourceOffset] = None,
+                                          private val end: Option[HoodieStreamSourceOffset] = None)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationTrait {
 
@@ -62,6 +68,88 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     } else {
       handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
         .findInstantsInRange(startTimestamp, endTimestamp)
+    }
+  }
+
+  override protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {
+    if (start.nonEmpty && end.nonEmpty) {
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList.sortBy(f => f)
+    } else if (!startInstantArchived || !endInstantArchived) {
+      // If endTimestamp commit is not archived, will filter instants
+      // before endTimestamp.
+      if (hollowCommitHandling == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
+        super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
+      } else {
+        super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
+      }
+    } else {
+      super.timeline.getInstants.asScala.toList
+    }
+  }
+
+  override protected lazy val commitsMetadata: java.util.List[HoodieCommitMetadata]  = {
+
+    if (start.nonEmpty && end.nonEmpty) {
+      val startOffsetPartition = start.get.partition
+      val endOffsetPartition = end.get.partition
+      val startOffsetCommitTime = start.get.commitTime
+      val endOffsetCommitTime = end.get.commitTime
+      val startOffsetCursor = start.get.cursor
+      val endOffsetCursor = end.get.cursor
+
+      val result = new ArrayList[HoodieCommitMetadata]()
+
+      for (commit <- includedCommits) {
+        val metadata = getCommitMetadata(commit, timeline)
+        val partitions = metadata.getPartitionToWriteStats.keySet().iterator().toList.sortBy(f => f)
+
+        if (commit.getTimestamp.equals(startOffsetCommitTime) && commit.getTimestamp.equals(endOffsetCommitTime)) {
+          if (startOffsetPartition.equals(endOffsetPartition)) {
+            val updatedWriteStats = metadata.getWriteStats(startOffsetPartition).subList(startOffsetCursor, endOffsetCursor)
+            metadata.overwriteWriteStat(startOffsetPartition, updatedWriteStats)
+          } else {
+            // start offset partition
+            val startOffsetPartitionStat = metadata.getWriteStats(startOffsetPartition)
+            val updatedWriteStats = startOffsetPartitionStat.subList(startOffsetCursor, startOffsetPartitionStat.size)
+            metadata.overwriteWriteStat(startOffsetPartition, updatedWriteStats)
+            // end offset partition
+            val endOffsetPartitionStat = metadata.getWriteStats(endOffsetPartition).subList(0, endOffsetCursor)
+            metadata.overwriteWriteStat(endOffsetPartition, endOffsetPartitionStat)
+            // other partitions
+            var partitionsToRemove = new ArrayList[String]()
+            partitionsToRemove.addAll(partitions.subList(0, partitions.indexOf(startOffsetPartition)))
+            partitionsToRemove.addAll(partitions.subList(partitions.indexOf(endOffsetPartition), partitions.size))
+            partitionsToRemove = partitionsToRemove
+              .filterNot(p => p.equals(startOffsetPartition) || p.equals(endOffsetPartition))
+              .toList
+              .asJava
+              .asInstanceOf[ArrayList[String]]
+            partitionsToRemove.foreach(metadata.removeWriteStat)
+          }
+        } else if (commit.getTimestamp.equals(startOffsetCommitTime)) {
+          // start offset partition
+          val startOffsetPartitionStat = metadata.getWriteStats(startOffsetPartition)
+          val updatedWriteStats = startOffsetPartitionStat.subList(startOffsetCursor, startOffsetPartitionStat.size)
+          metadata.overwriteWriteStat(startOffsetPartition, updatedWriteStats)
+
+          val partitionsToRemove: List[String] = partitions.subList(0, partitions.indexOf(startOffsetPartition)).toList
+          partitionsToRemove.foreach(metadata.removeWriteStat)
+        } else if (commit.getTimestamp.equals(endOffsetCommitTime)) {
+          // end offset partition
+          val endOffsetPartitionStat = metadata.getWriteStats(endOffsetPartition).subList(0, endOffsetCursor)
+          metadata.overwriteWriteStat(endOffsetPartition, endOffsetPartitionStat)
+
+          val partitionsToRemove: List[String] = partitions.subList(partitions.indexOf(endOffsetPartition) + 1, partitions.size).toList
+          partitionsToRemove.foreach(metadata.removeWriteStat)
+        } else {
+          // do nothing
+        }
+        result.add(metadata)
+      }
+
+      result
+    } else {
+      includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
     }
   }
 
