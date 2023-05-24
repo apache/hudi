@@ -18,6 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
@@ -47,7 +54,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -55,19 +61,10 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.util.Lazy;
-
-import org.apache.avro.AvroTypeException;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -1354,7 +1351,7 @@ public class HoodieTableMetadataUtil {
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final Path metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
     FileSystem fs = FSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
-    setMetadataPartitionState(dataMetaClient, MetadataPartitionType.FILES, false);
+    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, MetadataPartitionType.FILES, false);
     try {
       if (!fs.exists(metadataTablePath)) {
         return null;
@@ -1389,18 +1386,6 @@ public class HoodieTableMetadataUtil {
     return null;
   }
 
-  public static HoodieTableMetaClient setMetadataPartitionState(HoodieTableMetaClient dataMetaClient, MetadataPartitionType partitionType, boolean enabled) {
-    dataMetaClient.getTableConfig().setMetadataPartitionState(partitionType, enabled);
-    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionEnabled(partitionType) == enabled,
-            "Metadata table state change should be persisted");
-
-    LOG.info(String.format("Metadata table %s partition %s has been %s", dataMetaClient.getBasePathV2(), partitionType,
-            enabled ? "enabled" : "disabled"));
-    return dataMetaClient;
-  }
-
   /**
    * Delete a partition within the metadata table.
    * <p>
@@ -1421,7 +1406,7 @@ public class HoodieTableMetadataUtil {
 
     final Path metadataTablePartitionPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionType.getPartitionPath());
     FileSystem fs = FSUtils.getFs(metadataTablePartitionPath.toString(), context.getHadoopConf().get());
-    setMetadataPartitionState(dataMetaClient, partitionType, false);
+    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
     try {
       if (!fs.exists(metadataTablePartitionPath)) {
         return null;
@@ -1456,15 +1441,6 @@ public class HoodieTableMetadataUtil {
     }
 
     return null;
-  }
-
-  public static HoodieTableMetaClient setMetadataInflightPartitions(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> partitionTypes) {
-    dataMetaClient.getTableConfig().setMetadataPartitionsInflight(partitionTypes);
-    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
-    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
-
-    LOG.info(String.format("Metadata table %s partitions %s hasvebeen set to inflight", dataMetaClient.getBasePathV2(), partitionTypes));
-    return dataMetaClient;
   }
 
   /**
@@ -1539,6 +1515,6 @@ public class HoodieTableMetadataUtil {
    * unique timestamp.
    */
   public static String createIndexInitTimestamp(String timestamp, int offset) {
-    return String.format("%s%3d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
+    return String.format("%s%03d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
   }
 }

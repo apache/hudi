@@ -727,28 +727,30 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Enables or disables the specified metadata table partition.
    *
-   * @param partition The partition
-   * @param enabled   If true, the partition is enabled, else disabled
+   * @param partitionType The partition
+   * @param enabled       If true, the partition is enabled, else disabled
    */
-  public void setMetadataPartitionState(MetadataPartitionType partition, boolean enabled) {
-    ValidationUtils.checkArgument(!partition.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
-        "Metadata Table partition path cannot contain a comma: " + partition.getPartitionPath());
+  public void setMetadataPartitionState(HoodieTableMetaClient metaClient, MetadataPartitionType partitionType, boolean enabled) {
+    ValidationUtils.checkArgument(!partitionType.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
+        "Metadata Table partition path cannot contain a comma: " + partitionType.getPartitionPath());
     Set<String> partitions = getMetadataPartitions();
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
     if (enabled) {
-      partitions.add(partition.getPartitionPath());
-      partitionsInflight.remove(partition.getPartitionPath());
-    } else if (partition.equals(MetadataPartitionType.FILES)) {
+      partitions.add(partitionType.getPartitionPath());
+      partitionsInflight.remove(partitionType.getPartitionPath());
+    } else if (partitionType.equals(MetadataPartitionType.FILES)) {
       // file listing partition is required for all other partitions to work
       // Disabling file partition will also disable all partitions
       partitions.clear();
       partitionsInflight.clear();
     } else {
-      partitions.remove(partition.getPartitionPath());
-      partitionsInflight.remove(partition.getPartitionPath());
+      partitions.remove(partitionType.getPartitionPath());
+      partitionsInflight.remove(partitionType.getPartitionPath());
     }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionType, enabled ? "enabled" : "disabled"));
   }
 
   /**
@@ -756,14 +758,17 @@ public class HoodieTableConfig extends HoodieConfig {
    *
    * @param partitionTypes The list of partitions to enable as inflight.
    */
-  public void setMetadataPartitionsInflight(List<MetadataPartitionType> partitionTypes) {
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, List<MetadataPartitionType> partitionTypes) {
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
     partitionTypes.forEach(t -> {
       ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
           "Metadata Table partition path cannot contain a comma: " + t.getPartitionPath());
       partitionsInflight.add(t.getPartitionPath());
     });
+
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
   }
 
   /**

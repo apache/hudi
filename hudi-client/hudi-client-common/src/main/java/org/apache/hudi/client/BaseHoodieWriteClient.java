@@ -1160,7 +1160,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
-      initMetadataTable(operationType, instantTime);
+      initMetadataTable(instantTime);
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
@@ -1171,7 +1171,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param instantTime current inflight instant time
    */
-  protected void initMetadataTable(WriteOperationType operationType, Option<String> instantTime) {
+  protected void initMetadataTable(Option<String> instantTime) {
     // by default do nothing.
   }
 
@@ -1193,7 +1193,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *   <li>Initializing metrics contexts</li>
    * </ul>
    */
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
+  public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
     if (operationType == WriteOperationType.DELETE) {
