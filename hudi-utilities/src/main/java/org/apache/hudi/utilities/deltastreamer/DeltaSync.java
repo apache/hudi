@@ -976,8 +976,8 @@ public class DeltaSync implements Serializable, Closeable {
       }
 
       Map<String,HoodieException> failedMetaSyncs = new HashMap<>();
-      Timer.Context syncContext = metrics.getMetaSyncTimerContext();
       for (String impl : syncClientToolClasses) {
+        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
         } catch (HoodieMetaSyncException e) {
