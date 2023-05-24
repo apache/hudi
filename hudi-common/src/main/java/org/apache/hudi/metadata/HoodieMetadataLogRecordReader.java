@@ -200,7 +200,10 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
 
     public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
-      scannerBuilder.withInstantRange(Option.of(new ExplicitMatchRange(validLogBlockTimestamps)));
+      InstantRange instantRange = InstantRange.builder()
+          .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+          .explicitInstants(validLogBlockTimestamps).build();
+      scannerBuilder.withInstantRange(Option.of(instantRange));
       return this;
     }
 
@@ -216,23 +219,6 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public HoodieMetadataLogRecordReader build() {
       return new HoodieMetadataLogRecordReader(scannerBuilder.build());
-    }
-  }
-
-  /**
-   * Class to assist in checking if an instant is part of a set of instants.
-   */
-  private static class ExplicitMatchRange extends InstantRange {
-    Set<String> instants;
-
-    public ExplicitMatchRange(Set<String> instants) {
-      super(Collections.min(instants), Collections.max(instants));
-      this.instants = instants;
-    }
-
-    @Override
-    public boolean isInRange(String instant) {
-      return this.instants.contains(instant);
     }
   }
 }
