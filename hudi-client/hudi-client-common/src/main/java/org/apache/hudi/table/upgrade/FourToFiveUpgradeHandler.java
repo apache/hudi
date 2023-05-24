@@ -20,10 +20,19 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -47,7 +56,10 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     try {
       FileSystem fs = new Path(config.getBasePath()).getFileSystem(context.getHadoopConf().get());
-      if (!config.doSkipDefaultPartitionValidation() && fs.exists(new Path(config.getBasePath() + "/" + DEPRECATED_DEFAULT_PARTITION_PATH))) {
+      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+      String partitionPath = generatorPartitionPath(config, table.getMetaClient());
+
+      if (!config.doSkipDefaultPartitionValidation() && fs.exists(new Path(config.getBasePath() + "/" + partitionPath))) {
         LOG.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to %s "
                 + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
                 + " Sample spark command to use to re-write the data: \n\n"
@@ -70,5 +82,27 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       throw new HoodieException("Fetching FileSystem instance failed ", e);
     }
     return new HashMap<>();
+  }
+
+  private String generatorPartitionPath(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    String partitionPath = DEPRECATED_DEFAULT_PARTITION_PATH;
+    try {
+      if (tableConfig.getPartitionFields().isPresent()) {
+        BaseKeyGenerator keyGenerator =
+            (BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()));
+
+        TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+        GenericRecord partitionsRecord = new GenericData.Record(schemaResolver.getTableAvroSchema());
+        String[] partitions = tableConfig.getPartitionFields().get();
+        for (String partition : partitions) {
+          partitionsRecord.put(partition, DEPRECATED_DEFAULT_PARTITION_PATH);
+        }
+        partitionPath = keyGenerator.getPartitionPath(partitionsRecord);
+      }
+    } catch (Exception e) {
+      LOG.error("Load table Schema failed, use no hive style default path", e);
+    }
+    return partitionPath;
   }
 }
