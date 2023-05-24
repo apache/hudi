@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieInvalidInstantException;
 
 import org.apache.hadoop.fs.FileStatus;
 
@@ -46,7 +45,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private static final String DELIMITER = ".";
 
-  private static final String FILE_NAME_FORMAT_ERROR = "The fileName %s doesn't match instant format";
+  private static final String FILE_NAME_FORMAT_ERROR =
+      "The provided file name %s does not conform to the required format";
 
   /**
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
@@ -76,7 +76,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return matcher.group(1);
     }
 
-    throw new HoodieInvalidInstantException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+    throw new IllegalArgumentException("Failed to retrieve timestamp from name: "
+        + String.format(FILE_NAME_FORMAT_ERROR, fileName));
   }
 
   public static String getTimelineFileExtension(String fileName) {
@@ -135,7 +136,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       stateTransitionTime =
           HoodieInstantTimeGenerator.formatDate(new Date(fileStatus.getModificationTime()));
     } else {
-      throw new HoodieInvalidInstantException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+      throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
   }
 
@@ -237,7 +238,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
           : HoodieTimeline.makeSchemaFileName(timestamp);
     }
-    throw new HoodieInvalidInstantException("Cannot get file name for unknown action " + action);
+    throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }
 
   private static final Map<String, String> createComparableActionsMap() {
