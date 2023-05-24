@@ -71,11 +71,4 @@ public final class HoodieVersion {
     ValidationUtils.checkArgument(parts.length == 3, "HUDI version is not in the format major.minor.patch: " + get());
     return parts;
   }
-
-  public static void main(String[] args) {
-    System.out.println("hoodie version=" + get());
-    System.out.println(" major=" + major());
-    System.out.println(" minor=" + minor());
-    System.out.println(" patch=" + patch());
-  }
 }
