@@ -78,8 +78,8 @@ public class RunCompactionActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    LOG.info("Compaction start.");
-    metrics.emitCompactionStart();
+    LOG.info("Compaction requested.");
+    metrics.emitCompactionRequested();
 
     HoodieTimeline pendingMajorOrMinorCompactionTimeline = WriteOperationType.COMPACT.equals(operationType)
         ? table.getActiveTimeline().filterPendingCompactionTimeline()
@@ -128,8 +128,8 @@ public class RunCompactionActionExecutor<T> extends
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
-    LOG.info("Compaction stop.");
-    metrics.emitCompactionStop();
+    LOG.info("Compaction completed.");
+    metrics.emitCompactionCompleted();
     return compactionMetadata;
   }
 }
