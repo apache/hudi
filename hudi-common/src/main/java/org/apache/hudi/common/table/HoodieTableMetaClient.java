@@ -1149,10 +1149,11 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != bootstrapBasePath) {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
-        if (null != bootstrapPartitionTypeInferenceEnable) {
-          tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE,
-              Boolean.toString(bootstrapPartitionTypeInferenceEnable));
-        }
+      }
+
+      if (null != bootstrapPartitionTypeInferenceEnable) {
+        tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_PARTITION_COLUMN_TYPE_INFERENCE,
+            Boolean.toString(bootstrapPartitionTypeInferenceEnable));
       }
 
       if (StringUtils.nonEmpty(preCombineField)) {

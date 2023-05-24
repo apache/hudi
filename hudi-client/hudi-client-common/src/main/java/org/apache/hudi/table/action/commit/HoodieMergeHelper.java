@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.utils.ClosableMergingIterator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -122,7 +121,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             baseFileReader,
             HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
-            mergeHandle.getPartitionValues());
+            mergeHandle.getPartitionValues(),
+            table.getConfig().isBootstrapPartitionColumnTypeInferenceEnabled());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
         recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
       } else {

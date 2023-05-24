@@ -41,7 +41,6 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -95,8 +94,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     cleanupClients();
     cleanupTestDataGenerator();
   }
-
-
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
@@ -225,7 +222,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(bootstrapTargetPath);
   }
 
-
   protected void compareTables() {
     Map<String,String> readOpts = new HashMap<>();
     if (tableType.equals("MERGE_ON_READ")) {
@@ -267,25 +263,33 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(hudiBasePath);
   }
 
-  public Dataset<Row> generateTestInserts() {
+  protected Dataset<Row> makeInsertDf() {
     List<String> records = dataGen.generateInserts("000", nInserts).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+    return sparkSession.read().json(rdd);
   }
 
-  public Dataset<Row> generateTestUpdates(String instantTime) {
+  protected Dataset<Row> generateTestInserts() {
+    return addPartitionColumns(makeInsertDf(), nPartitions);
+  }
+
+  protected Dataset<Row> makeUpdateDf(String instantTime) {
     try {
       List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+      return sparkSession.read().json(rdd);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
-  public static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
+  protected Dataset<Row> generateTestUpdates(String instantTime) {
+    return addPartitionColumns(makeUpdateDf(instantTime), nPartitions);
+  }
+
+  private static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
     if (nPartitions < 2) {
       return df;
     }

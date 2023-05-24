@@ -47,7 +47,8 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   @Override
-  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
-    return new HoodieSparkBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader,
+                                                 Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
+    return new HoodieSparkBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues, partitionInference);
   }
 }

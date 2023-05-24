@@ -384,7 +384,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
           HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath)), partitionFields,
-          partitionValues);
+          partitionValues, typeInference);
     }
     return baseFileReader;
   }

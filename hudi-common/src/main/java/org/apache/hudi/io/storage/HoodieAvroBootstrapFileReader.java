@@ -26,14 +26,15 @@ import java.util.Objects;
 
 public class HoodieAvroBootstrapFileReader extends HoodieBootstrapFileReader<IndexedRecord> {
 
-  public HoodieAvroBootstrapFileReader(HoodieFileReader<IndexedRecord> skeletonFileReader, HoodieFileReader<IndexedRecord> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
-    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  public HoodieAvroBootstrapFileReader(HoodieFileReader<IndexedRecord> skeletonFileReader, HoodieFileReader<IndexedRecord> dataFileReader,
+                                       Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
+    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues, partitionInference);
   }
 
   @Override
   protected void setPartitionField(int position, Object fieldValue, IndexedRecord row) {
     if (Objects.isNull(row.get(position))) {
-      if (fieldValue.getClass().getName().equals("org.apache.spark.unsafe.types.UTF8String")) {
+      if (!partitionInference || fieldValue.getClass().getName().equals("org.apache.spark.unsafe.types.UTF8String")) {
         row.put(position, String.valueOf(fieldValue));
       } else {
         row.put(position, fieldValue);
