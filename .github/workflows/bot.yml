@@ -22,7 +22,7 @@ on:
       - master
       - 'release-*'
 env:
-  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
 
 jobs:
@@ -138,6 +138,14 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+      - name: Integration Test
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '1.17') }}
+        run: |
+          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   validate-bundles:
     runs-on: ubuntu-latest
@@ -271,8 +279,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark2.4'
+          - sparkProfile: 'spark2.4'
             sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
     steps:
       - uses: actions/checkout@v2
@@ -284,21 +291,18 @@ jobs:
           architecture: x64
       - name: Build Project
         env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
@@ -309,4 +313,4 @@ jobs:
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true $MVN_ARGS
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
