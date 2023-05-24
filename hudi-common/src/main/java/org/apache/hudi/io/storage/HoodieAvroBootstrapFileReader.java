@@ -33,7 +33,11 @@ public class HoodieAvroBootstrapFileReader extends HoodieBootstrapFileReader<Ind
   @Override
   protected void setPartitionField(int position, Object fieldValue, IndexedRecord row) {
     if (Objects.isNull(row.get(position))) {
-      row.put(position, String.valueOf(fieldValue));
+      if (fieldValue.getClass().getName().equals("org.apache.spark.unsafe.types.UTF8String")) {
+        row.put(position, String.valueOf(fieldValue));
+      } else {
+        row.put(position, fieldValue);
+      }
     }
   }
 }

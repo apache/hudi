@@ -124,10 +124,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        recordIterator = new ClosableMergingIterator<>(
-            baseFileRecordIterator,
-            (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema),
-            (left, right) -> left.joinWith(right, recordSchema));
+        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
       } else {
         recordIterator = baseFileRecordIterator;
         recordSchema = isPureProjection ? writerSchema : readerSchema;
