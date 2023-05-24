@@ -250,10 +250,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return createCorruptBlock(blockStartPos);
       }
       throw new HoodieIOException("Reading block failed with " + e);
-    } catch (HoodieNotSupportedException e) {
-      throw e;
     }
-
   }
 
   private Option<Schema> getTargetReaderSchemaForBlock() {

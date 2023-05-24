@@ -2618,7 +2618,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         }
         reader.close();
       } catch (Exception e) {
-        System.out.println(Arrays.toString(bOStream.toByteArray()));
         fail(e);
       }
       assertEquals(dataBlocksGenerated, dataBlocksSeen);
