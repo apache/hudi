@@ -110,7 +110,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
-  protected String tableName;
 
   protected HoodieBackedTableMetadata metadata;
   protected HoodieTableMetaClient metadataMetaClient;
@@ -148,7 +147,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
     if (dataMetaClient.getTableConfig().isMetadataTableEnabled() || writeConfig.isMetadataTableEnabled()) {
-      this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
 
       try {
@@ -531,7 +529,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieTableMetaClient initializeMetaClient() throws IOException {
     return HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
-        .setTableName(tableName)
+        .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
@@ -1065,6 +1063,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
 
     if (!pendingInstants.isEmpty()) {
+      checkNumDeltaCommits(metadataMetaClient, dataWriteConfig.getMetadataConfig().getMaxNumDeltacommitsWhenPending());
       LOG.info(String.format(
           "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
           pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
