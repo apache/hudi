@@ -190,6 +190,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             syncHoodieTable(roTableName.get(), false, true);
             // sync a RT table for MOR
             syncHoodieTable(snapshotTableName, true, false);
+            // sync origin table for MOR
+            syncHoodieTable(tableName, true, false);
         }
         break;
       default:
