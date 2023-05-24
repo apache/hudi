@@ -274,7 +274,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.14'
+          - flinkProfile: 'flink1.17'
             sparkProfile: 'spark2.4'
             sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
     steps:
@@ -291,14 +291,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -312,4 +312,4 @@ jobs:
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -pl hudi-flink-datasource/hudi-flink -am $MVN_ARGS
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -pl hudi-flink-datasource/hudi-flink -am $MVN_ARGS
