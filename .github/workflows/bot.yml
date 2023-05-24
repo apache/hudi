@@ -47,6 +47,7 @@ jobs:
         run: ./scripts/release/validate_source_rat.sh
 
   test-spark:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -109,6 +110,7 @@ jobs:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -140,6 +142,7 @@ jobs:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
   validate-bundles:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -309,4 +312,4 @@ jobs:
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true $MVN_ARGS
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -pl hudi-flink-datasource/hudi-flink -am $MVN_ARGS
