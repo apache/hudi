@@ -91,6 +91,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
+import static org.apache.hudi.common.fs.FSUtils.NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN;
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
@@ -173,13 +174,17 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                           final Map<String, String> extraMetadata);
 
   protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
+                                                                  Map<String, String> extraMetadata,
                                                                   Schema schema) {
-    return getPartitioner(strategyParams, schema, true);
+    String targetFileId = extraMetadata.get(NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN);
+    return getPartitioner(strategyParams, schema, targetFileId, true);
   }
 
   protected BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> getRDDPartitioner(Map<String, String> strategyParams,
+                                                                              Map<String, String> extraMetadata,
                                                                               Schema schema) {
-    return getPartitioner(strategyParams, schema, false);
+    String targetFileId = extraMetadata.get(NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN);
+    return getPartitioner(strategyParams, schema, targetFileId,false);
   }
 
   /**
@@ -190,6 +195,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
                                                       Schema schema,
+                                                      String targetFileGroupId,
                                                       boolean isRowPartitioner) {
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
@@ -201,22 +207,22 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         case ZORDER:
         case HILBERT:
           return isRowPartitioner
-              ? new RowSpatialCurveSortPartitioner(getWriteConfig())
+              ? new RowSpatialCurveSortPartitioner(getWriteConfig(), targetFileGroupId)
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
-              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), targetFileGroupId);
         case LINEAR:
           return isRowPartitioner
-              ? new RowCustomColumnsSortPartitioner(orderByColumns)
+              ? new RowCustomColumnsSortPartitioner(orderByColumns, targetFileGroupId)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-              getWriteConfig().isConsistentLogicalTimestampEnabled());
+              getWriteConfig().isConsistentLogicalTimestampEnabled(), targetFileGroupId);
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
     }).orElse(isRowPartitioner
         ? BulkInsertInternalPartitionerWithRowsFactory.get(
-        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true)
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true, targetFileGroupId)
         : BulkInsertInternalPartitionerFactory.get(
-        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true));
+        getWriteConfig().getBulkInsertSortMode(), getHoodieTable().isPartitioned(), true, targetFileGroupId));
   }
 
   /**

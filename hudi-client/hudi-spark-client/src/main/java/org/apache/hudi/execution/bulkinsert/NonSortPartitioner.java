@@ -20,7 +20,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -37,7 +36,7 @@ import org.apache.spark.api.java.JavaRDD;
  * @param <T> HoodieRecordPayload type
  */
 public class NonSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends TargetGroupAssignedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean enforceNumOutputPartitions;
 
@@ -45,7 +44,7 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
    * Default constructor without enforcing the number of output partitions.
    */
   public NonSortPartitioner() {
-    this(false);
+    this(false, null);
   }
 
   /**
@@ -53,7 +52,8 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
    *
    * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
    */
-  public NonSortPartitioner(boolean enforceNumOutputPartitions) {
+  public NonSortPartitioner(boolean enforceNumOutputPartitions, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.enforceNumOutputPartitions = enforceNumOutputPartitions;
   }
 

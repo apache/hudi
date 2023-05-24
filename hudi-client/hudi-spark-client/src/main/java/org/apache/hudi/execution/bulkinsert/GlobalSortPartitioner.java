@@ -20,7 +20,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -32,7 +31,11 @@ import org.apache.spark.api.java.JavaRDD;
  * @param <T> HoodieRecordPayload type
  */
 public class GlobalSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends TargetGroupAssignedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  public GlobalSortPartitioner(String targetFileGroupId) {
+    super(targetFileGroupId);
+  }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,

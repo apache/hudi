@@ -91,7 +91,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
-      this.executor = NonThrownExecutor.builder(LOG).build();
+      this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
     }
     this.collector = new StreamRecordCollector<>(output);
   }

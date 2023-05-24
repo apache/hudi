@@ -117,6 +117,17 @@ public class HoodieCommitMetadata implements Serializable {
     return filePaths;
   }
 
+  public Map<HoodieFileGroupId, String> getFileGroupIdAndRelativePaths() {
+    Map<HoodieFileGroupId, String> fileGroupIdToFullPaths = new HashMap<>();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        HoodieFileGroupId fileGroupId = new HoodieFileGroupId(stat.getPartitionPath(), stat.getFileId());
+        fileGroupIdToFullPaths.put(fileGroupId, stat.getPath().substring(stat.getPath().lastIndexOf(Path.SEPARATOR) + 1));
+      }
+    }
+    return fileGroupIdToFullPaths;
+  }
+
   public void setOperationType(WriteOperationType type) {
     this.operationType = type;
   }

@@ -94,6 +94,10 @@ public class CompactionOperation implements Serializable {
     return deltaFileNames;
   }
 
+  public void setDeltaFileNames(List<String> deltaFileNamesUpdated) {
+    deltaFileNames = deltaFileNamesUpdated;
+  }
+
   public Option<String> getDataFileName() {
     return dataFileName;
   }

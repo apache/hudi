@@ -97,7 +97,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     Dataset<Row> records2 = generateTestRecords();
     testBulkInsertInternalPartitioner(
         BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions),
+            sortMode, isTablePartitioned, enforceNumOutputPartitions, null),
         records1,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -106,7 +106,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         Option.empty());
     testBulkInsertInternalPartitioner(
         BulkInsertInternalPartitionerWithRowsFactory.get(
-            sortMode, isTablePartitioned, enforceNumOutputPartitions),
+            sortMode, isTablePartitioned, enforceNumOutputPartitions, null),
         records2,
         enforceNumOutputPartitions,
         isGloballySorted,
@@ -123,9 +123,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, null),
         records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, null),
         records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
 
     HoodieWriteConfig config = HoodieWriteConfig
@@ -134,9 +134,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, null),
         records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, null),
         records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
   }
 

@@ -1337,6 +1337,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return inlineClusteringEnabled() || isAsyncClusteringEnabled();
   }
 
+  public boolean isGenerateFileGroupAdvance() {
+    return getBoolean(HoodieClusteringConfig.GENERATE_FILE_GROUP_ADVANCE);
+  }
+
   public boolean isRollbackPendingClustering() {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }

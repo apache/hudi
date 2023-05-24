@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -332,6 +333,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    CleanerUtils.rollbackFailedWrites(
+        config.getFailedWritesCleanPolicy(),
+        HoodieTimeline.CLEAN_ACTION,
+        () -> rollbackFailedWrites(false));
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);

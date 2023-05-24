@@ -20,14 +20,13 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
-import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.List;
 
-public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPartitioner<T> {
+public abstract class SpatialCurveSortPartitionerBase<T> extends TargetGroupAssignedBulkInsertPartitioner<T> {
 
   private final String[] orderByColumns;
   private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
@@ -35,7 +34,9 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
 
   public SpatialCurveSortPartitionerBase(String orderByColumns,
                                          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
+                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
+                                         String targetFileGroupId) {
+    super(targetFileGroupId);
     if (orderByColumns != null) {
       this.orderByColumns = Arrays.stream(orderByColumns.split(","))
           .map(String::trim).toArray(String[]::new);
@@ -49,7 +50,9 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
 
   public SpatialCurveSortPartitionerBase(String[] orderByColumns,
                                          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
+                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
+                                         String targetFileGroupId) {
+    super(targetFileGroupId);
     this.orderByColumns = orderByColumns;
     this.layoutOptStrategy = layoutOptStrategy;
     this.curveCompositionStrategyType = curveCompositionStrategyType;

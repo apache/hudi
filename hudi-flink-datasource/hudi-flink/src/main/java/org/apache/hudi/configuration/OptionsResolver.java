@@ -46,8 +46,7 @@ public class OptionsResolver {
   public static boolean isAppendMode(Configuration conf) {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
-    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)
-        || needsScheduleClustering(conf);
+    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER);
   }
 
   /**
@@ -164,7 +163,7 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleClustering(Configuration conf) {
-    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
+    return conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
   }
 
   /**

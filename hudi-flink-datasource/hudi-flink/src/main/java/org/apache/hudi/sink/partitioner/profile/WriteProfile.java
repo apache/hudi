@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.partitioner.profile;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.core.fs.Path;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -33,9 +35,6 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.core.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

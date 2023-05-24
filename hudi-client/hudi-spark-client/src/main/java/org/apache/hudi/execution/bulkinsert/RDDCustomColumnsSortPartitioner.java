@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -37,19 +36,21 @@ import java.util.Arrays;
  * @param <T> HoodieRecordPayload type
  */
 public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends TargetGroupAssignedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
 
-  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;

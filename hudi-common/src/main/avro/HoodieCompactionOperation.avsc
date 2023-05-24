@@ -84,6 +84,14 @@
        "name":"version",
        "type":["int", "null"],
        "default": 1
+    },
+    {
+       "name":"missingInstants",
+       "type":["null", {
+          "type":"array",
+          "items":"string"
+       }],
+       "default": null
     }
   ]
 }

@@ -85,6 +85,8 @@ public class FSUtils {
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
+  public static final String NEW_FILE_GROUP_KEY_IN_CLUSTERING_PLAN = "NEW_FILE_GROUP_ID";
+
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {

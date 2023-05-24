@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,19 +26,18 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -49,6 +47,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class HoodieCompactor {
 
@@ -221,13 +220,12 @@ public class HoodieCompactor {
     LOG.info("Step 1: Do schedule");
     Option<String> instantTime = doSchedule(jsc);
     if (!instantTime.isPresent()) {
-      LOG.warn("Couldn't do schedule");
-      return -1;
+      LOG.warn("Couldn't do schedule, has not generate a new compaction plan");
     } else {
+      LOG.info("The schedule instant time is " + instantTime.get());
       cfg.compactionInstantTime = instantTime.get();
     }
 
-    LOG.info("The schedule instant time is " + instantTime.get());
     LOG.info("Step 2: Do compaction");
 
     return doCompact(jsc);
@@ -254,23 +252,28 @@ public class HoodieCompactor {
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
-      // instant from the active timeline
-      if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
+      if (StringUtils.nonEmpty(cfg.compactionInstantTime) && cfg.runningMode.equals("execute")) {
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+        UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
+      } else {
         HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
-        Option<HoodieInstant> firstCompactionInstant =
-            metaClient.getActiveTimeline().firstInstant(
-                HoodieTimeline.COMPACTION_ACTION, HoodieInstant.State.REQUESTED);
-        if (firstCompactionInstant.isPresent()) {
-          cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
-          LOG.info("Found the earliest scheduled compaction instant which will be executed: "
-              + cfg.compactionInstantTime);
+        LOG.info("instantaaaa:" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
+        List<HoodieInstant> pendingCompactionInstants =
+            metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+        if (pendingCompactionInstants != null && pendingCompactionInstants.size() != 0) {
+          pendingCompactionInstants.forEach(hoodieInstant -> {
+            cfg.compactionInstantTime = hoodieInstant.getTimestamp();
+            LOG.info("Found the earliest scheduled compaction instant which will be executed: "
+                + cfg.compactionInstantTime);
+          });
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+          UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
         } else {
           throw new HoodieCompactionException("There is no scheduled compaction in the table.");
         }
       }
-      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
-      return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
+
+      return 0;
     }
   }
 

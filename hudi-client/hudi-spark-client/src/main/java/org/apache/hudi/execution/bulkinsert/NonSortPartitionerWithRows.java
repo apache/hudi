@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -33,7 +31,7 @@ import org.apache.spark.sql.Row;
  * <p>
  * Corresponds to the {@code BulkInsertSortMode.NONE} mode.
  */
-public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class NonSortPartitionerWithRows extends TargetGroupAssignedBulkInsertPartitioner<Dataset<Row>> {
 
   private final boolean enforceNumOutputPartitions;
 
@@ -41,7 +39,7 @@ public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset
    * Default constructor without enforcing the number of output partitions.
    */
   public NonSortPartitionerWithRows() {
-    this(false);
+    this(false, null);
   }
 
   /**
@@ -49,7 +47,8 @@ public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset
    *
    * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
    */
-  public NonSortPartitionerWithRows(boolean enforceNumOutputPartitions) {
+  public NonSortPartitionerWithRows(boolean enforceNumOutputPartitions, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.enforceNumOutputPartitions = enforceNumOutputPartitions;
   }
 

@@ -20,9 +20,9 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.Serializable;
@@ -71,11 +71,12 @@ public abstract class CompactionStrategy implements Serializable {
    * @return Compaction plan to be scheduled.
    */
   public HoodieCompactionPlan generateCompactionPlan(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, List<String> missingInstants) {
     // Strategy implementation can overload this method to set specific compactor-id
     return HoodieCompactionPlan.newBuilder()
         .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans))
-        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
+        .setMissingInstants(missingInstants).build();
   }
 
   /**

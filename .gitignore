@@ -2,6 +2,7 @@
 /build/
 target/
 .mvn/
+hudi_table_test/
  
 # OS Files #
 .DS_Store

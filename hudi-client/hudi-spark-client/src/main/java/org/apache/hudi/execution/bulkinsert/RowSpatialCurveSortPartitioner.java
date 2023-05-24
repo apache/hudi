@@ -25,14 +25,15 @@ import org.apache.spark.sql.Row;
 
 public class RowSpatialCurveSortPartitioner extends SpatialCurveSortPartitionerBase<Dataset<Row>> {
 
-  public RowSpatialCurveSortPartitioner(HoodieWriteConfig config) {
-    super(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod());
+  public RowSpatialCurveSortPartitioner(HoodieWriteConfig config, String targetFileGroupId) {
+    super(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod(), targetFileGroupId);
   }
 
   public RowSpatialCurveSortPartitioner(String[] orderByColumns,
                                         HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
-                                        HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType) {
-    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
+                                        HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
+                                        String targetFileGroupId) {
+    super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType, targetFileGroupId);
   }
 
   @Override

@@ -20,7 +20,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
@@ -37,11 +36,12 @@ import org.apache.spark.sql.Row;
  * <p>
  * Corresponding to the {@code BulkInsertSortMode.PARTITION_PATH_REPARTITION} mode.
  */
-public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionPathRepartitionPartitionerWithRows extends TargetGroupAssignedBulkInsertPartitioner<Dataset<Row>> {
 
   private final boolean isTablePartitioned;
 
-  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned) {
+  public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, String targetFileGroupId) {
+    super(targetFileGroupId);
     this.isTablePartitioned = isTablePartitioned;
   }
 
