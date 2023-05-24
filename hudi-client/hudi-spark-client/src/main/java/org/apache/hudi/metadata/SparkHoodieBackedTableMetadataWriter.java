@@ -144,21 +144,22 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
-        LOG.info("New commit at " + instantTime + " being applied to MDT");
+        LOG.info("New commit at " + instantTime + " being applied to MDT.");
       } else {
         // this code path refers to a re-attempted commit that:
         //   1. got committed to metadata table, but failed in datatable.
-        //   2. failed while commiting to metadata table
-        // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+        //   2. failed while committing to metadata table
+        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
         // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
         // are upserts to metadata table and so only a new delta commit will be created.
         // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
         // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
-        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
-        LOG.info(String.format("%s completed commit at %s being applied to metadata table",
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+            .lastInstant();
+        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
             alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
 
-        // Rollback the previous committed commit
+        // Rollback the previous commit
         if (!writeClient.rollback(instantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
         }
