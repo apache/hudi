@@ -119,11 +119,9 @@ public class ChainedTransformer implements Transformer {
             getExpectedTransformedSchema(transformerInfo, jsc, sparkSession, expectedTargetStructOpt, Option.of(rowDataset), properties));
       }
 
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
-      if (enableSchemaValidation) {
-        // Transformed schema of 1st transformer is incoming schema for 2nd transformer
-        validateTransformedSchema(expectedTargetStructOpt.get(), dataset.schema(), transformerInfo);
-      }
+      Dataset<Row> transformedDataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
+      expectedTargetStructOpt.ifPresent(expectedStruct ->  validateTransformedSchema(expectedStruct, transformedDataset.schema(), transformerInfo));
+      dataset = transformedDataset;
     }
     return dataset;
   }
