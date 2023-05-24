@@ -186,14 +186,15 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   private def getBaseFileStatus(baseFiles: mutable.Buffer[HoodieBaseFile]): mutable.Buffer[FileStatus] = {
     if (shouldFastBootstrap) {
-     return baseFiles.map(f =>
+     baseFiles.map(f =>
         if (f.getBootstrapBaseFile.isPresent) {
          f.getBootstrapBaseFile.get().getFileStatus
         } else {
           f.getFileStatus
         })
+    } else {
+      baseFiles.map(_.getFileStatus)
     }
-    baseFiles.map(_.getFileStatus)
   }
 
   private def lookupFileNamesMissingFromIndex(allIndexedFileNames: Set[String]) = {
