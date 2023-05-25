@@ -675,10 +675,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            Path pathToBeDeleted = new Path(partitionFilePair.getValue());
-            if (!fileSystem.delete(pathToBeDeleted, false) && fileSystem.exists(pathToBeDeleted)) {
-              throw new HoodieException("Failed to delete the invalid data file " + pathToBeDeleted);
-            }
+            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
