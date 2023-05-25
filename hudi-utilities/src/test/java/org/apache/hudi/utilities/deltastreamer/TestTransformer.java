@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.transform.HoodieTransformerSchemaException;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
@@ -126,19 +127,39 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testTransformerSchemaValidationFailsWithInvalidTransformer() {
-    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformer";
+  public void testTransformerSchemaValidationFailsWithNonExistentColumn() {
+    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformerOnNonExistentColumn";
     List<String> transformerClassNames = Arrays.asList(
         FlatteningTransformerWithTransformedSchema.class.getName(),
         TimestampTransformer.class.getName(),
         // InvalidAddColumnTransformer uses a non_existent column in the transformation
         // The transformedSchema API adds field random1 whereas transformation adds field random
-        InvalidAddColumnTransformer.class.getName());
-    Throwable t = testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
-    assertTrue(Arrays.stream(t.getCause().getStackTrace())
+        InvalidAddColumnTransformerOnNonExistentColumn.class.getName());
+    HoodieTransformerSchemaException e = (HoodieTransformerSchemaException) testTransformerSchemaValidationFails(transformerClassNames, Option.empty(),
+        expectedErrorMsg, HoodieTransformerSchemaException.class);
+    assertTrue(Arrays.stream(e.getCause().getStackTrace())
         .anyMatch(ste -> ste.toString().contains("org.apache.hudi.utilities.transform.Transformer.transformedSchema")));
-    assertTrue(t.getMessage().contains("Missing Input Columns: {'non_existent}"), t.getMessage());
-    assertTrue(t.getMessage().contains("New Columns: ['random]"), t.getMessage());
+    assertTrue(e.getUnresolvedExpressions().toString().matches(".*\\(5 \\* 'non_existent[#0-9]*\\) AS random.*"), e.getUnresolvedExpressions().toString());
+    assertTrue(e.getMissingInputColumns().toString().contains("'non_existent"), e.getMissingInputColumns().toString());
+    assertTrue(e.getNewColumns().toString().contains("'random"), e.getNewColumns().toString());
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFailsWithWrongDataType() {
+    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformerOnInvalidDataType";
+    List<String> transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        // InvalidAddColumnTransformer uses a non_existent column in the transformation
+        // The transformedSchema API adds field random1 whereas transformation adds field random
+        InvalidAddColumnTransformerOnInvalidDataType.class.getName());
+    HoodieTransformerSchemaException e = (HoodieTransformerSchemaException) testTransformerSchemaValidationFails(transformerClassNames, Option.empty(),
+        expectedErrorMsg, HoodieTransformerSchemaException.class);
+    assertTrue(Arrays.stream(e.getCause().getStackTrace())
+        .anyMatch(ste -> ste.toString().contains("org.apache.hudi.utilities.transform.Transformer.transformedSchema")));
+    assertTrue(e.getUnresolvedExpressions().toString().matches(".*\\(5 \\* _hoodie_is_deleted[#0-9]*\\) AS random.*"), e.getUnresolvedExpressions().toString());
+    assertTrue(e.getMissingInputColumns().get().isEmpty(), e.getMissingInputColumns().toString());
+    assertTrue(e.getNewColumns().toString().contains("'random"), e.getNewColumns().toString());
   }
 
   @Test
@@ -293,9 +314,9 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
   }
 
   /**
-   * Provides a wrong implementation for transformedSchema of AddColumnTransformer.
+   * Performs transformation on non-existent column
    */
-  public static class InvalidAddColumnTransformer extends AddColumnTransformer {
+  public static class InvalidAddColumnTransformerOnNonExistentColumn extends AddColumnTransformer {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
@@ -303,4 +324,14 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  /**
+   * Performs multiplication on invalid data type (boolean)
+   */
+  public static class InvalidAddColumnTransformerOnInvalidDataType extends AddColumnTransformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("_hoodie_is_deleted")));
+    }
+  }
 }

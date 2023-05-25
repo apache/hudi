@@ -148,22 +148,11 @@ public class ChainedTransformer implements Transformer {
       return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
     } catch (Exception e) {
       if (e instanceof AnalysisException) {
-        String errMsg = String.format("Invalid transformer %s %s", transformerInfo.toString(),
-            printLogicalPlanErrorDetails((AnalysisException) e));
-        throw new HoodieSchemaException(errMsg, e);
+        String errMsg = String.format("Invalid transformer %s", transformerInfo.toString());
+        throw new HoodieTransformerSchemaException(errMsg, e);
       }
       throw e;
     }
-  }
-
-  private String printLogicalPlanErrorDetails(AnalysisException e) {
-    if (e.plan().isDefined()) {
-      LogicalPlan plan = e.plan().get();
-      Set<Object> newAttrs = new HashSet<>(JavaConversions.setAsJavaSet(plan.outputSet().toSet()));
-      newAttrs.removeAll(JavaConversions.setAsJavaSet(plan.inputSet().toSet()));
-      return String.format("\nMissing Input Columns: %s\nNew Columns: %s\nInput Columns: %s", plan.missingInput(), newAttrs, plan.inputSet());
-    }
-    return "";
   }
 
   private void validateTransformedSchema(StructType expectedTargetStruct, StructType targetStruct, TransformerInfo transformerInfo) {
