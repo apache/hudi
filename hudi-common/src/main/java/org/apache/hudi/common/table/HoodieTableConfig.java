@@ -83,6 +83,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
+  public static final String HOODIE_PROPERTIES_FILE_TMP = "hoodie.properties.tmp";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
 
@@ -346,7 +347,10 @@ public class HoodieTableConfig extends HoodieConfig {
           props.load(is);
         }
       } else {
-        throw ioe;
+        // If the table config have been written back, we should try read it again and throw any exception met
+        try (FSDataInputStream is = fs.open(cfgPath)) {
+          props.load(is);
+        }
       }
     }
   }
@@ -354,10 +358,11 @@ public class HoodieTableConfig extends HoodieConfig {
   public static void recover(FileSystem fs, Path metadataFolder) throws IOException {
     Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
-    recoverIfNeeded(fs, cfgPath, backupCfgPath);
+    Path tmpCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_TMP);
+    recoverIfNeeded(fs, cfgPath, backupCfgPath, tmpCfgPath);
   }
 
-  static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
+  static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath, Path tmpCfgPath) throws IOException {
     if (!fs.exists(cfgPath)) {
       // copy over from backup
       try (FSDataInputStream in = fs.open(backupCfgPath);
@@ -365,8 +370,9 @@ public class HoodieTableConfig extends HoodieConfig {
         FileIOUtils.copy(in, out);
       }
     }
-    // regardless, we don't need the backup anymore.
+    // regardless, we don't need the backup and tmp file anymore.
     fs.delete(backupCfgPath, false);
+    fs.delete(tmpCfgPath, false);
   }
 
   private static void upsertProperties(Properties current, Properties updated) {
@@ -379,10 +385,11 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
     Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
+    Path tmpCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_TMP);
     Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
       // 0. do any recovery from prior attempts.
-      recoverIfNeeded(fs, cfgPath, backupCfgPath);
+      recoverIfNeeded(fs, cfgPath, backupCfgPath, tmpCfgPath);
 
       // 1. backup the existing properties.
       try (FSDataInputStream in = fs.open(cfgPath);
@@ -391,16 +398,18 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       /// 2. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
-      // 3. read current props, upsert and save back.
+      // 3. read current props, upsert and save back to tmp file
       String checksum;
       try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, true)) {
+           FSDataOutputStream out = fs.create(tmpCfgPath, true)) {
         Properties props = new TypedProperties();
         props.load(in);
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
-      // 4. verify and remove backup.
+      // 4. rename the tmp config file to config file
+      fs.rename(tmpCfgPath, cfgPath);
+      // 5. verify and remove backup.
       try (FSDataInputStream in = fs.open(cfgPath)) {
         Properties props = new TypedProperties();
         props.load(in);

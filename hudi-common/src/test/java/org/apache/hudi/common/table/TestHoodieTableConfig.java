@@ -35,6 +35,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,6 +55,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   private Path metaPath;
   private Path cfgPath;
   private Path backupCfgPath;
+  private Path tmpCfgPath;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -62,6 +67,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig.create(fs, metaPath, props);
     cfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     backupCfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+    tmpCfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_TMP);
   }
 
   @AfterEach
@@ -137,10 +143,33 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
       config.getProps().store(out, "");
     }
 
-    HoodieTableConfig.recoverIfNeeded(fs, cfgPath, backupCfgPath);
+    HoodieTableConfig.recoverIfNeeded(fs, cfgPath, backupCfgPath, tmpCfgPath);
     assertTrue(fs.exists(cfgPath));
     assertFalse(fs.exists(backupCfgPath));
     config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
+  }
+
+  @Test
+  public void testConcurrentlyUpdate() throws ExecutionException, InterruptedException {
+    final ExecutorService executor = Executors.newFixedThreadPool(2);
+    Future updaterFuture = executor.submit(() -> {
+      for (int i = 0; i < 100; i++) {
+        Properties updatedProps = new Properties();
+        updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table" + i);
+        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field" + i);
+        HoodieTableConfig.update(fs, metaPath, updatedProps);
+      }
+    });
+
+    Future readerFuture = executor.submit(() -> {
+      for (int i = 0; i < 100; i++) {
+        // Try to load the table properties, won't throw any exception
+        new HoodieTableConfig(fs, metaPath.toString(), null, null);
+      }
+    });
+
+    updaterFuture.get();
+    readerFuture.get();
   }
 }
