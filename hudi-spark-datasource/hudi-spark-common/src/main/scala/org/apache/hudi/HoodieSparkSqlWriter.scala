@@ -701,6 +701,7 @@ object HoodieSparkSqlWriter {
     val bootstrapBasePath = hoodieConfig.getStringOrThrow(BASE_PATH,
       s"'${BASE_PATH.key}' is required for '${BOOTSTRAP_OPERATION_OPT_VAL}'" +
         " operation'")
+    assert(!path.equals(bootstrapBasePath), "Bootstrap base path and path must be different")
     val bootstrapIndexClass = hoodieConfig.getStringOrDefault(INDEX_CLASS_NAME)
 
     var schema: String = null
