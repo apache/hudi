@@ -20,6 +20,7 @@ package org.apache.hudi;
 
 /**
  * Indicates how stable a given API method/class is, so user's can plan and set their expectations accordingly.
+ *
  */
 public enum ApiMaturityLevel {
     /**
