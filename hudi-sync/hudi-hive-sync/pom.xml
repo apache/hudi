@@ -98,7 +98,7 @@
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
-
+    <!-- https://mvnrepository.com/artifact/org.pentaho/pentaho-aggdesigner-algorithm -->
     <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
