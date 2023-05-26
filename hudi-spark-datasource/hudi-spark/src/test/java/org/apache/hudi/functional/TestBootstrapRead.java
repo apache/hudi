@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
@@ -223,22 +222,22 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   protected void compareTables() {
     Map<String,String> readOpts = new HashMap<>();
-    if (tableType.equals("MERGE_ON_READ")) {
-      //Bootstrap MOR currently only has read optimized queries implemented
-      readOpts.put(DataSourceReadOptions.QUERY_TYPE().key(),DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL());
-    }
-    Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
+    Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
-      compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
+      if (tableType.equals("COPY_ON_WRITE")) {
+        compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
+      }
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
-    compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
     compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
-    compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    if (tableType.equals("COPY_ON_WRITE")) {
+      compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
+      compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    }
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
@@ -270,7 +269,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     List<String> records = dataGen.generateInserts("000", nInserts).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions).drop("city_to_state");
   }
 
   public Dataset<Row> generateTestUpdates(String instantTime) {
@@ -278,7 +277,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions).drop("city_to_state");
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

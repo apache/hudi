@@ -541,9 +541,12 @@ class HoodieCDCRDD(
       } else {
         // use [[RecordMergingFileIterator]] to load both the base file and log files
         val morSplit = HoodieMergeOnReadFileSplit(Some(basePartitionedFile), logFiles)
+        val reader = BaseFileReader(parquetReader, originTableSchema.structTypeSchema)
+        val iterator = reader(morSplit.dataFile.get)
         new RecordMergingFileIterator(
           morSplit,
-          BaseFileReader(parquetReader, originTableSchema.structTypeSchema),
+          iterator,
+          reader.schema,
           originTableSchema,
           originTableSchema,
           tableState,

@@ -97,7 +97,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
           case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
             val reader = pickBaseFileReader()
-            new RecordMergingFileIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
+            val iterator = reader(split.dataFile.get)
+            new RecordMergingFileIterator(split, iterator, reader.schema, tableSchema, requiredSchema, tableState, getHadoopConf)
 
           case _ => throw new UnsupportedOperationException(s"Not supported merge type ($mergeType)")
         }

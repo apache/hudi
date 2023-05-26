@@ -164,7 +164,8 @@ private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
  * streams
  */
 class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
-                                baseFileReader: BaseFileReader,
+                                baseFileIterator: Iterator[InternalRow],
+                                readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
                                 requiredSchema: HoodieTableSchema,
                                 tableState: HoodieTableState,
@@ -176,16 +177,14 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
   //        - Projected schema
   //       As such, no particular schema could be assumed, and therefore we rely on the caller
   //       to correspondingly set the schema of the expected output of base-file reader
-  private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReader.schema, nullable = false, "record")
+  private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(readerSchema, nullable = false, "record")
 
-  private val serializer = sparkAdapter.createAvroSerializer(baseFileReader.schema, baseFileReaderAvroSchema, nullable = false)
+  private val serializer = sparkAdapter.createAvroSerializer(readerSchema, baseFileReaderAvroSchema, nullable = false)
 
-  private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
+  private val recordKeyOrdinal = readerSchema.fieldIndex(tableState.recordKeyField)
 
-  private val requiredSchemaProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
+  private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
   private val requiredSchemaAvroProjection = AvroProjection.create(avroSchema)
-
-  private val baseFileIterator = baseFileReader(split.dataFile.get)
 
   private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
     tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy)
@@ -227,7 +226,7 @@ class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
     //       on the record from the Delta Log
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, baseFileReader.schema)
+        val curRecord = new HoodieSparkRecord(curRow, readerSchema)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map { r =>
