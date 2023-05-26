@@ -80,7 +80,7 @@ public class HoodieHiveUtils {
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
 
-  private static final boolean isHive3 = isHive3();
+  private static final boolean IS_HIVE3 = isHive3();
 
   public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
     return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
@@ -169,7 +169,7 @@ public class HoodieHiveUtils {
    * So that we need to initialize timestamp according to the version of Hive.
    */
   public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
-    return isHive3 ? Hive3Shims.getTimestampWriteable(value, timestampMillis) : Hive2Shims.getTimestampWriteable(value, timestampMillis);
+    return IS_HIVE3 ? Hive3Shims.getTimestampWriteable(value, timestampMillis) : Hive2Shims.getTimestampWriteable(value, timestampMillis);
   }
 
   /**
@@ -178,14 +178,14 @@ public class HoodieHiveUtils {
    * So that we need to initialize date according to the version of Hive.
    */
   public static Writable getDateWriteable(int value) {
-    return isHive3 ? Hive3Shims.getDateWriteable(value) : Hive2Shims.getDateWriteable(value);
+    return IS_HIVE3 ? Hive3Shims.getDateWriteable(value) : Hive2Shims.getDateWriteable(value);
   }
 
   public static int getDays(Object dateWritable) {
-    return isHive3 ? Hive3Shims.getDays(dateWritable) : Hive2Shims.getDays(dateWritable);
+    return IS_HIVE3 ? Hive3Shims.getDays(dateWritable) : Hive2Shims.getDays(dateWritable);
   }
 
   public static long getMills(Object timestamp) {
-    return isHive3 ? Hive3Shims.getMills(timestamp) : Hive2Shims.getMills(timestamp);
+    return IS_HIVE3 ? Hive3Shims.getMills(timestamp) : Hive2Shims.getMills(timestamp);
   }
 }
