@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.FileSourceScanExec
+import org.apache.spark.sql.execution.{FileSourceScanExec, WholeStageCodegenExec}
 import org.apache.spark.sql.execution.datasources.parquet.Spark32PlusHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
@@ -50,7 +50,6 @@ import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
-
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
  * that's not possible to customize in any other way
@@ -62,6 +61,20 @@ import java.net.URI
  * </ol>
  */
 class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+  }
+
+  def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    // Only output columnar if there is WSCG to read it.
+    val requiredWholeStageCodegenSettings =
+      conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
+    requiredWholeStageCodegenSettings &&
+      supportBatch(sparkSession, schema)
+  }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -138,18 +151,8 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     // Should always be set by FileSourceScanExec creating this.
     // Check conf before checking option, to allow working around an issue by changing conf.
     val returningBatch = sparkSession.sessionState.conf.parquetVectorizedReaderEnabled &&
-      options.get(FileFormat.OPTION_RETURNING_BATCH, "false")
-        .getOrElse {
-          throw new IllegalArgumentException(
-            "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-              "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
-        }
-        .equals("true")
-    if (returningBatch) {
-      // If the passed option said that we are to return batches, we need to also be able to
-      // do this based on config and resultSchema.
-      assert(supportBatch(sparkSession, resultSchema))
-    }
+      supportsColumnar(sparkSession, resultSchema).toString.equals("true")
+
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
