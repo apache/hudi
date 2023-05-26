@@ -112,7 +112,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
                                                            HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
-        config.getString(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
+        config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, Schema.class, Option.class, Properties.class},
         new AvroSchemaConverter(conf).convert(schema), schema, filter, config.getProps());
   }
