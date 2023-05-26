@@ -49,7 +49,7 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties));
+      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
       // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
       ErrorTableUtils.validate(dataset);
     }
