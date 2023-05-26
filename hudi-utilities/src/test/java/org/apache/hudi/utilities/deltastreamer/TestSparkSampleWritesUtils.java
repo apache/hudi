@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.streamer.SparkSampleWritesUtils;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;

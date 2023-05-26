@@ -7,16 +7,17 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 
@@ -24,20 +25,20 @@ import java.util.Objects;
 
 /**
  * Wrapper over TableConfig objects.
- * Useful for incrementally syncing multiple tables one by one via HoodieMultiTableDeltaStreamer.java class.
+ * Useful for incrementally syncing multiple tables one by one via HoodieMultiTableStreamer.java class.
  */
 public class TableExecutionContext {
 
   private TypedProperties properties;
-  private HoodieDeltaStreamer.Config config;
+  private HoodieStreamer.Config config;
   private String database;
   private String tableName;
 
-  public HoodieDeltaStreamer.Config getConfig() {
+  public HoodieStreamer.Config getConfig() {
     return config;
   }
 
-  public void setConfig(HoodieDeltaStreamer.Config config) {
+  public void setConfig(HoodieStreamer.Config config) {
     this.config = config;
   }
 

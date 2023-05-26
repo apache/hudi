@@ -25,6 +25,7 @@ import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;

@@ -28,11 +28,11 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter;
-import org.apache.hudi.utilities.deltastreamer.ErrorEvent;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
+import org.apache.hudi.utilities.streamer.ErrorEvent;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;

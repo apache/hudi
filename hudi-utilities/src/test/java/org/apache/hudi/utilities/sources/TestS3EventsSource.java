@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.sources.AbstractCloudObjectsSourceTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -34,9 +34,9 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_FS;
 import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_REGION;
 import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
-import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_FS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**

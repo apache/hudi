@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;

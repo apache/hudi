@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -30,7 +30,7 @@ public class TerminationStrategyUtils {
   /**
    * Create a PostWriteTerminationStrategy class via reflection,
    * <br>
-   * if the class name of PostWriteTerminationStrategy is configured through the {@link HoodieDeltaStreamer.Config#postWriteTerminationStrategyClass}.
+   * if the class name of PostWriteTerminationStrategy is configured through the {@link HoodieStreamer.Config#postWriteTerminationStrategyClass}.
    */
   public static Option<PostWriteTerminationStrategy> createPostWriteTerminationStrategy(TypedProperties properties, String postWriteTerminationStrategyClass)
       throws HoodieException {

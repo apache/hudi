@@ -86,6 +86,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -2575,7 +2576,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TypedProperties properties = new TypedProperties();
     properties.setProperty("hoodie.datasource.write.recordkey.field","key");
     properties.setProperty("hoodie.datasource.write.partitionpath.field","pp");
-    TestDeltaSync testDeltaSync = new TestDeltaSync(cfg, sparkSession, null, properties,
+    TestStreamSync testDeltaSync = new TestStreamSync(cfg, sparkSession, null, properties,
         jsc, fs, jsc.hadoopConfiguration(), null);
 
     properties.put(HoodieTableConfig.NAME.key(), "sample_tbl");
@@ -2727,7 +2728,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @CsvSource(value = {"COPY_ON_WRITE, AVRO",  "MERGE_ON_READ, AVRO",
-                      "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
+      "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
   public void testConfigurationHotUpdate(HoodieTableType tableType, HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + String.format("/configurationHotUpdate_%s_%s", tableType.name(), recordType.name());
 
@@ -2755,11 +2756,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());
   }
 
-  class TestDeltaSync extends DeltaSync {
+  class TestStreamSync extends DeltaSync {
 
-    public TestDeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
-        JavaSparkContext jssc, FileSystem fs, Configuration conf,
-        Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+    public TestStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
+                          JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                          Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 

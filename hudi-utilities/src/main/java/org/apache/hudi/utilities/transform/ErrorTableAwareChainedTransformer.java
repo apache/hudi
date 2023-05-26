@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.ErrorTableUtils;
+import org.apache.hudi.utilities.streamer.ErrorTableUtils;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;

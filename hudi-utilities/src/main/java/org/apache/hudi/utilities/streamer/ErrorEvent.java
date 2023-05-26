@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 /**
  * Error event is an event triggered during write or processing failure of a record.
