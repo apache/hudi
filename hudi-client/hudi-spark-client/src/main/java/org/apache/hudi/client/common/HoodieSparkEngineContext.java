@@ -62,8 +62,7 @@ import scala.Tuple2;
  */
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkEngineContext.class);
+  
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
