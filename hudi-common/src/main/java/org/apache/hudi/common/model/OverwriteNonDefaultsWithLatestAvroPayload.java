@@ -29,7 +29,7 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * subclass of OverwriteWithLatestAvroPayload used for delta streamer.
+ * subclass of OverwriteWithLatestAvroPayload.
  *
  * <ol>
  * <li>preCombine - Picks the latest delta record for a key, based on an ordering field;

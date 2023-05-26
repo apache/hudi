@@ -110,7 +110,7 @@ public class HoodieStreamer implements Serializable {
       HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
-  public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
+  public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   /**
@@ -326,7 +326,7 @@ public class HoodieStreamer implements Serializable {
             + "outstanding clustering is less than this number")
     public Integer maxPendingClustering = 5;
 
-    @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
+    @Parameter(names = {"--continuous"}, description = "Hudi Streamer runs in continuous mode running"
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
@@ -367,13 +367,13 @@ public class HoodieStreamer implements Serializable {
     public Boolean forceDisableCompaction = false;
 
     /**
-     * Resume Delta Streamer from this checkpoint.
+     * Resume Hudi Streamer from this checkpoint.
      */
-    @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
+    @Parameter(names = {"--checkpoint"}, description = "Resume Hudi Streamer from this checkpoint.")
     public String checkpoint = null;
 
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
-        + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
+        + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for Hudi Streamer "
         + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
         + "Use this field only when switching source, for example, from DFS source to Kafka Source.")
     public String initialCheckpointProvider = null;
@@ -544,7 +544,7 @@ public class HoodieStreamer implements Serializable {
       allKeys.add(k.toString());
     }
     Collections.sort(allKeys);
-    StringBuilder propsLog = new StringBuilder("Creating delta streamer with configs:\n");
+    StringBuilder propsLog = new StringBuilder("Creating Hudi Streamer with configs:\n");
     for (String key : allKeys) {
       String value = Option.ofNullable(props.get(key)).orElse("").toString();
       // Truncate too long values.
@@ -784,7 +784,7 @@ public class HoodieStreamer implements Serializable {
             + "that clustering will complete by then.", ue);
         try {
           Thread.sleep(60000); // Intentionally not using cfg.minSyncIntervalSeconds, since it could be too high or it could be 0.
-          // Once the delta streamer gets past this clustering update exception, regular syncs will honor cfg.minSyncIntervalSeconds.
+          // Once the Hudi Streamer gets past this clustering update exception, regular syncs will honor cfg.minSyncIntervalSeconds.
         } catch (InterruptedException e) {
           throw new HoodieException("Deltastreamer interrupted while waiting for next round ", e);
         }

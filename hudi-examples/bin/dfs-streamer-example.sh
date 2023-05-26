@@ -17,19 +17,19 @@
 # limitations under the License.
 
 
-# Simple examples of HoodieDeltaStreamer which read data from a mock HoodieExampleDataGenerator,
-# this is an example for developers to define your own custom data source.
+# Simple examples of HoodieStreamer which read data from JsonDFSSource,
+# which will read data from a dfs directory for once, then write data to a hudi table which could be queried.
 
 BASE_PATH=$(cd `dirname $0`; pwd)
 
-${BASE_PATH}/hudi-delta-streamer \
+${BASE_PATH}/hudi-streamer \
 --hoodie-conf hoodie.datasource.write.recordkey.field=uuid \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=driver \
---target-base-path /tmp/hoodie/deltastreamertable \
+--hoodie-conf hoodie.deltastreamer.source.dfs.root=hudi-examples/hudi-examples-spark/src/main/resources/streamer-config/dfs \
+--target-base-path /tmp/hoodie/streamertable \
 --table-type MERGE_ON_READ \
---target-table deltastreamertable \
+--target-table streamertable \
 --source-ordering-field ts \
---source-class org.apache.hudi.examples.common.RandomJsonSource \
+--source-class org.apache.hudi.utilities.sources.JsonDFSSource \
 --schemaprovider-class org.apache.hudi.examples.common.ExampleDataSchemaProvider \
---transformer-class org.apache.hudi.examples.common.IdentityTransformer \
---continuous
+--transformer-class org.apache.hudi.examples.common.IdentityTransformer

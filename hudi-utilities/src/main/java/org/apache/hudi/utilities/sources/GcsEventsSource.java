@@ -65,7 +65,7 @@ $ bin/spark-submit \
 --driver-memory 4g \
 --executor-memory 4g \
 --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --source-class org.apache.hudi.utilities.sources.GcsEventsSource \
 --op INSERT \

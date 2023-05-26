@@ -35,7 +35,7 @@ import java.util.Arrays;
  */
 @Immutable
 @ConfigClassProperty(name = "Hudi Incremental Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of incremental pulling from a Hudi "
         + "table as a source in Deltastreamer.")

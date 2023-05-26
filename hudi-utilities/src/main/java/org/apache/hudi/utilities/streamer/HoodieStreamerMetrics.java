@@ -75,19 +75,19 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     return String.format("%s.%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
-  public void updateDeltaStreamerMetrics(long durationInNs) {
+  public void updateStreamerMetrics(long durationInNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
     }
   }
 
-  public void updateDeltaStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
+  public void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
     }
   }
 
-  public void updateDeltaStreamerSyncMetrics(long syncEpochTimeInMs) {
+  public void updateStreamerSyncMetrics(long syncEpochTimeInMs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
     }
@@ -134,19 +134,19 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
    *
    * @param heartbeatTimestampMs the timestamp in milliseconds at which heartbeat is emitted.
    */
-  public void updateDeltaStreamerHeartbeatTimestamp(long heartbeatTimestampMs) {
+  public void updateStreamerHeartbeatTimestamp(long heartbeatTimestampMs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "heartbeatTimestampMs"), heartbeatTimestampMs);
     }
   }
 
-  public void updateDeltaStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount) {
+  public void updateStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceDelayCount);
     }
   }
 
-  public void updateDeltaStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount) {
+  public void updateStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceNewMessageCount);
     }

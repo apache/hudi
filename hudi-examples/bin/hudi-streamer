@@ -35,6 +35,6 @@ exec "${SPARK_HOME}"/bin/spark-submit \
 --conf spark.yarn.queue=root.default \
 --conf spark.yarn.submit.waitAppCompletion=false \
 --jars ${EXAMPLES_JARS} \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 "${JAR_FILE}" \
 $@

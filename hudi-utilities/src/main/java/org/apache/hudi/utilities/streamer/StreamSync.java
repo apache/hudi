@@ -85,8 +85,8 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackCo
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
+import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -155,7 +155,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_FORCE_SKIP_PROP;
@@ -454,7 +454,7 @@ public class StreamSync implements Serializable, Closeable {
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
 
-    metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
+    metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
     return result;
   }
 
@@ -728,9 +728,9 @@ public class StreamSync implements Serializable, Closeable {
           resumeCheckpointStr = multiwriterIdentifier.isPresent() ? readCheckpointValue(value, multiwriterIdentifier.get()) : Option.of(value);
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          throw new HoodieDeltaStreamerException(
+          throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                  + "was indeed built via Hudi Streamer. Last Commit :" + lastCommit + ", Instants :"
                   + commitsTimelineOpt.get().getInstants() + ", CommitMetadata="
                   + commitMetadata.toJsonString());
         }
@@ -833,7 +833,7 @@ public class StreamSync implements Serializable, Closeable {
         writeStatusRDD = writeClient.deletePartitions(partitions, instantTime).getWriteStatuses();
         break;
       default:
-        throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
+        throw new HoodieStreamerException("Unknown operation : " + cfg.operation);
     }
 
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
@@ -911,7 +911,7 @@ public class StreamSync implements Serializable, Closeable {
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateDeltaStreamerMetrics(overallTimeMs);
+    metrics.updateStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -979,7 +979,7 @@ public class StreamSync implements Serializable, Closeable {
           Timer.Context syncContext = metrics.getMetaSyncTimerContext();
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
           long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-          metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+          metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
         } catch (HoodieException e) {
           LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
           metaSyncExceptions.add(e);
