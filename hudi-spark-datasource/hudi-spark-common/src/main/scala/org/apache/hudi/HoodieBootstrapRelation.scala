@@ -76,7 +76,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues =
           getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val dataFile = PartitionedFile(partitionValues, SparkPath.fromPathString(baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val dataFile = PartitionedFile(partitionValues, SparkPath.fromPathString(baseFile.getBootstrapBaseFile.get().getPath), 0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, SparkPath.fromPathString(baseFile.getPath), 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)

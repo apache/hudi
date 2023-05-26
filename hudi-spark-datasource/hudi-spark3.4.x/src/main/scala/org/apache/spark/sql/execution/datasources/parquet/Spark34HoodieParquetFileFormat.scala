@@ -25,7 +25,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-class Spark34HoodieParquetFileFormat(override protected val shouldAppendPartitionValues: Boolean) extends Spark32PlusHoodieParquetFileFormat(shouldAppendPartitionValues) {
+class Spark34HoodieParquetFileFormat(protected val shouldAppendPartitionValues: Boolean) extends Spark32PlusHoodieParquetFileFormat(shouldAppendPartitionValues) {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
