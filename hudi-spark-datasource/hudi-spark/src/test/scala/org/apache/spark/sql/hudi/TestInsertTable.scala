@@ -25,13 +25,10 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 import org.junit.jupiter.api.Assertions.assertEquals
-
-import org.scalatest.Inspectors.forAll
 
 import java.io.File
 
@@ -1119,9 +1116,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
 
-  /*
-   * NOTE: Additionally, this test serves as a smoke test making sure that all of the bulk-insert
-   *       modes work
+  /**
+   * This test is to make sure that bulk insert doesn't create a bunch of tiny files
+   * if [[HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS]] doesn't
+   * start with the partition columns.
+   *
+   * Additionally, this test serves as a smoke test making sure that all of the bulk-insert
+   * modes work.
    */
   test(s"Test Bulk Insert with all sort-modes") {
     withTempDir { basePath =>
@@ -1174,8 +1175,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |(7, 'a', 23, '2021-03-21')
              |""".stripMargin)
 
-        // TODO re-enable
-        //assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
+        if (sortMode.name.equals(BulkInsertSortMode.GLOBAL_SORT.name())) {
+          assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
+        }
       }
     }
   }
@@ -1231,69 +1233,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         })
       }
     }
-  }
-
-  /**
-   * This test is to make sure that bulk insert doesn't create a bunch of tiny files if
-   * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns
-   *
-   */
-  forAll(BulkInsertSortMode.values().toList) { (sortMode: BulkInsertSortMode) =>
-    val sortModeName = sortMode.name()
-    test(s"Test Bulk Insert with BulkInsertSortMode: '$sortModeName'") {
-      withTempDir { basePath =>
-        testBulkInsertPartitioner(basePath, sortModeName)
-       }
-    }
-  }
-
-  def testBulkInsertPartitioner(basePath: File, sortModeName: String): Unit = {
-    val tableName = generateTableName
-    // TODO Remove these with [HUDI-5419]
-    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
-    spark.sessionState.conf.unsetConf("hoodie.datasource.write.insert.drop.duplicates")
-    spark.sessionState.conf.unsetConf("hoodie.merge.allow.duplicate.on.inserts")
-    spark.sessionState.conf.unsetConf("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
-    // Default parallelism is 200 which means in global sort, each record will end up in a different spark partition so
-    // 9 files would be created. Setting parallelism to 3 so that each spark partition will contain a hudi partition.
-    val parallelism = if (sortModeName.equals(BulkInsertSortMode.GLOBAL_SORT.name())) {
-      "hoodie.bulkinsert.shuffle.parallelism = 3,"
-    } else {
-      ""
-    }
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  id int,
-         |  name string,
-         |  price double,
-         |  dt string
-         |) using hudi
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  preCombineField = 'name',
-         |  type = 'cow',
-         |  $parallelism
-         |  hoodie.bulkinsert.sort.mode = '$sortModeName'
-         | )
-         | partitioned by (dt)
-         | location '${basePath.getCanonicalPath}/$tableName'
-        """.stripMargin)
-    spark.sql("set hoodie.sql.bulk.insert.enable = true")
-    spark.sql("set hoodie.sql.insert.mode = non-strict")
-    spark.sql(
-      s"""insert into $tableName  values
-         |(5, 'a', 35, '2021-05-21'),
-         |(1, 'a', 31, '2021-01-21'),
-         |(3, 'a', 33, '2021-03-21'),
-         |(4, 'b', 16, '2021-05-21'),
-         |(2, 'b', 18, '2021-01-21'),
-         |(6, 'b', 17, '2021-03-21'),
-         |(8, 'a', 21, '2021-05-21'),
-         |(9, 'a', 22, '2021-01-21'),
-         |(7, 'a', 23, '2021-03-21')
-         |""".stripMargin)
-    assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
   }
 
   test("Test Insert Overwrite Into Consistent Bucket Index Table") {
