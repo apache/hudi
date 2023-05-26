@@ -95,8 +95,8 @@ The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version,
 | `-Dspark3.1`              | hudi-spark3.1-bundle_2.12                    | For Spark 3.1.x and Scala 2.12                   |
 | `-Dspark3.2`              | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12 (same as default) |
 | `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.x and Scala 2.12                   |
-| `-Dspark -Dscala-2.11`    | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11                   |
-| `-Dspark -Dscala-2.12`    | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
+| `-Dspark2 -Dscala-2.11`   | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11                   |
+| `-Dspark2 -Dscala-2.12`   | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.3.x and Scala 2.12                   |
 
 For example,
