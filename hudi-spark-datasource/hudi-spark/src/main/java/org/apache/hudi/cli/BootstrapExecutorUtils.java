@@ -118,7 +118,7 @@ public class BootstrapExecutorUtils implements Serializable {
   /**
    * Bootstrap Executor.
    *
-   * @param cfg        HudiStreamer Config
+   * @param cfg        Hudi Streamer Config
    * @param jssc       Java Spark Context
    * @param fs         File System
    * @param properties Bootstrap Writer Properties

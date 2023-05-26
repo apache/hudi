@@ -111,7 +111,7 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 @ConfigClassProperty(name = "Write Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
-        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g HudiStreamer).")
+        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g Hudi Streamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteConfig.class);

@@ -39,7 +39,7 @@ public class ConfigGroups {
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    HUDI_STREAMER("HudiStreamer Configs");
+    HUDI_STREAMER("Hudi Streamer Configs");
 
     public final String name;
 
@@ -68,10 +68,10 @@ public class ConfigGroups {
         "Configurations controlling callback behavior into HTTP endpoints, to push "
             + "notifications on commits on hudi tables."),
     SCHEMA_PROVIDER(
-        "HudiStreamer Schema Provider Configs",
-        "Configurations that control the schema provider for HudiStreamer."),
+        "Hudi Streamer Schema Provider Configs",
+        "Configurations that control the schema provider for Hudi Streamer."),
     DELTA_STREAMER_SOURCE(
-        "HudiStreamer Source Configs",
+        "Hudi Streamer Source Configs",
         "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
@@ -150,7 +150,7 @@ public class ConfigGroups {
         description = "Configurations specific to Amazon Web Services.";
         break;
       case HUDI_STREAMER:
-        description = "These set of configs are used for HudiStreamer utility which provides "
+        description = "These set of configs are used for Hudi Streamer utility which provides "
             + "the way to ingest from different sources such as DFS or Kafka.";
         break;
       default:
