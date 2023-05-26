@@ -38,6 +38,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import static org.apache.hudi.io.storage.HoodieHFileConfig.CACHE_DATA_IN_L1;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.DROP_BEHIND_CACHE_COMPACTION;
@@ -110,10 +111,9 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(Configuration conf, Schema schema,
                                                            HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
-    HoodieAvroWriteSupport writeSupport = (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
+    return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getString(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {MessageType.class, Schema.class, Option.class, Option.class},
-        new AvroSchemaConverter(conf).convert(schema), schema, filter, Option.of(config));
-    return writeSupport;
+        new Class<?>[] {MessageType.class, Schema.class, Option.class, Properties.class},
+        new AvroSchemaConverter(conf).convert(schema), schema, filter, config.getProps());
   }
 }
