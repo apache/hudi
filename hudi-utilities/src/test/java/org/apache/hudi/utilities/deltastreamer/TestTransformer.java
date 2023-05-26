@@ -91,6 +91,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
                               TypedProperties properties) {
       String[] suffixes = ((String) properties.get("transformer.suffix")).split(",");
       for (String suffix : suffixes) {
+        // verify no configs with suffix are in properties
         properties.keySet().forEach(k -> assertFalse(((String) k).endsWith(suffix)));
       }
       int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
