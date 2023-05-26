@@ -2383,6 +2383,7 @@
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.2</name>
         </property>
