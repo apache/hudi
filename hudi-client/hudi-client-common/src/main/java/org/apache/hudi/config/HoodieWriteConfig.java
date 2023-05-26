@@ -1944,6 +1944,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
 
+  public String getBucketIndexHashFieldWithDefault() {
+    return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+  }
+
   /**
    * storage properties.
    */
@@ -2848,6 +2852,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAllowMultiWriteOnSameInstant(boolean allow) {
       writeConfig.setValue(ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE, String.valueOf(allow));
+      return this;
+    }
+
+    public Builder withHiveStylePartitioningEnabled(boolean enabled) {
+      writeConfig.setValue(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE, String.valueOf(enabled));
       return this;
     }
 

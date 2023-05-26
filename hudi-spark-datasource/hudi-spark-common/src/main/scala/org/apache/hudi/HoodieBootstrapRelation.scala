@@ -27,7 +27,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -191,11 +191,20 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
+  def toHadoopFsRelation: HadoopFsRelation = {
+      HadoopFsRelation(
+        location = fileIndex,
+        partitionSchema = fileIndex.partitionSchema,
+        dataSchema = fileIndex.dataSchema,
+        bucketSpec = None,
+        fileFormat = fileFormat,
+        optParams)(sparkSession)
+  }
+
 }
 
 
 object HoodieBootstrapRelation {
-
   private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
     val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq

@@ -238,7 +238,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         ("rider,driver", 14167),
         ("rider,driver,tip_history", 14167))
     else if (HoodieSparkUtils.isSpark2)
-    // TODO re-enable tests (these tests are very unstable currently)
       Array(
         ("rider", 14160),
         ("rider,driver", 14160),
