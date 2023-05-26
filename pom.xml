@@ -2157,7 +2157,6 @@
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
-        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
@@ -2193,7 +2192,6 @@
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
-        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>false</skipITs>
       </properties>
@@ -2249,7 +2247,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skip.hudi-spark3.unit.tests>false</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2291,7 +2288,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skip.hudi-spark3.unit.tests>false</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2332,7 +2328,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skip.hudi-spark3.unit.tests>false</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2374,7 +2369,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skip.hudi-spark3.unit.tests>false</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2419,7 +2413,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skip.hudi-spark3.unit.tests>false</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
