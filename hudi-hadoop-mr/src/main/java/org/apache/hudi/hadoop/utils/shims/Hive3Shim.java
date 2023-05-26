@@ -29,22 +29,25 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.sql.Timestamp;
 
-public class Hive3Shims {
+/**
+ * Shim clazz for Hive3.
+ */
+public class Hive3Shim implements HiveShim {
 
-  public static final Logger LOG = LoggerFactory.getLogger(Hive3Shims.class);
+  public static final Logger LOG = LoggerFactory.getLogger(Hive3Shim.class);
 
   public static final String HIVE_TIMESTAMP_TYPE_CLASS = "org.apache.hadoop.hive.common.type.Timestamp";
   public static final String TIMESTAMP_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.TimestampWritableV2";
   public static final String DATE_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.DateWritableV2";
 
-  private static Class TIMESTAMP_CLASS = null;
+  private static Class<?> TIMESTAMP_CLASS = null;
   private static Method SET_TIME_IN_MILLIS = null;
   private static Method TO_SQL_TIMESTAMP = null;
-  private static Constructor TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = null;
+  private static Constructor<?> TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = null;
 
-  private static Class DATE_WRITEABLE_CLASS = null;
+  private static Class<?> DATE_WRITEABLE_CLASS = null;
   private static Method GET_DAYS = null;
-  private static Constructor DATE_WRITEABLE_V2_CONSTRUCTOR = null;
+  private static Constructor<?> DATE_WRITEABLE_V2_CONSTRUCTOR = null;
 
   static {
     // timestamp
@@ -67,12 +70,21 @@ public class Hive3Shims {
     }
   }
 
+  private static final Hive3Shim INSTANCE = new Hive3Shim();
+
+  private Hive3Shim() {
+  }
+
+  public static Hive3Shim getInstance() {
+    return INSTANCE;
+  }
+
   /**
    * Get timestamp writeable object from long value.
    * Hive3 use TimestampWritableV2 to build timestamp objects and Hive2 use TimestampWritable.
    * So that we need to initialize timestamp according to the version of Hive.
    */
-  public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
+  public Writable getTimestampWriteable(long value, boolean timestampMillis) {
     try {
       Object timestamp = TIMESTAMP_CLASS.newInstance();
       SET_TIME_IN_MILLIS.invoke(timestamp, timestampMillis ? value : value / 1000);
@@ -87,7 +99,7 @@ public class Hive3Shims {
    * Hive3 use DateWritableV2 to build date objects and Hive2 use DateWritable.
    * So that we need to initialize date according to the version of Hive.
    */
-  public static Writable getDateWriteable(int value) {
+  public Writable getDateWriteable(int value) {
     try {
       return (Writable) DATE_WRITEABLE_V2_CONSTRUCTOR.newInstance(value);
     } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
@@ -95,7 +107,7 @@ public class Hive3Shims {
     }
   }
 
-  public static int getDays(Object dateWritable) {
+  public int getDays(Object dateWritable) {
     try {
       return (int)GET_DAYS.invoke(dateWritable);
     } catch (IllegalAccessException | InvocationTargetException e) {
@@ -103,7 +115,7 @@ public class Hive3Shims {
     }
   }
 
-  public static long getMills(Object timestamp) {
+  public long getMills(Object timestamp) {
     try {
       return ((Timestamp) TO_SQL_TIMESTAMP.invoke(timestamp)).getTime();
     } catch (IllegalAccessException | InvocationTargetException e) {

@@ -18,28 +18,11 @@
 
 package org.apache.hudi.hadoop.utils.shims;
 
-import org.apache.hadoop.hive.serde2.io.DateWritable;
-import org.apache.hadoop.hive.serde2.io.TimestampWritable;
-import org.apache.hadoop.io.Writable;
-
-import java.sql.Timestamp;
-
-public class Hive2Shims {
-
-  public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
-    Timestamp timestamp = new Timestamp(timestampMillis ? value : value / 1000);
-    return new TimestampWritable(timestamp);
-  }
-
-  public static Writable getDateWriteable(int value) {
-    return new DateWritable(value);
-  }
-
-  public static int getDays(Object dateWritable) {
-    return ((DateWritable) dateWritable).getDays();
-  }
-
-  public static long getMills(Object timestamp) {
-    return ((Timestamp) timestamp).getTime();
+/**
+ * Factory clazz for {@link HiveShim}.
+ */
+public class HiveShims {
+  public static HiveShim getInstance(boolean hive3) {
+    return hive3 ? Hive3Shim.getInstance() : Hive2Shim.getInstance();
   }
 }

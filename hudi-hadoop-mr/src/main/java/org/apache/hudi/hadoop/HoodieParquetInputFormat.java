@@ -74,9 +74,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   /**
    * Spark2 use `parquet.hadoopParquetInputFormat` in `com.twitter:parquet-hadoop-bundle`.
    * So that we need to distinguish the constructions of classes with
-   *  `parquet.hadoopParquetInputFormat` or `org.apache.parquet.hadoop.ParquetInputFormat`.
+   * `parquet.hadoopParquetInputFormat` or `org.apache.parquet.hadoop.ParquetInputFormat`.
    * If we use `org.apache.parquet:parquet-hadoop`, we can use `HudiAvroParquetInputFormat`
-   *  in Hive or Spark3 to get timestamp with correct type.
+   * in Hive or Spark3 to get timestamp with correct type.
    */
   private void initAvroInputFormat() {
     try {

@@ -30,14 +30,14 @@ import java.io.IOException;
 
 /**
  * To resolve issue <a href="https://issues.apache.org/jira/browse/HUDI-83">Fix Timestamp/Date type read by Hive3</a>,
- * we need to handle timestamp types separately based on the parquet-avro approach
+ * we need to handle timestamp types separately based on the parquet-avro approach.
  */
 public class HoodieTimestampAwareParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
 
   @Override
   public RecordReader<Void, ArrayWritable> createRecordReader(
       InputSplit inputSplit,
-      TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
+      TaskAttemptContext taskAttemptContext) throws IOException {
     Configuration conf = ContextUtil.getConfiguration(taskAttemptContext);
     return new HoodieAvroParquetReader(inputSplit, conf);
   }

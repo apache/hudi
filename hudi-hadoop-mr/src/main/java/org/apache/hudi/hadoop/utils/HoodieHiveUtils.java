@@ -20,8 +20,8 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.utils.shims.Hive2Shims;
-import org.apache.hudi.hadoop.utils.shims.Hive3Shims;
+import org.apache.hudi.hadoop.utils.shims.HiveShim;
+import org.apache.hudi.hadoop.utils.shims.HiveShims;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -81,6 +81,8 @@ public class HoodieHiveUtils {
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
 
   private static final boolean IS_HIVE3 = isHive3();
+
+  private static final HiveShim HIVE_SHIM = HiveShims.getInstance(IS_HIVE3);
 
   public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
     return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
@@ -169,7 +171,7 @@ public class HoodieHiveUtils {
    * So that we need to initialize timestamp according to the version of Hive.
    */
   public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
-    return IS_HIVE3 ? Hive3Shims.getTimestampWriteable(value, timestampMillis) : Hive2Shims.getTimestampWriteable(value, timestampMillis);
+    return HIVE_SHIM.getTimestampWriteable(value, timestampMillis);
   }
 
   /**
@@ -178,14 +180,14 @@ public class HoodieHiveUtils {
    * So that we need to initialize date according to the version of Hive.
    */
   public static Writable getDateWriteable(int value) {
-    return IS_HIVE3 ? Hive3Shims.getDateWriteable(value) : Hive2Shims.getDateWriteable(value);
+    return HIVE_SHIM.getDateWriteable(value);
   }
 
   public static int getDays(Object dateWritable) {
-    return IS_HIVE3 ? Hive3Shims.getDays(dateWritable) : Hive2Shims.getDays(dateWritable);
+    return HIVE_SHIM.getDays(dateWritable);
   }
 
   public static long getMills(Object timestamp) {
-    return IS_HIVE3 ? Hive3Shims.getMills(timestamp) : Hive2Shims.getMills(timestamp);
+    return HIVE_SHIM.getMills(timestamp);
   }
 }
