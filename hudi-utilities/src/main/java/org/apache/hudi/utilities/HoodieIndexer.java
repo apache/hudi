@@ -35,10 +35,10 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.TestOnly;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -85,7 +85,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  */
 public class HoodieIndexer {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexer.class);
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
@@ -126,8 +126,8 @@ public class HoodieIndexer {
     public String indexTypes = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" to generate an indexing plan; "
         + "Set \"execute\" to execute the indexing plan at the given instant, which means --instant-time is required here; "
-        + "Set \"scheduleandExecute\" to generate an indexing plan first and execute that plan immediately;"
-        + "Set \"dropindex\" to drop the index types specified in --index-types;")
+        + "Set \"scheduleAndExecute\" to generate an indexing plan first and execute that plan immediately;"
+        + "Set \"dropIndex\" to drop the index types specified in --index-types;")
     public String runningMode = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

@@ -32,8 +32,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,25 +41,25 @@ import java.util.concurrent.ConcurrentHashMap;
  * A container that can potentially hold one or more table's file-system views. There is one view for each table.
  * This is a view built against a timeline containing completed actions. In an embedded timeline-server mode, this
  * typically holds only one table's view. In a stand-alone server mode, this can hold more than one table's views.
- *
+ * <p>
  * FileSystemView can be stored "locally" using the following storage mechanisms: a. In Memory b. Spillable Map c.
- * RocksDB
- *
+ * RocksDB.
+ * <p>
  * But there can be cases where the file-system view is managed remoted. For example : Embedded Timeline Server). In
  * this case, the clients will configure a remote filesystem view client (RemoteHoodieTableFileSystemView) for the
- * table which can connect to the remote file system view and fetch views. THere are 2 modes here : REMOTE_FIRST and
- * REMOTE_ONLY REMOTE_FIRST : The file-system view implementation on client side will act as a remote proxy. In case, if
+ * table which can connect to the remote file system view and fetch views. There are 2 modes here : REMOTE_FIRST and
+ * REMOTE_ONLY. REMOTE_FIRST : The file-system view implementation on client side will act as a remote proxy. In case, if
  * there is problem (or exceptions) querying remote file-system view, a backup local file-system view(using either one
- * of in-memory, spillable, rocksDB) is used to server file-system view queries REMOTE_ONLY : In this case, there is no
+ * of in-memory, spillable, rocksDB) is used to server file-system view queries. REMOTE_ONLY : In this case, there is no
  * backup local file-system view. If there is problem (or exceptions) querying remote file-system view, then the
  * exceptions are percolated back to client.
- *
+ * <p>
  * FileSystemViewManager is designed to encapsulate the file-system view storage from clients using the file-system
  * view. FileSystemViewManager uses a factory to construct specific implementation of file-system view and passes it to
  * clients for querying.
  */
 public class FileSystemViewManager {
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemViewManager.class);
 
   private static final String HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS = "org.apache.hudi.common.table.view.HoodieMetaserverFileSystemView";
 
@@ -81,7 +81,7 @@ public class FileSystemViewManager {
 
   /**
    * Drops reference to File-System Views. Future calls to view results in creating a new view
-   * 
+   *
    * @param basePath
    */
   public void clearFileSystemView(String basePath) {
@@ -93,7 +93,7 @@ public class FileSystemViewManager {
 
   /**
    * Main API to get the file-system view for the base-path.
-   * 
+   *
    * @param basePath
    * @return
    */
@@ -129,7 +129,7 @@ public class FileSystemViewManager {
 
   /**
    * Create RocksDB based file System view for a table.
-   * 
+   *
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
    * @param metaClient HoodieTableMetaClient
@@ -143,7 +143,7 @@ public class FileSystemViewManager {
 
   /**
    * Create a spillable Map based file System view for a table.
-   * 
+   *
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
    * @param metaClient HoodieTableMetaClient
@@ -162,29 +162,28 @@ public class FileSystemViewManager {
    */
   private static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig viewConf,
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
-    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
+    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePathV2());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     if (metadataConfig.enabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
-      return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
-          metadataSupplier.get());
+      return new HoodieMetadataFileSystemView(metaClient, timeline, metadataSupplier.get());
     }
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
-          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
+          metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
   public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient,
                                                                        HoodieMetadataConfig metadataConfig) {
-    
+
     return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, metadataConfig,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-    
+
   }
-  
+
   public static HoodieTableFileSystemView createInMemoryFileSystemViewWithTimeline(HoodieEngineContext engineContext,
                                                                                    HoodieTableMetaClient metaClient,
                                                                                    HoodieMetadataConfig metadataConfig,
@@ -196,7 +195,7 @@ public class FileSystemViewManager {
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
           new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
-          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetaserverConfig());
+          metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
   }

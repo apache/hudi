@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
+import com.lmax.disruptor.TimeoutException;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -27,7 +28,11 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -38,18 +43,23 @@ import java.util.function.Function;
  */
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
+  private static final Logger LOG = LoggerFactory.getLogger(DisruptorMessageQueue.class);
+
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
+  private AtomicReference<Throwable> throwable = new AtomicReference<>(null);
 
   private boolean isShutdown = false;
   private boolean isStarted = false;
 
-  public DisruptorMessageQueue(Option<Integer> bufferSize, Function<I, O> transformFunction, Option<String> waitStrategyName, int totalProducers, Runnable preExecuteRunnable) {
-    WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
+  private static final long TIMEOUT_WAITING_SECS = 10L;
+
+  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyId, int totalProducers, Runnable preExecuteRunnable) {
+    WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyId);
     CustomizedThreadFactory threadFactory = new CustomizedThreadFactory("disruptor", true, preExecuteRunnable);
 
-    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize.get(), threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
+    this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, totalProducers > 1 ? ProducerType.MULTI : ProducerType.SINGLE, waitStrategy);
     this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }
@@ -81,7 +91,13 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public void markAsFailed(Throwable e) {
+    this.throwable.compareAndSet(null, e);
     // no-op
+  }
+
+  @Override
+  public Throwable getThrowable() {
+    return this.throwable.get();
   }
 
   @Override
@@ -98,14 +114,30 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
       if (!isShutdown) {
         isShutdown = true;
         isStarted = false;
-        queue.shutdown();
+        if (Thread.currentThread().isInterrupted()) {
+          // if current thread has been interrupted, we still give executor a chance to proceeding.
+          LOG.error("Disruptor Queue has been interrupted! Shutdown now.");
+          try {
+            queue.shutdown(TIMEOUT_WAITING_SECS, TimeUnit.SECONDS);
+          } catch (TimeoutException e) {
+            LOG.error("Disruptor queue shutdown timeout: " + e);
+            throw new HoodieException(e);
+          }
+          throw new HoodieException("Disruptor Queue has been interrupted! Shutdown now.");
+        } else {
+          queue.shutdown();
+        }
       }
     }
   }
 
-  protected void setHandlers(HoodieConsumer consumer) {
+  protected void setHandlers(HoodieConsumer<O, ?> consumer) {
     queue.handleEventsWith((event, sequence, endOfBatch) -> {
-      consumer.consume(event.get());
+      try {
+        consumer.consume(event.get());
+      } catch (Exception e) {
+        LOG.error("Failed consuming records", e);
+      }
     });
   }
 

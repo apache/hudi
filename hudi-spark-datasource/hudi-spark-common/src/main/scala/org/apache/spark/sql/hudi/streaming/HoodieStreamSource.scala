@@ -69,6 +69,11 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
+  private val useStateTransitionTime =
+    parameters.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key())
+      .map(_.toBoolean)
+      .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue())
+
   @transient private lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
     metadataLog.get(0).getOrElse {
@@ -101,7 +106,16 @@ class HoodieStreamSource(
     metaClient.reloadActiveTimeline()
     metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
       case activeInstants if !activeInstants.empty() =>
-        Some(HoodieSourceOffset(activeInstants.lastInstant().get().getTimestamp))
+        val timestamp = if (useStateTransitionTime) {
+          activeInstants.getInstantsOrderedByStateTransitionTime
+            .skip(activeInstants.countInstants() - 1)
+            .findFirst()
+            .get()
+            .getStateTransitionTime
+        } else {
+          activeInstants.lastInstant().get().getTimestamp
+        }
+        Some(HoodieSourceOffset(timestamp))
       case _ =>
         None
     }
@@ -137,6 +151,7 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+          DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key() -> useStateTransitionTime.toString,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
         )
@@ -163,10 +178,7 @@ class HoodieStreamSource(
     startOffset match {
       case INIT_OFFSET => startOffset.commitTime
       case HoodieSourceOffset(commitTime) =>
-        val time = HoodieActiveTimeline.parseDateFromInstantTime(commitTime).getTime
-        // As we consume the data between (start, end], start is not included,
-        // so we +1s to the start commit time here.
-        HoodieActiveTimeline.formatDate(new Date(time + 1000))
+        commitTime
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

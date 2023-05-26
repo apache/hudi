@@ -39,6 +39,8 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -152,6 +154,17 @@ public class TestCompactionUtil {
     CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
     int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
     assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testInferMetadataConf(boolean metadataEnabled) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.METADATA_ENABLED.key(), metadataEnabled + "");
+    beforeEach(options);
+    CompactionUtil.inferMetadataConf(this.conf, this.metaClient);
+    assertThat("Metadata table should be disabled after inference",
+        this.conf.getBoolean(FlinkOptions.METADATA_ENABLED), is(metadataEnabled));
   }
 
   /**

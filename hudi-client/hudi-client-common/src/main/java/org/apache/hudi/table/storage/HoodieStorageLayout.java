@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.storage;
 
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -50,7 +52,16 @@ public abstract class HoodieStorageLayout implements Serializable {
    */
   public abstract boolean writeOperationSupported(WriteOperationType operationType);
 
+  @EnumDescription("Determines how the files are organized within a table.")
   public enum LayoutType {
-    DEFAULT, BUCKET
+
+    @EnumFieldDescription("Each file group contains records of a certain set of keys, "
+        + "without particular grouping criteria.")
+    DEFAULT,
+
+    @EnumFieldDescription("Each file group contains records of a set of keys which map "
+        + "to a certain range of hash values, so that using the hash function can easily "
+        + "identify the file group a record belongs to, based on the record key.")
+    BUCKET
   }
 }

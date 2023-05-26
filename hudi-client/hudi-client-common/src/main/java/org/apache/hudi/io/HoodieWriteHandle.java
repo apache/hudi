@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -38,14 +39,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -58,7 +60,7 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
  */
 public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteHandle.class);
 
   /**
    * Schema used to write records into data files
@@ -75,6 +77,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
+
+  private boolean closed = false;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
@@ -95,7 +99,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
-    schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
+    this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
   }
 
@@ -175,6 +179,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     doWrite(record, schema, props);
   }
 
+  protected boolean isClosed() {
+    return closed;
+  }
+
+  protected void markClosed() {
+    this.closed = true;
+  }
+
   public abstract List<WriteStatus> close();
 
   public List<WriteStatus> writeStatuses() {
@@ -242,7 +254,12 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
         .withSuffix(suffix)
+        .withLogWriteCallback(getLogWriteCallback())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+  }
+
+  protected HoodieLogFileWriteCallback getLogWriteCallback() {
+    return new AppendLogWriteCallback();
   }
 
   protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
@@ -261,6 +278,33 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     } catch (IOException e) {
       LOG.error("Fail to get indexRecord from " + record, e);
       return Option.empty();
+    }
+  }
+
+  protected class AppendLogWriteCallback implements HoodieLogFileWriteCallback {
+    // here we distinguish log files created from log files being appended. Considering following scenario:
+    // An appending task write to log file.
+    // (1) append to existing file file_instant_writetoken1.log.1
+    // (2) rollover and create file file_instant_writetoken2.log.2
+    // Then this task failed and retry by a new task.
+    // (3) append to existing file file_instant_writetoken1.log.1
+    // (4) rollover and create file file_instant_writetoken3.log.2
+    // finally file_instant_writetoken2.log.2 should not be committed to hudi, we use marker file to delete it.
+    // keep in mind that log file is not always fail-safe unless it never roll over
+
+    @Override
+    public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+      // we use create rather than createIfNotExists because create method can trigger marker-based early conflict detection.
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+          config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
+    }
+
+    @Override
+    public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+      return writeMarkers.create(partitionPath, logFileToCreate.getFileName(), IOType.CREATE,
+          config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
   }
 }

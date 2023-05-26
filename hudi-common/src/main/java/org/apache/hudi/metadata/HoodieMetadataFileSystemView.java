@@ -54,9 +54,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig,
+        metaClient.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true));
   }
 
   /**
@@ -92,14 +91,26 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   @Override
   public void reset() {
-    super.reset();
-    tableMetadata.reset();
+    try {
+      writeLock.lock();
+      clear();
+      // Initialize with new Hoodie timeline.
+      init(metaClient, getTimeline());
+      tableMetadata.reset();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
   public void sync() {
-    super.sync();
-    tableMetadata.reset();
+    try {
+      writeLock.lock();
+      maySyncIncrementally();
+      tableMetadata.reset();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override

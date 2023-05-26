@@ -18,11 +18,12 @@
 
 package org.apache.spark
 
-import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.io.{Input, Output}
+import com.esotericsoftware.kryo.{Kryo, Serializer}
 import com.esotericsoftware.kryo.serializers.JavaSerializer
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.SerializableConfiguration
-import org.apache.hudi.common.model.HoodieSparkRecord
+import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.serializer.KryoRegistrator
@@ -44,11 +45,14 @@ import org.apache.spark.serializer.KryoRegistrator
  * </ol>
  */
 class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegistrator {
+
   override def registerClasses(kryo: Kryo): Unit = {
     ///////////////////////////////////////////////////////////////////////////
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
     super[HoodieCommonKryoRegistrar].registerClasses(kryo)
+
+    kryo.register(classOf[HoodieKey], new HoodieKeySerializer)
 
     kryo.register(classOf[HoodieWriteConfig])
 
@@ -58,6 +62,23 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     // NOTE: Hadoop's configuration is not a serializable object by itself, and hence
     //       we're relying on [[SerializableConfiguration]] wrapper to work it around
     kryo.register(classOf[SerializableConfiguration], new JavaSerializer())
+  }
+
+  /**
+   * NOTE: This {@link Serializer} could deserialize instance of {@link HoodieKey} serialized
+   *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
+   */
+  class HoodieKeySerializer extends Serializer[HoodieKey] {
+    override def write(kryo: Kryo, output: Output, key: HoodieKey): Unit = {
+      output.writeString(key.getRecordKey)
+      output.writeString(key.getPartitionPath)
+    }
+
+    override def read(kryo: Kryo, input: Input, klass: Class[HoodieKey]): HoodieKey = {
+      val recordKey = input.readString()
+      val partitionPath = input.readString()
+      new HoodieKey(recordKey, partitionPath)
+    }
   }
 }
 

@@ -36,8 +36,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -63,7 +63,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
  * entries).
  */
 public class TimelineServerBasedWriteMarkers extends WriteMarkers {
-  private static final Logger LOG = LogManager.getLogger(TimelineServerBasedWriteMarkers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerBasedWriteMarkers.class);
   private final ObjectMapper mapper;
   private final String timelineServerHost;
   private final int timelineServerPort;
@@ -133,9 +133,9 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+  protected Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
-    String markerFileName = getMarkerFileName(dataFileName, type);
+    String markerFileName = getMarkerFileName(fileName, type);
 
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
@@ -149,10 +149,10 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    String markerFileName = getMarkerFileName(dataFileName, type);
+    String markerFileName = getMarkerFileName(fileName, type);
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, true);
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
@@ -220,7 +220,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ")");
+    LOG.debug("Sending request : (" + url + ")");
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {

@@ -21,7 +21,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.TableCapability._
-import org.apache.spark.sql.connector.catalog._
+import org.apache.spark.sql.connector.catalog.{SupportsWrite, Table, TableCapability, V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -85,8 +85,8 @@ case class HoodieInternalV2Table(spark: SparkSession,
 }
 
 private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
-                                     hoodieCatalogTable: HoodieCatalogTable,
-                                     spark: SparkSession)
+                                   hoodieCatalogTable: HoodieCatalogTable,
+                                   spark: SparkSession)
   extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
 
   private var overwriteTable = false
@@ -106,7 +106,7 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
     override def toInsertableRelation: InsertableRelation = {
       new InsertableRelation {
         override def insert(data: DataFrame, overwrite: Boolean): Unit = {
-          alignOutputColumns(data).write.format("org.apache.hudi")
+          data.write.format("org.apache.hudi")
             .mode(SaveMode.Append)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
               buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))
@@ -114,10 +114,5 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
         }
       }
     }
-  }
-
-  private def alignOutputColumns(data: DataFrame): DataFrame = {
-    val schema = hoodieCatalogTable.tableSchema
-    spark.createDataFrame(data.toJavaRDD, schema)
   }
 }

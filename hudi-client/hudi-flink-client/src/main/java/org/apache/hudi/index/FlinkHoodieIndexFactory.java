@@ -20,7 +20,6 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -39,15 +38,13 @@ public final class FlinkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
-      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
-      if (!(instance instanceof HoodieIndex)) {
-        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
-      }
-      return (HoodieIndex) instance;
+      return HoodieIndexUtils.createUserDefinedIndex(config);
     }
 
-    // TODO more indexes to be added
     switch (config.getIndexType()) {
+      case FLINK_STATE:
+        // Flink state index stores the index mappings with a state-backend,
+        // instantiates an in-memory HoodieIndex component as a placeholder.
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:

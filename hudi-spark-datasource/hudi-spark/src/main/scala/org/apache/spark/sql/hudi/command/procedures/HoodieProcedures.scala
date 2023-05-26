@@ -88,6 +88,7 @@ object HoodieProcedures {
       ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
+      ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
     )
   }
 }

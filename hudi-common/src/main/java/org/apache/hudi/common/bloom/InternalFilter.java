@@ -66,7 +66,7 @@ abstract class InternalFilter implements Writable {
   public abstract void add(Key key);
 
   /**
-   * Determines wether a specified key belongs to <i>this</i> filter.
+   * Determines whether a specified key belongs to <i>this</i> filter.
    *
    * @param key The key to test.
    * @return boolean True if the specified key belongs to <i>this</i> filter. False otherwise.
@@ -74,7 +74,7 @@ abstract class InternalFilter implements Writable {
   public abstract boolean membershipTest(Key key);
 
   /**
-   * Peforms a logical AND between <i>this</i> filter and a specified filter.
+   * Performs a logical AND between <i>this</i> filter and a specified filter.
    * <p>
    * <b>Invariant</b>: The result is assigned to <i>this</i> filter.
    *
@@ -83,7 +83,7 @@ abstract class InternalFilter implements Writable {
   public abstract void and(InternalFilter filter);
 
   /**
-   * Peforms a logical OR between <i>this</i> filter and a specified filter.
+   * Performs a logical OR between <i>this</i> filter and a specified filter.
    * <p>
    * <b>Invariant</b>: The result is assigned to <i>this</i> filter.
    *
@@ -92,7 +92,7 @@ abstract class InternalFilter implements Writable {
   public abstract void or(InternalFilter filter);
 
   /**
-   * Peforms a logical XOR between <i>this</i> filter and a specified filter.
+   * Performs a logical XOR between <i>this</i> filter and a specified filter.
    * <p>
    * <b>Invariant</b>: The result is assigned to <i>this</i> filter.
    *
@@ -163,7 +163,7 @@ abstract class InternalFilter implements Writable {
   @Override
   public void readFields(DataInput in) throws IOException {
     int ver = in.readInt();
-    if (ver > 0) { // old unversioned format
+    if (ver > 0) { // old non-versioned format
       this.nbHash = ver;
       this.hashType = Hash.JENKINS_HASH;
     } else if (ver == VERSION) {

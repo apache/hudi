@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.command
 
 import java.nio.charset.StandardCharsets
-
 import org.apache.avro.Schema
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
@@ -30,6 +30,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.SchemaUtils
 
@@ -101,13 +102,14 @@ object AlterHoodieTableAddColumnsCommand {
   def commitWithSchema(schema: Schema, hoodieCatalogTable: HoodieCatalogTable,
       sparkSession: SparkSession): Unit = {
 
+    val writeSchema = HoodieAvroUtils.removeMetadataFields(schema);
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
       jsc,
-      schema.toString,
+      writeSchema.toString,
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
-      HoodieWriterUtils.parametersWithWriteDefaults(hoodieCatalogTable.catalogProperties).asJava
+      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(hoodieCatalogTable.catalogProperties)).asJava
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)

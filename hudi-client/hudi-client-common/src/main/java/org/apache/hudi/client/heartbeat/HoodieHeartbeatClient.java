@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeart
 @NotThreadSafe
 public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHeartbeatClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatClient.class);
 
   private final transient FileSystem fs;
   private final String basePath;
@@ -84,7 +84,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     private Boolean isHeartbeatStopped = false;
     private Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
-    private Timer timer = new Timer();
+    private Timer timer = new Timer(true);
 
     public String getInstantTime() {
       return instantTime;
@@ -226,6 +226,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       lastHeartbeatForWriter = new Heartbeat();
       lastHeartbeatForWriter.setLastHeartbeatTime(lastHeartbeatForWriterTime);
       lastHeartbeatForWriter.setInstantTime(instantTime);
+      lastHeartbeatForWriter.getTimer().cancel();
     }
     if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
       LOG.warn("Heartbeat expired, currentTime = " + currentTime + ", last heartbeat = " + lastHeartbeatForWriter

@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -52,7 +54,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
   }
 
   @Override
-  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
-    writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
+    writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
   }
 }

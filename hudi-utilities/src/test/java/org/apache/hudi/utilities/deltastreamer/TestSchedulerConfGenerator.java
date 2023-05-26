@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -50,5 +51,30 @@ public class TestSchedulerConfGenerator {
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     assertNotNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "all satisfies");
+  }
+
+  @Test
+  public void testGenerateConfig() {
+    String targetConfig =
+        "<?xml version=\"1.0\"?>\n"
+            + "<allocations>\n"
+            + "    <pool name=\"hoodiedeltasync\">\n"
+            + "        <schedulingMode>FAIR</schedulingMode>\n"
+            + "        <weight>1</weight>\n"
+            + "        <minShare>2</minShare>\n"
+            + "    </pool>\n"
+            + "    <pool name=\"hoodiecompact\">\n"
+            + "        <schedulingMode>FAIR</schedulingMode>\n"
+            + "        <weight>3</weight>\n"
+            + "        <minShare>4</minShare>\n"
+            + "    </pool>\n"
+            + "    <pool name=\"hoodiecluster\">\n"
+            + "        <schedulingMode>FAIR</schedulingMode>\n"
+            + "        <weight>5</weight>\n"
+            + "        <minShare>6</minShare>\n"
+            + "    </pool>\n"
+            + "</allocations>";
+    String generatedConfig = SchedulerConfGenerator.generateConfig(1, 3, 2, 4, 5, 6);
+    assertEquals(targetConfig, generatedConfig);
   }
 }

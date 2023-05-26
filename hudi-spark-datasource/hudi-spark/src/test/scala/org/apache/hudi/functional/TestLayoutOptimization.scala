@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import scala.collection.JavaConversions._
 
 @Tag("functional")
-class TestLayoutOptimization extends HoodieClientTestBase {
+class TestLayoutOptimization extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =

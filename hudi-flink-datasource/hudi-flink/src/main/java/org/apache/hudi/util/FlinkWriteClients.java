@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -172,6 +171,10 @@ public class FlinkWriteClients {
                     .withClusteringTargetFileMaxBytes(conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES))
                     .withClusteringPlanSmallFileLimit(conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT) * 1024 * 1024L)
                     .withClusteringSkipPartitionsFromLatest(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST))
+                    .withClusteringPartitionFilterBeginPartition(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION))
+                    .withClusteringPartitionFilterEndPartition(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION))
+                    .withClusteringPartitionRegexPattern(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN))
+                    .withClusteringPartitionSelected(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED))
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
                     .build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -212,6 +215,7 @@ public class FlinkWriteClients {
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
+            .withIndexConfig(StreamerUtil.getIndexConfig(conf))
             .withPayloadConfig(getPayloadConfig(conf))
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
@@ -220,17 +224,16 @@ public class FlinkWriteClients {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
-    if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      builder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
-      if (!conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-        builder.withLockConfig(HoodieLockConfig.newBuilder()
-            .withLockProvider(FileSystemBasedLockProvider.class)
-            .withLockWaitTimeInMillis(2000L) // 2s
-            .withFileSystemLockExpire(1) // 1 minute
-            .withClientNumRetries(30)
-            .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
-            .build());
-      }
+    if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
+      // configure the fs lock provider by default
+      builder.withLockConfig(HoodieLockConfig.newBuilder()
+          .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))
+          .withLockProvider(FileSystemBasedLockProvider.class)
+          .withLockWaitTimeInMillis(2000L) // 2s
+          .withFileSystemLockExpire(1) // 1 minute
+          .withClientNumRetries(30)
+          .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
+          .build());
     }
 
     // do not configure cleaning strategy as LAZY until multi-writers is supported.

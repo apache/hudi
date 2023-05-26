@@ -28,9 +28,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -50,7 +50,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(InProcessLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(InProcessLockProvider.class);
   private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
   private final ReentrantReadWriteLock lock;
   private final String basePath;
@@ -124,7 +124,6 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
       lock.writeLock().unlock();
     }
     LOG.info(getLogMessage(LockState.ALREADY_RELEASED));
-    LOCK_INSTANCE_PER_BASEPATH.remove(basePath);
   }
 
   private String getLogMessage(LockState state) {

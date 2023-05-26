@@ -122,6 +122,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
+    return HoodieJavaPairRDD.of(pairRDDData.mapValues(func::apply));
+  }
+
+  @Override
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
     return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
       Pair<L, W> newPair = mapToPairFunc.call(new ImmutablePair<>(pair._1, pair._2));

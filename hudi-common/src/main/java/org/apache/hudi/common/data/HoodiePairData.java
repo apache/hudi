@@ -90,11 +90,16 @@ public interface HoodiePairData<K, V> extends Serializable {
   HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism);
 
   /**
-   * @param func serializable map function.
-   * @param <O>  output object type.
-   * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
+   * Maps key-value pairs of this {@link HoodiePairData} container leveraging provided mapper
+   *
+   * NOTE: That this returns {@link HoodieData} and not {@link HoodiePairData}
    */
   <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func);
+
+  /**
+   * Maps values of this {@link HoodiePairData} container leveraging provided mapper
+   */
+  <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func);
 
   /**
    * @param mapToPairFunc serializable map function to generate another pair.

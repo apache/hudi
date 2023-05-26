@@ -19,13 +19,15 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.language.postfixOps
 
@@ -33,7 +35,7 @@ import scala.language.postfixOps
  * Test cases to validate Hudi's support for writing and reading when evolving schema implicitly via Avro's Schema Resolution
  * Note: Test will explicitly write into different partitions to ensure that a Hudi table will have multiple filegroups with different schemas.
  */
-class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
+class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
@@ -82,12 +84,14 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
       .save(saveDir)
   }
 
-  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true): Unit = {
-    val opts = if (isCow) {
+  def upsertData(df: DataFrame, saveDir: String, isCow: Boolean = true, shouldAllowDroppedColumns: Boolean = false,
+                 enableSchemaValidation: Boolean = HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue().toBoolean): Unit = {
+    var opts = if (isCow) {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE")
     } else {
       commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
     }
+    opts = opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString)
 
     df.write.format("hudi")
       .options(opts)
@@ -204,12 +208,18 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeleteColumn(isCow: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,true",
+    "COPY_ON_WRITE,false",
+    "MERGE_ON_READ,true",
+    "MERGE_ON_READ,false"
+  ))
+  def testDeleteColumn(tableType: String, schemaValidationEnabled : Boolean): Unit = {
     // test to delete a column
     val tempRecordPath = basePath + "/record_tbl/"
     val _spark = spark
     import _spark.implicits._
+    val isCow = tableType.equals(HoodieTableType.COPY_ON_WRITE.name())
 
     val df1 = Seq((1, 100, "aaa")).toDF("id", "userid", "name")
     val df2 = Seq((2, "bbb")).toDF("id", "name")
@@ -228,7 +238,11 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
     upsertDf.show(false)
 
     // upsert
-    upsertData(upsertDf, tempRecordPath, isCow)
+    assertThrows(classOf[SchemaCompatibilityException]) {
+      upsertData(upsertDf, tempRecordPath, isCow, enableSchemaValidation = schemaValidationEnabled)
+    }
+
+    upsertData(upsertDf, tempRecordPath, isCow, shouldAllowDroppedColumns = true, enableSchemaValidation = schemaValidationEnabled)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)
@@ -776,7 +790,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase {
     df6 = df6.withColumn("userid", df6.col("userid").cast("float"))
     df6.printSchema()
     df6.show(false)
-    upsertData(df6, tempRecordPath)
+    assertThrows(classOf[SchemaCompatibilityException]) {
+      upsertData(df6, tempRecordPath)
+    }
+    upsertData(df6, tempRecordPath, shouldAllowDroppedColumns = true)
 
     // 7. Rearrange column position
     var df7 = Seq((7, "newcol1", 700, newPartition)).toDF("id", "newcol1", "userid", "name")

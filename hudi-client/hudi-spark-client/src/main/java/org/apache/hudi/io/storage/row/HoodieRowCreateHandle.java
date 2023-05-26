@@ -36,11 +36,11 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -54,7 +54,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRowCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowCreateHandle.class);
   private static final AtomicLong GLOBAL_SEQ_NO = new AtomicLong(1);
 
   private final HoodieTable table;
@@ -232,7 +232,7 @@ public class HoodieRowCreateHandle implements Serializable {
     long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getFs(), path);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
-    stat.setTotalWriteErrors(writeStatus.getFailedRowsSize());
+    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(currTimer.endTimer());
     stat.setRuntimeStats(runtimeStats);

@@ -17,14 +17,10 @@
 
 package org.apache.spark.sql.catalyst.plans.logcal
 
-import org.apache.hudi.DefaultSource
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
-
-import scala.collection.mutable
-
+import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 
 case class HoodieQuery(args: Seq[Expression]) extends LeafNode {
 
@@ -38,36 +34,20 @@ object HoodieQuery {
 
   val FUNC_NAME = "hudi_query";
 
-  def resolve(spark: SparkSession, func: HoodieQuery): LogicalPlan = {
+  def parseOptions(exprs: Seq[Expression]): (String, Map[String, String]) = {
+    val args = exprs.map(_.eval().toString)
 
-    val args = func.args
+    val (Seq(identifier, queryMode), remaining) = args.splitAt(2)
 
-    val identifier = spark.sessionState.sqlParser.parseTableIdentifier(args.head.eval().toString)
-    val catalogTable = spark.sessionState.catalog.getTableMetadata(identifier)
+    val opts = queryMode match {
+      case "read_optimized" | "snapshot" =>
+        checkState(remaining.isEmpty, s"No additional args are expected in `$queryMode` mode")
+        Map("hoodie.datasource.query.type" -> queryMode)
 
-    val options = mutable.Map("path" -> catalogTable.location.toString) ++ parseOptions(args.tail)
-
-    val hoodieDataSource = new DefaultSource
-    val relation = hoodieDataSource.createRelation(spark.sqlContext, options.toMap)
-    new LogicalRelation(
-      relation,
-      relation.schema.toAttributes,
-      Some(catalogTable),
-      false
-    )
-  }
-
-  private def parseOptions(args: Seq[Expression]): Map[String, String] = {
-    val options = mutable.Map.empty[String, String]
-    val queryMode = args.head.eval().toString
-    val instants = args.tail.map(_.eval().toString)
-    queryMode match {
-      case "read_optimized" =>
-        assert(instants.isEmpty, "No expressions have to be provided in read_optimized mode.")
-        options += ("hoodie.datasource.query.type" -> "read_optimized")
       case _ =>
-        throw new AnalysisException("hudi_query doesn't support other query modes for now.")
+        throw new AnalysisException(s"'hudi_query' doesn't currently support `$queryMode`")
     }
-    options.toMap
+
+    (identifier, opts)
   }
 }

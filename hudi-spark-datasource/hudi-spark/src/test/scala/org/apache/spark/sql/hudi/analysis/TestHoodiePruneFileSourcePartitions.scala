@@ -54,8 +54,11 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     )
 
   @ParameterizedTest
-  @CsvSource(value = Array("cow", "mor"))
-  def testPartitionFiltersPushDown(tableType: String): Unit = {
+  @CsvSource(value = Array(
+    "cow,true", "cow,false",
+    "mor,true", "mor,false"
+  ))
+  def testPartitionFiltersPushDown(tableType: String, partitioned: Boolean): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -65,7 +68,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |  ts long,
          |  partition string
          |) USING hudi
-         |PARTITIONED BY (partition)
+         |${if (partitioned) "PARTITIONED BY (partition)" else ""}
          |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
@@ -87,7 +90,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
       // instead of serving already cached value
       spark.sessionState.catalog.invalidateAllCachedTables()
 
-      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
+      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
 
       val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
       val optimizedPlan = df.queryExecution.optimizedPlan
@@ -103,27 +106,37 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          support (for partition-pruning) will only occur during execution phase, while file-listing
             //          actually happens during analysis stage
             case "eager" =>
-              assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
-              assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
+              if (partitioned) {
+                assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              } else {
+                // NOTE: We're adding 512 to make sure we always round to the next integer value
+                assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
+                assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
+              }
 
             // Case #2: Lazy listing (default mode).
             //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
             //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
             //          list the whole table
             case "lazy" =>
-              assertEquals(425, f.stats.sizeInBytes.longValue() / 1024)
-              assertEquals(425, lr.stats.sizeInBytes.longValue() / 1024)
+              // NOTE: We're adding 512 to make sure we always round to the next integer value
+              assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
+              assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }
 
-          val executionPlan = df.queryExecution.executedPlan
-          val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-            case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-            case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
-          }
+          if (partitioned) {
+            val executionPlan = df.queryExecution.executedPlan
+            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
+              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
+              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
+            }
 
-          Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+            Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+          }
 
         case _ =>
           val failureHint =
@@ -179,7 +192,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
       // instead of serving already cached value
       spark.sessionState.catalog.invalidateAllCachedTables()
 
-      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode.override=$listingModeOverride")
+      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
 
       val df = spark.sql(s"SELECT * FROM $tableName")
       val optimizedPlan = df.queryExecution.optimizedPlan
@@ -223,6 +236,5 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
       }
     }
   }
-
 
 }

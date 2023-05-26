@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
@@ -40,11 +41,12 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -73,7 +75,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
  */
 public class FileCreateUtils {
 
-  private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileCreateUtils.class);
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -96,12 +98,20 @@ public class FileCreateUtils {
     return FSUtils.makeLogFileName(fileId, fileExtension, instantTime, version, WRITE_TOKEN);
   }
 
-  public static String markerFileName(String instantTime, String fileId, IOType ioType) {
-    return markerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION);
+  public static String markerFileName(String fileName, IOType ioType) {
+    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, ioType.name());
   }
 
-  public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension) {
-    return String.format("%s_%s_%s%s%s.%s", fileId, WRITE_TOKEN, instantTime, fileExtension, HoodieTableMetaClient.MARKER_EXTN, ioType);
+  public static String dataFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
+    return markerFileName(FSUtils.makeBaseFileName(instantTime, writeToken, fileId, fileExtension), ioType);
+  }
+
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, int logVersion) {
+    return logFileMarkerFileName(instantTime, fileId, ioType, HoodieLogFile.DELTA_EXTENSION, logVersion);
+  }
+
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, int logVersion) {
+    return markerFileName(FSUtils.makeLogFileName(fileId, fileExtension, instantTime, logVersion, WRITE_TOKEN), ioType);
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
@@ -325,9 +335,9 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
-    raf.setLength(length);
-    raf.close();
+    try (RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw")) {
+      raf.setLength(length);
+    }
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
@@ -356,9 +366,43 @@ public class FileCreateUtils {
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
       throws IOException {
+    return createMarkerFile(basePath, partitionPath, instantTime, instantTime, fileId, ioType, WRITE_TOKEN);
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String commitInstant,
+      String instantTime, String fileId, IOType ioType, String writeToken) throws IOException {
+    // with HUDI-1517, this method is used for creating marker files for data files. So append type is not allowed
+    ValidationUtils.checkArgument(ioType != IOType.APPEND);
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     Files.createDirectories(parentPath);
-    Path markerFilePath = parentPath.resolve(markerFileName(instantTime, fileId, ioType));
+    Path markerFilePath = parentPath.resolve(dataFileMarkerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION, writeToken));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
+      throws IOException {
+    return createLogFileMarker(basePath, partitionPath, instantTime, fileId, ioType, HoodieLogFile.LOGFILE_BASE_VERSION);
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType, int logVersion)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(logFileMarkerFileName(instantTime, fileId, ioType, logVersion));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createFileMarkerByFileName(String basePath, String partitionPath, String instantTime, String fileName, IOType ioType)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(markerFileName(fileName, ioType));
     if (Files.notExists(markerFilePath)) {
       Files.createFile(markerFilePath);
     }

@@ -18,15 +18,16 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-
-import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.CollectionUtils.reduce;
+import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
 /**
  * Utility methods to support evolve old avro schema based on a given schema.
@@ -50,7 +51,7 @@ public class AvroSchemaEvolutionUtils {
    * @return reconcile Schema
    */
   public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
-    InternalSchema inComingInternalSchema = AvroInternalSchemaConverter.convert(incomingSchema);
+    InternalSchema inComingInternalSchema = convert(incomingSchema);
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -109,40 +110,39 @@ public class AvroSchemaEvolutionUtils {
   }
 
   /**
-   * Canonical the nullability.
-   * Do not allow change cols Nullability field from optional to required.
-   * If above problem occurs, try to correct it.
+   * Reconciles nullability requirements b/w {@code source} and {@code target} schemas,
+   * by adjusting these of the {@code source} schema to be in-line with the ones of the
+   * {@code target} one
    *
-   * @param writeSchema writeSchema hoodie used to write data.
-   * @param readSchema read schema
-   * @return canonical Schema
+   * @param sourceSchema source schema that needs reconciliation
+   * @param targetSchema target schema that source schema will be reconciled against
+   * @return schema (based off {@code source} one) that has nullability constraints reconciled
    */
-  public static Schema canonicalizeColumnNullability(Schema writeSchema, Schema readSchema) {
-    if (writeSchema.getFields().isEmpty() || readSchema.getFields().isEmpty()) {
-      return writeSchema;
+  public static Schema reconcileNullability(Schema sourceSchema, Schema targetSchema) {
+    if (sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
+      return sourceSchema;
     }
-    InternalSchema writeInternalSchema = AvroInternalSchemaConverter.convert(writeSchema);
-    InternalSchema readInternalSchema = AvroInternalSchemaConverter.convert(readSchema);
-    List<String> colNamesWriteSchema = writeInternalSchema.getAllColsFullName();
-    List<String> colNamesFromReadSchema = readInternalSchema.getAllColsFullName();
-    // try to deal with optional change. now when we use sparksql to update hudi table,
-    // sparksql Will change the col type from optional to required, this is a bug.
-    List<String> candidateUpdateCols = colNamesWriteSchema.stream().filter(f -> {
-      boolean exist = colNamesFromReadSchema.contains(f);
-      if (exist && (writeInternalSchema.findField(f).isOptional() != readInternalSchema.findField(f).isOptional())) {
-        return true;
-      } else {
-        return false;
-      }
-    }).collect(Collectors.toList());
+
+    InternalSchema sourceInternalSchema = convert(sourceSchema);
+    InternalSchema targetInternalSchema = convert(targetSchema);
+
+    List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
+    List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
+    List<String> candidateUpdateCols = colNamesSourceSchema.stream()
+        .filter(f -> colNamesTargetSchema.contains(f)
+            && sourceInternalSchema.findField(f).isOptional() != targetInternalSchema.findField(f).isOptional())
+        .collect(Collectors.toList());
+
     if (candidateUpdateCols.isEmpty()) {
-      return writeSchema;
+      return sourceSchema;
     }
-    // try to correct all changes
-    TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(writeInternalSchema);
-    candidateUpdateCols.stream().forEach(f -> updateChange.updateColumnNullability(f, true));
-    InternalSchema updatedSchema = SchemaChangeUtils.applyTableChanges2Schema(writeInternalSchema, updateChange);
-    return AvroInternalSchemaConverter.convert(updatedSchema, writeSchema.getFullName());
+
+    // Reconcile nullability constraints (by executing phony schema change)
+    TableChanges.ColumnUpdateChange schemaChange =
+        reduce(candidateUpdateCols, TableChanges.ColumnUpdateChange.get(sourceInternalSchema),
+          (change, field) -> change.updateColumnNullability(field, true));
+
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
 }
 

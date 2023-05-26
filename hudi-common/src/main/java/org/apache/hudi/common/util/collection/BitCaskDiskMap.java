@@ -20,15 +20,14 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
-import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -59,16 +58,16 @@ import java.util.zip.InflaterInputStream;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
- * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
+ * This class provides a disk spillable only map implementation. All of the data is currently written to one file,
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
- *
+ * <p>
  * Inspired by https://github.com/basho/bitcask
  */
 public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BitCaskDiskMap.class);
   // Caching byte compression/decompression to avoid creating instances for every operation
   private static final ThreadLocal<CompressionHandler> DISK_COMPRESSION_REF =
       ThreadLocal.withInitial(CompressionHandler::new);
@@ -111,8 +110,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * RandomAcessFile is not thread-safe. This API opens a new file handle per thread and returns.
-   * 
+   * RandomAccessFile is not thread-safe. This API opens a new file handle per thread and returns.
+   *
    * @return
    */
   private BufferedRandomAccessFile getRandomAccessFile() {
@@ -443,8 +442,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
 
     private byte[] decompressBytes(final byte[] bytes) throws IOException {
       decompressBaos.reset();
-      InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
-      try {
+      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes))) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
           decompressBaos.write(decompressIntermediateBuffer, 0, len);

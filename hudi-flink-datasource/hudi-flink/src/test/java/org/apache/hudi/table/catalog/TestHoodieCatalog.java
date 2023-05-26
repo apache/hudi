@@ -18,12 +18,16 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -54,6 +58,7 @@ import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,7 +114,11 @@ public class TestHoodieCatalog {
                     .getLogicalType()
                     .getTypeRoot()
                     .equals(LogicalTypeRoot.VARCHAR)) {
-                  return Column.physical(col.getName(), DataTypes.STRING());
+                  DataType dataType = DataTypes.STRING();
+                  if ("uuid".equals(col.getName())) {
+                    dataType = dataType.notNull();
+                  }
+                  return Column.physical(col.getName(), dataType);
                 } else {
                   return col;
                 }
@@ -150,14 +159,19 @@ public class TestHoodieCatalog {
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
     File testDb = new File(tempFile, TEST_DEFAULT_DATABASE);
     testDb.mkdir();
+
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(getDefaultCatalogOption()));
+    catalog.open();
+  }
+
+  Map<String, String> getDefaultCatalogOption() {
     Map<String, String> catalogOptions = new HashMap<>();
     assertThrows(ValidationException.class,
         () -> catalog = new HoodieCatalog("hudi", Configuration.fromMap(catalogOptions)));
     catalogPathStr = tempFile.getAbsolutePath();
     catalogOptions.put(CATALOG_PATH.key(), catalogPathStr);
     catalogOptions.put(DEFAULT_DATABASE.key(), TEST_DEFAULT_DATABASE);
-    catalog = new HoodieCatalog("hudi", Configuration.fromMap(catalogOptions));
-    catalog.open();
+    return catalogOptions;
   }
 
   @AfterEach
@@ -222,9 +236,39 @@ public class TestHoodieCatalog {
     // test table exist
     assertTrue(catalog.tableExists(tablePath));
 
+    // validate the full name of table create schema
+    HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(
+        catalog.getTable(tablePath).getOptions().get(FlinkOptions.PATH.key()),
+        HadoopConfigurations.getHadoopConf(new Configuration())).get();
+    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
+    assertThat(tableCreateSchema.get().getFullName(), is("hoodie.tb1.tb1_record"));
+
     // test create exist table
     assertThrows(TableAlreadyExistException.class,
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
+  }
+
+  @Test
+  void testCreateTableWithoutPreCombineKey() {
+    Map<String, String> options = getDefaultCatalogOption();
+    options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));
+    catalog.open();
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true),
+        "Option 'precombine.field' is required for payload class: "
+            + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+
+    Map<String, String> options2 = getDefaultCatalogOption();
+    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
+    catalog.open();
+    ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
+    assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(tablePath2, EXPECTED_CATALOG_TABLE, true),
+        "Field not_exists does not exist in the table schema. Please check 'precombine.field' option.");
   }
 
   @Test

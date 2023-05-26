@@ -23,31 +23,35 @@ import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal, Or}
 import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.condition.DisabledIf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
-
 import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
-class TestColumnStatsIndex extends HoodieClientTestBase {
+@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils#gteqSpark3_3",
+  disabledReason = "Jackson version conflicts (HUDI-5352)")
+class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =
@@ -94,10 +98,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      // NOTE: Currently only this setting is used like following by different MT partitions:
-      //          - Files: using it
-      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
-      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
@@ -193,7 +193,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
     ) ++ metadataOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
@@ -245,7 +246,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -298,7 +299,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -317,6 +318,103 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
         assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
         assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTranslateQueryFiltersIntoColumnStatsIndexFilterExpr(shouldReadInMemory: Boolean): Unit = {
+    val targetColumnsToIndex = Seq("c1", "c2", "c3")
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
+    )
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+
+    ////////////////////////////////////////////////////////////////////////
+    // NOTE: Partial CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          NOT indexed by the CSI
+    ////////////////////////////////////////////////////////////////////////
+
+    // We have to include "c1", since we sort the expected outputs by this column
+    val requestedColumns = Seq("c4", "c1")
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+
+    ////////////////////////////////////////////////////////////////////////
+    // Query filter #1: c1 > 1 and c4 > 'c4 filed value'
+    //                  We should filter only for c1
+    ////////////////////////////////////////////////////////////////////////
+    {
+      val andConditionFilters = Seq(
+        GreaterThan(AttributeReference("c1", IntegerType, nullable = true)(), Literal(1)),
+        GreaterThan(AttributeReference("c4", StringType, nullable = true)(), Literal("c4 filed value"))
+      )
+
+      val expectedAndConditionIndexedFilter = And(
+        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+        Literal(true)
+      )
+
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+        val andConditionActualFilter = andConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
+          .reduce(And)
+        assertEquals(expectedAndConditionIndexedFilter, andConditionActualFilter)
+      }
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Query filter #2: c1 > 1 or c4 > 'c4 filed value'
+    //                  Since c4 is not indexed, we cannot filter any data
+    ////////////////////////////////////////////////////////////////////////
+    {
+      val orConditionFilters = Seq(
+        Or(GreaterThan(AttributeReference("c1", IntegerType, nullable = true)(), Literal(1)),
+          GreaterThan(AttributeReference("c4", StringType, nullable = true)(), Literal("c4 filed value")))
+      )
+
+      val expectedOrConditionIndexedFilter = Or(
+        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+        Literal(true)
+      )
+
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+        val orConditionActualFilter = orConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
+          .reduce(And)
+        assertEquals(expectedOrConditionIndexedFilter, orConditionActualFilter)
       }
     }
   }
@@ -416,6 +514,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
           s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
+              .filter(col => indexedCols.contains(col))
               .flatMap(col => {
                 val minColName = s"${col}_minValue"
                 val maxColName = s"${col}_maxValue"
@@ -451,7 +550,15 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
+    val indexedColumns: Set[String] = {
+      val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
+      if (customIndexedColumns.isEmpty) {
+        sourceTableSchema.fieldNames.toSet
+      } else {
+        customIndexedColumns.asScala.toSet
+      }
+    }
+    val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
     val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
@@ -539,14 +646,12 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
 object TestColumnStatsIndex {
 
-  case class ColumnStatsTestCase(tableType: HoodieTableType, forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
+  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean)
 
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = true)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = true)))
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false)))
     ): _*)
   }
 }

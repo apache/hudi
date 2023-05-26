@@ -58,6 +58,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
+
 /**
  * This class encapsulates all the cdc-writing functions.
  */
@@ -89,7 +92,7 @@ public class HoodieCDCLogger implements Closeable {
   private final CDCTransformer transformer;
 
   // Max block size to limit to for a log block
-  private final int maxBlockSize;
+  private final long maxBlockSize;
 
   // Average cdc record size. This size is updated at the end of every log block flushed to disk
   private long averageCDCRecordSize = 0;
@@ -240,10 +243,10 @@ public class HoodieCDCLogger implements Closeable {
   // -------------------------------------------------------------------------
 
   private CDCTransformer getTransformer() {
-    if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
+    if (cdcSupplementalLoggingMode == DATA_BEFORE_AFTER) {
       return (operation, recordKey, oldRecord, newRecord) ->
-          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), newRecord);
-    } else if (cdcSupplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE)) {
+          HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), commitTime, removeCommitMetadata(oldRecord), removeCommitMetadata(newRecord));
+    } else if (cdcSupplementalLoggingMode == DATA_BEFORE) {
       return (operation, recordKey, oldRecord, newRecord) ->
           HoodieCDCUtils.cdcRecord(cdcSchema, operation.getValue(), recordKey, removeCommitMetadata(oldRecord));
     } else {

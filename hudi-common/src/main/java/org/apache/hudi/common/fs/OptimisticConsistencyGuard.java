@@ -20,8 +20,8 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -41,7 +41,7 @@ import java.util.concurrent.TimeoutException;
  * Step1 and Step2 is handled by {@link FailSafeConsistencyGuard}.
  *
  * We are simplifying these steps with {@link OptimisticConsistencyGuard}.
- * Step1: Check if all files adhere to visibility event. If yes, proceed to Sptep 3.
+ * Step1: Check if all files adhere to visibility event. If yes, proceed to Step 3.
  * Step2: If not, Sleep for a configured threshold and then proceed to next step.
  * Step3: issue deletes.
  *
@@ -50,7 +50,7 @@ import java.util.concurrent.TimeoutException;
  */
 public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
 
-  private static final Logger LOG = LogManager.getLogger(OptimisticConsistencyGuard.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OptimisticConsistencyGuard.class);
 
   public OptimisticConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
     super(fs, consistencyGuardConfig);

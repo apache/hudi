@@ -18,12 +18,19 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -52,5 +59,90 @@ public class TestWriteStatus {
     assertTrue(status.hasErrors());
     assertTrue(status.getWrittenRecords().isEmpty());
     assertEquals(2000, status.getTotalRecords());
+  }
+
+  @Test
+  public void testSuccessWithEventTime() {
+    // test with empty eventTime
+    WriteStatus status = new WriteStatus(false, 1.0);
+    status.setStat(new HoodieWriteStat());
+    for (int i = 0; i < 1000; i++) {
+      Map<String, String> metadata = new HashMap<>();
+      metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, "");
+      status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
+    }
+    assertEquals(1000, status.getTotalRecords());
+    assertFalse(status.hasErrors());
+    assertNull(status.getStat().getMaxEventTime());
+    assertNull(status.getStat().getMinEventTime());
+
+    // test with null eventTime
+    status = new WriteStatus(false, 1.0);
+    status.setStat(new HoodieWriteStat());
+    for (int i = 0; i < 1000; i++) {
+      Map<String, String> metadata = new HashMap<>();
+      metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, null);
+      status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
+    }
+    assertEquals(1000, status.getTotalRecords());
+    assertFalse(status.hasErrors());
+    assertNull(status.getStat().getMaxEventTime());
+    assertNull(status.getStat().getMinEventTime());
+
+    // test with seconds eventTime
+    status = new WriteStatus(false, 1.0);
+    status.setStat(new HoodieWriteStat());
+    long minSeconds = 0L;
+    long maxSeconds = 0L;
+    for (int i = 0; i < 1000; i++) {
+      Map<String, String> metadata = new HashMap<>();
+      long eventTime = System.currentTimeMillis() / 1000;
+      if (i == 0) {
+        minSeconds = eventTime;
+      } else if (i == 999) {
+        maxSeconds = eventTime;
+      }
+      metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+      status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
+    }
+    assertEquals(1000, status.getTotalRecords());
+    assertFalse(status.hasErrors());
+    assertEquals(maxSeconds * 1000L, status.getStat().getMaxEventTime());
+    assertEquals(minSeconds * 1000L, status.getStat().getMinEventTime());
+
+    // test with millis eventTime
+    status = new WriteStatus(false, 1.0);
+    status.setStat(new HoodieWriteStat());
+    minSeconds = 0L;
+    maxSeconds = 0L;
+    for (int i = 0; i < 1000; i++) {
+      Map<String, String> metadata = new HashMap<>();
+      long eventTime = System.currentTimeMillis();
+      if (i == 0) {
+        minSeconds = eventTime;
+      } else if (i == 999) {
+        maxSeconds = eventTime;
+      }
+      metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+      status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
+    }
+    assertEquals(1000, status.getTotalRecords());
+    assertFalse(status.hasErrors());
+    assertEquals(maxSeconds, status.getStat().getMaxEventTime());
+    assertEquals(minSeconds, status.getStat().getMinEventTime());
+
+    // test with error format eventTime
+    status = new WriteStatus(false, 1.0);
+    status.setStat(new HoodieWriteStat());
+    for (int i = 0; i < 1000; i++) {
+      Map<String, String> metadata = new HashMap<>();
+      metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(i));
+      status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
+    }
+    assertEquals(1000, status.getTotalRecords());
+    assertFalse(status.hasErrors());
+    assertNull(status.getStat().getMaxEventTime());
+    assertNull(status.getStat().getMinEventTime());
+
   }
 }

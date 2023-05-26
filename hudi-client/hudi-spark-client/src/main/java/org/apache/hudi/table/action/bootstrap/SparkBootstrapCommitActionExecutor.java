@@ -64,9 +64,9 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -88,7 +88,7 @@ import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFac
 public class SparkBootstrapCommitActionExecutor<T>
     extends BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieBootstrapWriteMetadata<HoodieData<WriteStatus>>> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkBootstrapCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkBootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
   private transient FileSystem bootstrapSourceFileSystem;
 
@@ -326,6 +326,8 @@ public class SparkBootstrapCommitActionExecutor<T>
       if (!(selector instanceof FullRecordBootstrapModeSelector)) {
         FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
         result.putAll(fullRecordBootstrapModeSelector.select(folders));
+      } else {
+        result.putAll(selector.select(folders));
       }
     } else {
       result = selector.select(folders);
@@ -357,8 +359,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
     }
 
-    BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
-        config.getBootstrapPartitionPathTranslatorClass(), properties);
+    BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()
         .flatMap(p -> {
@@ -368,9 +369,10 @@ public class SparkBootstrapCommitActionExecutor<T>
         .collect(Collectors.toList());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
-    return context.parallelize(bootstrapPaths, config.getBootstrapParallelism())
+    return context.parallelize(
+            bootstrapPaths, Math.min(bootstrapPaths.size(), config.getBootstrapParallelism()))
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
-                partitionFsPair.getRight().getLeft(), keyGenerator));
+            partitionFsPair.getRight().getLeft(), keyGenerator));
   }
 
   @Override

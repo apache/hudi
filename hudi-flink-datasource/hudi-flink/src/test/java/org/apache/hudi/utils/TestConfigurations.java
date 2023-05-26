@@ -90,6 +90,9 @@ public class TestConfigurations {
           DataTypes.FIELD("gender", DataTypes.CHAR(1)), // removed field
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()))),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -102,8 +105,21 @@ public class TestConfigurations {
           DataTypes.FIELD("last_name", DataTypes.VARCHAR(10)), // new field
           DataTypes.FIELD("salary", DataTypes.DOUBLE()), // new field
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("f3", DataTypes.STRING()))), // new field added at the end of struct
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
+
+  public static final DataType ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
+          DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_date", DataTypes.DATE()),
+          DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(3, 2)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
 
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
 

@@ -45,8 +45,8 @@ import org.apache.hudi.table.action.compact.OperationResult;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -64,7 +64,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
  */
 public class CompactionAdminClient extends BaseHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(HoodieEngineContext context, String basePath) {
     super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build());
@@ -507,9 +507,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
    * Holds Operation result for Renaming.
    */
   public static class ValidationOpResult extends OperationResult<CompactionOperation> {
-
-    public ValidationOpResult() {}
-
     public ValidationOpResult(CompactionOperation operation, boolean success, Option<Exception> exception) {
       super(operation, success, exception);
     }
@@ -520,8 +517,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
     public String fileId;
     public String srcPath;
     public String destPath;
-
-    public RenameInfo() {}
 
     public RenameInfo(String fileId, String srcPath, String destPath) {
       this.fileId = fileId;

@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -44,7 +46,12 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,7 +65,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -67,6 +73,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for MergeOnReadInputFormat and ParquetInputFormat.
@@ -324,7 +331,7 @@ public class TestInputFormat {
   void testReadWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
-    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.name());
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 
     // write the insert data sets
@@ -340,7 +347,6 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(Collections.emptySet())
         .skipCompaction(false)
         .build();
 
@@ -365,7 +371,7 @@ public class TestInputFormat {
   void testReadFromEarliestWithChangeLogCOW(HoodieCDCSupplementalLoggingMode mode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
-    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.getValue());
+    options.put(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE.key(), mode.name());
     options.put(FlinkOptions.READ_START_COMMIT.key(), "earliest");
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 
@@ -382,7 +388,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
 
@@ -421,13 +427,13 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
 
     // default read the latest commit
     // the compaction base files are skipped
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -443,7 +449,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -459,7 +465,7 @@ public class TestInputFormat {
     inputFormat = this.tableSource.getInputFormat(true);
 
     // filter out the last commit by partition pruning
-    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits3.isEmpty());
     List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual3 = TestData.rowDataToString(result3);
@@ -470,8 +476,6 @@ public class TestInputFormat {
   @Test
   void testReadSkipClustering() throws Exception {
     beforeEach(HoodieTableType.COPY_ON_WRITE);
-
-    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
 
     // write base first with clustering
     conf.setString(FlinkOptions.OPERATION, "insert");
@@ -488,13 +492,13 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
 
     // default read the latest commit
     // the clustering files are skipped
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -510,7 +514,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.REPLACE_COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -527,7 +531,7 @@ public class TestInputFormat {
     inputFormat = this.tableSource.getInputFormat(true);
 
     // filter out the last commit by partition pruning
-    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits3.isEmpty());
     List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual3 = TestData.rowDataToString(result3);
@@ -535,11 +539,102 @@ public class TestInputFormat {
     assertThat(actual3, is(expected3));
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testReadHollowInstants(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put("hoodie.parquet.small.file.limit", "0"); // invalidate the small file strategy
+    beforeEach(tableType, options);
+
+    // write 4 commits
+    for (int i = 0; i < 8; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    // we got 4 commits on the timeline: c1, c2, c3, c4
+    // re-create the metadata file for c2 and c3 so that they have greater completion time than c4.
+    // the completion time sequence become: c1, c4, c2, c3,
+    // we will test with the same consumption sequence.
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    List<HoodieInstant> oriInstants = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
+    assertThat(oriInstants.size(), is(4));
+    List<HoodieCommitMetadata> metadataList = new ArrayList<>();
+    // timeline: c1, c2.inflight, c3.inflight, c4
+    for (int i = 1; i <= 2; i++) {
+      HoodieInstant instant = oriInstants.get(i);
+      metadataList.add(TestUtils.deleteInstantFile(metaClient, instant));
+    }
+
+    List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
+    assertThat(instants.size(), is(2));
+
+    String c4 = instants.get(1).getTimestamp();
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .build();
+
+    // timeline: c1, c2.inflight, c3.inflight, c4
+    // default read the latest commit
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    assertFalse(splits1.isEmpty());
+    List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result1, TestData.dataSetInsert(7, 8));
+
+    // timeline: c1, c2.inflight, c3.inflight, c4
+    // -> c1
+    conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    assertFalse(splits2.isEmpty());
+    List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2, 7, 8));
+
+    // timeline: c1, c2, c3.inflight, c4
+    // c4 -> c2
+    TestUtils.saveInstantAsComplete(metaClient, oriInstants.get(1), metadataList.get(0)); // complete c2
+    assertThat(splits2.getEndInstant(), is(c4));
+    IncrementalInputSplits.Result splits3 = incrementalInputSplits.inputSplits(metaClient, splits2.getEndInstant(), splits2.getOffset(), false);
+    assertFalse(splits3.isEmpty());
+    List<RowData> result3 = readData(inputFormat, splits3.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result3, TestData.dataSetInsert(3, 4));
+
+    // test c2 and c4, c2 completion time > c1, so it is not a hollow instant
+    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getStateTransitionTime(), false);
+    assertFalse(splits4.isEmpty());
+    List<RowData> result4 = readData(inputFormat, splits4.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result4, TestData.dataSetInsert(3, 4, 7, 8));
+
+    // timeline: c1, c2, c3, c4
+    // c4 -> c3
+    TestUtils.saveInstantAsComplete(metaClient, oriInstants.get(2), metadataList.get(1)); // complete c3
+    assertThat(splits3.getEndInstant(), is(c4));
+    IncrementalInputSplits.Result splits5 = incrementalInputSplits.inputSplits(metaClient, splits3.getEndInstant(), splits3.getOffset(), false);
+    assertFalse(splits5.isEmpty());
+    List<RowData> result5 = readData(inputFormat, splits5.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result5, TestData.dataSetInsert(5, 6));
+
+    // c4 ->
+    assertThat(splits5.getEndInstant(), is(c4));
+    IncrementalInputSplits.Result splits6 = incrementalInputSplits.inputSplits(metaClient, splits5.getEndInstant(), splits5.getOffset(), false);
+    assertTrue(splits6.isEmpty());
+
+    // test c2 and c4, c2 is recognized as a hollow instant
+    // the (version_number, completion_time) pair is not consistent, just for test purpose
+    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getStateTransitionTime(), false);
+    assertFalse(splits7.isEmpty());
+    List<RowData> result7 = readData(inputFormat, splits7.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result7, TestData.dataSetInsert(3, 4, 7, 8));
+  }
+
   @Test
   void testReadBaseFilesWithStartCommit() throws Exception {
     beforeEach(HoodieTableType.COPY_ON_WRITE);
-
-    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
 
     // write base files
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -552,11 +647,11 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
-        .requiredPartitions(new HashSet<>(Arrays.asList("par1", "par2", "par3", "par4")))
+        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
     // default read the latest commit
-    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits1 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits1.isEmpty());
     List<RowData> result1 = readData(inputFormat, splits1.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
 
@@ -571,7 +666,7 @@ public class TestInputFormat {
     String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 1, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
-    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, hadoopConf, null, false);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     String actual2 = TestData.rowDataToString(result2);
@@ -586,10 +681,14 @@ public class TestInputFormat {
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    Map<String, String> prunedPartitions = new HashMap<>();
-    prunedPartitions.put("partition", "par1");
     // prune to only be with partition 'par1'
-    tableSource.applyPartitions(Collections.singletonList(prunedPartitions));
+    FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
+    ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
+    CallExpression partFilter = new CallExpression(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(partRef, partLiteral),
+        DataTypes.BOOLEAN());
+    tableSource.applyFilters(Arrays.asList(partFilter));
     InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);

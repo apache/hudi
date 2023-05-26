@@ -28,6 +28,15 @@ import java.util.Objects;
  * we need to keep the ordering val to combine with the data records when merging, or the data loss
  * may occur if there are intermediate deletions for the inputs
  * (a new INSERT comes after a DELETE in one input batch).
+ *
+ * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+ *
+ *       This class is serialized (using Kryo) as part of {@code HoodieDeleteBlock} to make
+ *       sure this stays backwards-compatible we can't MAKE ANY CHANGES TO THIS CLASS (add,
+ *       delete, reorder or change types of the fields in this class, make class final, etc)
+ *       as this would break its compatibility with already persisted blocks.
+ *
+ *       Check out HUDI-5760 for more details
  */
 public class DeleteRecord implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -98,10 +107,9 @@ public class DeleteRecord implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("DeleteRecord {");
-    sb.append(" key=").append(hoodieKey);
-    sb.append(" orderingVal=").append(this.orderingVal);
-    sb.append('}');
-    return sb.toString();
+    return "DeleteRecord {"
+            + " key=" + hoodieKey
+            + " orderingVal=" + this.orderingVal
+            + '}';
   }
 }

@@ -242,7 +242,7 @@ public class TestInLineFileSystem {
   @Test
   public void testOpen() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    // open non existant path
+    // open non-existent path
     assertThrows(FileNotFoundException.class, () -> {
       inlinePath.getFileSystem(conf).open(inlinePath);
     }, "Should have thrown exception");

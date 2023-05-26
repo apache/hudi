@@ -18,12 +18,13 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
-import org.apache.hudi.common.util.Either;
-import org.apache.hudi.common.util.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,15 +50,14 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * reader and a writer schema are declared compatible if all datum instances of
  * the writer schema can be successfully decoded using the specified reader
  * schema.
- *
+ * <p>
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
- *
- *       This code is borrowed from Avro 1.10, with the following modifications:
- *       <ol>
- *         <li>Compatibility checks ignore schema name, unless schema is held inside
- *         a union</li>
- *       </ol>
- *
+ * <p>
+ * This code is borrowed from Avro 1.10, with the following modifications:
+ * <ol>
+ *   <li>Compatibility checks ignore schema name, unless schema is held inside
+ *   a union</li>
+ * </ol>
  */
 public class AvroSchemaCompatibility {
   private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCompatibility.class);
@@ -224,7 +224,7 @@ public class AvroSchemaCompatibility {
      * Reports the compatibility of a reader/writer schema pair.
      *
      * <p>
-     * Memoizes the compatibility results.
+     * Memorizes the compatibility results.
      * </p>
      *
      * @param reader Reader schema to test.
@@ -241,13 +241,13 @@ public class AvroSchemaCompatibility {
     /**
      * Reports the compatibility of a reader/writer schema pair.
      * <p>
-     * Memoizes the compatibility results.
+     * Memorizes the compatibility results.
      * </p>
      *
-     * @param reader      Reader schema to test.
-     * @param writer      Writer schema to test.
-     * @param locations   Stack tracking the path (chain of locations) within the
-     *                    schema.
+     * @param reader    Reader schema to test.
+     * @param writer    Writer schema to test.
+     * @param locations Stack tracking the path (chain of locations) within the
+     *                  schema.
      * @return the compatibility of the reader/writer schema pair.
      */
     private SchemaCompatibilityResult getCompatibility(final Schema reader,

@@ -18,67 +18,57 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, UpdateTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructField
 
-import scala.collection.JavaConverters._
-
-case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeafRunnableCommand
+case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
-  private val table = updateTable.table
-  private val tableId = getTableIdentifier(table)
-
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    logInfo(s"start execute update command for $tableId")
-    val sqlConf = sparkSession.sessionState.conf
-    val name2UpdateValue = updateTable.assignments.map {
-      case Assignment(attr: AttributeReference, value) =>
-        attr.name -> value
-    }.toMap
+    val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
+      .map(HoodieCatalogTable(sparkSession, _))
+      .get
 
-    val updateExpressions = table.output
-      .map(attr => {
-        val UpdateValueOption = name2UpdateValue.find(f => sparkSession.sessionState.conf.resolver(f._1, attr.name))
-        if(UpdateValueOption.isEmpty) attr else UpdateValueOption.get._2
-      })
-      .filter { // filter the meta columns
-        case attr: AttributeReference =>
-          !HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet.contains(attr.name)
-        case _=> true
-      }
+    val tableId = catalogTable.table.qualifiedName
 
-    val projects = updateExpressions.zip(removeMetaFields(table.schema).fields).map {
-      case (attr: AttributeReference, field) =>
-        Column(cast(attr, field, sqlConf))
-      case (exp, field) =>
-        Column(Alias(cast(exp, field, sqlConf), field.name)())
+    logInfo(s"Executing 'UPDATE' command for $tableId")
+
+    val assignedAttributes = ut.assignments.map {
+      case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    var df = Dataset.ofRows(sparkSession, table)
-    if (updateTable.condition.isDefined) {
-      df = df.filter(Column(updateTable.condition.get))
+    val filteredOutput = removeMetaFields(ut.table.output)
+    val targetExprs = filteredOutput.map { targetAttr =>
+      // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
+      //       assigned attributes to the ones of the target table. Ones not being assigned
+      //       will simply be carried over (from the old record)
+      assignedAttributes.find(p => attributeEquals(p._1, targetAttr))
+        .map { case (_, expr) => Alias(castIfNeeded(expr, targetAttr.dataType), targetAttr.name)() }
+        .getOrElse(targetAttr)
     }
-    df = df.select(projects: _*)
-    val config = buildHoodieConfig(HoodieCatalogTable(sparkSession, tableId))
-    df.write
-      .format("hudi")
+
+    val condition = ut.condition.getOrElse(TrueLiteral)
+    val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
+
+    val config = buildHoodieConfig(catalogTable)
+    val df = Dataset.ofRows(sparkSession, filteredPlan)
+
+    df.write.format("hudi")
       .mode(SaveMode.Append)
       .options(config)
       .save()
-    sparkSession.catalog.refreshTable(tableId.unquotedString)
-    logInfo(s"Finish execute update command for $tableId")
+
+    sparkSession.catalog.refreshTable(tableId)
+
+    logInfo(s"Finished executing 'UPDATE' command for $tableId")
+
     Seq.empty[Row]
   }
 
-  def cast(exp:Expression, field: StructField, sqlConf: SQLConf): Expression = {
-    castIfNeeded(exp, field.dataType, sqlConf)
-  }
 }

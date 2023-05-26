@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.model.debezium;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
@@ -37,11 +41,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link PostgresDebeziumAvroPayload}.
@@ -104,6 +110,7 @@ public class TestPostgresDebeziumAvroPayload {
   public void testMergeWithDelete() throws IOException {
     GenericRecord deleteRecord = createRecord(2, Operation.DELETE, 100L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(deleteRecord, 100L);
+    assertTrue(payload.isDeleted(avroSchema, new Properties()));
 
     GenericRecord existingRecord = createRecord(2, Operation.UPDATE, 99L);
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
@@ -114,6 +121,21 @@ public class TestPostgresDebeziumAvroPayload {
     payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
     mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 2, Operation.UPDATE, 99L);
+  }
+
+  @Test
+  public void testMergeWithDeleteUsingEmptyRecord() throws IOException {
+    // empty record being merged with current record.
+    HoodieRecord<PostgresDebeziumAvroPayload> emptyRecord = new HoodieAvroRecord(new HoodieKey(), new PostgresDebeziumAvroPayload(Option.empty()));
+    GenericRecord existingRecord = createRecord(2, Operation.UPDATE, 99L);
+    Option<IndexedRecord> mergedRecord = emptyRecord.getData().combineAndGetUpdateValue(existingRecord, avroSchema, new TypedProperties());
+    // expect nothing to be committed to table
+    assertFalse(mergedRecord.isPresent());
+    // Insert record being merged with empty record.
+    GenericRecord insertedRecord = createRecord(1, Operation.INSERT, 100L);
+    PostgresDebeziumAvroPayload insertPayload = new PostgresDebeziumAvroPayload(insertedRecord, 100L);
+    PostgresDebeziumAvroPayload combinedPayload = (PostgresDebeziumAvroPayload) insertPayload.preCombine(emptyRecord.getData(), avroSchema, new TypedProperties());
+    assertEquals(insertPayload, combinedPayload);
   }
 
   @Test

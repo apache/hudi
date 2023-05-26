@@ -29,6 +29,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -75,7 +76,7 @@ public class TestHiveIncrementalPuller {
   public void testInitHiveIncrementalPuller() {
     assertDoesNotThrow(() -> {
       new HiveIncrementalPuller(config);
-    }, "Unexpected exception while initing HiveIncrementalPuller.");
+    }, "Unexpected exception while initializing HiveIncrementalPuller.");
   }
 
   private HiveIncrementalPuller.Config getHivePullerConfig(String incrementalSql) throws IOException {
@@ -109,8 +110,9 @@ public class TestHiveIncrementalPuller {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "jdbc");
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
-    tool.syncHoodieTable();
+    try (HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
+      tool.syncHoodieTable();
+    }
   }
 
   private void createTargetTable() throws IOException, URISyntaxException {
@@ -118,8 +120,9 @@ public class TestHiveIncrementalPuller {
     String targetBasePath = tempDir.resolve("target_table").toAbsolutePath().toString();
     HiveTestUtil.createCOWTable(instantTime, 5, true,
         targetBasePath, "tgtdb", "test2");
-    HiveSyncTool tool = new HiveSyncTool(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf());
-    tool.syncHoodieTable();
+    try (HiveSyncTool tool = new HiveSyncTool(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf())) {
+      tool.syncHoodieTable();
+    }
   }
 
   private TypedProperties getTargetHiveSyncConfig(String basePath) {
@@ -164,6 +167,7 @@ public class TestHiveIncrementalPuller {
   }
 
   @Test
+  @EnabledIf(value = "org.apache.hudi.HoodieSparkUtils#isSpark2", disabledReason = "Disable due to hive not support avro 1.10.2.")
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");

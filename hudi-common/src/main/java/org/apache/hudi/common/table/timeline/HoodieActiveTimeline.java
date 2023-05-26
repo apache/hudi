@@ -32,10 +32,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
@@ -82,7 +81,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
     }};
 
-  private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
 
   /**
@@ -374,18 +373,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   //-----------------------------------------------------------------
 
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    try {
-      // Reading from auxiliary path first. In future release, we will cleanup compaction management
-      // to only write to timeline and skip auxiliary and this code will be able to handle it.
-      return readDataFromPath(new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName()));
-    } catch (HoodieIOException e) {
-      // This will be removed in future release. See HUDI-546
-      if (e.getIOException() instanceof FileNotFoundException) {
-        return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
-      } else {
-        throw e;
-      }
-    }
+    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
   }
 
   public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
@@ -492,11 +480,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return commitInstant;
   }
 
-  private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
-    // This will be removed in future release. See HUDI-546
-    Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, data);
-  }
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -704,8 +687,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    // Write workload to auxiliary folder
-    createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 
@@ -715,8 +696,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
-    // Write workload to auxiliary folder
-    createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 

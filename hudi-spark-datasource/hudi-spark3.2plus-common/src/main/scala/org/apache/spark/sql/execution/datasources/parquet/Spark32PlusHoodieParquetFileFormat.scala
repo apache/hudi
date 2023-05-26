@@ -95,7 +95,11 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     hadoopConf.setBoolean(
       SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
       sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
-
+    // Using string value of this conf to preserve compatibility across spark versions.
+    hadoopConf.setBoolean(
+      "spark.sql.legacy.parquet.nanosAsLong",
+      sparkSession.sessionState.conf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
+    )
     val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here
@@ -132,6 +136,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     val parquetOptions = new ParquetOptions(options, sparkSession.sessionState.conf)
     val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
+    val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
@@ -374,7 +379,10 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
             }).toAttributes ++ partitionSchema.toAttributes
             val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
               if (typeChangeInfos.containsKey(i)) {
-                Cast(attr, typeChangeInfos.get(i).getLeft)
+                val srcType = typeChangeInfos.get(i).getRight
+                val dstType = typeChangeInfos.get(i).getLeft
+                val needTimeZone = Cast.needsTimeZone(srcType, dstType)
+                Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
               } else attr
             }
             GenerateUnsafeProjection.generate(castSchema, newFullSchema)

@@ -198,6 +198,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs) {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> HoodieTimeline.isInRange(s.getStateTransitionTime(), startTs, endTs)),
+        details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
@@ -407,6 +414,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
     return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
+  }
+
+  @Override
+  public Stream<HoodieInstant> getInstantsOrderedByStateTransitionTime() {
+    return getInstantsAsStream().sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
   }
 
   @Override

@@ -18,12 +18,14 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -386,9 +388,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         if (!parameters.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
           // read the table config first
           final boolean hiveStyle;
-          HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
-          if (tableConfig != null && tableConfig.contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
-            hiveStyle = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+          Option<HoodieTableConfig> tableConfig = StreamerUtil.getTableConfig(path, hiveConf);
+          if (tableConfig.isPresent() && tableConfig.get().contains(FlinkOptions.HIVE_STYLE_PARTITIONING.key())) {
+            hiveStyle = Boolean.parseBoolean(tableConfig.get().getHiveStylePartitioningEnable());
           } else {
             // fallback to the partition path pattern
             Path hoodieTablePath = new Path(path);
@@ -416,11 +418,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
     Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
-    String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
-    List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
-        ? null : StringUtils.split(pkColumnsStr, ",");
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
+      String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
+      List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
+          ? null : StringUtils.split(pkColumnsStr, ",");
       // if the table is initialized from spark, the write schema is nullable for pk columns.
       DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
           AvroSchemaConverter.convertToDataType(latestTableSchema), pkColumns);
@@ -480,7 +482,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
-    final String avroSchema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPersistedRowDataType().getLogicalType()).toString();
+    final String avroSchema = AvroSchemaConverter.convertToSchema(
+        catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
+        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     flinkConf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
@@ -532,7 +536,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
             tablePath.getDatabaseName(), tablePath.getObjectName());
 
-    hiveTable.setOwner(UserGroupInformation.getCurrentUser().getUserName());
+    hiveTable.setOwner(UserGroupInformation.getCurrentUser().getShortUserName());
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
@@ -564,7 +568,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // the metadata fields should be included to keep sync with the hive sync tool,
     // because since Hive 3.x, there is validation when altering table,
     // when the metadata fields are synced through the hive sync tool,
-    // a compatability issue would be reported.
+    // a compatibility issue would be reported.
     boolean withOperationField = Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.CHANGELOG_ENABLED.key(), "false"));
     List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema(), withOperationField);
 
@@ -596,7 +600,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys, withOperationField));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
@@ -842,7 +846,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (Exception e) {
       throw new CatalogException(
           String.format(
-              "Failed to drop partition %s of table %s", partitionSpec, tablePath));
+              "Failed to drop partition %s of table %s", partitionSpec, tablePath), e);
     }
   }
 

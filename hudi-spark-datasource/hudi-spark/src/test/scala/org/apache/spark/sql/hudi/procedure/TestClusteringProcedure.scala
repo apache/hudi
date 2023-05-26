@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
@@ -63,7 +62,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -164,7 +163,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -393,6 +392,14 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
             Seq(10, "a10", 10.0, 1009)
           )
         }
+
+        // Test partition pruning with invalid predicates
+        {
+          val resultD = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1111L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(0)(resultD.length)
+        }
       }
     }
   }
@@ -605,7 +612,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call run_clustering with partition selected config") {
+  test("Test Call run_clustering with partition selected") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -631,9 +638,9 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1011)")
-        spark.sql(s"set ${HoodieClusteringConfig.PARTITION_SELECTED.key()}=ts=1010")
         // Do
-        val result = spark.sql(s"call run_clustering(table => '$tableName', show_involved_partition => true)")
+        val result = spark.sql(s"call run_clustering(table => '$tableName', " +
+          s"selected_partitions => 'ts=1010', show_involved_partition => true)")
           .collect()
           .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
         assertResult(1)(result.length)
@@ -646,13 +653,13 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         )
       }
 
-      // Test clustering with PARTITION_SELECTED config set, choose all partitions to schedule
+      // Test clustering with PARTITION_SELECTED, choose all partitions to schedule
       {
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1010)")
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1011)")
         spark.sql(s"insert into $tableName values(6, 'a6', 10, 1012)")
-        spark.sql(s"set ${HoodieClusteringConfig.PARTITION_SELECTED.key()}=ts=1010,ts=1011,ts=1012")
-        val result = spark.sql(s"call run_clustering(table => '$tableName', show_involved_partition => true)")
+        val result = spark.sql(s"call run_clustering(table => '$tableName', " +
+          s"selected_partitions => 'ts=1010,ts=1011,ts=1012', show_involved_partition => true)")
           .collect()
           .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
         assertResult(1)(result.length)
@@ -667,6 +674,38 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           Seq(6, "a6", 10.0, 1012)
         )
       }
+    }
+  }
+
+  test("Test Call run_clustering with unsupported bucket index") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'BUCKET',
+           |  hoodie.bucket.index.hash.field = 'id',
+           |  hoodie.datasource.write.recordkey.field = 'id'
+           | )
+           | partitioned by (ts)
+           | location '$basePath'
+     """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+
+      checkExceptionContain(s"call run_clustering(table => '$tableName')")(
+        "Executor SparkExecuteClusteringCommitActionExecutor is not compatible with table layout HoodieSimpleBucketLayout")
     }
   }
 

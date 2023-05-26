@@ -43,15 +43,14 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,7 +74,7 @@ import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
  * </ul>
  */
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;
 
@@ -343,7 +342,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             .collect(Collectors.toMap(Pair::getKey, p -> p.getRight().get()));
 
     Set<Path> missingPartitionPaths =
-        CollectionUtils.diffSet(new HashSet<>(partitionPaths), cachedPartitionPaths.keySet());
+        CollectionUtils.diffSet(partitionPaths, cachedPartitionPaths.keySet());
 
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on

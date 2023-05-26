@@ -34,9 +34,11 @@ public class HoodieSimpleBucketLayout extends HoodieStorageLayout {
   public static final Set<WriteOperationType> SUPPORTED_OPERATIONS = CollectionUtils.createImmutableSet(
       WriteOperationType.INSERT,
       WriteOperationType.INSERT_PREPPED,
+      WriteOperationType.BULK_INSERT,
       WriteOperationType.UPSERT,
       WriteOperationType.UPSERT_PREPPED,
       WriteOperationType.INSERT_OVERWRITE,
+      WriteOperationType.INSERT_OVERWRITE_TABLE,
       WriteOperationType.DELETE,
       WriteOperationType.COMPACT,
       WriteOperationType.DELETE_PARTITION

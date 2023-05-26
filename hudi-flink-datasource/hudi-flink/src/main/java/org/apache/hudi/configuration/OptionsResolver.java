@@ -18,13 +18,20 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -53,8 +60,7 @@ public class OptionsResolver {
   public static boolean isAppendMode(Configuration conf) {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
-    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)
-        || needsScheduleClustering(conf);
+    return isInsertOperation(conf) && ((isCowTable(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)) || isMorTable(conf));
   }
 
   /**
@@ -209,8 +215,8 @@ public class OptionsResolver {
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
-    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE);
-    return HoodieCDCSupplementalLoggingMode.parse(mode);
+    String mode = conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE).toUpperCase();
+    return HoodieCDCSupplementalLoggingMode.valueOf(mode);
   }
 
   /**
@@ -225,6 +231,81 @@ public class OptionsResolver {
    */
   public static boolean isIncrementalQuery(Configuration conf) {
     return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent();
+  }
+
+  /**
+   * Returns whether consistent value will be generated for a logical timestamp type column.
+   */
+  public static boolean isConsistentLogicalTimestampEnabled(Configuration conf) {
+    return conf.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  /**
+   * Returns whether the writer txn should be guarded by lock.
+   */
+  public static boolean isLockRequired(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
+        || ConfigUtils.resolveEnum(WriteConcurrencyMode.class, conf.getString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
+        == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
+  }
+
+  /**
+   * Returns whether OCC is enabled.
+   */
+  public static boolean isOptimisticConcurrencyControl(Configuration conf) {
+    return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  }
+
+  /**
+   * Returns whether to read the instants using completion time.
+   *
+   * <p>A Hudi instant contains both the txn start time and completion time, for incremental subscription
+   * of the source reader, using completion time to filter the candidate instants can avoid data loss
+   * in scenarios like multiple writers.
+   */
+  public static boolean isReadByTxnCompletionTime(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key(), HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.defaultValue());
+  }
+
+  /**
+   * Returns the index type.
+   */
+  public static HoodieIndex.IndexType getIndexType(Configuration conf) {
+    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE));
+  }
+
+  /**
+   * Returns the index key field.
+   */
+  public static String getIndexKeyField(Configuration conf) {
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+  }
+
+  /**
+   * Returns the index key field values.
+   */
+  public static String[] getIndexKeys(Configuration conf) {
+    return getIndexKeyField(conf).split(",");
+  }
+
+  /**
+   * Returns the conflict resolution strategy.
+   */
+  public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {
+    return isBucketIndexType(conf)
+        ? new BucketIndexConcurrentFileWritesConflictResolutionStrategy()
+        : new SimpleConcurrentFileWritesConflictResolutionStrategy();
+  }
+
+  /**
+   * Returns whether to commit even when current batch has no data, for flink defaults false
+   */
+  public static boolean allowCommitOnEmptyBatch(Configuration conf) {
+    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
   }
 
   // -------------------------------------------------------------------------

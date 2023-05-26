@@ -34,10 +34,11 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
  * Hoodie Configs for Locks.
  */
 @ConfigClassProperty(name = "DynamoDB based Locks Configurations",
-                     groupName = ConfigGroups.Names.WRITE_CLIENT,
-                     description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
-                                   + " between writers to a Hudi table. Concurrency between Hudi's own table services "
-                                   + " are auto managed internally.")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    subGroupName = ConfigGroups.SubGroupNames.LOCK,
+    description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
+        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+        + " are auto managed internally.")
 public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   // configs for DynamoDb based locks
@@ -45,13 +46,15 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_NAME = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table")
-      .noDefaultValue()
+      .defaultValue("hudi_locks")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_PARTITION_KEY = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withInferFunction(cfg -> {
         if (cfg.contains(HoodieTableConfig.NAME)) {
@@ -66,6 +69,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> DYNAMODB_LOCK_REGION = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region")
       .defaultValue("us-east-1")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withInferFunction(cfg -> {
         String regionFromEnv = System.getenv("AWS_REGION");
@@ -80,30 +84,35 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")
       .defaultValue(BillingMode.PAY_PER_REQUEST.name())
+      .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode");
+      .withDocumentation("For DynamoDB based lock provider, by default it is `PAY_PER_REQUEST` mode. Alternative is `PROVISIONED`.");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_READ_CAPACITY = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity")
       .defaultValue("20")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_WRITE_CAPACITY = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity")
       .defaultValue("10")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout")
-      .defaultValue(String.valueOf(10 * 60 * 1000))
+      .defaultValue(String.valueOf(2 * 60 * 1000))
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
 
   public static final ConfigProperty<String> DYNAMODB_ENDPOINT_URL = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "endpoint_url")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.10.1")
       .withDocumentation("For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service."
                          + " Useful for development with a local dynamodb instance.");

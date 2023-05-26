@@ -26,8 +26,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -43,12 +43,13 @@ import java.util.stream.IntStream;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieConsistentHashingMetadata implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieConsistentHashingMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieConsistentHashingMetadata.class);
   /**
    * Upper-bound of the hash value
    */
   public static final int HASH_VALUE_MASK = Integer.MAX_VALUE;
   public static final String HASHING_METADATA_FILE_SUFFIX = ".hashing_meta";
+  public static final String HASHING_METADATA_COMMIT_FILE_SUFFIX = ".commit";
 
   private final short version;
   private final String partitionPath;

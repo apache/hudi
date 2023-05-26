@@ -36,7 +36,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "verbose", DataTypes.BooleanType, false)
   )
 
@@ -44,7 +44,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_name", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("is_present_in_fs", DataTypes.BooleanType, nullable = true, Metadata.empty),
-    StructField("is_resent_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
+    StructField("is_present_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("fs_size", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("metadata_size", DataTypes.LongType, nullable = true, Metadata.empty)
   ))

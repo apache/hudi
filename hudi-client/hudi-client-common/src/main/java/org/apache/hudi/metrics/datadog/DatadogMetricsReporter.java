@@ -60,7 +60,7 @@ public class DatadogMetricsReporter extends MetricsReporter {
 
     reporter = new DatadogReporter(
         registry,
-        new DatadogHttpClient(apiSite, apiKey, skipValidation, timeoutSeconds),
+        new DatadogHttpClient(apiSite, apiKey, skipValidation, timeoutSeconds, host),
         prefix,
         host,
         tags,

@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")
@@ -43,6 +43,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_added", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_updated", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -54,6 +55,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   private val METADATA_OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -121,7 +123,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
         for (hoodieWriteStat <- partitionWriteStat.getValue) {
           rows.add(Row(
-            commit.getTimestamp, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.getTimestamp, commit.getStateTransitionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -151,7 +153,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getTimestamp, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.getTimestamp, commit.getStateTransitionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))
@@ -181,4 +183,3 @@ object ShowArchivedCommitsMetadataProcedure {
     override def get() = new ShowArchivedCommitsProcedure(true)
   }
 }
-

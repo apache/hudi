@@ -24,77 +24,91 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
+import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
+
 public class HoodieIncrSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIncrSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
 
   public static class Config {
 
     /**
-     * {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.
+     * {@link #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.
      */
-    static final String HOODIE_SRC_BASE_PATH = "hoodie.deltastreamer.source.hoodieincr.path";
+    @Deprecated
+    static final String HOODIE_SRC_BASE_PATH = HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key();
 
     /**
-     * {@value #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched.
+     * {@link #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched.
      */
-    static final String NUM_INSTANTS_PER_FETCH = "hoodie.deltastreamer.source.hoodieincr.num_instants";
-    static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = 5;
+    @Deprecated
+    static final String NUM_INSTANTS_PER_FETCH = HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.key();
+    @Deprecated
+    static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.defaultValue();
 
     /**
-     * {@value #HOODIE_SRC_PARTITION_FIELDS} specifies partition fields that needs to be added to source table after
+     * {@link #HOODIE_SRC_PARTITION_FIELDS} specifies partition fields that needs to be added to source table after
      * parsing _hoodie_partition_path.
      */
-    static final String HOODIE_SRC_PARTITION_FIELDS = "hoodie.deltastreamer.source.hoodieincr.partition.fields";
+    @Deprecated
+    static final String HOODIE_SRC_PARTITION_FIELDS = HoodieIncrSourceConfig.HOODIE_SRC_PARTITION_FIELDS.key();
 
     /**
-     * {@value #HOODIE_SRC_PARTITION_EXTRACTORCLASS} PartitionValueExtractor class to extract partition fields from
+     * {@link #HOODIE_SRC_PARTITION_EXTRACTORCLASS} PartitionValueExtractor class to extract partition fields from
      * _hoodie_partition_path.
      */
-    static final String HOODIE_SRC_PARTITION_EXTRACTORCLASS =
-        "hoodie.deltastreamer.source.hoodieincr.partition.extractor.class";
+    @Deprecated
+    static final String HOODIE_SRC_PARTITION_EXTRACTORCLASS = HoodieIncrSourceConfig.HOODIE_SRC_PARTITION_EXTRACTORCLASS.key();
+    @Deprecated
     static final String DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS =
-        SlashEncodedDayPartitionValueExtractor.class.getCanonicalName();
+        HoodieIncrSourceConfig.HOODIE_SRC_PARTITION_EXTRACTORCLASS.defaultValue();
 
     /**
-     * {@value #READ_LATEST_INSTANT_ON_MISSING_CKPT} allows delta-streamer to incrementally fetch from latest committed
+     * {@link  #READ_LATEST_INSTANT_ON_MISSING_CKPT} allows delta-streamer to incrementally fetch from latest committed
      * instant when checkpoint is not provided. This config is deprecated. Please refer to {@link #MISSING_CHECKPOINT_STRATEGY}.
      */
     @Deprecated
-    public static final String READ_LATEST_INSTANT_ON_MISSING_CKPT =
-        "hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt";
-    public static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT = false;
+    public static final String READ_LATEST_INSTANT_ON_MISSING_CKPT = HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.key();
+    @Deprecated
+    public static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT =
+        HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue();
 
     /**
-     * {@value #MISSING_CHECKPOINT_STRATEGY} allows delta-streamer to decide the checkpoint to consume from when checkpoint is not set.
+     * {@link  #MISSING_CHECKPOINT_STRATEGY} allows delta-streamer to decide the checkpoint to consume from when checkpoint is not set.
      * instant when checkpoint is not provided.
      */
-    public static final String MISSING_CHECKPOINT_STRATEGY = "hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy";
+    @Deprecated
+    public static final String MISSING_CHECKPOINT_STRATEGY = HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key();
 
     /**
-     * {@value #SOURCE_FILE_FORMAT} is passed to the reader while loading dataset. Default value is parquet.
+     * {@link  #SOURCE_FILE_FORMAT} is passed to the reader while loading dataset. Default value is parquet.
      */
-    static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
-    static final String DEFAULT_SOURCE_FILE_FORMAT = "parquet";
+    @Deprecated
+    static final String SOURCE_FILE_FORMAT = HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.key();
+    @Deprecated
+    static final String DEFAULT_SOURCE_FILE_FORMAT = HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.defaultValue();
 
     /**
      * Drops all meta fields from the source hudi table while ingesting into sink hudi table.
      */
-    static final String HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = "hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source";
-    public static final Boolean DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = false;
+    @Deprecated
+    static final String HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE = HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.key();
+    @Deprecated
+    public static final Boolean DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE =
+        HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue();
   }
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -105,7 +119,7 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
 
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.HOODIE_SRC_BASE_PATH));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key()));
 
     /*
      * DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH,
@@ -114,12 +128,14 @@ public class HoodieIncrSource extends RowSource {
      * extractor = DataSourceUtils.createPartitionExtractor(props.getString( Config.HOODIE_SRC_PARTITION_EXTRACTORCLASS,
      * Config.DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS));
      */
-    String srcPath = props.getString(Config.HOODIE_SRC_BASE_PATH);
-    int numInstantsPerFetch = props.getInteger(Config.NUM_INSTANTS_PER_FETCH, Config.DEFAULT_NUM_INSTANTS_PER_FETCH);
-    boolean readLatestOnMissingCkpt = props.getBoolean(Config.READ_LATEST_INSTANT_ON_MISSING_CKPT,
-        Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
-    IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy = (props.containsKey(Config.MISSING_CHECKPOINT_STRATEGY))
-        ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(Config.MISSING_CHECKPOINT_STRATEGY)) : null;
+    String srcPath = props.getString(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key());
+    int numInstantsPerFetch = props.getInteger(HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.key(),
+        HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.defaultValue());
+    boolean readLatestOnMissingCkpt = props.getBoolean(HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.key(),
+        HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
+    IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy =
+        (props.containsKey(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key()))
+            ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key())) : null;
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
@@ -159,35 +175,19 @@ public class HoodieIncrSource extends RowSource {
               queryTypeAndInstantEndpts.getRight().getRight()));
     }
 
-    /*
-     * log.info("Partition Fields are : (" + partitionFields + "). Initial Source Schema :" + source.schema());
-     *
-     * StructType newSchema = new StructType(source.schema().fields()); for (String field : partitionFields) { newSchema
-     * = newSchema.add(field, DataTypes.StringType, true); }
-     *
-     * /** Validates if the commit time is sane and also generates Partition fields from _hoodie_partition_path if
-     * configured
-     *
-     * Dataset<Row> validated = source.map((MapFunction<Row, Row>) (Row row) -> { // _hoodie_instant_time String
-     * instantTime = row.getString(0); IncrSourceHelper.validateInstantTime(row, instantTime, instantEndpts.getKey(),
-     * instantEndpts.getValue()); if (!partitionFields.isEmpty()) { // _hoodie_partition_path String hoodiePartitionPath
-     * = row.getString(3); List<Object> partitionVals =
-     * extractor.extractPartitionValuesInPath(hoodiePartitionPath).stream() .map(o -> (Object)
-     * o).collect(Collectors.toList()); ValidationUtils.checkArgument(partitionVals.size() == partitionFields.size(),
-     * "#partition-fields != #partition-values-extracted"); List<Object> rowObjs = new
-     * ArrayList<>(scala.collection.JavaConversions.seqAsJavaList(row.toSeq())); rowObjs.addAll(partitionVals); return
-     * RowFactory.create(rowObjs.toArray()); } return row; }, RowEncoder.apply(newSchema));
-     *
-     * log.info("Validated Source Schema :" + validated.schema());
-     */
-    boolean dropAllMetaFields = props.getBoolean(Config.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE,
-        Config.DEFAULT_HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE);
+    HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
+
+    boolean shouldDropMetaFields = props.getBoolean(HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.key(),
+        HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue())
+        // NOTE: In case when Spark native [[RecordMerger]] is used, we have to make sure
+        //       all meta-fields have been properly cleaned up from the incoming dataset
+        //
+        || recordType == HoodieRecord.HoodieRecordType.SPARK;
 
     // Remove Hoodie meta columns except partition path from input source
-    String[] colsToDrop = dropAllMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
+    String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
     final Dataset<Row> src = source.drop(colsToDrop);
-    // log.info("Final Schema from Source is :" + src.schema());
     return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
   }
 }

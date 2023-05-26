@@ -28,7 +28,10 @@ import org.apache.spark.sql.Row;
 import java.util.Arrays;
 
 /**
- * A partitioner that does sorting based on specified column values for each spark partitions.
+ * A partitioner that globally sorts a {@link Dataset<Row>} based on partition path column and custom columns.
+ *
+ * @see GlobalSortPartitionerWithRows
+ * @see BulkInsertSortMode#GLOBAL_SORT
  */
 public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
 

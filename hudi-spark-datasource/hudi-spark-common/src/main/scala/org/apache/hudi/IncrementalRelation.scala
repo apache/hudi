@@ -32,15 +32,14 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.slf4j.LoggerFactory
 
-import java.util.stream.Collectors
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
@@ -56,7 +55,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
                           val userSchema: Option[StructType],
                           val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
 
-  private val log = LogManager.getLogger(classOf[IncrementalRelation])
+  private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val basePath = metaClient.getBasePathV2
@@ -65,6 +64,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
+
+  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
+    .map(_.toBoolean)
+    .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
@@ -82,9 +86,17 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+  private val commitsTimelineToReturn = {
+    if (useStateTransitionTime) {
+      commitTimeline.findInstantsInRangeByStateTransitionTime(
+        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
+    } else {
+      commitTimeline.findInstantsInRange(
+        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+    }
+  }
   private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
 
   // use schema from a file produced in the end/latest instant
@@ -101,10 +113,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
-      if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
+      if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchema(false) else
         schemaResolver.getTableAvroSchema(commitsToReturn.last, false)
     } else {
-      schemaResolver.getTableAvroSchemaWithoutMetadataFields()
+      schemaResolver.getTableAvroSchema(false)
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
@@ -205,6 +217,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+        if (useStateTransitionTime) {
+          throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
+        }
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {

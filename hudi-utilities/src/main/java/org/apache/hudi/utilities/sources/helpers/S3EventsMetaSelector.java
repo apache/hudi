@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
@@ -61,7 +62,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
   public static S3EventsMetaSelector createSourceSelector(TypedProperties props) {
     String sourceSelectorClass =
         props.getString(
-            S3EventsMetaSelector.Config.SOURCE_INPUT_SELECTOR,
+            DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
             S3EventsMetaSelector.class.getName());
     try {
       S3EventsMetaSelector selector =

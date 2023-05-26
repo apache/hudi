@@ -18,11 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoSerializable;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -31,8 +26,17 @@ import java.util.Objects;
  * <p>
  * - recordKey : a recordKey that acts as primary key for a record.
  * - partitionPath : the partition path of a record.
+ *
+ * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+ *
+ *       This class is serialized (using Kryo) as part of {@code HoodieDeleteBlock} to make
+ *       sure this stays backwards-compatible we can't MAKE ANY CHANGES TO THIS CLASS (add,
+ *       delete, reorder or change types of the fields in this class, make class final, etc)
+ *       as this would break its compatibility with already persisted blocks.
+ *
+ *       Check out HUDI-5760 for more details
  */
-public final class HoodieKey implements Serializable, KryoSerializable {
+public class HoodieKey implements Serializable {
 
   private String recordKey;
   private String partitionPath;
@@ -85,17 +89,5 @@ public final class HoodieKey implements Serializable, KryoSerializable {
     sb.append(" partitionPath=").append(partitionPath);
     sb.append('}');
     return sb.toString();
-  }
-
-  @Override
-  public void write(Kryo kryo, Output output) {
-    output.writeString(recordKey);
-    output.writeString(partitionPath);
-  }
-
-  @Override
-  public void read(Kryo kryo, Input input) {
-    this.recordKey = input.readString();
-    this.partitionPath = input.readString();
   }
 }

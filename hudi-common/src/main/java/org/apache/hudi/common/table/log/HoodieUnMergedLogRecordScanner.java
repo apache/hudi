@@ -42,9 +42,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean useScanV2, HoodieRecordMerger recordMerger) {
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), useScanV2, recordMerger);
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger);
     this.callback = callback;
   }
 
@@ -105,7 +105,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
-    private boolean useScanV2;
+    private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger;
 
     public Builder withFileSystem(FileSystem fs) {
@@ -167,8 +167,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
-    public Builder withUseScanV2(boolean useScanV2) {
-      this.useScanV2 = useScanV2;
+    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
+      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
       return this;
     }
 
@@ -184,7 +184,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, useScanV2, recordMerger);
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger);
     }
   }
 }

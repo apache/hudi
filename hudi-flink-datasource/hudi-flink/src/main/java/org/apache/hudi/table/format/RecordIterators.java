@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
@@ -50,8 +50,8 @@ public abstract class RecordIterators {
       Path path,
       long splitStart,
       long splitLength) throws IOException {
-    InternalSchema fileSchema = internalSchemaManager.getFileSchema(path.getName());
-    if (fileSchema.isEmptySchema()) {
+    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(path.getName());
+    if (mergeSchema.isEmptySchema()) {
       return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
@@ -66,14 +66,14 @@ public abstract class RecordIterators {
               splitStart,
               splitLength));
     } else {
-      CastMap castMap = internalSchemaManager.getCastMap(fileSchema, fieldNames, fieldTypes, selectedFields);
+      CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
       Option<RowDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
       ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
               conf,
-              internalSchemaManager.getFileFieldNames(fileSchema, fieldNames), // the reconciled field names
+              internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
               castMap.getFileFieldTypes(),                                     // the reconciled field types
               partitionSpec,
               selectedFields,

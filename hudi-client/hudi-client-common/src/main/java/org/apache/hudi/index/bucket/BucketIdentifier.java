@@ -38,18 +38,18 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return getBucketId(getHashKeys(hoodieKey, indexKeyFields), numBuckets);
   }
 
   public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return getBucketId(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields), numBuckets);
   }
 
   public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
     return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
 
-  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
+  public static int getBucketId(List<String> hashKeyFields, int numBuckets) {
     return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
@@ -76,7 +76,11 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int bucketIdFromFileId(String fileId) {
-    return Integer.parseInt(fileId.substring(0, 8));
+    return Integer.parseInt(bucketIdStrFromFileId(fileId));
+  }
+
+  public static String bucketIdStrFromFileId(String fileId) {
+    return fileId.substring(0, 8);
   }
 
   public static String bucketIdStr(int n) {
@@ -85,6 +89,10 @@ public class BucketIdentifier implements Serializable {
 
   public static String newBucketFileIdPrefix(int bucketId) {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
+  public static String newBucketFileIdPrefix(String fileId, int bucketId) {
+    return fileId.replaceFirst(".{8}", bucketIdStr(bucketId));
   }
 
   public static String newBucketFileIdPrefix(String bucketId) {

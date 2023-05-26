@@ -23,16 +23,17 @@ import org.apache.hudi.metaserver.service.HoodieMetaserverGateway;
 import org.apache.hudi.metaserver.service.HoodieMetaserverProxyHandler;
 import org.apache.hudi.metaserver.service.TableService;
 import org.apache.hudi.metaserver.service.TimelineService;
-import org.apache.hudi.metaserver.store.RelationalDBBasedStorage;
 import org.apache.hudi.metaserver.store.MetaserverStorage;
+import org.apache.hudi.metaserver.store.RelationalDBBasedStorage;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.TServerSocketWrapper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerTransport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Proxy;
 
@@ -44,7 +45,7 @@ import java.lang.reflect.Proxy;
  */
 public class HoodieMetaserver {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetaserver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaserver.class);
 
   private static TServer server;
   private static Thread serverThread;

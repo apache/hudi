@@ -82,6 +82,10 @@ public class TestClusteringUtil {
     this.table = FlinkTables.createTable(conf);
     this.metaClient = table.getMetaClient();
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    // init the metadata table if it is enabled
+    if (this.writeClient.getConfig().isMetadataTableEnabled()) {
+      this.writeClient.initMetadataTable();
+    }
   }
 
   @Test

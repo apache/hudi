@@ -30,13 +30,13 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +53,7 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 @Tag("functional")
 public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMetadataBootstrap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBootstrap.class);
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
@@ -106,7 +106,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
 
     // validate
     validateMetadata(testTable);
-    // after bootstrap do two writes and validate its still functional.
+    // after bootstrap do two writes and validate it's still functional.
     doWriteInsertAndUpsert(testTable);
     validateMetadata(testTable);
   }
@@ -178,7 +178,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     // once the commit is complete, metadata should get fully synced.
     // in prod code path, SparkHoodieBackedTableMetadataWriter.create() will be called for every commit,
     // which may not be the case here if we directly call HoodieBackedTableMetadataWriter.update()
-    // hence lets first move the commit to complete and invoke sync directly
+    // hence let's first move the commit to complete and invoke sync directly
     ((HoodieMetadataTestTable) testTable).moveInflightCommitToComplete("00000007", inflightCommitMeta, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
@@ -252,7 +252,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     initWriteConfigAndMetatableWriter(writeConfig, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
-    // after bootstrap do two writes and validate its still functional.
+    // after bootstrap do two writes and validate it's still functional.
     doWriteInsertAndUpsert(testTable);
     validateMetadata(testTable);
   }

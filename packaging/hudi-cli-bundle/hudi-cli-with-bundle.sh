@@ -16,13 +16,32 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
+JAKARTA_EL_VERSION=3.0.3
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "DIR is ${DIR}"
-CLI_BUNDLE_JAR=`ls $DIR/target/hudi-cli-bundle*.jar | grep -v source | grep -v javadoc`
-SPARK_BUNDLE_JAR=`ls $DIR/../hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v source | grep -v javadoc`
+
+if [ -z "$CLI_BUNDLE_JAR" ]; then
+  echo "Inferring CLI_BUNDLE_JAR path assuming this script is under Hudi repo"
+  CLI_BUNDLE_JAR=`ls $DIR/target/hudi-cli-bundle*.jar | grep -v source | grep -v javadoc`
+fi
+
+if [ -z "$SPARK_BUNDLE_JAR" ]; then
+  echo "Inferring SPARK_BUNDLE_JAR path assuming this script is under Hudi repo"
+  SPARK_BUNDLE_JAR=`ls $DIR/../hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v source | grep -v javadoc`
+fi
+
+echo "CLI_BUNDLE_JAR: $CLI_BUNDLE_JAR"
+echo "SPARK_BUNDLE_JAR: $SPARK_BUNDLE_JAR"
+
 HUDI_CONF_DIR="${DIR}"/conf
 # hudi aux lib contains jakarta.el jars, which need to be put directly on class path
 HUDI_AUX_LIB="${DIR}"/auxlib
+
+if [ ! -d $HUDI_AUX_LIB ]; then
+  echo "Downloading necessary auxiliary jars for Hudi CLI"
+  wget https://repo1.maven.org/maven2/org/glassfish/jakarta.el/$JAKARTA_EL_VERSION/jakarta.el-$JAKARTA_EL_VERSION.jar -P auxlib
+  wget https://repo1.maven.org/maven2/jakarta/el/jakarta.el-api/$JAKARTA_EL_VERSION/jakarta.el-api-$JAKARTA_EL_VERSION.jar -P auxlib
+fi
 
 . "${DIR}"/conf/hudi-env.sh
 
