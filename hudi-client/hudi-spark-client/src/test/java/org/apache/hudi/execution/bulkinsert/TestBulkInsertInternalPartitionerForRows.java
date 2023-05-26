@@ -131,15 +131,16 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
-        records, true, true, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
-
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
-        .withPath("/")
+        .withPath("/dummy_path")
         .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
+
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, config),
+        records, true, true, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
+
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
         records, true, true, true, generateExpectedPartitionNumRecords(records), Option.of(comparator), true);
   }

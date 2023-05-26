@@ -202,7 +202,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
         case LINEAR:
           return isRowPartitioner
-              ? new RowCustomColumnsSortPartitioner(orderByColumns)
+              ? new RowCustomColumnsSortPartitioner(orderByColumns, getWriteConfig())
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema), getWriteConfig());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));

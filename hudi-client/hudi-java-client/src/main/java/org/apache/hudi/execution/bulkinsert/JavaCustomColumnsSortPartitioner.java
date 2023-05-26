@@ -31,6 +31,8 @@ import org.apache.avro.Schema;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
+
 /**
  * A partitioner that does sorting based on specified column values for Java client.
  *
@@ -44,7 +46,7 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final boolean consistentLogicalTimestampEnabled;
 
   public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
-    this.sortColumnNames = BulkInsertPartitioner.tryPrependPartitionPathColumns(columnNames, config);
+    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }

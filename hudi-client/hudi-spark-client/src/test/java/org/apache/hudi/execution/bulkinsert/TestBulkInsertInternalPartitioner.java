@@ -214,7 +214,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     String sortColumnString = "begin_lat";
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
-        .withPath("/")
+        .withPath("/dummy_path")
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
