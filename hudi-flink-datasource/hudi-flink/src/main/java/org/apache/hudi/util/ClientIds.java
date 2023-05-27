@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -69,7 +70,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
   private static final String HEARTBEAT_FOLDER_NAME = ".ids";
   private static final String HEARTBEAT_FILE_NAME_PREFIX = "_";
-  public static final String INIT_CLIENT_ID = "";
+  public static final String INIT_CLIENT_ID = String.valueOf(RandomUtils.nextInt(0,100));
   public static final long DEFAULT_HEARTBEAT_INTERVAL_IN_MS = 60 * 1000; // default 1 minute
   public static final int DEFAULT_NUM_TOLERABLE_HEARTBEAT_MISSES = 5;    // by default decide the service is stopped if it is inactive for 5 minutes
 

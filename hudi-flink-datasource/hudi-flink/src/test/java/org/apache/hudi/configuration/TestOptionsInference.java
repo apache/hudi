@@ -30,6 +30,7 @@ import java.io.File;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Test cases for {@link OptionsInference}.
@@ -69,6 +70,12 @@ public class TestOptionsInference {
     }
   }
 
+  @Test
+  void testAutoGenerateClient() {
+      Configuration conf = getConf();
+      OptionsInference.setupClientId(conf);
+      assertNotNull(conf.getString(FlinkOptions.WRITE_CLIENT_ID), "auto generate client failed!");
+  }
   private Configuration getConf() {
     Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
