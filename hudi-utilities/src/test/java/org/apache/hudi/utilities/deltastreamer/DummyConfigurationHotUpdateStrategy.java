@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 
-import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,28 +28,19 @@ import java.io.Serializable;
 
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 
-public class DummyConfigurationHotUpdateStrategy implements ConfigurationHotUpdateStrategy, Serializable {
+public class DummyConfigurationHotUpdateStrategy extends ConfigurationHotUpdateStrategy implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(DummyConfigurationHotUpdateStrategy.class);
 
-  private HoodieDeltaStreamer.Config cfg;
-  private TypedProperties properties;
-  private SparkSession sparkSession;
-
-  public DummyConfigurationHotUpdateStrategy(SparkSession sparkSession, HoodieDeltaStreamer.Config cfg, TypedProperties properties) {
-    this.sparkSession = sparkSession;
-    this.cfg = cfg;
-    this.properties = properties;
+  public DummyConfigurationHotUpdateStrategy(HoodieDeltaStreamer.Config cfg, TypedProperties properties) {
+    super(cfg, properties);
   }
 
   @Override
-  public boolean updateProps(final TypedProperties properties) {
-    boolean updated = false;
+  public void updateProperties(TypedProperties properties) {
     if (properties.containsKey(UPSERT_PARALLELISM_VALUE.key())) {
       long upsertShuffleParallelism = properties.getLong(UPSERT_PARALLELISM_VALUE.key());
       properties.setProperty(UPSERT_PARALLELISM_VALUE.key(), String.valueOf(upsertShuffleParallelism + 5));
       LOG.info("update {} from [{}] to [{}]", UPSERT_PARALLELISM_VALUE.key(), upsertShuffleParallelism, upsertShuffleParallelism + 5);
-      updated = true;
     }
-    return updated;
   }
 }

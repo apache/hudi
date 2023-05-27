@@ -668,7 +668,7 @@ public class HoodieDeltaStreamer implements Serializable {
       this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
           TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
       this.configurationHotUpdateStrategyOpt = StringUtils.isNullOrEmpty(cfg.configHotUpdateStrategyClass) ? Option.empty() :
-          ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, sparkSession, cfg, properties.get());
+          ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, cfg, properties.get());
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         try {
@@ -748,7 +748,7 @@ public class HoodieDeltaStreamer implements Serializable {
             try {
               long start = System.currentTimeMillis();
               // check if deltastreamer need to update the configuration before the sync
-              if (configurationHotUpdateStrategyOpt.isPresent() && configurationHotUpdateStrategyOpt.get().updateProps(props)) {
+              if (configurationHotUpdateStrategyOpt.isPresent() && configurationHotUpdateStrategyOpt.get().updatePropertiesInPlace(props)) {
                 LOG.info("props updated, re-init deltasync");
                 LOG.info(toSortedTruncatedString(props));
                 reInitDeltaSync();
