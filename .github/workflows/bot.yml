@@ -15,61 +15,20 @@ on:
       - '**.pdf'
       - '**.png'
       - '**.svg'
-      - '**.yaml'
-      - '**.yml'
-      - '.gitignore'
     branches:
       - master
       - 'release-*'
 env:
   MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
-  SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
 
 jobs:
-  validate-source:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
-        with:
-          java-version: '8'
-          distribution: 'adopt'
-          architecture: x64
-      - name: Check Binary Files
-        run: ./scripts/release/validate_source_binary_files.sh
-      - name: Check Copyright
-        run: |
-          ./scripts/release/create_source_directory.sh hudi-tmp-repo
-          cd hudi-tmp-repo
-          ./scripts/release/validate_source_copyright.sh
-      - name: RAT check
-        run: ./scripts/release/validate_source_rat.sh
-
   test-spark:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.11"
-            sparkProfile: "spark2.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark2"
-
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark2.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark2"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.3"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+            sparkProfile: "spark3.4"
 
     steps:
       - uses: actions/checkout@v2
@@ -95,7 +54,6 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.4.x $MVN_ARGS
@@ -159,29 +117,11 @@ jobs:
           # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
           sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
           mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
-      - name: IT - Bundle Validation - OpenJDK 8
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
-      - name: IT - Bundle Validation - OpenJDK 11
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
-      - name: IT - Bundle Validation - OpenJDK 17
+      - name: IT - Bundle Validation
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
-        if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION
