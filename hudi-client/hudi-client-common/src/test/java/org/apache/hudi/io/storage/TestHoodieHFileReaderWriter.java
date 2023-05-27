@@ -39,6 +39,8 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -198,10 +200,10 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
+  @Disabled("Disable the test with evolved schema for HFile since it's not supported")
+  @ParameterizedTest
   @Override
-  @Test
-  public void testWriteReadWithEvolvedSchema() throws Exception {
-    // Disable the test with evolved schema for HFile since it's not supported
+  public void testWriteReadWithEvolvedSchema(String evolvedSchemaPath) throws Exception {
     // TODO(HUDI-3683): fix the schema evolution for HFile
   }
 

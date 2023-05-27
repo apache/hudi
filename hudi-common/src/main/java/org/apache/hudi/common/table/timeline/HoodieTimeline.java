@@ -239,7 +239,7 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with instants after startTs and before or on endTs
    * by state transition timestamp of actions.
    */
-  HoodieTimeline findInstantsInRangeByStateTransitionTs(String startTs, String endTs);
+  HoodieTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -358,7 +358,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Get the stream of instants in order by state transition timestamp of actions.
    */
-  Stream<HoodieInstant> getInstantsOrderedByStateTransitionTs();
+  Stream<HoodieInstant> getInstantsOrderedByStateTransitionTime();
 
   /**
    * @return true if the passed in instant is before the first completed instant in the timeline

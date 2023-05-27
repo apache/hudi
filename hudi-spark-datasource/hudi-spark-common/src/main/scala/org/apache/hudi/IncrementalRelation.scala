@@ -88,7 +88,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsTimelineToReturn = {
     if (useStateTransitionTime) {
-      commitTimeline.findInstantsInRangeByStateTransitionTs(
+      commitTimeline.findInstantsInRangeByStateTransitionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
     } else {

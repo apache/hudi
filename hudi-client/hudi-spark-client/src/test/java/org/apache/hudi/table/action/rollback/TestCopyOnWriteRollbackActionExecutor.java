@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
@@ -109,7 +110,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<HoodieRollbackStat> hoodieRollbackStats = copyOnWriteRollbackActionExecutor.executeRollback(rollbackPlan);
 
     // assert hoodieRollbackStats
-    assertEquals(hoodieRollbackStats.size(), 3);
+    // Rollbacks requests for p1/id21 and p2/id22 only
+    assertEquals(hoodieRollbackStats.size(), 2);
     for (HoodieRollbackStat stat : hoodieRollbackStats) {
       switch (stat.getPartitionPath()) {
         case p1:
@@ -224,6 +226,50 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     metaClient.reloadActiveTimeline();
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+  }
+
+  /**
+   * Test rollback when large number of files are to be rolled back.
+   */
+  @Test
+  public void testRollbackScale() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
+
+    // File lengths for files that will be part of commit 003 to be rolled back
+    final int largeCommitNumFiles = 10000;
+    int[] fileLengths = IntStream.range(10, 10 + largeCommitNumFiles).toArray();
+
+    // Let's create some commit files and parquet files.
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, "id11")
+        .withBaseFilesInPartition(p2, "id12")
+        .withLogFile(p1, "id11", 3)
+        .addCommit("002")
+        .withBaseFilesInPartition(p1, "id21")
+        .withBaseFilesInPartition(p2, "id22")
+        .addCommit("003")
+        .withBaseFilesInPartition(p3, fileLengths);
+
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().withRollbackUsingMarkers(false).build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "003");
+
+    // Schedule rollback
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers());
+    HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true, true);
+    copyOnWriteRollbackActionExecutor.doRollbackAndGetStats(hoodieRollbackPlan);
+
+    // All files must have been rolled back
+    assertEquals(largeCommitNumFiles, hoodieRollbackPlan.getRollbackRequests().stream().mapToInt(r -> r.getFilesToBeDeleted().size()).sum());
+    assertEquals(largeCommitNumFiles, hoodieRollbackPlan.getRollbackRequests().stream().filter(r -> !r.getFilesToBeDeleted().isEmpty()).count());
   }
 
   private void performRollbackAndValidate(boolean isUsingMarkers, HoodieWriteConfig cfg, HoodieTable table,

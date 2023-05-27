@@ -196,8 +196,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (recordKeys.length == 1
           && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
           && !fields.contains(recordKeys[0])) {
-        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
-            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+        throw new HoodieValidationException("Primary key definition is required, the default primary key field "
+            + "'" + FlinkOptions.RECORD_KEY_FIELD.defaultValue() + "' does not exist in the table schema, "
+            + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to speciy.");
       }
 
       Arrays.stream(recordKeys)
