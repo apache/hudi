@@ -220,7 +220,7 @@ public class HoodieStreamer implements Serializable {
 
   public static class Config implements Serializable {
     public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
-        + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+        + "/src/test/resources/streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
@@ -577,9 +577,9 @@ public class HoodieStreamer implements Serializable {
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc = null;
     if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
-      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, additionalSparkConfigs);
+      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, additionalSparkConfigs);
     } else {
-      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
     }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");

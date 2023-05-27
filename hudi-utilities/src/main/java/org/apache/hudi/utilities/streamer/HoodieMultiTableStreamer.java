@@ -261,7 +261,7 @@ public class HoodieMultiTableStreamer {
           + " please use %s to configure multiple target tables", HoodieStreamerConfig.TABLES_TO_BE_INGESTED.key()));
     }
 
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableStreamer(config, jssc).sync();
     } finally {
@@ -290,7 +290,7 @@ public class HoodieMultiTableStreamer {
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
         + "to individual classes, for supported properties.")
     public String propsFilePath =
-        "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+        "file://" + System.getProperty("user.dir") + "/src/test/resources/streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
