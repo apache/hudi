@@ -52,7 +52,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
     if ((REPLACE_COMMIT_ACTION.equals(currentInstant.getAction())
           && ClusteringUtils.isClusteringCommit(metaClient, currentInstant))
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {

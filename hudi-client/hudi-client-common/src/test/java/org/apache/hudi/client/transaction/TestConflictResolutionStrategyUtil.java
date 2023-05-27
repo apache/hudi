@@ -270,7 +270,7 @@ public class TestConflictResolutionStrategyUtil {
         .addInflightReplace(instantTime, inflightReplaceMetadata);
   }
 
-  public static HoodieReplaceCommitMetadata createReplaceCommitMetadata(WriteOperationType writeOperationType) {
+  private static HoodieReplaceCommitMetadata createReplaceCommitMetadata(WriteOperationType writeOperationType) {
     String fileId1 = "file-1";
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     Map<String, List<String>> partitionFileIds = new HashMap<>();

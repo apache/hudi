@@ -65,7 +65,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 does not have a conflict with scheduled compaction plan 1
@@ -92,7 +91,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with compaction 1
@@ -126,7 +124,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
     // TODO Create method to create compactCommitMetadata
     //    HoodieCommitMetadata currentMetadata = createCommitMetadata(newInstantTime);
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with compaction 1
@@ -153,7 +150,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 should not conflict with an earlier scheduled compaction 1 with the same file ids
@@ -179,7 +175,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // Since we give preference to ingestion over clustering, there wont be a conflict with replacecommit.
@@ -247,7 +242,6 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with replace 1

@@ -141,7 +141,7 @@ public class HoodieTestTable {
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClieInstantient) {
+  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;

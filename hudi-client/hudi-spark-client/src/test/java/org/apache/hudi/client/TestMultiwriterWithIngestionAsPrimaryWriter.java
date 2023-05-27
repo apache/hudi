@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -232,7 +233,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
     Option<String> clusterInstant = client3.scheduleTableService(Option.empty(), TableServiceType.CLUSTER);
 
     // Since instant 2 is still in inflight the clustering commit should fail with HoodieWriteConflictException exception.
-    assertThrows(HoodieWriteConflictException.class, () -> client3.cluster(clusterInstant.get(), true));
+    assertThrows(HoodieClusteringException.class, () -> client3.cluster(clusterInstant.get(), true));
   }
 
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,

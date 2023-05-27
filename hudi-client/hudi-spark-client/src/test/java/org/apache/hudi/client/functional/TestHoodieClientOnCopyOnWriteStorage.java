@@ -95,6 +95,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
@@ -2823,7 +2824,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Schedule and execute clustering, this should fail since there is a conflict between ingestion inflight commit.
     clusteringWriteClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
-    assertThrows(HoodieWriteConflictException.class, () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
+    assertThrows(HoodieClusteringException.class, () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
 
     // Do a rollback on the replacecommit that is failed
     clusteringWriteClient.rollback(clusteringCommitTime);

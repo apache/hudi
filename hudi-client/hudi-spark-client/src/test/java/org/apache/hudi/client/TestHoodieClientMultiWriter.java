@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -297,7 +298,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future1 = executors.submit(() -> {
       try {
-        final String nextCommitTime = "002";
+        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
 
         // Wait for the 2nd writer to start the commit
@@ -318,7 +319,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future2 = executors.submit(() -> {
       try {
-        final String nextCommitTime = "003";
+        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
 
         // Wait for the 1st writer to make progress with the commit
         cyclicBarrier.await(60, TimeUnit.SECONDS);
@@ -431,6 +432,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withAutoClean(false)
             .withAsyncClean(true)
+            .retainCommits(0)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
@@ -445,16 +447,21 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withConflictResolutionStrategy(resolutionStrategy)
             .build()).withAutoCommit(false).withProperties(lockProperties);
     Set<String> validInstants = new HashSet<>();
+
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    createCommitWithInserts(cfg, client, "000", "001", 200, true);
-    validInstants.add("001");
+    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200, true);
+    validInstants.add(firstCommitTime);
+
     // Create 2 commits with upserts
-    createCommitWithUpserts(cfg, client, "001", "000", "002", 100);
-    createCommitWithUpserts(cfg, client, "002", "000", "003", 100);
-    validInstants.add("002");
-    validInstants.add("003");
+    String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, "000", secondCommitTime, 100);
+    String thirdCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, "000", thirdCommitTime, 100);
+    validInstants.add(secondCommitTime);
+    validInstants.add(thirdCommitTime);
 
     // Three clients running actions in parallel
     final int threadCount = 3;
@@ -474,9 +481,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future1 = executors.submit(() -> {
-      final String newCommitTime = "004";
+      final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       final int numRecords = 100;
-      final String commitTimeBetweenPrevAndNew = "002";
+      final String commitTimeBetweenPrevAndNew = secondCommitTime;
 
       // We want the upsert to go through only after the compaction
       // and cleaning schedule completion. So, waiting on latch here.
@@ -485,13 +492,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Since the compaction already went in, this upsert has
         // to fail
         assertThrows(IllegalArgumentException.class, () -> {
-          createCommitWithUpserts(cfg, client1, "003", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
+          createCommitWithUpserts(cfg, client1, thirdCommitTime, commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
         });
       } else {
         // We don't have the compaction for COW and so this upsert
         // has to pass
         assertDoesNotThrow(() -> {
-          createCommitWithUpserts(cfg, client1, "003", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
+          createCommitWithUpserts(cfg, client1, thirdCommitTime, commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
         });
         validInstants.add(newCommitTime);
       }
@@ -500,7 +507,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future2 = executors.submit(() -> {
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          client2.scheduleTableService("005", Option.empty(), TableServiceType.COMPACT);
+          String compactionTimeStamp = HoodieActiveTimeline.createNewInstantTime();
+          client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
         });
       }
       latchCountDownAndWait(scheduleCountDownLatch, 30000);
@@ -509,22 +517,31 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future3 = executors.submit(() -> {
       assertDoesNotThrow(() -> {
         latchCountDownAndWait(scheduleCountDownLatch, 30000);
-        client3.scheduleTableService("006", Option.empty(), TableServiceType.CLEAN);
+        String cleanCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        client3.scheduleTableService(cleanCommitTime, Option.empty(), TableServiceType.CLEAN);
       });
     });
     future1.get();
     future2.get();
     future3.get();
 
+    String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ) ?
+        metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
+          .firstInstant().get().getTimestamp() : "";
+    Option<HoodieInstant> pendingCleanInstantOp = metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested()
+        .firstInstant();
+    String pendingCleanTime = pendingCleanInstantOp.isPresent() ?
+        pendingCleanInstantOp.get().getTimestamp() : HoodieActiveTimeline.createNewInstantTime();
+
     CountDownLatch runCountDownLatch = new CountDownLatch(threadCount);
     // Create inserts, run cleaning, run compaction in parallel
     future1 = executors.submit(() -> {
-      final String newCommitTime = "007";
+      final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       final int numRecords = 100;
       latchCountDownAndWait(runCountDownLatch, 30000);
       assertDoesNotThrow(() -> {
-        createCommitWithInserts(cfg, client1, "003", newCommitTime, numRecords, true);
-        validInstants.add("007");
+        createCommitWithInserts(cfg, client1, thirdCommitTime, newCommitTime, numRecords, true);
+        validInstants.add(newCommitTime);
       });
     });
 
@@ -532,9 +549,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       latchCountDownAndWait(runCountDownLatch, 30000);
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact("005");
-          client2.commitCompaction("005", compactionMetadata.getCommitMetadata().get(), Option.empty());
-          validInstants.add("005");
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact(pendingCompactionTime);
+          client2.commitCompaction(pendingCompactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+          validInstants.add(pendingCompactionTime);
         });
       }
     });
@@ -542,8 +559,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future3 = executors.submit(() -> {
       latchCountDownAndWait(runCountDownLatch, 30000);
       assertDoesNotThrow(() -> {
-        client3.clean("006", false);
-        validInstants.add("006");
+        client3.clean(pendingCleanTime, false);
+        validInstants.add(pendingCleanTime);
       });
     });
     future1.get();
