@@ -59,6 +59,7 @@ import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorI
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
+import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
@@ -907,18 +908,18 @@ object HoodieSparkSqlWriter {
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
 
       // Collect exceptions in list because we want all sync to run. Then we can throw
-      val metaSyncExceptions = new ListBuffer[HoodieException]()
+      val failedMetaSyncs = new mutable.HashMap[String,HoodieException]()
       syncClientToolClassSet.foreach(impl => {
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, fs.getConf, fs, basePath.toString, baseFileFormat)
         } catch {
           case e: HoodieException =>
             log.info("SyncTool class " + impl.trim + " failed with exception", e)
-            metaSyncExceptions.add(e)
+            failedMetaSyncs.put(impl, e)
         }
       })
-      if (metaSyncExceptions.nonEmpty) {
-        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions)
+      if (failedMetaSyncs.nonEmpty) {
+        throw getHoodieMetaSyncException(failedMetaSyncs)
       }
     }
 

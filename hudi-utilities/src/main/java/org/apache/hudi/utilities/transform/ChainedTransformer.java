@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -72,7 +72,7 @@ public class ChainedTransformer implements Transformer {
       } else {
         String[] splits = configuredTransformer.split(ID_TRANSFORMER_CLASS_NAME_DELIMITER);
         if (splits.length > 2) {
-          throw new IllegalArgumentException("There should only be one colon in a configured transformer");
+          throw new HoodieTransformPlanException("There should only be one colon in a configured transformer");
         }
         String id = splits[0];
         validateIdentifier(id, identifiers, configuredTransformer);
@@ -80,10 +80,10 @@ public class ChainedTransformer implements Transformer {
         transformers.add(new TransformerInfo(transformer, id));
       }
     }
-
-    ValidationUtils.checkArgument(transformers.stream().allMatch(TransformerInfo::hasIdentifier)
-            || transformers.stream().noneMatch(TransformerInfo::hasIdentifier),
-        "Either all transformers should have identifier or none should");
+    if (!(transformers.stream().allMatch(TransformerInfo::hasIdentifier)
+        || transformers.stream().noneMatch(TransformerInfo::hasIdentifier))) {
+      throw new HoodieTransformPlanException("Either all transformers should have identifier or none should");
+    }
   }
 
   public List<String> getTransformersNames() {
@@ -101,9 +101,11 @@ public class ChainedTransformer implements Transformer {
   }
 
   private void validateIdentifier(String id, Set<String> identifiers, String configuredTransformer) {
-    ValidationUtils.checkArgument(StringUtils.nonEmpty(id), String.format("Transformer identifier is empty for %s", configuredTransformer));
+    if (StringUtils.isNullOrEmpty(id)) {
+      throw new HoodieTransformPlanException(String.format("Transformer identifier is empty for %s", configuredTransformer));
+    }
     if (identifiers.contains(id)) {
-      throw new IllegalArgumentException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
+      throw new HoodieTransformPlanException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
     } else {
       identifiers.add(id);
     }
