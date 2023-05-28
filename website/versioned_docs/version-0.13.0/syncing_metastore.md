@@ -139,7 +139,7 @@ WITH (
   'path' = '${db_path}/t1',
   'table.type' = 'COPY_ON_WRITE',  -- If MERGE_ON_READ, hive query will not have output until the parquet file is generated
   'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
-  'hive_sync.mode' = 'hms',        -- Required. Setting hive sync mode to hms, default jdbc
+  'hive_sync.mode' = 'hms',        -- Required. Setting hive sync mode to hms, default hms. (Before 0.13, the default sync mode was jdbc.)
   'hive_sync.metastore.uris' = 'thrift://${ip}:9083' -- Required. The port need set on hive-site.xml
 );
 
@@ -158,7 +158,7 @@ WITH (
   'path' = '${db_path}/t1',
   'table.type' = 'COPY_ON_WRITE',  --If MERGE_ON_READ, hive query will not have output until the parquet file is generated
   'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
-  'hive_sync.mode' = 'jdbc',       -- Required. Setting hive sync mode to hms, default jdbc
+  'hive_sync.mode' = 'jdbc',       -- Required. Setting hive sync mode to jdbc, default hms. (Before 0.13, the default sync mode was jdbc.)
   'hive_sync.metastore.uris' = 'thrift://${ip}:9083', -- Required. The port need set on hive-site.xml
   'hive_sync.jdbc_url'='jdbc:hive2://${ip}:10000',    -- required, hiveServer port
   'hive_sync.table'='${table_name}',                  -- required, hive table name
