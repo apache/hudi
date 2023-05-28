@@ -525,13 +525,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future2.get();
     future3.get();
 
-    String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ) ?
-        metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
-          .firstInstant().get().getTimestamp() : "";
+    String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ)
+        ? metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
+          .firstInstant().get().getTimestamp()
+        : "";
     Option<HoodieInstant> pendingCleanInstantOp = metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested()
         .firstInstant();
-    String pendingCleanTime = pendingCleanInstantOp.isPresent() ?
-        pendingCleanInstantOp.get().getTimestamp() : HoodieActiveTimeline.createNewInstantTime();
+    String pendingCleanTime = pendingCleanInstantOp.isPresent()
+        ? pendingCleanInstantOp.get().getTimestamp()
+        : HoodieActiveTimeline.createNewInstantTime();
 
     CountDownLatch runCountDownLatch = new CountDownLatch(threadCount);
     // Create inserts, run cleaning, run compaction in parallel

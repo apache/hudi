@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
 import org.apache.hudi.common.data.HoodieData;
