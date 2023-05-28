@@ -44,7 +44,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_STR;
-import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletes;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletesWithEmptyPayloadAndNewPartition;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletesWithNewPartition;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getInserts;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getKeyGenProps;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
@@ -157,14 +158,14 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
       // 4th batch: delete records with id=0,1
       String commitTimeAtEpoch7 = getCommitTimeAtUTC(7);
-      List<HoodieRecord> deletesAtEpoch7 = getDeletes(insertsAtEpoch0.subList(0, 2), p2, 7, payloadClass);
+      List<HoodieRecord> deletesAtEpoch7 = getDeletesWithNewPartition(insertsAtEpoch0.subList(0, 2), p2, 7, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch7);
       assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch7, 2), commitTimeAtEpoch7).collect());
       readTableAndValidate(metaClient, new int[] {2, 3}, p2, 6);
 
       // 5th batch: delete records with id=2 (set to unknown partition but still matched)
       String commitTimeAtEpoch8 = getCommitTimeAtUTC(8);
-      List<HoodieRecord> deletesAtEpoch8 = getDeletes(insertsAtEpoch0.subList(2, 3), "unknown_pt", 8, payloadClass);
+      List<HoodieRecord> deletesAtEpoch8 = getDeletesWithEmptyPayloadAndNewPartition(insertsAtEpoch0.subList(2, 3), "unknown_pt");
       client.startCommitWithTime(commitTimeAtEpoch8);
       assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch8, 1), commitTimeAtEpoch8).collect());
       readTableAndValidate(metaClient, new int[] {3}, p2, 6);

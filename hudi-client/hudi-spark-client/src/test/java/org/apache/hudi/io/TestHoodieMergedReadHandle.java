@@ -58,6 +58,7 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_STR;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_WITH_METAFIELDS;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletes;
+import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletesWithEmptyPayload;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getInserts;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getKeyGenProps;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
@@ -118,7 +119,14 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
       assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch6, 1), commitTimeAtEpoch6).collect());
       doMergedReadAndValidate(metaClient, writeConfig, totalRecords - 1, partition, 5, payloadClass);
 
-      // 4th batch: normal updates
+      // 4th batch: delete the record with id 2 (the 2nd last one) using EmptyHoodieRecordPayload
+      String commitTimeAtEpoch7 = getCommitTimeAtUTC(7);
+      client.startCommitWithTime(commitTimeAtEpoch7);
+      List<HoodieRecord> deletesAtEpoch7 = getDeletesWithEmptyPayload(updatesAtEpoch5.subList(totalRecords - 2, totalRecords - 1));
+      assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch7, 1), commitTimeAtEpoch7).collect());
+      doMergedReadAndValidate(metaClient, writeConfig, totalRecords - 2, partition, 5, payloadClass);
+
+      // 5th batch: normal updates
       String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
       List<HoodieRecord> updatesAtEpoch9 = getUpdates(updatesAtEpoch5, 9, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch9);
