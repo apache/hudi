@@ -79,6 +79,7 @@
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>com.esotericsoftware:minlog</include>
