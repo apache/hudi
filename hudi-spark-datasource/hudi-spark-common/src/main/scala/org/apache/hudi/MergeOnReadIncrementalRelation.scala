@@ -62,7 +62,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     if (fullTableScan) {
       metaClient.getCommitsAndCompactionTimeline
     } else if (useStateTransitionTime) {
-      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTs(startTimestamp, endTimestamp)
+      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
     }
@@ -166,7 +166,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       if (useStateTransitionTime) {
-        super.timeline.findInstantsInRangeByStateTransitionTs(startTimestamp, endTimestamp).getInstants.asScala.toList
+        super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
       } else {
         super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
       }

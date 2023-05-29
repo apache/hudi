@@ -91,6 +91,10 @@ public class BucketIdentifier implements Serializable {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
   }
 
+  public static String newBucketFileIdPrefix(String fileId, int bucketId) {
+    return fileId.replaceFirst(".{8}", bucketIdStr(bucketId));
+  }
+
   public static String newBucketFileIdPrefix(String bucketId) {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }

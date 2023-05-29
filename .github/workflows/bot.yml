@@ -22,7 +22,7 @@ on:
       - master
       - 'release-*'
 env:
-  MVN_ARGS: -e -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
 
 jobs:
@@ -51,13 +51,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.11"
+          - scalaProfile: "scala-2.11 -Dscala.binary.version=2.11"
             sparkProfile: "spark2.4"
             sparkModules: "hudi-spark-datasource/hudi-spark2"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark2.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark2"
+            sparkProfile: "spark3.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
@@ -84,7 +84,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark,hudi-spark-datasource/hudi-spark -am -DskipTests=true $MVN_ARGS
+          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -96,7 +96,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: FT - Spark
@@ -104,7 +104,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
@@ -138,6 +138,14 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+      - name: Integration Test
+        env:
+          SCALA_PROFILE: 'scala-2.12'
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '1.17') }}
+        run: |
+          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   validate-bundles:
     runs-on: ubuntu-latest
@@ -146,14 +154,22 @@ jobs:
         include:
           - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.16'
             sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.1'
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.2'
+            sparkRuntime: 'spark3.2.3'
           - flinkProfile: 'flink1.13'
             sparkProfile: 'spark3.1'
+            sparkRuntime: 'spark3.1.3'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.0'
+            sparkRuntime: 'spark3.0.2'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -175,7 +191,7 @@ jobs:
       - name: IT - Bundle Validation - OpenJDK 8
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -183,7 +199,7 @@ jobs:
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -192,8 +208,109 @@ jobs:
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
         if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
+
+  validate-release-candidate-bundles:
+    if: false
+    runs-on: ubuntu-latest
+    env:
+      HUDI_VERSION: 0.13.1-rcx
+      STAGING_REPO_NUM: 1123
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3'
+            sparkRuntime: 'spark3.3.2'
+          - flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.1'
+          - flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.2'
+            sparkRuntime: 'spark3.2.3'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark3.1'
+            sparkRuntime: 'spark3.1.3'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark'
+            sparkRuntime: 'spark2.4.8'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark2.4'
+            sparkRuntime: 'spark2.4.8'
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: IT - Bundle Validation - OpenJDK 8
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+        run: |
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8 $STAGING_REPO_NUM
+      - name: IT - Bundle Validation - OpenJDK 11
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+        if: ${{ startsWith(env.SPARK_PROFILE, 'spark3') }} # Only Spark 3.x supports Java 11 as of now
+        run: |
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11 $STAGING_REPO_NUM
+      - name: IT - Bundle Validation - OpenJDK 17
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+        if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
+        run: |
+          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sparkProfile: 'spark2.4'
+            sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build Project
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run:
+          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+      - name: 'UT integ-test'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run:
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+      - name: 'IT'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run: |
+          echo "Downloading $SPARK_ARCHIVE"
+          curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
+          mkdir /tmp/spark-events/
+          SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
+          export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS

@@ -22,9 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -34,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,6 +58,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
  * Hoodie Index Utilities.
@@ -187,6 +187,14 @@ public class HoodieIndexUtils {
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
+  public static HoodieIndex createUserDefinedIndex(HoodieWriteConfig config) {
+    Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+    if (!(instance instanceof HoodieIndex)) {
+      throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+    }
+    return (HoodieIndex) instance;
+  }
+
   /**
    * Read existing records based on the given partition path and {@link HoodieRecordLocation} info.
    * <p>
@@ -213,9 +221,8 @@ public class HoodieIndexUtils {
   /**
    * Merge the incoming record with the matching existing record loaded via {@link HoodieMergedReadHandle}. The existing record is the latest version in the table.
    */
-  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieWriteConfig config) throws IOException {
+  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(HoodieRecord<R> incoming, HoodieRecord<R> existing, Schema writeSchema, HoodieWriteConfig config) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     // prepend the hoodie meta fields as the incoming record does not have them
     HoodieRecord incomingPrepended = incoming
@@ -264,12 +271,13 @@ public class HoodieIndexUtils {
             return Collections.singletonList(getTaggedRecord(incoming, Option.empty())).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
-          if (incoming.getData() instanceof EmptyHoodieRecordPayload) {
+          Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
+          if (incoming.isDelete(writeSchema, config.getProps())) {
             // incoming is a delete: force tag the incoming to the old partition
-            return Collections.singletonList(getTaggedRecord(incoming, Option.of(existing.getCurrentLocation()))).iterator();
+            return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();
           }
 
-          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, config);
+          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();
@@ -280,7 +288,7 @@ public class HoodieIndexUtils {
             return Collections.singletonList(getTaggedRecord(merged, Option.of(existing.getCurrentLocation()))).iterator();
           } else {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
-            HoodieRecord<R> deleteRecord = new HoodieAvroRecord(existing.getKey(), new EmptyHoodieRecordPayload());
+            HoodieRecord<R> deleteRecord = createDeleteRecord(config, existing.getKey());
             deleteRecord.setCurrentLocation(existing.getCurrentLocation());
             deleteRecord.seal();
             return Arrays.asList(deleteRecord, getTaggedRecord(merged, Option.empty())).iterator();

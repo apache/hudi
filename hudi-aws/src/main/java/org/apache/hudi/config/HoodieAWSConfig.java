@@ -37,6 +37,8 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGIO
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
 
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE;
+
 /**
  * Configurations used by the AWS credentials and AWS DynamoDB based lock.
  */
@@ -145,6 +147,11 @@ public class HoodieAWSConfig extends HoodieConfig {
 
     public Builder withDynamoDBWriteCapacity(String capacity) {
       awsConfig.setValue(DYNAMODB_LOCK_WRITE_CAPACITY, capacity);
+      return this;
+    }
+
+    public Builder withGlueSkipTableArchive(String skipTableArchive) {
+      awsConfig.setValue(GLUE_SKIP_TABLE_ARCHIVE, skipTableArchive);
       return this;
     }
 

@@ -23,7 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
-import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -59,7 +59,7 @@ public class HiveSchemaProvider extends SchemaProvider {
           sourceSchemaTableName,
           "hoodie." + sourceSchemaDatabaseName);
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
-      throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
+      throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
     }
 
     // target schema
@@ -74,7 +74,7 @@ public class HiveSchemaProvider extends SchemaProvider {
             targetSchemaTableName,
             "hoodie." + targetSchemaDatabaseName);
       } catch (NoSuchDatabaseException | NoSuchTableException e) {
-        throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
+        throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
       }
     }
   }

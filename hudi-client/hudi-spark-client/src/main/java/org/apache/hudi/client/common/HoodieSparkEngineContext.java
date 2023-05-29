@@ -40,8 +40,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -63,7 +61,6 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();

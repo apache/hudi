@@ -51,10 +51,24 @@ public class SchedulerConfGenerator {
   public static final String SPARK_SCHEDULER_FAIR_MODE = "FAIR";
 
   private static final String SPARK_SCHEDULING_PATTERN =
-      "<?xml version=\"1.0\"?>\n<allocations>\n  <pool name=\"%s\">\n"
-          + "    <schedulingMode>%s</schedulingMode>\n    <weight>%s</weight>\n    <minShare>%s</minShare>\n"
-          + "  </pool>\n  <pool name=\"%s\">\n    <schedulingMode>%s</schedulingMode>\n"
-          + "    <weight>%s</weight>\n    <minShare>%s</minShare>\n  </pool>\n</allocations>";
+      "<?xml version=\"1.0\"?>\n"
+          + "<allocations>\n"
+          + "    <pool name=\"%s\">\n"
+          + "        <schedulingMode>%s</schedulingMode>\n"
+          + "        <weight>%s</weight>\n"
+          + "        <minShare>%s</minShare>\n"
+          + "    </pool>\n"
+          + "    <pool name=\"%s\">\n"
+          + "        <schedulingMode>%s</schedulingMode>\n"
+          + "        <weight>%s</weight>\n"
+          + "        <minShare>%s</minShare>\n"
+          + "    </pool>\n"
+          + "    <pool name=\"%s\">\n"
+          + "        <schedulingMode>%s</schedulingMode>\n"
+          + "        <weight>%s</weight>\n"
+          + "        <minShare>%s</minShare>\n"
+          + "    </pool>\n"
+          + "</allocations>";
 
   /**
    * Helper to generate spark scheduling configs in XML format with input params.
@@ -67,8 +81,8 @@ public class SchedulerConfGenerator {
    * @param clusteringWeight Minshare for clustering
    * @return Spark scheduling configs
    */
-  private static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
-      Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) {
+  static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
+                               Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) {
     return String.format(SPARK_SCHEDULING_PATTERN, DELTASYNC_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         deltaSyncWeight.toString(), deltaSyncMinShare.toString(), COMPACT_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         compactionWeight.toString(), compactionMinShare.toString(), CLUSTERING_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,

@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")

@@ -89,7 +89,7 @@ public class HoodieDeleteHelper<T, R> extends
         dedupedKeys = keys.repartition(targetParallelism);
       }
 
-      HoodieData dedupedRecords = createPhonyRecords(config, dedupedKeys);
+      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys);
 
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
@@ -118,12 +118,21 @@ public class HoodieDeleteHelper<T, R> extends
     }
   }
 
-  private static HoodieData createPhonyRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
+  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
     HoodieRecordType recordType = config.getRecordMerger().getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
       return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
     } else {
       return keys.map(key -> new HoodieEmptyRecord<>(key, recordType));
+    }
+  }
+
+  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key) {
+    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+    if (recordType == HoodieRecordType.AVRO) {
+      return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
+    } else {
+      return new HoodieEmptyRecord<>(key, recordType);
     }
   }
 
