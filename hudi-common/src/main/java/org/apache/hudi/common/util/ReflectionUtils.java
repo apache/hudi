@@ -130,6 +130,20 @@ public class ReflectionUtils {
   }
 
   /**
+   * Checks whether target class has a method w/ {@code methodName} and list of arguments
+   * designated by {@code paramTypes}
+   */
+  public static boolean hasMethod(Class<?> klass, String methodName, Class<?>... paramTypes) {
+    try {
+      klass.getMethod(methodName, paramTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.info(String.format("No method %s found in class '%s'", methodName, klass.getName()));
+      return false;
+    }
+  }
+
+  /**
    * Scans all classes accessible from the context class loader
    * which belong to the given package and subpackages.
    *
@@ -193,12 +207,22 @@ public class ReflectionUtils {
   }
 
   /**
+   * Invokes a non-static method of a class on provided object.
+   */
+  public static <O, R> R invokeMethod(O obj, String methodName, Object[] args, Class<?>... paramTypes) {
+    Class<?> klass = obj.getClass();
+    try {
+      Method method = klass.getMethod(methodName, paramTypes);
+      return (R) method.invoke(obj, args);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method '%s' of the class '%s'", methodName, klass.getName()), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the method '%s' of the class '%s'", methodName, klass.getName()), e);
+    }
+  }
+
+  /**
    * Invoke a static method of a class.
-   * @param clazz
-   * @param methodName
-   * @param args
-   * @param parametersType
-   * @return the return value of the method
    */
   public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
     try {
@@ -207,7 +231,7 @@ public class ReflectionUtils {
     } catch (ClassNotFoundException e) {
       throw new HoodieException("Unable to find the class " + clazz, e);
     } catch (NoSuchMethodException e) {
-      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to find the method %s of the class %s ", methodName, clazz), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
       throw new HoodieException(String.format("Unable to invoke the method %s of the class %s ", methodName, clazz), e);
     }
