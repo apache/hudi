@@ -748,10 +748,15 @@ public class HoodieDeltaStreamer implements Serializable {
             try {
               long start = System.currentTimeMillis();
               // check if deltastreamer need to update the configuration before the sync
-              if (configurationHotUpdateStrategyOpt.isPresent() && configurationHotUpdateStrategyOpt.get().updatePropertiesInPlace(props)) {
-                LOG.info("props updated, re-init deltasync");
-                LOG.info(toSortedTruncatedString(props));
-                reInitDeltaSync();
+              if (configurationHotUpdateStrategyOpt.isPresent()) {
+                Option<TypedProperties> newProps = configurationHotUpdateStrategyOpt.get().updateProperties(props);
+                if (newProps.isPresent()) {
+                  this.props = newProps.get();
+                  // reinit the DeltaSync only when the props updated
+                  LOG.info("Re-init delta sync with new config properties:");
+                  LOG.info(toSortedTruncatedString(props));
+                  reInitDeltaSync();
+                }
               }
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(deltaSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {

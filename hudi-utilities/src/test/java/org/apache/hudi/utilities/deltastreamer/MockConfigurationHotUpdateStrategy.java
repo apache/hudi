@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,19 +29,25 @@ import java.io.Serializable;
 
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 
-public class DummyConfigurationHotUpdateStrategy extends ConfigurationHotUpdateStrategy implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(DummyConfigurationHotUpdateStrategy.class);
+/**
+ * ConfigurationHotUpdateStrategy for test purpose.
+ */
+public class MockConfigurationHotUpdateStrategy extends ConfigurationHotUpdateStrategy implements Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(MockConfigurationHotUpdateStrategy.class);
 
-  public DummyConfigurationHotUpdateStrategy(HoodieDeltaStreamer.Config cfg, TypedProperties properties) {
+  public MockConfigurationHotUpdateStrategy(HoodieDeltaStreamer.Config cfg, TypedProperties properties) {
     super(cfg, properties);
   }
 
   @Override
-  public void updateProperties(TypedProperties properties) {
-    if (properties.containsKey(UPSERT_PARALLELISM_VALUE.key())) {
-      long upsertShuffleParallelism = properties.getLong(UPSERT_PARALLELISM_VALUE.key());
-      properties.setProperty(UPSERT_PARALLELISM_VALUE.key(), String.valueOf(upsertShuffleParallelism + 5));
+  public Option<TypedProperties> updateProperties(TypedProperties currentProps) {
+    if (currentProps.containsKey(UPSERT_PARALLELISM_VALUE.key())) {
+      long upsertShuffleParallelism = currentProps.getLong(UPSERT_PARALLELISM_VALUE.key());
+      TypedProperties newProps = new TypedProperties(currentProps);
+      newProps.setProperty(UPSERT_PARALLELISM_VALUE.key(), String.valueOf(upsertShuffleParallelism + 5));
       LOG.info("update {} from [{}] to [{}]", UPSERT_PARALLELISM_VALUE.key(), upsertShuffleParallelism, upsertShuffleParallelism + 5);
+      return Option.of(newProps);
     }
+    return Option.empty();
   }
 }

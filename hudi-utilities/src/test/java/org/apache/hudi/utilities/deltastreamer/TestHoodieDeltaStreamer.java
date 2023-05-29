@@ -2700,7 +2700,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.addRecordMerger(recordType, cfg.configs);
     cfg.continuousMode = true;
     cfg.tableType = tableType.name();
-    cfg.configHotUpdateStrategyClass = DummyConfigurationHotUpdateStrategy.class.getName();
+    cfg.configHotUpdateStrategyClass = MockConfigurationHotUpdateStrategy.class.getName();
     long upsertParallelism = 200;
     cfg.configs.add(String.format("%s=%s", UPSERT_PARALLELISM_VALUE.key(), upsertParallelism));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);

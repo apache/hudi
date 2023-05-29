@@ -19,17 +19,12 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategyUtils.mergeProperties;
+import org.apache.hudi.common.util.Option;
 
 /**
- * Configuration of delta sync hot update strategy.
+ * Hot update strategy for delta streamer configuration.
  */
 public abstract class ConfigurationHotUpdateStrategy {
-  private static final Logger LOG = LoggerFactory.getLogger(ConfigurationHotUpdateStrategy.class);
 
   protected HoodieDeltaStreamer.Config cfg;
   protected TypedProperties properties;
@@ -41,24 +36,12 @@ public abstract class ConfigurationHotUpdateStrategy {
   }
 
   /**
-   * Configuration hot update. The method is called in main on driver, so we can update the properties in place.
-   * @param properties props may be updated.
-   * @return true if props updated.
+   * Update the current config properties with plugin logic.
+   *
+   * @param currentProps Current props to be updated
+   *
+   * @return A new copy of the props if any config option is updated
+   * or empty if no update happens.
    */
-  public final boolean updatePropertiesInPlace(final TypedProperties properties) {
-    try {
-      TypedProperties newProps = new TypedProperties(properties);
-      updateProperties(newProps);
-      return mergeProperties(properties, newProps);
-    } catch (Exception e) {
-      LOG.warn("update properties in place failed", e);
-      return false;
-    }
-  }
-
-  /**
-   * user defined function to update the properties
-   * @param properties to be updated
-   */
-  public abstract void updateProperties(TypedProperties properties);
+  public abstract Option<TypedProperties> updateProperties(TypedProperties currentProps);
 }
