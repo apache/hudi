@@ -150,6 +150,7 @@ public class FlinkCompactionConfig extends Configuration {
         : readConfig(HadoopConfigurations.getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
+
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
    * The latter is more suitable for the table APIs. It reads all the properties
