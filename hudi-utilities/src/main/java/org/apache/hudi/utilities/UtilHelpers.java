@@ -192,7 +192,7 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Boolean isErrorTableWriterEnabled) throws IOException {
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, boolean isErrorTableWriterEnabled) throws IOException {
     try {
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : 
           isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames) : new ChainedTransformer(classNames)

@@ -45,8 +45,6 @@ import java.util.List;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
@@ -129,12 +127,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
       "org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testErrorTableAwareChainedTransformerValidationFails(String transformerName) {
-    try {
-      ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")));
-      fail();
-    } catch (Exception e) {
-      assertTrue(e instanceof HoodieTransformException, e.getMessage());
-    }
+    assertThrows(HoodieTransformException.class, () -> new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(","))));
   }
 
   @ParameterizedTest
