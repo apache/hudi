@@ -690,36 +690,52 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param savepointTime Savepoint time to rollback to
    */
   public void restoreToSavepoint(String savepointTime) {
-    boolean initialMetadataTableIfNecessary = config.isMetadataTableEnabled();
-    if (initialMetadataTableIfNecessary) {
+    boolean initializeMetadataTableIfNecessary = config.isMetadataTableEnabled();
+    if (initializeMetadataTableIfNecessary) {
       try {
-        // Delete metadata table directly when users trigger savepoint rollback if mdt existed and beforeTimelineStarts
+        // Delete metadata table directly when users trigger savepoint rollback if mdt existed and if the savePointTime is beforeTimelineStarts
+        // or before the oldest compaction on MDT.
+        // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setConf(hadoopConf)
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
-        // Same as HoodieTableMetadataUtil#processRollbackMetadata
+        Option<HoodieInstant> lastCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().lastInstant();
+        boolean deleteMDT = false;
+        if (lastCompaction.isPresent()) {
+          if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(savepointTime, lastCompaction.get().getTimestamp())) {
+            LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than oldest compaction %s on MDT",
+                savepointTime, lastCompaction.get().getTimestamp()));
+            deleteMDT = true;
+          }
+        }
+
         HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
         if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-          HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
-              .setConf(hadoopConf)
-              .setBasePath(config.getBasePath()).build();
-          deleteMetadataTable(dataMetaClient, getEngineContext(), false);
+          LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
+              savepointTime, mdtClient.getCommitsTimeline().firstInstant().get().getTimestamp()));
+          deleteMDT = true;
+        }
+
+        if (deleteMDT) {
+          // TODO: this should use the correct API to delete from HoodieTableMetadataUtil so hoodie.properties is also updated
+          // To be fixed after HUDI-6200
+          mdtMetaClient.getFs().delete(new Path(metadataTableBasePathStr), true);
           // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
           // so that we need to disable metadata initialized here.
-          initialMetadataTableIfNecessary = false;
+          initializeMetadataTableIfNecessary = false;
         }
       } catch (Exception e) {
         // Metadata directory does not exist
       }
     }
 
-    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
     ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
         + " is enabled");
-    restoreToInstant(savepointTime, initialMetadataTableIfNecessary);
+    restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
   }
 
@@ -728,6 +744,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
     return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
+  }
+
+  @Deprecated
+  public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
+    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false);
   }
 
   /**

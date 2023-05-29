@@ -182,6 +182,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected BaseHoodieWriteClient getWriteClient() {
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig);
+  }
+
+  @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);

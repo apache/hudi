@@ -635,6 +635,9 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Convert rollback action metadata to metadata table records.
+   * <p>
+   * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
+   * are handled by actual rollback of the deltacommit which added records to those partitions.
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext engineContext, HoodieActiveTimeline metadataTableTimeline,
@@ -648,18 +651,6 @@ public class HoodieTableMetadataUtil {
         convertMetadataToRollbackRecords(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles, instantTime, lastSyncTs, wasSynced);
     final HoodieData<HoodieRecord> rollbackRecordsRDD = engineContext.parallelize(filesPartitionRecords, 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES, rollbackRecordsRDD);
-
-    if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
-      final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
-          convertFilesToBloomFilterRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecordsRDD);
-    }
-
-    if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
-          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
-    }
 
     return partitionToRecordsMap;
   }
@@ -792,9 +783,9 @@ public class HoodieTableMetadataUtil {
   /**
    * Convert rollback action metadata to files partition records.
    */
-  private static List<HoodieRecord> convertFilesToFilesPartitionRecords(Map<String, List<String>> partitionToDeletedFiles,
-                                                                        Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                        String instantTime, String operation) {
+  protected static List<HoodieRecord> convertFilesToFilesPartitionRecords(Map<String, List<String>> partitionToDeletedFiles,
+                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                          String instantTime, String operation) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileChangeCount = {0, 0}; // deletes, appends
 
