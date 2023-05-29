@@ -20,7 +20,10 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -29,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -55,15 +59,20 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
   /**
    * compaction plan instant -> compaction plan
    */
-  private final List<Pair<String, HoodieCompactionPlan>> compactionPlans;
+  private List<Pair<String, HoodieCompactionPlan>> compactionPlans;
+  private final Configuration conf;
 
-  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans) {
+  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans, Configuration conf) {
     this.compactionPlans = compactionPlans;
+    this.conf = conf;
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    // no operation
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    Set<String> pendingCompactInstants = metaClient.getActiveTimeline().filterPendingCompactionTimeline()
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    compactionPlans = compactionPlans.stream().filter(p -> pendingCompactInstants.contains(p.getLeft())).collect(Collectors.toList());
   }
 
   @Override

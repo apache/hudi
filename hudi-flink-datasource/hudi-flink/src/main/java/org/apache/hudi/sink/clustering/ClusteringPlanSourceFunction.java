@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -60,21 +61,31 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
    */
   private final String clusteringInstantTime;
 
-  public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan) {
+  private boolean isPending;
+
+  private final Configuration conf;
+
+  public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan, Configuration conf) {
     this.clusteringInstantTime = clusteringInstantTime;
     this.clusteringPlan = clusteringPlan;
+    this.conf = conf;
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    // no operation
+    isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline()
+        .getInstantsAsStream().anyMatch(i -> clusteringInstantTime.equals(i.getTimestamp()) && !i.isCompleted());
   }
 
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
-    for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
-      LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
-      sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
+    if (isPending) {
+      for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
+        LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
+        sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
+      }
+    } else {
+      LOG.warn(clusteringInstantTime + " not found in pending instants.");
     }
   }
 
