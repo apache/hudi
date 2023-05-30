@@ -86,9 +86,12 @@ class HoodieMergeOnReadBootstrapRDD(@transient spark: SparkSession,
         //       schema (for more details please check out [[ParquetFileFormat]] implementation).
         val unsafeProjection = generateUnsafeProjection(schema, requiredSchema.structTypeSchema)
 
-        new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
-          iterator.map(unsafeProjection), schema, tableSchema, requiredSchema, tableState, getHadoopConf)
-
+        if (bootstrapPartition.split.logFiles.isEmpty) {
+          iterator.map(unsafeProjection)
+        } else {
+          new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
+            iterator.map(unsafeProjection), schema, tableSchema, requiredSchema, tableState, getHadoopConf)
+        }
       case _ =>
         // NOTE: Regular file-reader is already projected into the required schema
         new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
