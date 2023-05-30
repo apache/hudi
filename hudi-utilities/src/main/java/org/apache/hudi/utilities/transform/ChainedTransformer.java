@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -95,7 +96,7 @@ public class ChainedTransformer implements Transformer {
     Dataset<Row> dataset = rowDataset;
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties));
+      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
     }
     return dataset;
   }
@@ -133,7 +134,10 @@ public class ChainedTransformer implements Transformer {
       return idOpt.isPresent();
     }
 
-    protected TypedProperties getProperties(TypedProperties properties) {
+    protected TypedProperties getProperties(TypedProperties properties, List<TransformerInfo> transformers) {
+      Set<String> transformerIds = transformers.stream().map(transformerInfo -> transformerInfo.idOpt.orElse(null))
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
       TypedProperties transformerProps = properties;
       if (idOpt.isPresent()) {
         // Transformer specific property keys end with the id associated with the transformer.
@@ -144,8 +148,12 @@ public class ChainedTransformer implements Transformer {
         Map<String, Object> overrideKeysMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
           String key = (String) entry.getKey();
-          if (key.endsWith("." + id)) {
+          String keyId = key.replaceAll(".*\\.", "");
+          if (keyId.equals(id)) {
             overrideKeysMap.put(key.substring(0, key.length() - (id.length() + 1)), entry.getValue());
+          }
+          if (transformerIds.contains(keyId)) {
+            transformerProps.remove(key);
           }
         }
         transformerProps.putAll(overrideKeysMap);
