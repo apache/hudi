@@ -18,12 +18,23 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.Path;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.hudi.util.StreamerUtil.buildProperties;
+import static org.apache.hudi.util.StreamerUtil.readConfig;
 
 /**
  * Configurations for Hoodie Flink compaction.
@@ -125,6 +136,21 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
   public String spillableMapPath = HoodieMemoryConfig.getDefaultSpillableMapBasePath();
 
+  @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+      + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
+  public List<String> configs = new ArrayList<>();
+
+  @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
+      + "hoodie and hadoop etc.")
+  public String propsFilePath = "";
+
+  public static TypedProperties getProps(FlinkCompactionConfig cfg) {
+    return cfg.propsFilePath.isEmpty()
+        ? buildProperties(cfg.configs)
+        : readConfig(HadoopConfigurations.getHadoopConf(cfg),
+        new Path(cfg.propsFilePath), cfg.configs).getProps();
+  }
+
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
    * The latter is more suitable for the table APIs. It reads all the properties
@@ -132,7 +158,8 @@ public class FlinkCompactionConfig extends Configuration {
    * (set by `--hoodie-conf` option).
    */
   public static org.apache.flink.configuration.Configuration toFlinkConfig(FlinkCompactionConfig config) {
-    org.apache.flink.configuration.Configuration conf = new Configuration();
+    Map<String, String> propsMap = new HashMap<String, String>((Map) getProps(config));
+    org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
     conf.setString(FlinkOptions.PATH, config.path);
     conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);

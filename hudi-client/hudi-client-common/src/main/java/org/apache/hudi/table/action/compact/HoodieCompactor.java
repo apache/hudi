@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -41,6 +42,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -57,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
@@ -126,8 +130,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
+    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
+    Option<InstantRange> instantRange = HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
+        ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionHelper))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
   }
 
@@ -141,7 +148,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String instantTime,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
-    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime,
+    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
         taskContextSupplier, new CompactionExecutionHelper());
   }
 
@@ -154,6 +161,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    CompactionOperation operation,
                                    String instantTime,
                                    String maxInstantTime,
+                                   Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
     FileSystem fs = metaClient.getFs();
@@ -162,7 +170,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       readerSchema = new Schema.Parser().parse(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-      // its safe to modify config here, since we running in task side.
+      // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
       readerSchema = HoodieAvroUtils.addMetadataFields(
@@ -201,6 +209,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withPartition(operation.getPartitionPath())
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
+        .withInstantRange(instantRange)
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
@@ -245,6 +254,17 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
       s.getStat().setRuntimeStats(runtimeStats);
     }).collect(toList());
+  }
+
+  private InstantRange getMetadataLogReaderInstantRange(HoodieTableMetaClient metadataMetaClient) {
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metadataMetaClient.getHadoopConf())
+        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePath()))
+        .build();
+    Set<String> validInstants = HoodieBackedTableMetadata.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
+    return InstantRange.builder()
+        .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+        .explicitInstants(validInstants).build();
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

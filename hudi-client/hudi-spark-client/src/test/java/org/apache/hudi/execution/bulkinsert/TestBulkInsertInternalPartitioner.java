@@ -212,16 +212,6 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   @Test
   public void testCustomColumnSortPartitioner() {
     String sortColumnString = "begin_lat";
-    String[] sortColumns = sortColumnString.split(",");
-    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
-
-    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
-    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
-        records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
-        records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
-
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
@@ -229,6 +219,17 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
+    String[] sortColumns = sortColumnString.split(",");
+    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
+
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+        records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+        records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
+
+
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
         records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),

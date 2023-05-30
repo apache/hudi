@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 import org.apache.hudi.utilities.config.PulsarSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.pulsar.client.api.Consumer;
@@ -179,7 +180,7 @@ public class PulsarSource extends RowSource implements Closeable {
       pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
-      throw new HoodieIOException("Failed to ack message for topic", e);
+      throw new HoodieReadFromSourceException("Failed to ack message for topic", e);
     }
   }
 
@@ -188,7 +189,7 @@ public class PulsarSource extends RowSource implements Closeable {
       return pulsarConsumer.get().getLastMessageId();
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
-      throw new HoodieIOException("Failed to fetch latest messageId for topic", e);
+      throw new HoodieReadFromSourceException("Failed to fetch latest messageId for topic", e);
     }
   }
 

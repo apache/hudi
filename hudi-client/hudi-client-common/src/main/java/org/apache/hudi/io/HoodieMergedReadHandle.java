@@ -158,7 +158,9 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
           if (!mergeResult.isPresent()) {
             continue;
           }
-          mergedRecords.add(mergeResult.get().getLeft());
+          HoodieRecord<T> r = mergeResult.get().getLeft().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
+              config.getProps(), simpleKeyGenFieldsOpt, logRecordScanner.isWithOperationField(), logRecordScanner.getPartitionNameOverride(), false, Option.empty());
+          mergedRecords.add(r);
         } else {
           mergedRecords.add(record.copy());
         }
