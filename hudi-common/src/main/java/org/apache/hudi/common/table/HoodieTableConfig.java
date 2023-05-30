@@ -276,7 +276,7 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY) && payloadClassName != null
+      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
           && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
         setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
