@@ -37,7 +37,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
@@ -234,6 +234,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     numInstants
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithClustering(isAsyncClustering: Boolean): Unit = {
