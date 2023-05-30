@@ -17,7 +17,7 @@ In sections, below we will discuss specific setup to access different query type
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
 See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
 
-To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#Spark-DataSource) page.
+To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#Spark-DataSource) page.
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.
@@ -205,7 +205,7 @@ And for these use cases you should test the stability first.
 | `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
 
 ## Hive
-To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#hive) page.
+To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#hive) page.
 
 ### Incremental query
 `HiveIncrementalPuller` allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and
@@ -246,10 +246,10 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## PrestoDB
-To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#prestodb) page.
+To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#prestodb) page.
 
 ## Trino
-To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#trino) page.
+To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#trino) page.
 
 ## Impala (3.4 or later)
 
@@ -282,13 +282,13 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
-To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#redshift-spectrum) page.
+To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#redshift-spectrum) page.
 
 ## Doris 
-To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#doris) page.
+To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#doris) page.
 
 ## StarRocks
-To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#starrocks) page.
+To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#starrocks) page.
 
 ## Support Matrix
 
