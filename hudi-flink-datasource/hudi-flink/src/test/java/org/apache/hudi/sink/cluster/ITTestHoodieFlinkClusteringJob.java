@@ -82,7 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * IT cases for {@link HoodieFlinkClusteringJob}.
  */
 @ExtendWith(FlinkMiniCluster.class)
-public class ITTestHoodieFlinkClustering {
+public class ITTestHoodieFlinkClusteringJob {
 
   private static final Map<String, String> EXPECTED = new HashMap<>();
 
@@ -227,7 +227,7 @@ public class ITTestHoodieFlinkClustering {
     asyncClusteringService.start(null);
 
     // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(5);
+    TimeUnit.SECONDS.sleep(10);
 
     asyncClusteringService.shutDown();
 

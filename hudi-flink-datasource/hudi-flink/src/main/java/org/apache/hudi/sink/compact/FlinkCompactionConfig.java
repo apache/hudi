@@ -24,6 +24,9 @@ import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
+
+import java.time.Duration;
 
 /**
  * Configurations for Hoodie Flink compaction.
@@ -145,6 +148,8 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    // execution checkpointing
+    conf.set(ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(config.minCompactionIntervalSeconds));
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);

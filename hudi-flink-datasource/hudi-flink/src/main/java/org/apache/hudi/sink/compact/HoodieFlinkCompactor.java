@@ -26,9 +26,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.common.ServiceSourceFunction;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
@@ -40,6 +42,8 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,7 +97,7 @@ public class HoodieFlinkCompactor {
     } else {
       LOG.info("Hoodie Flink Compactor running only single round");
       try {
-        compactionScheduleService.compact();
+        compactionScheduleService.compact(false);
       } catch (ApplicationExecutionException aee) {
         if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
           LOG.info("Compaction is not performed");
@@ -141,11 +145,6 @@ public class HoodieFlinkCompactor {
     private final Configuration conf;
 
     /**
-     * Meta Client.
-     */
-    private final HoodieTableMetaClient metaClient;
-
-    /**
      * Write Client.
      */
     private final HoodieFlinkWriteClient<?> writeClient;
@@ -166,7 +165,7 @@ public class HoodieFlinkCompactor {
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
-      this.metaClient = StreamerUtil.createMetaClient(conf);
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
       // get the table name
       conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
@@ -195,8 +194,7 @@ public class HoodieFlinkCompactor {
         try {
           while (!isShutdownRequested()) {
             try {
-              compact();
-              Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
+              compact(true);
             } catch (ApplicationExecutionException aee) {
               if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
                 LOG.info("Compaction is not performed.");
@@ -216,12 +214,12 @@ public class HoodieFlinkCompactor {
       }, executor), executor);
     }
 
-    private void compact() throws Exception {
+    private void compact(boolean serviceMode) throws Exception {
       table.getMetaClient().reloadActiveTimeline();
 
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
-        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
         if (compactionInstantTimeOption.isPresent()) {
           boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
           if (!scheduled) {
@@ -233,65 +231,83 @@ public class HoodieFlinkCompactor {
         }
       }
 
-      // fetch the instant based on the configured execution sequence
-      HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-      List<HoodieInstant> requested = CompactionPlanStrategies.getStrategy(cfg).select(pendingCompactionTimeline);
-      if (requested.isEmpty()) {
-        // do nothing.
-        LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
-        return;
-      }
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(conf);
 
-      List<String> compactionInstantTimes = requested.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-      compactionInstantTimes.forEach(timestamp -> {
-        HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(timestamp);
-        if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-          LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
-          table.rollbackInflightCompaction(inflightInstant);
-          table.getMetaClient().reloadActiveTimeline();
+      int compactionParallelism;
+      DataStream<CompactionPlanEvent> planStream;
+      List<String> compactionInstantTimes = null;
+      if (serviceMode) {
+        compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+        planStream = env.addSource(new ServiceSourceFunction(conf.get(ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL)))
+            .name("compaction_service_source")
+            .uid("uid_compaction_service_source")
+            .setParallelism(1)
+            .transform("compact_plan_generate", TypeInformation.of(CompactionPlanEvent.class), new CompactionPlanOperator(conf))
+            .setParallelism(1);
+      } else {
+        // fetch the instant based on the configured execution sequence
+        HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+        List<HoodieInstant> requested = CompactionPlanStrategies.getStrategy(cfg).select(pendingCompactionTimeline);
+        if (requested.isEmpty()) {
+          // do nothing.
+          LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
+          return;
         }
-      });
 
-      // generate timestamp and compaction plan pair
-      // should support configurable commit metadata
-      List<Pair<String, HoodieCompactionPlan>> compactionPlans = compactionInstantTimes.stream()
-          .map(timestamp -> {
-            try {
-              return Pair.of(timestamp, CompactionUtils.getCompactionPlan(table.getMetaClient(), timestamp));
-            } catch (Exception e) {
-              throw new HoodieException("Get compaction plan at instant " + timestamp + " error", e);
-            }
-          })
-          // reject empty compaction plan
-          .filter(pair -> validCompactionPlan(pair.getRight()))
-          .collect(Collectors.toList());
+        compactionInstantTimes = requested.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        compactionInstantTimes.forEach(timestamp -> {
+          HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(timestamp);
+          if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
+            LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
+            table.rollbackInflightCompaction(inflightInstant);
+            table.getMetaClient().reloadActiveTimeline();
+          }
+        });
 
-      if (compactionPlans.isEmpty()) {
-        // No compaction plan, do nothing and return.
-        LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
-        return;
+        // generate timestamp and compaction plan pair
+        // should support configurable commit metadata
+        List<Pair<String, HoodieCompactionPlan>> compactionPlans = compactionInstantTimes.stream()
+            .map(timestamp -> {
+              try {
+                return Pair.of(timestamp, CompactionUtils.getCompactionPlan(table.getMetaClient(), timestamp));
+              } catch (Exception e) {
+                throw new HoodieException("Get compaction plan at instant " + timestamp + " error", e);
+              }
+            })
+            // reject empty compaction plan
+            .filter(pair -> validCompactionPlan(pair.getRight()))
+            .collect(Collectors.toList());
+
+        if (compactionPlans.isEmpty()) {
+          // No compaction plan, do nothing and return.
+          LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
+          return;
+        }
+
+        List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
+
+        // get compactionParallelism.
+        compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
+            ? Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum())
+            : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+
+        LOG.info("Start to compaction for instant " + compactionInstantTimes);
+
+        // Mark instant as compaction inflight
+        for (HoodieInstant instant : instants) {
+          table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+        }
+        table.getMetaClient().reloadActiveTimeline();
+
+        // setup configuration
+        long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+        conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+
+        planStream = env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+            .name("compaction_source")
+            .uid("uid_compaction_source");
       }
-
-      List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
-
-      // get compactionParallelism.
-      int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
-          ? Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum())
-          : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
-
-      LOG.info("Start to compaction for instant " + compactionInstantTimes);
-
-      // Mark instant as compaction inflight
-      for (HoodieInstant instant : instants) {
-        table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-      }
-      table.getMetaClient().reloadActiveTimeline();
-
-      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-      env.addSource(new CompactionPlanSourceFunction(compactionPlans))
-          .name("compaction_source")
-          .uid("uid_compaction_source")
-          .rebalance()
+      planStream.rebalance()
           .transform("compact_task",
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
@@ -301,7 +317,7 @@ public class HoodieFlinkCompactor {
           .uid("uid_compaction_commit")
           .setParallelism(1);
 
-      env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
+      env.execute(String.format("flink_hudi_compaction%s", serviceMode ? StringUtils.EMPTY_STRING : "_" + String.join(",", compactionInstantTimes)));
     }
 
     /**
