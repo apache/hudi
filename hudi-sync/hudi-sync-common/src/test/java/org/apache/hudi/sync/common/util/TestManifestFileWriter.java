@@ -30,10 +30,13 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.stream.IntStream;
+import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.sync.common.util.ManifestFileWriter.fetchLatestBaseFilesForAllPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestManifestFileWriter extends HoodieCommonTestHarness {
 
@@ -47,7 +50,7 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(metaClient, 10);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false).count());
+    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false, false).count());
   }
 
   @Test
@@ -55,10 +58,26 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(metaClient, 3);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    manifestFileWriter.writeManifestFile();
+    manifestFileWriter.writeManifestFile(false);
     Path manifestFilePath = manifestFileWriter.getManifestFilePath();
     try (InputStream is = metaClient.getFs().open(manifestFilePath)) {
-      assertEquals(9, FileIOUtils.readAsUTFStringLines(is).size(), "there should be 9 base files in total; 3 per partition.");
+      List<String> expectedLines = FileIOUtils.readAsUTFStringLines(is);
+      assertEquals(9, expectedLines.size(), "there should be 9 base files in total; 3 per partition.");
+      expectedLines.forEach(line -> assertFalse(line.contains(basePath)));
+    }
+  }
+
+  @Test
+  public void testCreateManifestFileWithAbsolutePath() throws Exception {
+    // Generate 10 files under each partition
+    createTestDataForPartitionedTable(metaClient, 3);
+    ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    manifestFileWriter.writeManifestFile(true);
+    Path manifestFilePath = manifestFileWriter.getManifestFilePath();
+    try (InputStream is = metaClient.getFs().open(manifestFilePath)) {
+      List<String> expectedLines = FileIOUtils.readAsUTFStringLines(is);
+      assertEquals(9, expectedLines.size(), "there should be 9 base files in total; 3 per partition.");
+      expectedLines.forEach(line -> assertTrue(line.startsWith(metaClient.getFs().getScheme() + ":" + basePath)));
     }
   }
 

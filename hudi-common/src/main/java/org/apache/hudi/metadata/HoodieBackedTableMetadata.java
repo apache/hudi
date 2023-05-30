@@ -469,7 +469,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Pair.of(baseFileReader, baseFileOpenMs);
   }
 
-  private Set<String> getValidInstantTimestamps() {
+  public static Set<String> getValidInstantTimestamps(HoodieTableMetaClient dataMetaClient, HoodieTableMetaClient metadataMetaClient) {
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     HoodieActiveTimeline datasetTimeline = dataMetaClient.getActiveTimeline();
@@ -511,7 +511,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
-    Set<String> validInstantTimestamps = getValidInstantTimestamps();
+    Set<String> validInstantTimestamps = getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
 
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
@@ -565,7 +565,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param instant  The Rollback operation to read
    * @param timeline instant of timeline from dataset.
    */
-  private List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline) {
+  private static List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline) {
     try {
       List<String> commitsToRollback = null;
       if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {

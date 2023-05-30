@@ -39,7 +39,6 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile,
                                 skeletonFile: Option[PartitionedFile],
                                 logFiles: List[HoodieLogFile]) extends HoodieFileSplit
 
-
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
                                    private val globPaths: Seq[Path],

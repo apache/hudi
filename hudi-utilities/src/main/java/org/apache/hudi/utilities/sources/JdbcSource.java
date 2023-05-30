@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.SqlQueryBuilder;
 import org.apache.hudi.utilities.config.JdbcSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -256,7 +257,7 @@ public class JdbcSource extends RowSource {
       }
     } catch (Exception e) {
       LOG.error("Failed to checkpoint");
-      throw new HoodieException("Failed to checkpoint. Last checkpoint: " + lastCkptStr.orElse(null), e);
+      throw new HoodieReadFromSourceException("Failed to checkpoint. Last checkpoint: " + lastCkptStr.orElse(null), e);
     }
   }
 
