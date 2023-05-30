@@ -18,13 +18,12 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
-import org.apache.hudi.HoodieBootstrapRelation.validate
+import org.apache.hudi.HoodieBootstrapRelation.{getFilePath, validate}
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.hadoop.CachingPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -34,10 +33,36 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-import java.net.URI
+import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
-case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile] = None) extends HoodieFileSplit
+case class HoodieBootstrapSplit(dataFile: PartitionedFile,
+                                skeletonFile: Option[PartitionedFile],
+                                logFiles: List[HoodieLogFile]) extends HoodieFileSplit
 
+
+case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
+                                   private val userSchema: Option[StructType],
+                                   private val globPaths: Seq[Path],
+                                   override val metaClient: HoodieTableMetaClient,
+                                   override val optParams: Map[String, String],
+                                   private val prunedDataSchema: Option[StructType] = None)
+  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) {
+
+  override type Relation = HoodieBootstrapRelation
+
+  override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
+    this.copy(prunedDataSchema = Some(prunedSchema))
+
+  def toHadoopFsRelation: HadoopFsRelation = {
+    HadoopFsRelation(
+      location = fileIndex,
+      partitionSchema = fileIndex.partitionSchema,
+      dataSchema = fileIndex.dataSchema,
+      bucketSpec = None,
+      fileFormat = fileFormat,
+      optParams)(sparkSession)
+  }
+}
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
  * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
@@ -55,7 +80,7 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[
  * @param metaClient Hoodie table meta client
  * @param optParams  DataSource options passed by the user
  */
-case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
+abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
                                    private val globPaths: Seq[Path],
                                    override val metaClient: HoodieTableMetaClient,
@@ -64,44 +89,44 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = HoodieBootstrapSplit
-  override type Relation = HoodieBootstrapRelation
+
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
   private lazy val bootstrapBasePath = new Path(metaClient.getTableConfig.getBootstrapBasePath.get)
 
-  override val mandatoryFields: Seq[String] = Seq.empty
+  override lazy val mandatoryFields: Seq[String] = Seq.empty
+
+  protected def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
+    listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+  }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
-    val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    val fileSlices = getFileSlices(partitionFilters, dataFilters)
     val isPartitioned = metaClient.getTableConfig.isTablePartitioned
     fileSlices.map { fileSlice =>
       val baseFile = fileSlice.getBaseFile.get()
+      val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
 
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
             bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val filePath = if (isPartitioned) {
-          encodePartitionPath(baseFile.getBootstrapBaseFile.get.getFileStatus)
-        } else {
-          baseFile.getBootstrapBaseFile.get.getPath
-        }
-        val dataFile = PartitionedFile(partitionValues, filePath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val dataFile = PartitionedFile(partitionValues, getFilePath(baseFile.getBootstrapBaseFile.get.getFileStatus.getPath),
+          0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
 
-        HoodieBootstrapSplit(dataFile, skeletonFile)
+        HoodieBootstrapSplit(dataFile, skeletonFile, logFiles)
       } else {
         val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
-        HoodieBootstrapSplit(dataFile)
+        HoodieBootstrapSplit(dataFile, Option.empty, logFiles)
       }
     }
   }
 
-  protected override def composeRDD(fileSplits: Seq[FileSplit],
-                                    tableSchema: HoodieTableSchema,
-                                    requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
-                                    filters: Array[Filter]): RDD[InternalRow] = {
+  protected def getFileReaders(tableSchema: HoodieTableSchema,
+                               requiredSchema: HoodieTableSchema,
+                               requestedColumns: Array[String],
+                               filters: Array[Filter]): (BaseFileReader, BaseFileReader, BaseFileReader) = {
     val requiredSkeletonFileSchema =
       StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
 
@@ -109,12 +134,22 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       createBootstrapFileReaders(tableSchema, requiredSchema, requiredSkeletonFileSchema, filters)
 
     val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
+    (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader)
+  }
 
+  protected override def composeRDD(fileSplits: Seq[FileSplit],
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+
+    val (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader) = getFileReaders(tableSchema,
+      requiredSchema, requestedColumns, filters)
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
       requiredSchema, fileSplits)
   }
 
-  private def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
+  protected def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
                                          requiredSchema: HoodieTableSchema,
                                          requiredSkeletonFileSchema: StructType,
                                          filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
@@ -166,7 +201,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     (bootstrapDataFileReader, boostrapSkeletonFileReader)
   }
 
-  private def createRegularFileReader(tableSchema: HoodieTableSchema,
+  protected def createRegularFileReader(tableSchema: HoodieTableSchema,
                                      requiredSchema: HoodieTableSchema,
                                      filters: Array[Filter]): BaseFileReader = {
     // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
@@ -196,33 +231,10 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     //       back into the one expected by the caller
     projectReader(regularFileReader, requiredSchema.structTypeSchema)
   }
-
-  override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
-
-  def toHadoopFsRelation: HadoopFsRelation = {
-      HadoopFsRelation(
-        location = fileIndex,
-        partitionSchema = fileIndex.partitionSchema,
-        dataSchema = fileIndex.dataSchema,
-        bucketSpec = None,
-        fileFormat = fileFormat,
-        optParams)(sparkSession)
-  }
-
-  //TODO: This should be unnecessary with spark 3.4 [SPARK-41970]
-  private def encodePartitionPath(file: FileStatus): String = {
-    val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(bootstrapBasePath)
-    val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
-    val filePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath)
-    val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
-    CachingPath.concatPathUnsafe(CachingPath.concatPathUnsafe(tablePathWithoutScheme, PartitionPathEncodeUtils.escapePathName(relativePath)), filePathWithoutScheme.getName).toString
-  }
 }
 
-
 object HoodieBootstrapRelation {
-  private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
+  def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
     val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq
 
@@ -231,4 +243,9 @@ object HoodieBootstrapRelation {
     checkState(combinedColumns.sorted == requiredDataColumns.sorted)
   }
 
+  def getFilePath(path: Path): String = {
+
+    //see MergeOnReadSnapshotRelation.getFilePath()
+    path.toUri.toString
+  }
 }
