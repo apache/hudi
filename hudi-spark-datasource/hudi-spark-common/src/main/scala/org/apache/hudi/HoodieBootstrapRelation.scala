@@ -148,7 +148,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
       requiredSchema, fileSplits)
   }
 
-  protected def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
+  private def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
                                          requiredSchema: HoodieTableSchema,
                                          requiredSkeletonFileSchema: StructType,
                                          filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
@@ -200,7 +200,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     (bootstrapDataFileReader, boostrapSkeletonFileReader)
   }
 
-  protected def createRegularFileReader(tableSchema: HoodieTableSchema,
+  private def createRegularFileReader(tableSchema: HoodieTableSchema,
                                      requiredSchema: HoodieTableSchema,
                                      filters: Array[Filter]): BaseFileReader = {
     // NOTE: "Data" schema in here refers to the whole table's schema that doesn't include only partition
