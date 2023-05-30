@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.11 -Dscala.binary.version=2.11"
+          - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
             sparkModules: "hudi-spark-datasource/hudi-spark2"
 
