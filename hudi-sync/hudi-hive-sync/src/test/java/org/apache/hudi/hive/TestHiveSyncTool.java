@@ -239,8 +239,7 @@ public class TestHiveSyncTool {
       throw new HoodieHiveSyncException("Failed to get the metastore location from the table " + tableName, e);
     }
   }
-
-
+  
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncAllPartition() throws Exception {
