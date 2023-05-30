@@ -20,8 +20,6 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
