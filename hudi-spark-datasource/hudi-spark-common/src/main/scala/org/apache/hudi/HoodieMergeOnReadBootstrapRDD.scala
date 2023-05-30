@@ -78,19 +78,18 @@ class HoodieMergeOnReadBootstrapRDD(@transient spark: SparkSession,
 
           (merge(skeletonFileIterator, dataFileIterator), mergedSchema)
         }
-
-        // NOTE: Here we have to project the [[InternalRow]]s fetched into the expected target schema.
-        //       These could diverge for ex, when requested schema contains partition columns which might not be
-        //       persisted w/in the data file, but instead would be parsed from the partition path. In that case
-        //       output of the file-reader will have different ordering of the fields than the original required
-        //       schema (for more details please check out [[ParquetFileFormat]] implementation).
-        val unsafeProjection = generateUnsafeProjection(schema, requiredSchema.structTypeSchema)
-
+        
         if (bootstrapPartition.split.logFiles.isEmpty) {
+          // NOTE: Here we have to project the [[InternalRow]]s fetched into the expected target schema.
+          //       These could diverge for ex, when requested schema contains partition columns which might not be
+          //       persisted w/in the data file, but instead would be parsed from the partition path. In that case
+          //       output of the file-reader will have different ordering of the fields than the original required
+          //       schema (for more details please check out [[ParquetFileFormat]] implementation).
+          val unsafeProjection = generateUnsafeProjection(schema, requiredSchema.structTypeSchema)
           iterator.map(unsafeProjection)
         } else {
           new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
-            iterator.map(unsafeProjection), schema, tableSchema, requiredSchema, tableState, getHadoopConf)
+            iterator, schema, tableSchema, requiredSchema, tableState, getHadoopConf)
         }
       case _ =>
         // NOTE: Regular file-reader is already projected into the required schema
@@ -131,9 +130,7 @@ class HoodieMergeOnReadBootstrapRDD(@transient spark: SparkSession,
   private def getHadoopConf: Configuration = {
     val conf = hadoopConfBroadcast.value.value
     // TODO clean up, this lock is unnecessary
-    CONFIG_INSTANTIATION_LOCK.synchronized {
-      new Configuration(conf)
-    }
+    conf
   }
 }
 

@@ -221,7 +221,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void compareTables() {
-    Map<String,String> readOpts = new HashMap<>();
     Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
