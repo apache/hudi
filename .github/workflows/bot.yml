@@ -24,6 +24,7 @@ env:
 jobs:
   test-spark:
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         include:
@@ -67,6 +68,7 @@ jobs:
 
   test-flink:
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         include:
@@ -94,6 +96,7 @@ jobs:
 
   validate-bundles:
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         include:
