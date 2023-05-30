@@ -13,7 +13,7 @@ This guide helps you quickly start using Flink on Hudi, and learn different mode
 - **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/hoodie_deltastreamer#streaming-query) and [Incremental Query](/docs/hoodie_deltastreamer#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_configuration#memory-optimization) and [Write Rate Limit](/docs/flink_configuration#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
-- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/query_engine_setup#prestodb).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/0.11.0/query_engine_setup#prestodb).
 
 ## Quick Start
 
