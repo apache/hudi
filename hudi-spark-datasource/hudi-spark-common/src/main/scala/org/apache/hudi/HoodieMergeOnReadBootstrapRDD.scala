@@ -78,7 +78,6 @@ class HoodieMergeOnReadBootstrapRDD(@transient spark: SparkSession,
 
           (merge(skeletonFileIterator, dataFileIterator), mergedSchema)
         }
-        
         if (bootstrapPartition.split.logFiles.isEmpty) {
           // NOTE: Here we have to project the [[InternalRow]]s fetched into the expected target schema.
           //       These could diverge for ex, when requested schema contains partition columns which might not be

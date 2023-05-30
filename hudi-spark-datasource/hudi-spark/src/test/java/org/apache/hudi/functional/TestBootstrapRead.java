@@ -225,10 +225,10 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
+      compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       if (tableType.equals("COPY_ON_WRITE")) {
         compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
       }
-      compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
@@ -268,7 +268,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     List<String> records = dataGen.generateInserts("000", nInserts).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions).drop("city_to_state");
+    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
   }
 
   public Dataset<Row> generateTestUpdates(String instantTime) {
@@ -276,7 +276,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions).drop("city_to_state");
+      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
