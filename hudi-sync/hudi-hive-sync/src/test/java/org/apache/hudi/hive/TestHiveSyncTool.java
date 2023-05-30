@@ -261,7 +261,7 @@ public class TestHiveSyncTool {
     assertEquals(3, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
     // Use META_SYNC_PARTITION_FIXMODE, sync all partition metadata
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIXMODE.key(), "true");
+    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_INCREMENTAL.key(), "false");
     reInitHiveSyncClient();
     reSyncHiveTable();
     assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),

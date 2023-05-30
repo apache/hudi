@@ -174,10 +174,15 @@ public class HoodieSyncConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The spark version used when syncing with a metastore.");
 
-  public static final ConfigProperty<String> META_SYNC_PARTITION_FIXMODE = ConfigProperty
-      .key("hoodie.datasource.hive_sync.partition_fixmode")
-      .defaultValue("false")
-      .withDocumentation("Implement a full partition sync operation when partitions are lost.");
+  public static final ConfigProperty<Boolean> META_SYNC_INCREMENTAL = ConfigProperty
+      .key("hoodie.meta.sync.incremental")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Whether to incrementally sync the partitions to the metastore, i.e., "
+          + "only added, changed, and deleted partitions based on the commit metadata. If set to "
+          + "`false`, the meta sync executes a full partition sync operation when partitions are "
+          + "lost.");
 
   private Configuration hadoopConf;
 
@@ -242,8 +247,12 @@ public class HoodieSyncConfig extends HoodieConfig {
     public Boolean isConditionalSync;
     @Parameter(names = {"--spark-version"}, description = "The spark version")
     public String sparkVersion;
-    @Parameter(names = {"--partition-fixmode"}, description = "Implement a full partition sync operation when partitions are lost.")
-    public Boolean partitionFixMode;
+    @Parameter(names = {"--sync-incremental"}, description =
+        "Whether to incrementally sync the partitions to the metastore, i.e., "
+            + "only added, changed, and deleted partitions based on the commit metadata. If set to "
+            + "`false`, the meta sync executes a full partition sync operation when partitions are "
+            + "lost.")
+    public Boolean syncIncremental;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
@@ -265,7 +274,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
       props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);
       props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
-      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIXMODE.key(), partitionFixMode);
+      props.setPropertyIfNonNull(META_SYNC_INCREMENTAL.key(), syncIncremental);
       return props;
     }
   }
