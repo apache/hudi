@@ -29,6 +29,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkException;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,11 @@ public class TestHoodieFileStatusSerialization extends HoodieClientTestHarness {
       testPaths.add(new Path("s3://table-bucket/"));
     }
     engineContext = new HoodieSparkEngineContext(jsc);
+  }
+
+  @AfterAll
+  public void tearDown() {
+    cleanupSparkContexts();
   }
 
   @Test
