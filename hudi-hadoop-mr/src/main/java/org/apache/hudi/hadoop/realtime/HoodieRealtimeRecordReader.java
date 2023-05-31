@@ -68,8 +68,15 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
       }
       LOG.info("Enabling merged reading of realtime records for split " + split);
       return new RealtimeCompactedRecordReader(split, jobConf, realReader);
-    } catch (IOException ex) {
+    } catch (Exception ex) {
       LOG.error("Got exception when constructing record reader", ex);
+      try {
+        if (realReader != null) {
+          realReader.close();
+        }
+      } catch (IOException e) {
+        LOG.error("Got exception when closing parquet record reader", e);
+      }
       throw new HoodieException(ex);
     }
   }
