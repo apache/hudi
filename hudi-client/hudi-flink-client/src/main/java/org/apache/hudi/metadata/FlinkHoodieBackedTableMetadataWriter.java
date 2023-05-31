@@ -189,6 +189,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
   protected boolean canTriggerCompaction(String latestDeltaCommitTimeInMetadataTable) {
+    // Allows compaction of the metadata table to run regardless of inflight instants
     return true;
   }
 

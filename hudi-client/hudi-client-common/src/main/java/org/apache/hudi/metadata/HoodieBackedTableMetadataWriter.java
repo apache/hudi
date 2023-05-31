@@ -936,8 +936,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
   protected boolean canTriggerCompaction(String latestDeltaCommitTimeInMetadataTable) {
-    // finish off any pending compactions if any from previous attempt.
-
     // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
     // Whenever you want to change this logic, please ensure all below scenarios are considered.
     // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
@@ -971,6 +969,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * </ol>
    */
   protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
+    // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
     String latestDeltaCommitTimeInMetadataTable = metadataMetaClient.reloadActiveTimeline()
