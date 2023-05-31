@@ -85,6 +85,10 @@ public class HiveSyncConfigHolder {
       .defaultValue("false")
       .markAdvanced()
       .withDocumentation("Skip the _ro suffix for Read optimized table, when registering");
+  public static final ConfigProperty<String> HIVE_SYNC_META_TO_ORIGIN_TABLE = ConfigProperty
+          .key("hoodie.datasource.hive_sync.sync_origin_table")
+          .defaultValue("false")
+          .withDocumentation("sync meta info to origin table if enable");
   public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.datasource.hive_sync.support_timestamp")
       .defaultValue("false")
