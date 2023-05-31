@@ -1,40 +1,72 @@
 ## Proposers
+
 - @stream2000
 - @hujincalrin
 - @huberylee
 - @YuweiXiao
+
 ## Approvers
+
 ## Status
+
 JIRA: [HUDI-5823](https://issues.apache.org/jira/browse/HUDI-5823)
+
 ## Abstract
-In some classic hudi use cases, users partition hudi data by time and are only interested in data from a recent period of time. The outdated data is useless and costly,  we need a TTL(Time-To-Live) management mechanism to prevent the dataset from growing infinitely.
-This proposal introduces Partition TTL Management policies to hudi, people can config the policies by table config directly or by call commands. With proper configs set, Hudi can find out which partitions are outdated and delete them.
+
+In some classic hudi use cases, users partition hudi data by time and are only interested in data from a recent period
+of time. The outdated data is useless and costly, we need a TTL(Time-To-Live) management mechanism to prevent the
+dataset from growing infinitely.
+This proposal introduces Partition TTL Management policies to hudi, people can config the policies by table config
+directly or by call commands. With proper configs set, Hudi can find out which partitions are outdated and delete them.
+
 ## Background
-TTL management mechanism is an important feature for databases. Hudi already provides a delete_partition interface to delete outdated partitions. However, users still need to detect which partitions are outdated and call `delete_partition` manually, which means that users need to define and implement some kind of TTL policies and maintain proper statistics to find expired partitions by themself. As the scale of installations grew,  it's more important to implement a user-friendly TTL management mechanism for hudi.
+
+TTL management mechanism is an important feature for databases. Hudi already provides a delete_partition interface to
+delete outdated partitions. However, users still need to detect which partitions are outdated and
+call `delete_partition` manually, which means that users need to define and implement some kind of TTL policies and
+maintain proper statistics to find expired partitions by themselves. As the scale of installations grew, it's more
+important to implement a user-friendly TTL management mechanism for hudi.
+
 ## Implementation
+
 There are 3 components to implement Partition TTL Management
 
 - TTL policy definition & storage
-- Partition statistics for TTL management
-- Appling policies
+- Gathering proper partition statistics for TTL management
+- Executing TTL management
+
 ### TTL Policy Definition
-We have three main considerations when designing TTL policy:
 
-1. User hopes to manage partition TTL not only by  expired time but also by sub-partitions count and sub-partitions size. So we need to support the following three different TTL policy types.
-    1. **KEEP_BY_TIME**. Partitions will expire N days after their last modified time.
-    2. **KEEP_BY_COUNT**. Keep N sub-partitions for a  high-level partition. When sub partition count exceeds, delete the partitions with smaller partition values until the sub-partition count meets the policy configuration.
-    3. **KEEP_BY_SIZE**. Similar to KEEP_BY_COUNT, but to ensure that the sum of the data size of all sub-partitions does not exceed the policy configuration.
-2. User need to set different policies for different partitions. For example, the hudi table is partitioned by two fields (user_id, ts). For partition(user_id='1'), we set the policy to keep 100G data for all sub-partitions, and for partition(user_id='2') we set the policy that all sub-partitions will expire 10 days after their last modified time.
-3. It's possible that there are a lot of high-level partitions in the user's table,  and they don't want to set TTL policies for all the high-level partitions. So we need to provide a default policy mechanism so that users can set a default policy for all high-level partitions and add some explicit policies for some of them if needed. Explicit policies will override the default policy.
+We have four main considerations when designing TTL policy:
 
-So here we have the TTL policy definition:
+1. Usually user hopes to manage partition TTL by expired time, so we support the policy `KEEP_BY_TIME` that partitions
+   will expire N days after their last modified time. Note that the last modified time here means any inserts/updates to
+   the partition. Also, we will make it easy to extend new policies so that users can implement their own polices to
+   decide which partitions are expired.
+2. User need to set different policies for different partitions. For example, the hudi table is partitioned
+   by `user_id`. For partition(user_id='1'), we set the policy that this partition will expire 7 days after its last
+   modified time, while for
+   partition(user_id='2') we can set the policy that it will expire 30 days after its last modified time.
+3. It's possible that users have multi-fields partitioning, and they don't want set policy for all partition. So we need
+   to support partition regex when defining
+   partition TTL policies. For example, for a hudi table partitioned by (user_id, ts), we can first set a default
+   policy(which policy value contains `*`)
+   that for all partitions matched (user_id=*/) will expire in 7 days, and explicitly set a policy that for partition
+   matched user_id=3 will expire in 30 days. Explicit policy will override default polices, which means default policies
+   only takes effects on partitions that do not match any explicit ttl policies.
+4. We may need to support record level ttl policy in the future. So partition TTL policy should be an implementation of
+   HoodieTTLPolicy.
+
+So we have the TTL policy definition like this (may change when implementing):
+
 ```java
-public class HoodiePartitionTTLPolicy {
+public class HoodiePartitionTTLPolicy implements HoodieTTLPolicy {
   public enum TTLPolicy {
-    KEEP_BY_TIME, KEEP_BY_SIZE, KEEP_BY_COUNT
+    // We supports keep by last modified time at the first version
+    KEEP_BY_TIME
   }
 
-  // Partition spec for which the policy takes effect
+  // Partition spec for which the policy takes effect, could be a regex or a static partition value
   private String partitionSpec;
 
   private TTLPolicy policy;
@@ -43,18 +75,15 @@ public class HoodiePartitionTTLPolicy {
 }
 ```
 
-### User Interface for TTL policy
-Users can config partition TTL management policies through SparkSQL Call Command and through table config directly.  Assume that the user has a hudi table partitioned by two fields(user_id, ts), he can config partition TTL policies as follows.
+### User Interface for TTL policy Definition
 
-```sql
--- Set default policy for all user_id, which keeps the data for 30 days.
+Users can config partition TTL management policies through SparkSQL Call Command and through table config directly.
+Assume that the user has a hudi table partitioned by two fields(user_id, ts), he can config partition TTL policies as
+follows.
+
+```sparksql
+-- Set policy for all user_id using partition regex, which keeps the data for 30 days.
 call add_ttl_policy(table => 'test', partitionSpec => 'user_id=*/', policy => 'KEEP_BY_TIME', policyValue => '30');
- 
---For partition user_id=1/, keep 10 sub partitions.
-call add_ttl_policy(table => 'test', partitionSpec => 'user_id=1/', policy => 'KEEP_BY_COUNT', policyValue => '10');
-
---For partition user_id=2/, keep 100GB data in total
-call add_ttl_policy(table => 'test', partitionSpec => 'user_id=2/', policy => 'KEEP_BY_SIZE', policyValue => '107374182400');
 
 --For partition user_id=3/, keep the data for 7 day.
 call add_ttl_policy(table => 'test', partitionSpec => 'user_id=3/', policy => 'KEEP_BY_TIME', policyValue => '7');
@@ -62,47 +91,69 @@ call add_ttl_policy(table => 'test', partitionSpec => 'user_id=3/', policy => 'K
 -- Show all the TTL policies including default and explicit policies
 call show_ttl_policies(table => 'test');
 user_id=*/	KEEP_BY_TIME	30
-user_id=1/	KEEP_BY_COUNT	10
-user_id=2/	KEEP_BY_SIZE	107374182400
 user_id=3/	KEEP_BY_TIME	7
 ```
 
 ### Storage for TTL policy
-The partition TTL policies will be stored in `hoodie.properties`since it is part of table metadata. The policy configs in `hoodie.properties`are defined as follows. Explicit policies are defined using a JSON array while default policy is defined using separate configs.
+
+We need persistent partition ttt policies in hudi table config and users should interact with hudi only by
+setting/getting ttl policies. Hudi then will takes care of doing the ttl management in an async table service.
+
+The partition TTL policies will be stored in `hoodie.properties` and they are defined as follows. Explicit policies are
+defined using a JSON array, note we support regex here.
 
 ```properties
-# Default TTL policy definition
-hoodie.partition.ttl.management.default.policy=KEEP_BY_TIME
-hoodie.partition.ttl.management.default.fields=user_id
-hoodie.partition.ttl.management.default.policy.value=30
-
-# Explicit TTL policy definition
-hoodie.partition.ttl.policies=[{"partitionSpec"\:"user_id\=2/","policy"\:"KEEP_BY_SIZE","policyValue"\:107374182400},{"partitionSpec"\:"user_id\=1/","policy"\:"KEEP_BY_COUNT","policyValue"\:10},{"partitionSpec"\:"user_id\=3/","policy"\:"KEEP_BY_TIME","policyValue"\:7}]
+# TTL policy definition
+hoodie.partition.ttl.policies=[{"partitionSpec"\:"user_id\=*/","policy"\:"KEEP_BY_TIME","policyValue"\:7},{"partitionSpec"\:"user_id\=3/","policy"\:"KEEP_BY_TIME","policyValue"\:30}]
 ```
 
 ### Partition Statistics
-#### Partition Statistics Entity
-We need need to maintain a partition stat for every partition in the hudi table. The stat will contain three fields:
 
-- RelativePath. Relative path to the base path, or we can call it PartitionPath.
-- LastModifiedTime. Last instant time that modified the partition. We need this information to support  the `KEEP_BY_TIME` policy.
-- PartitionTotalFileSize. The sum of all valid data file sizes in the partition, to support the `KEEP_BY_SIZE`policy. We calculate only the latest file slices in the partition currently.
-#### Gathering Partition Statistics
-The simplest way to get partition statistics is that reading information from the metadata table. However, the write and compaction of the metadata table will severely affect the throughput and latency of data ingestion.  So we design an asynchronous partition statistics as follows.
+We need to gather proper partition statistics for different kinds of partition ttl policies. Specifically, for
+KEEP_BY_TIME policy that we want to support first, we need to know the last modified time for every partition in hudi
+table.
 
-- At the first time we gather the partitions statistics, we list all partitions in the hudi table and calculate `PartitionTotalFileSize`and `LastModifiedTime`for each partition. Then we store all the partition stats in persistent storage along with the instant time we do the stats.  For example, we can directly store all partition stats in a JSON file whose file name contains the instant time.
-- After initializing the partition statistics, we can list only affected partitions by reading timeline metadata and store the new partition statistics back to the storage with new instant time.
-- Note that deleted partition will be deleted from partition statistics too. If a partition was deleted before and have no new data, we will remove it from partition statistics so it won't calculated as expired partition again.
-### Appling Policies
-Once we have defined the TTL policies and have proper partition statistics,  it's easy to apply the policies and delete expired partitions.
+To simplify the design, we decide to use the largest commit time of committed file groups in the partition as partition
+last modified time. But for file groups generated by replace commit, it may not reveal the real insert/update time for
+the file group. We can also introduce other mechanism to get last modified time of the partition, like add a new kind of
+partition metadata or add a new field in metadata table. Open to ideas for this design choice.
 
-1. Gather partitions statistics.
-2. Apply each TTL policy. For explicit policies, find sub-partitions matched `PartitionSpec`defined in the policy and check if there are expired partitions according to the policy type and  size. For default policy, find partitions that do not match any explicit policy and check if they are expired.
-3. For all expired partitions, call delete_partition to delete them, which will generate a replace commit and mark all files in those partitions as replaced. For pending clustering and compaction that affect the target partition to delete,  [HUDI-5553](https://issues.apache.org/jira/browse/HUDI-5553) introduces a pre-check that will throw an exception, and further improvement could be discussed in [HUDI-5663](https://issues.apache.org/jira/browse/HUDI-5663).
+### Executing TTL management
+
+Once we have defined the TTL policies and have proper partition statistics, it's easy to apply the policies and delete
+expired partitions. The process of TTL management is very similar to other table services in hudi, we will provide a new
+method called `managePartitionTTL` in `BaseHoodieTableServiceClient` and we can invoke this method in async table
+service, SparkSQL Call Command, cli, JAVA code etc.
+
+We will provide an Async Table Service as the default interface to the users that want to do partition TTL management
+and we can add more interfaces in the future.
+
+User will config the async ttl management service as follows:
+
+```properties
+hoodie.partition.ttl.management.async=true
+```
+
+The process of manage partition TTL is as follows:
+
+1. Gather partitions statistics, list all partitions and the largest commit time of committed
+   file groups of each partition as their last modified time.
+2. Apply each TTL policy. For explicit policies, find sub-partitions matched `PartitionSpec` defined in the policy and
+   check if there are expired partitions according to the policy type and size. For default policy, find partitions that
+   do not match any explicit policy and check if they are expired.
+3. For all expired partitions, call delete_partition to delete them, which will generate a replace commit and mark all
+   files in those partitions as replaced. For pending clustering and compaction that affect the target partition to
+   delete,  [HUDI-5553](https://issues.apache.org/jira/browse/HUDI-5553) introduces a pre-check that will throw an
+   exception, and further improvement could be discussed
+   in [HUDI-5663](https://issues.apache.org/jira/browse/HUDI-5663).
 4. Clean then will delete all replaced file groups.
+
 ## Rollout/Adoption Plan
+
 This will be updated once we decide on one of the approaches proposed above.
+
 ## Test Plan
+
 This will be updated once we decide on one of the approaches proposed above.
 
 
