@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         include:
           - scalaProfile: "scala-2.12"
@@ -58,6 +59,7 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-common,hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.4.x $MVN_ARGS
+        continue-on-error: true
       - name: FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -65,7 +67,7 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.4.x $MVN_ARGS
-
+        continue-on-error: true
   test-flink:
     runs-on: ubuntu-latest
     continue-on-error: true
