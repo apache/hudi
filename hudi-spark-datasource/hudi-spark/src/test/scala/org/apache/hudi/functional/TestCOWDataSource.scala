@@ -1195,7 +1195,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     val snapshotDF0 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(numRecords, snapshotDF0.count())
 
     val df1 = snapshotDF0.limit(numRecordsToDelete)
@@ -1210,7 +1210,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
       .save(basePath)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
