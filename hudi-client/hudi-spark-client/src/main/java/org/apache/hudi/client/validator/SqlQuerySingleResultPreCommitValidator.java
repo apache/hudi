@@ -70,7 +70,7 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     if (result == null || !expectedResult.equals(result.toString())) {
       LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
       throw new HoodieValidationException("Query validation failed for '" + query
-          + "'. Expected " + expectedResult + " row, Found " + result);
+          + "'. Expected " + expectedResult + " row(s), Found " + result);
     } else {
       LOG.info("Query validation successful. Expected: " + expectedResult + " got " + result);
     }
