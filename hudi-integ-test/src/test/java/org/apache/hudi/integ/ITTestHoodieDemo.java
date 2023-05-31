@@ -288,8 +288,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testSparkSQLAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
     System.out.println("VEXLER output: ");
-    System.out.println(stdOutErrPair.getLeft())
-    System.out.println(stdOutErrPair.getRight())
+    System.out.println(stdOutErrPair.getLeft());
+    System.out.println(stdOutErrPair.getRight());
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow   |false      |\n"
                                                     + "|default |stock_ticks_cow_bs   |false      |\n"
                                                     + "|default |stock_ticks_mor_bs_ro |false      |\n"
