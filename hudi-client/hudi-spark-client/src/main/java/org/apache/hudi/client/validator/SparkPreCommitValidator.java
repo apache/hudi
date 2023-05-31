@@ -88,14 +88,14 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
   /**
    * Publish pre-commit validator run stats for a given commit action.
    */
-  protected void publishRunStats(String instantTime, long duration) {
+  private void publishRunStats(String instantTime, long duration) {
     // Record validator duration metrics.
     if (getWriteConfig().isMetricsOn()) {
       HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
       Option<HoodieInstant> currentInstant = metaClient.getActiveTimeline()
           .findInstantsAfterOrEquals(instantTime, 1)
           .firstInstant();
-      metrics.publishMetrics(currentInstant.get().getAction(), getClass().getSimpleName(), duration);
+      metrics.reportMetrics(currentInstant.get().getAction(), getClass().getSimpleName(), duration);
     }
   }
 

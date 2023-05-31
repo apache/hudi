@@ -275,14 +275,14 @@ public class HoodieMetrics {
   }
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
-    metrics.registerGauge(getMetricsName("replacecommit", "fileCreationTime"), durationInMs);
+    reportMetrics("replacecommit", "fileCreationTime", durationInMs);
   }
 
   /**
-   * Given a commit action, metrics name and value this method publishes custom metrics.
+   * Given a commit action, metrics name and value this method reports custom metrics.
    */
-  public void publishMetrics(String commitAction, String metricsName, long value) {
-    metrics.registerGauge(getMetricsName(commitAction, metricsName), value);
+  public void reportMetrics(String commitAction, String metricName, long value) {
+    metrics.registerGauge(getMetricsName(commitAction, metricName), value);
   }
 
   /**
