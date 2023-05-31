@@ -29,6 +29,7 @@ import org.apache.spark.sql.{Dataset, Row}
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
@@ -171,10 +172,17 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       val snapshotDf5 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
       snapshotDf5.cache()
       compareUpdateDfWithHudiDf(inputDf4, snapshotDf5, snapshotDf4)
+      inputDf4.unpersist(true)
+      snapshotDf5.unpersist(true)
 
       // compaction is expected to have completed. both RO and RT are expected to return same results.
       compareROAndRT(isMetadataEnabledOnRead, tableName, tableBasePath)
     }
+
+    inputDf0.unpersist(true)
+    updateDf.unpersist(true)
+    inputDf2.unpersist(true)
+    inputDf3.unpersist(true)
   }
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
@@ -251,7 +259,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
   def createTable(tableName: String, keyGenClass: String, writeOptions: String, tableBasePath: String): Unit = {
     //If you have partitioned by (partition_path) with nonpartitioned keygen, the partition_path will be empty in the table
-    val partitionedBy = if (!keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+    val partitionedBy = if (!classOf[NonpartitionedKeyGenerator].getName.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
       "partitioned by (partition_path)"
     } else {
       ""
@@ -436,6 +444,9 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     snapshotDf3.cache()
     assertEquals(210, snapshotDf3.count())
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0).union(inputDf2), snapshotDf3)
+    inputDf0.unpersist(true)
+    inputDf1.unpersist(true)
+    inputDf2.unpersist(true)
   }
 
 }
