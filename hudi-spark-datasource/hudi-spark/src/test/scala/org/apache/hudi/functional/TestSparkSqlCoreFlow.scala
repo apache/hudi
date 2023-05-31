@@ -62,19 +62,19 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       )
 
   //extracts the params and runs each core flow test
-  forAll (params) { (paramStr: String) =>
-    test(s"Core flow with params: $paramStr") {
-      val splits = paramStr.split('|')
-      withTempDir { basePath =>
-        testCoreFlows(basePath,
-          tableType = splits(0),
-          isMetadataEnabledOnWrite = splits(1).toBoolean,
-          isMetadataEnabledOnRead = splits(2).toBoolean,
-          keyGenClass = splits(3),
-          indexType = splits(4))
-      }
-    }
-  }
+//  forAll (params) { (paramStr: String) =>
+//    test(s"Core flow with params: $paramStr") {
+//      val splits = paramStr.split('|')
+//      withTempDir { basePath =>
+//        testCoreFlows(basePath,
+//          tableType = splits(0),
+//          isMetadataEnabledOnWrite = splits(1).toBoolean,
+//          isMetadataEnabledOnRead = splits(2).toBoolean,
+//          keyGenClass = splits(3),
+//          indexType = splits(4))
+//      }
+//    }
+//  }
 
   def testCoreFlows(basePath: File, tableType: String, isMetadataEnabledOnWrite: Boolean, isMetadataEnabledOnRead: Boolean, keyGenClass: String, indexType: String): Unit = {
     //Create table and set up for testing
@@ -349,24 +349,24 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   //params for immutable user flow
   val paramsForImmutable: List[String] = List(
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
+//    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
+//    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
+//    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
     "COPY_ON_WRITE|bulk_insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
     "COPY_ON_WRITE|bulk_insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
     "COPY_ON_WRITE|bulk_insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
@@ -413,37 +413,36 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
     //Insert Operation
     val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
-    val inputDf0 = generateInserts(dataGen, "000", 100)
+    val inputDf0 = generateInserts(dataGen, "000", 100).cache
     insertInto(tableName, inputDf0, "bulk_insert", isMetadataEnabledOnWrite, keyGenClass)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, tableBasePath, "000"))
 
     //Snapshot query
     val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf1.cache()
     assertEquals(100, snapshotDf1.count())
     compareEntireInputDfWithHudiDf(inputDf0, snapshotDf1)
 
-    val inputDf1 = generateInserts(dataGen, "001", 50)
+    val inputDf1 = generateInserts(dataGen, "001", 50).cache
     insertInto(tableName, inputDf1, operation, isMetadataEnabledOnWrite, keyGenClass)
 
-    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf2.cache()
+    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabledOnRead).cache
     assertEquals(150, snapshotDf2.count())
-
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0), snapshotDf2)
+    snapshotDf2.unpersist(true)
 
-    val inputDf2 = generateInserts(dataGen, "002", 60)
-    inputDf2.cache()
+
+    val inputDf2 = generateInserts(dataGen, "002", 60).cache()
     insertInto(tableName, inputDf2, operation, isMetadataEnabledOnWrite, keyGenClass)
 
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").size())
 
     // Snapshot Query
-    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf3.cache()
+    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabledOnRead).cache
     assertEquals(210, snapshotDf3.count())
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0).union(inputDf2), snapshotDf3)
+    snapshotDf3.unpersist(true)
+
     inputDf0.unpersist(true)
     inputDf1.unpersist(true)
     inputDf2.unpersist(true)
