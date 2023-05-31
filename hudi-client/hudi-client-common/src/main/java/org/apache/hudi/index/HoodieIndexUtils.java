@@ -181,9 +181,18 @@ public class HoodieIndexUtils {
     return foundRecordKeys;
   }
 
+  /**
+   * Check if the given commit timestamp is valid for the timeline.
+   *
+   * The commit timestamp is considered to be valid if:
+   *   1. the commit timestamp is present in the timeline, or
+   *   2. the commit timestamp is less than the first commit timestamp in the timeline
+   *
+   * @param commitTimeline  The timeline
+   * @param commitTs        The commit timestamp to check
+   * @return                true if the commit timestamp is valid for the timeline
+   */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
-    // Check if the last commit ts for this row is 1) present in the timeline or
-    // 2) is less than the first commit ts in the timeline
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
