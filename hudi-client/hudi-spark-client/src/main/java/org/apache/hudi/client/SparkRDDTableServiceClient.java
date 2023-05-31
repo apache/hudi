@@ -181,6 +181,16 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
     // Validation has to be done after cloning. if not, it could result in dereferencing the write status twice which means clustering could get executed twice.
     validateClusteringCommit(clusteringMetadata, clusteringInstant, table);
+
+    // Publish file creation metrics for clustering.
+    if (config.isMetricsOn()) {
+      clusteringMetadata.getWriteStats()
+          .ifPresent(hoodieWriteStats -> hoodieWriteStats.stream()
+              .filter(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats() != null)
+              .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
+              .forEach(metrics::updateClusteringFileCreationMetrics));
+    }
+
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
