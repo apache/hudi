@@ -71,6 +71,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -258,8 +259,16 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       propertiesChanged = true;
     }
 
-    Option<String> lastCommitTimeSynced = tableExists ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
-    LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
+    boolean syncIncremental = config.getBoolean(META_SYNC_INCREMENTAL);
+    Option<String> lastCommitTimeSynced = (tableExists && syncIncremental)
+        ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
+    if (syncIncremental) {
+      LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
+    } else {
+      LOG.info(
+          "Executing a full partition sync operation since {} is set to false.",
+          META_SYNC_INCREMENTAL.key());
+    }
 
     boolean partitionsChanged;
     if (!lastCommitTimeSynced.isPresent()

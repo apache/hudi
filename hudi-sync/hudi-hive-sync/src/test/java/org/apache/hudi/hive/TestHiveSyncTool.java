@@ -37,6 +37,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
@@ -237,6 +238,33 @@ public class TestHiveSyncTool {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the metastore location from the table " + tableName, e);
     }
+  }
+  
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncAllPartition() throws Exception {
+    // Create and write some partition
+    HiveTestUtil.createCOWTable("100", 1, true);
+    HiveTestUtil.addCOWPartition("2010/02/01", true, true, "101");
+    HiveTestUtil.addCOWPartition("2010/02/02", true, true, "102");
+    HiveTestUtil.addCOWPartition("2010/02/03", true, true, "103");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
+    // Drop one partition metadata
+    ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
+        + "` DROP PARTITION (`datestr`='2010-02-03')");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(3, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
+    // Use META_SYNC_PARTITION_FIXMODE, sync all partition metadata
+    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_INCREMENTAL.key(), "false");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
   }
 
   @ParameterizedTest
