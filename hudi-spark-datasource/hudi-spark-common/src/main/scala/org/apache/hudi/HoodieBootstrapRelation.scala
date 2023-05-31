@@ -33,7 +33,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
+import scala.collection.JavaConverters._
 
 case class HoodieBootstrapSplit(dataFile: PartitionedFile,
                                 skeletonFile: Option[PartitionedFile],
