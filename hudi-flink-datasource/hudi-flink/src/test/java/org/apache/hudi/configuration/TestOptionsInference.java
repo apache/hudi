@@ -72,9 +72,9 @@ public class TestOptionsInference {
 
   @Test
   void testAutoGenerateClient() {
-      Configuration conf = getConf();
-      OptionsInference.setupClientId(conf);
-      assertNotNull(conf.getString(FlinkOptions.WRITE_CLIENT_ID), "auto generate client failed!");
+    Configuration conf = getConf();
+    OptionsInference.setupClientId(conf);
+    assertNotNull(conf.getString(FlinkOptions.WRITE_CLIENT_ID), "auto generate client failed!");
   }
   private Configuration getConf() {
     Configuration conf = new Configuration();
