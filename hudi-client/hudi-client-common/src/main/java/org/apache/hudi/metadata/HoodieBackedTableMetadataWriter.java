@@ -688,7 +688,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         });
   }
 
-  private static void checkNumDeltaCommits(HoodieTableMetaClient metaClient, int maxNumDeltaCommitsWhenPending) {
+  protected static void checkNumDeltaCommits(HoodieTableMetaClient metaClient, int maxNumDeltaCommitsWhenPending) {
     final HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
     Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
         .filter(s -> s.getAction().equals(COMPACTION_ACTION)).lastInstant();
@@ -933,28 +933,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
-   *  Perform a compaction on the Metadata Table.
-   *
-   * Cases to be handled:
-   *   1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
-   *      a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
-   *
-   *   2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
-   *      deltacommit.
+   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
-  protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
+  protected boolean canTriggerCompaction(String latestDeltaCommitTimeInMetadataTable) {
     // finish off any pending compactions if any from previous attempt.
-    writeClient.runAnyPendingCompactions();
 
-    String latestDeltaCommitTimeInMetadataTable = metadataMetaClient.reloadActiveTimeline()
-        .getDeltaCommitTimeline()
-        .filterCompletedInstants()
-        .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
-        .getTimestamp();
     // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
     // Whenever you want to change this logic, please ensure all below scenarios are considered.
     // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
-    // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, latest compaction instant time in MDT represents
+    // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, the latest compaction instant time in MDT represents
     // any instants before that is already synced with metadata table.
     // c. Do consider out of order commits. For eg, c4 from DT could complete before c3. and we can't trigger compaction in MDT with c4 as base instant time, until every
     // instant before c4 is synced with metadata table.
@@ -966,6 +953,33 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info(String.format(
           "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
           pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   *  Perform a compaction on the Metadata Table.
+   *
+   * <p>Cases to be handled:
+   *
+   * <ol>
+   *   <li>We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+   *   a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx;</li>
+   *   <li>In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
+   *   deltacommit.</li>
+   * </ol>
+   */
+  protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
+    writeClient.runAnyPendingCompactions();
+
+    String latestDeltaCommitTimeInMetadataTable = metadataMetaClient.reloadActiveTimeline()
+        .getDeltaCommitTimeline()
+        .filterCompletedInstants()
+        .lastInstant().orElseThrow(() -> new HoodieMetadataException("No completed deltacommit in metadata table"))
+        .getTimestamp();
+
+    if (!canTriggerCompaction(latestDeltaCommitTimeInMetadataTable)) {
       return;
     }
 

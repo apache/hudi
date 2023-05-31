@@ -185,6 +185,13 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
   }
 
+  /**
+   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
+   */
+  protected boolean canTriggerCompaction(String latestDeltaCommitTimeInMetadataTable) {
+    return true;
+  }
+
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
