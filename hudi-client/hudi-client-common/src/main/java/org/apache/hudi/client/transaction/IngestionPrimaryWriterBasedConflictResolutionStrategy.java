@@ -73,7 +73,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
         .findInstantsModifiedAfter(currentInstant.getTimestamp())
-        .getInstantsOrderedByStateTransitionTs()
+        .getInstantsOrderedByStateTransitionTime()
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, completedCommitsInstants));
     return completedCommitsInstants.stream();
