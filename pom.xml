@@ -2140,9 +2140,7 @@
       </modules>
       <properties>
         <spark.version>${spark2.version}</spark.version>
-        <sparkbundle.version>2.4</sparkbundle.version>
-        <scala.version>${scala11.version}</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
+        <sparkbundle.version/>
         <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
@@ -2176,8 +2174,6 @@
       <properties>
         <spark.version>${spark2.version}</spark.version>
         <sparkbundle.version>2.4</sparkbundle.version>
-        <scala.version>${scala11.version}</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
         <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
