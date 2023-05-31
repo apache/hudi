@@ -40,7 +40,7 @@ import java.util.List;
  * Example configuration: "query1#expectedResult1;query2#expectedResult2;"
  */
 public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryInequalityPreCommitValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQuerySingleResultPreCommitValidator.class);
 
   public SqlQuerySingleResultPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -68,9 +68,9 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     }
     Object result = newRows.get(0).apply(0);
     if (result == null || !expectedResult.equals(result.toString())) {
-      LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + "Query: " + query);
+      LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
       throw new HoodieValidationException("Query validation failed for '" + query
-          + "'. Expected " + expectedResult + " rows, Found " + result);
+          + "'. Expected " + expectedResult + " row, Found " + result);
     } else {
       LOG.info("Query validation successful. Expected: " + expectedResult + " got " + result);
     }
