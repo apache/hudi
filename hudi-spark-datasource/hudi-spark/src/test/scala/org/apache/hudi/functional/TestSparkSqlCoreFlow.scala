@@ -259,7 +259,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
   def createTable(tableName: String, keyGenClass: String, writeOptions: String, tableBasePath: String): Unit = {
     //If you have partitioned by (partition_path) with nonpartitioned keygen, the partition_path will be empty in the table
-    val partitionedBy = if (!classOf[NonpartitionedKeyGenerator].getName.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+    val partitionedBy = if (!keyGenClass.equals(classOf[NonpartitionedKeyGenerator].getName)) {
       "partitioned by (partition_path)"
     } else {
       ""
