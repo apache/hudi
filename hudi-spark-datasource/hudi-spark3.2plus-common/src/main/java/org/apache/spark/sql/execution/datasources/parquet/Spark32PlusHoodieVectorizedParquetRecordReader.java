@@ -17,28 +17,37 @@
 
 package org.apache.spark.sql.execution.datasources.parquet;
 
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.Types.Field;
+
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.spark.memory.MemoryMode;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.vectorized.OffHeapColumnVector;
 import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.IntStream;
 
 public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
 
   // save the col type change info.
-  private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
+  private final Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
 
   private ColumnarBatch columnarBatch;
 
@@ -47,7 +56,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   private WritableColumnVector[] columnVectors;
 
   // The capacity of vectorized batch.
-  private int capacity;
+  private final int capacity;
 
   // If true, this class returns batches instead of rows.
   private boolean returnColumnarBatch;
@@ -62,6 +71,11 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   private int batchIdx = 0;
   private int numBatched = 0;
 
+  // The schema of vectorized batch.
+  private final InternalSchema schema;
+
+  private final Map<Integer, String> missingColumns = new HashMap<>();
+
   public Spark32PlusHoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
@@ -70,11 +84,13 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
       String int96RebaseTz,
       boolean useOffHeap,
       int capacity,
-      Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
+      Map<Integer, Pair<DataType, DataType>> typeChangeInfos,
+      InternalSchema schema) {
     super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;
+    this.schema = schema;
   }
 
   @Override
@@ -85,29 +101,31 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
     }
     if (idToColumnVectors == null) {
       idToColumnVectors = new HashMap<>();
-      typeChangeInfos.entrySet()
-          .stream()
-          .forEach(f -> {
-            WritableColumnVector vector =
-                memoryMode == MemoryMode.OFF_HEAP ? new OffHeapColumnVector(capacity, f.getValue().getLeft()) : new OnHeapColumnVector(capacity, f.getValue().getLeft());
-            idToColumnVectors.put(f.getKey(), vector);
-          });
+      typeChangeInfos.forEach((key, value) -> {
+        WritableColumnVector vector =
+            memoryMode == MemoryMode.OFF_HEAP ? new OffHeapColumnVector(capacity, value.getLeft()) : new OnHeapColumnVector(capacity, value.getLeft());
+        idToColumnVectors.put(key, vector);
+      });
     }
   }
 
   @Override
   public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException, UnsupportedOperationException {
     super.initialize(inputSplit, taskAttemptContext);
+    initializeInternal();
   }
 
   @Override
   public void close() throws IOException {
     super.close();
-    for (Map.Entry<Integer, WritableColumnVector> e : idToColumnVectors.entrySet()) {
-      e.getValue().close();
+    if (columnarBatch != null) {
+      columnarBatch.close();
+      columnarBatch = null;
     }
-    idToColumnVectors = null;
-    columnarBatch = null;
+    if (idToColumnVectors != null) {
+      idToColumnVectors.forEach((key, value) -> value.close());
+      idToColumnVectors = null;
+    }
     columnVectors = null;
   }
 
@@ -124,7 +142,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
         columnVectors[entry.getKey()] = idToColumnVectors.get(entry.getKey());
       }
     }
-    if (changed) {
+    if (changed || !missingColumns.isEmpty()) {
       if (columnarBatch == null) {
         // fill other vector
         for (int i = 0; i < columnVectors.length; i++) {
@@ -134,6 +152,8 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
         }
         columnarBatch = new ColumnarBatch(columnVectors);
       }
+      // Set missing column with default value.
+      missingColumns.keySet().forEach(this::setColumnDefaultValue);
       columnarBatch.setNumRows(currentColumnBatch.numRows());
       return columnarBatch;
     } else {
@@ -145,7 +165,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   public boolean nextBatch() throws IOException {
     boolean result = super.nextBatch();
     if (idToColumnVectors != null) {
-      idToColumnVectors.entrySet().stream().forEach(e -> e.getValue().reset());
+      idToColumnVectors.forEach((key, value) -> value.reset());
     }
     numBatched = resultBatch().numRows();
     batchIdx = 0;
@@ -175,7 +195,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   public boolean nextKeyValue() throws IOException {
     resultBatch();
 
-    if (returnColumnarBatch)  {
+    if (returnColumnarBatch) {
       return nextBatch();
     }
 
@@ -187,5 +207,58 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
     ++batchIdx;
     return true;
   }
-}
 
+  private void initializeInternal() {
+    if (schema != null) {
+      List<String[]> columnPaths = requestedSchema.getPaths();
+      for (int i = 0; i < requestedSchema.getFieldCount(); i++) {
+        String[] columnPath = columnPaths.get(i);
+        if (!fileSchema.containsPath(columnPath)) {
+          String fieldName = requestedSchema.getFields().get(i).getName();
+          Field field = schema.findField(fieldName);
+          if (Objects.nonNull(field) && Objects.nonNull(field.getDefaultValue())) {
+            missingColumns.put(i, fieldName);
+          }
+        }
+      }
+    }
+  }
+
+  private void setColumnDefaultValue(int columnIndex) {
+    WritableColumnVector columnVector = (WritableColumnVector) columnarBatch.column(columnIndex);
+    Field field = schema.findField(missingColumns.get(columnIndex));
+    Object defaultValue = field.getDefaultValue();
+    switch (field.type().typeId()) {
+      case BOOLEAN:
+        columnVector.putBooleans(0, capacity, (Boolean) defaultValue);
+        break;
+      case INT:
+        columnVector.putInts(0, capacity, (Integer) defaultValue);
+        break;
+      case LONG:
+        columnVector.putLongs(0, capacity, (Long) defaultValue);
+        break;
+      case FLOAT:
+        columnVector.putFloats(0, capacity, (Float) defaultValue);
+        break;
+      case DOUBLE:
+        columnVector.putDoubles(0, capacity, (Double) defaultValue);
+        break;
+      case STRING:
+        IntStream.range(0, capacity).forEach(i ->
+            columnVector.putByteArray(i, defaultValue.toString().getBytes(StandardCharsets.UTF_8)));
+        break;
+      case BINARY:
+        IntStream.range(0, capacity).forEach(i -> columnVector.putByteArray(i, (byte[]) defaultValue));
+        break;
+      case DECIMAL:
+        IntStream.range(0, capacity).forEach(i ->
+            columnVector.putDecimal(i, Decimal.fromDecimal(defaultValue), ((Types.DecimalType) field.type()).precision()));
+        break;
+      default:
+        return;
+    }
+    columnVector.putNotNulls(0, capacity);
+    columnVector.setIsConstant();
+  }
+}

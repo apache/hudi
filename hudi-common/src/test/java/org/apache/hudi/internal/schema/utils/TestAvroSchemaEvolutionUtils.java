@@ -63,7 +63,7 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testPrimitiveTypes() {
-    Schema[] avroPrimitives = new Schema[] {
+    Schema[] avroPrimitives = new Schema[]{
         Schema.create(Schema.Type.BOOLEAN),
         Schema.create(Schema.Type.INT),
         Schema.create(Schema.Type.LONG),
@@ -78,7 +78,7 @@ public class TestAvroSchemaEvolutionUtils {
         Schema.create(Schema.Type.BYTES),
         LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4))};
 
-    Type[] primitiveTypes = new Type[] {
+    Type[] primitiveTypes = new Type[]{
         Types.BooleanType.get(),
         Types.IntType.get(),
         Types.LongType.get(),
@@ -104,21 +104,20 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testRecordAndPrimitiveTypes() {
-    Types.RecordType record = Types.RecordType.get(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "bool", Types.BooleanType.get()),
-        Types.Field.get(1, "int", Types.IntType.get()),
-        Types.Field.get(2, "long", Types.LongType.get()),
-        Types.Field.get(3, "float", Types.FloatType.get()),
-        Types.Field.get(4, "double", Types.DoubleType.get()),
-        Types.Field.get(5, "date", Types.DateType.get()),
-        Types.Field.get(6, "time", Types.TimeType.get()),
-        Types.Field.get(7, "timestamp", Types.TimestampType.get()),
-        Types.Field.get(8, "string", Types.StringType.get()),
-        Types.Field.get(9, "uuid", Types.UUIDType.get()),
-        Types.Field.get(10, "fixed", Types.FixedType.getFixed(10)),
-        Types.Field.get(11, "binary", Types.BinaryType.get()),
-        Types.Field.get(12, "decimal", Types.DecimalType.get(10, 2))
-    }));
+    Types.RecordType record = Types.RecordType.get(Arrays.asList(
+        Types.Field.get(0, "bool", Types.BooleanType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(1, "int", Types.IntType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(2, "long", Types.LongType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(3, "float", Types.FloatType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(4, "double", Types.DoubleType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(5, "date", Types.DateType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(6, "time", Types.TimeType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(7, "timestamp", Types.TimestampType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(8, "string", Types.StringType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(9, "uuid", Types.UUIDType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(10, "fixed", Types.FixedType.getFixed(10), JsonProperties.NULL_VALUE),
+        Types.Field.get(11, "binary", Types.BinaryType.get(), JsonProperties.NULL_VALUE),
+        Types.Field.get(12, "decimal", Types.DecimalType.get(10, 2), JsonProperties.NULL_VALUE)));
 
     Schema schema = create("t1",
         new Schema.Field("bool", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
@@ -165,16 +164,16 @@ public class TestAvroSchemaEvolutionUtils {
     Schema schema = new Schema.Parser().parse(schemaStr);
 
     Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
-        Types.Field.get(1, true, "data", Types.StringType.get()),
+        Types.Field.get(1, true, "data", Types.StringType.get(), null, JsonProperties.NULL_VALUE),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(7, false, "feature1",
-                Types.BooleanType.get()), Types.Field.get(8, true, "feature2", Types.BooleanType.get()))),
+                Types.BooleanType.get()), Types.Field.get(8, true, "feature2", Types.BooleanType.get(), null, JsonProperties.NULL_VALUE)), null, JsonProperties.NULL_VALUE),
         Types.Field.get(3, false, "locations", Types.MapType.get(9, 10, Types.StringType.get(),
             Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
         Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
-            Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
+            Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get()))), null, JsonProperties.NULL_VALUE),
         Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
-        Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
+        Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()), null, JsonProperties.NULL_VALUE)
     );
     InternalSchema internalSchema = new InternalSchema(recordType);
 
@@ -274,7 +273,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("col6", 18987);
     avroRecord.put("col7", 1640491505000000L);
     avroRecord.put("col8", false);
-    ByteBuffer bb = ByteBuffer.wrap(new byte[] {97, 48, 53});
+    ByteBuffer bb = ByteBuffer.wrap(new byte[]{97, 48, 53});
     avroRecord.put("col9", bb);
     avroRecord.put("enum", new GenericData.EnumSymbol(new Schema.Parser().parse(enumSchema), Enum.ENUM1));
     Assertions.assertEquals(GenericData.get().validate(avroSchema, avroRecord), true);
@@ -314,7 +313,7 @@ public class TestAvroSchemaEvolutionUtils {
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(5, false, "feature1",
                 Types.BooleanType.get()), Types.Field.get(6, true, "feature2", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
+        Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
             Types.RecordType.get(Types.Field.get(10, false, "lat", Types.FloatType.get()), Types.Field.get(11, false, "long", Types.FloatType.get())), false))
     );
@@ -331,7 +330,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1.locations");
+    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType) record.field("locations").type()).valueType(), "test1.locations");
     GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);
@@ -358,7 +357,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
                 Types.Field.get(5, true, "featurex", Types.BooleanType.get()),
                 Types.Field.get(6, true, "feature2", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
+        Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
             Types.RecordType.get(
                 Types.Field.get(10, true, "laty", Types.FloatType.get()),
@@ -399,7 +398,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
                 Types.Field.get(6, true, "featurex", Types.BooleanType.get()),
                 Types.Field.get(7, true, "feature2", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
+        Types.Field.get(3, false, "doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(9, 10, Types.StringType.get(),
             Types.RecordType.get(
                 Types.Field.get(11, false, "laty", Types.FloatType.get()),
@@ -416,7 +415,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, true, "featurex", Types.BooleanType.get()),
                 Types.Field.get(6, true, "feature2", Types.BooleanType.get()),
                 Types.Field.get(5, true, "feature3", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
+        Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
             Types.RecordType.get(
                 Types.Field.get(10, false, "laty", Types.FloatType.get()),
@@ -428,7 +427,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, false, "nest1", Types.BooleanType.get()),
                 Types.Field.get(5, true, "nest2", Types.BooleanType.get())))
     );
-    evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
+    evolvedRecord = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
     InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema);
     Types.RecordType checkedRecord = Types.RecordType.get(
@@ -439,8 +438,8 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
                 Types.Field.get(6, true, "featurex", Types.BooleanType.get()),
                 Types.Field.get(7, true, "feature2", Types.BooleanType.get()),
-                Types.Field.get(17, true, "feature3", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
+                Types.Field.get(17, true, "feature3", Types.BooleanType.get(), null, JsonProperties.NULL_VALUE))),
+        Types.Field.get(3, false, "doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(9, 10, Types.StringType.get(),
             Types.RecordType.get(
                 Types.Field.get(11, false, "laty", Types.FloatType.get()),
@@ -450,7 +449,7 @@ public class TestAvroSchemaEvolutionUtils {
         Types.Field.get(14, true, "addStruct",
             Types.RecordType.get(
                 Types.Field.get(15, false, "nest1", Types.BooleanType.get()),
-                Types.Field.get(16, true, "nest2", Types.BooleanType.get())))
+                Types.Field.get(16, true, "nest2", Types.BooleanType.get(), null, JsonProperties.NULL_VALUE)), null, JsonProperties.NULL_VALUE)
     );
     Assertions.assertEquals(result.getRecord(), checkedRecord);
   }

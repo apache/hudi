@@ -67,6 +67,18 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
     assertEquals(Types.LongType.get(), getFieldByName("number").type());
   }
 
+  @Test
+  public void testUpdateColumnComment() {
+    writeClient.updateColumnComment("number", "number comment");
+    assertEquals("number comment", getFieldByName("number").doc());
+  }
+
+  @Test
+  public void testUpdateColumnDefaultValue() {
+    writeClient.updateColumnDefaultValue("number", 1);
+    assertEquals(1, getFieldByName("number").getDefaultValue());
+  }
+
   private HoodieJavaWriteClient<RawTripTestPayload> getWriteClient() {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)

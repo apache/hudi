@@ -134,7 +134,7 @@ public class SchemaChangeUtils {
             newFields.add(oldfield);
           } else {
             hasChanged = true;
-            newFields.add(Types.Field.get(oldfield.fieldId(), oldfield.isOptional(), oldfield.name(), newType, oldfield.doc()));
+            newFields.add(Types.Field.get(oldfield.fieldId(), oldfield.isOptional(), oldfield.name(), newType, oldfield.doc(), oldfield.getDefaultValue()));
           }
         }
         return hasChanged ? Types.RecordType.get(newFields, record.name()) : record;
@@ -197,7 +197,7 @@ public class SchemaChangeUtils {
           // apply delete
           newType = deletes.applyDelete(f.fieldId(), newType);
           if (newType != null) {
-            fields.add(Types.Field.get(f.fieldId(), f.isOptional(), f.name(), newType, f.doc()));
+            fields.add(Types.Field.get(f.fieldId(), f.isOptional(), f.name(), newType, f.doc(), f.getDefaultValue()));
           }
         }
         if (fields.isEmpty()) {
@@ -267,9 +267,9 @@ public class SchemaChangeUtils {
           Types.Field oldField = record.fields().get(i);
           Types.Field updateField = updates.getUpdates().get(oldField.fieldId());
           if (updateField != null) {
-            newFields.add(Types.Field.get(oldField.fieldId(), updateField.isOptional(), updateField.name(), newType, updateField.doc()));
+            newFields.add(Types.Field.get(oldField.fieldId(), updateField.isOptional(), updateField.name(), newType, updateField.doc(), updateField.getDefaultValue()));
           } else if (!oldField.type().equals(newType)) {
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
+            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc(), oldField.getDefaultValue()));
           } else {
             newFields.add(oldField);
           }

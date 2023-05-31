@@ -259,7 +259,8 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
               int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity,
-              typeChangeInfos)
+              typeChangeInfos,
+              querySchemaOption.orElse(null))
           } else {
             new VectorizedParquetRecordReader(
               convertTz.orNull,

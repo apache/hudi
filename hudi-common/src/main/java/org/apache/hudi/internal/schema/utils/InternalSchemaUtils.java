@@ -126,7 +126,7 @@ public class InternalSchemaUtils {
             newFields.add(oldField);
           } else if (newType != null) {
             changed = true;
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
+            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc(), oldField.getDefaultValue()));
           }
         }
         if (newFields.isEmpty()) {

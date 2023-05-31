@@ -167,7 +167,7 @@ public class AvroInternalSchemaConverter {
         for (int i  = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           Type fieldType = fieldTypes.get(i);
-          internalFields.add(Types.Field.get(nextAssignId, AvroInternalSchemaConverter.isOptional(field.schema()), field.name(), fieldType, field.doc()));
+          internalFields.add(Types.Field.get(nextAssignId, AvroInternalSchemaConverter.isOptional(field.schema()), field.name(), fieldType, field.doc(), field.defaultVal()));
           nextAssignId += 1;
         }
         // NOTE: We're keeping a tab of full-name here to make sure we stay

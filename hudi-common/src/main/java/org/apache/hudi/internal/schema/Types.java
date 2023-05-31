@@ -407,7 +407,6 @@ public class Types {
 
   /** A field within a record. */
   public static class Field implements Serializable {
-    // Experimental method to support defaultValue
     public static Field get(int id, boolean isOptional, String name, Type type, String doc, Object defaultValue) {
       return new Field(isOptional, id, name, type, doc, defaultValue);
     }
@@ -420,6 +419,10 @@ public class Types {
       return new Field(isOptional, id, name, type, null, null);
     }
 
+    public static Field get(int id, String name, Type type, Object defaultValue) {
+      return new Field(true, id, name, type, null, defaultValue);
+    }
+
     public static Field get(int id, String name, Type type) {
       return new Field(true, id, name, type, null, null);
     }
@@ -429,7 +432,6 @@ public class Types {
     private final String name;
     private final Type type;
     private final String doc;
-    // Experimental properties
     private final Object defaultValue;
 
     private Field(boolean isOptional, int id, String name, Type type, String doc, Object defaultValue) {
@@ -467,8 +469,8 @@ public class Types {
 
     @Override
     public String toString() {
-      return String.format("%d: %s: %s %s",
-          id, name, isOptional ? "optional" : "required", type) + (doc != null ? " (" + doc + ")" : "");
+      return String.format("%d: %s: %s %s %s",
+          id, name, isOptional ? "optional" : "required", type, defaultValue) + (doc != null ? " (" + doc + ")" : "");
     }
 
     @Override
@@ -487,6 +489,8 @@ public class Types {
       } else if (!name.equals(that.name)) {
         return false;
       } else if (!Objects.equals(doc, that.doc)) {
+        return false;
+      } else if (!Objects.equals(defaultValue, that.defaultValue)) {
         return false;
       }
       return type.equals(that.type);

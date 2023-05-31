@@ -34,18 +34,17 @@ public class TestMergeSchema {
 
   @Test
   public void testPrimitiveMerge() {
-    Types.RecordType record = Types.RecordType.get(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "col1", Types.BooleanType.get()),
+    Types.RecordType record = Types.RecordType.get(Arrays.asList(Types.Field.get(0, "col1", Types.BooleanType.get()),
         Types.Field.get(1, "col2", Types.IntType.get()),
         Types.Field.get(2, "col3", Types.LongType.get()),
-        Types.Field.get(3, "col4", Types.FloatType.get())}));
+        Types.Field.get(3, "col4", Types.FloatType.get())));
 
     InternalSchema oldSchema = new InternalSchema(record);
     // add c1 after 'col1', and c2 before 'col3'
     TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldSchema);
-    addChange.addColumns("c1", Types.BooleanType.get(), "add c1 after col1");
+    addChange.addColumns("c1", Types.BooleanType.get(), "add c1 after col1", true);
     addChange.addPositionChange("c1", "col1", "after");
-    addChange.addColumns("c2", Types.IntType.get(), "add c2 before col3");
+    addChange.addColumns("c2", Types.IntType.get(), "add c2 before col3", 1);
     addChange.addPositionChange("c2", "col3", "before");
     InternalSchema newAddSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange);
     TableChanges.ColumnDeleteChange deleteChange = TableChanges.ColumnDeleteChange.get(newAddSchema);
@@ -56,36 +55,32 @@ public class TestMergeSchema {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(newDeleteSchema);
     updateChange.updateColumnType("col2", Types.LongType.get())
         .updateColumnComment("col2", "alter col2 comments")
+        .updateColumnDefaultValue("col2", 2L)
         .renameColumn("col2", "colx").addPositionChange("col2",
             "col4", "after");
     InternalSchema updateSchema = SchemaChangeUtils.applyTableChanges2Schema(newDeleteSchema, updateChange);
 
     // add col1 again
     TableChanges.ColumnAddChange addChange1 = TableChanges.ColumnAddChange.get(updateSchema);
-    addChange1.addColumns("col1", Types.BooleanType.get(), "add new col1");
+    addChange1.addColumns("col1", Types.BooleanType.get(), "add new col1", null);
     InternalSchema finalSchema = SchemaChangeUtils.applyTableChanges2Schema(updateSchema, addChange1);
     // merge schema by using columnType from query schema
     InternalSchema mergeSchema = new InternalSchemaMerger(oldSchema, finalSchema, true, false).mergeSchema();
 
-    InternalSchema checkedSchema = new InternalSchema(Types.RecordType.get(Arrays.asList(new Types.Field[] {
-            Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
-            Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
-            Types.Field.get(3, true, "col4", Types.FloatType.get()),
-            Types.Field.get(1, true, "col2", Types.LongType.get(), "alter col2 comments"),
-            Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1")
-        })));
+    InternalSchema checkedSchema = new InternalSchema(Types.RecordType.get(Arrays.asList(Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1", true),
+        Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3", 1),
+        Types.Field.get(3, true, "col4", Types.FloatType.get()),
+        Types.Field.get(1, true, "col2", Types.LongType.get(), "alter col2 comments", 2L),
+        Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1"))));
     Assertions.assertEquals(mergeSchema, checkedSchema);
 
     // merge schema by using columnType from file schema
     InternalSchema mergeSchema1 = new InternalSchemaMerger(oldSchema, finalSchema, true, true).mergeSchema();
-    InternalSchema checkedSchema1 = new InternalSchema(Types.RecordType.get(Arrays.asList(new Types.Field[] {
-            Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
-            Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
-            Types.Field.get(3, true, "col4", Types.FloatType.get()),
-            Types.Field.get(1, true, "col2", Types.IntType.get(), "alter col2 comments"),
-            Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1")
-        })));
+    InternalSchema checkedSchema1 = new InternalSchema(Types.RecordType.get(Arrays.asList(Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1", true),
+        Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3", 1),
+        Types.Field.get(3, true, "col4", Types.FloatType.get()),
+        Types.Field.get(1, true, "col2", Types.IntType.get(), "alter col2 comments", 2L),
+        Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1"))));
     Assertions.assertEquals(mergeSchema1, checkedSchema1);
   }
 }
-

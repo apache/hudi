@@ -247,7 +247,7 @@ public class InternalSchemaBuilder implements Serializable {
         for (int i = 0; i < oldFields.size(); i++) {
           Types.Field oldField = oldFields.get(i);
           Type fieldType = refreshNewId(oldField.type(), nextId);
-          internalFields.add(Types.Field.get(currentId++, oldField.isOptional(), oldField.name(), fieldType, oldField.doc()));
+          internalFields.add(Types.Field.get(currentId++, oldField.isOptional(), oldField.name(), fieldType, oldField.doc(), oldField.getDefaultValue()));
         }
         return Types.RecordType.get(internalFields);
       case ARRAY:
