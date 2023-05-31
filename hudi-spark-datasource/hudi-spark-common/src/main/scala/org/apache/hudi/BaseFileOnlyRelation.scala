@@ -179,7 +179,6 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
         Seq.empty
       }
 
-      sparkSession.sqlContext.setConf("spark.sql.parquet.enableVectorizedReader", "false")
       DataSource.apply(
         sparkSession = sparkSession,
         paths = extraReadPaths,

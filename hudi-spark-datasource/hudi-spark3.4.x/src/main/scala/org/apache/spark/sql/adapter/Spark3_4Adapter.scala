@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat, Spark34HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.HoodieSpark3_4ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -59,11 +59,7 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   }
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      Some(new Spark34HoodieParquetFileFormat(appendPartitionValues))
-    } else {
-      Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
-    }
+    Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
