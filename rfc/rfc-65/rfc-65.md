@@ -128,10 +128,12 @@ service, SparkSQL Call Command, cli, JAVA code etc.
 We will provide an Async Table Service as the default interface to the users that want to do partition TTL management
 and we can add more interfaces in the future.
 
-User will config the async ttl management service as follows:
+User will config the async ttl management service as follows. TTL management will be trigger N commits after last
+TTL replace commit.
 
 ```properties
 hoodie.partition.ttl.management.async=true
+hoodie.partition.ttl.management.min.commits=10
 ```
 
 The process of manage partition TTL is as follows:
