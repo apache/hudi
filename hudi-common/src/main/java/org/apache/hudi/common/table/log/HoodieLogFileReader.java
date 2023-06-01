@@ -243,12 +243,16 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         default:
           throw new HoodieNotSupportedException("Unsupported Block " + blockType);
       }
-    } catch (IOException | CorruptedLogFileException | IllegalArgumentException e) {
+    } catch (IOException e) {
       // check for corrupt block
       inputStream.seek(blockStartPos);
       if (isBlockCorrupted(blockSize)) {
         return createCorruptBlock(blockStartPos);
       }
+      throw new HoodieIOException("Reading block failed with " + e);
+    } catch (CorruptedLogFileException e) {
+      return createCorruptBlock(blockStartPos);
+    } catch (IllegalArgumentException e) {
       throw new HoodieIOException("Reading block failed with " + e);
     }
   }
