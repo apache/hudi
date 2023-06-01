@@ -173,6 +173,10 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("The spark version used when syncing with a metastore.");
+  public static final ConfigProperty<String> META_SYNC_SNAPSHOT_WITH_TABLE_NAME = ConfigProperty
+          .key("hoodie.meta.sync.sync_snapshot_with_table_name")
+          .defaultValue("false")
+          .withDocumentation("sync meta info to origin table if enable");
 
   private Configuration hadoopConf;
 
