@@ -41,7 +41,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
@@ -199,7 +198,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter initMetadataWriter() {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
+        this.hadoopConf, this.config, new HoodieFlinkEngineContext(this.hadoopConf));
   }
 
   public void initMetadataTable() {

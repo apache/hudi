@@ -63,6 +63,7 @@ public class HadoopConfigurations {
     if (explicitDir != null) {
       hadoopConf.addResource(new Path(explicitDir, "hive-site.xml"));
     }
+    conf.toMap().forEach(hadoopConf::set);
     return hadoopConf;
   }
 }

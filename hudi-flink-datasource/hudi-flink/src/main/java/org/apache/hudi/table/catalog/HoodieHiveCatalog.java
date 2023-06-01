@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
@@ -75,6 +76,7 @@ import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -150,6 +152,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
               + HiveConf.ConfVars.METASTOREURIS);
     }
     LOG.info("Created Hoodie Catalog '{}' in hms mode", catalogName);
+  }
+
+  @Override
+  public java.util.Optional<Factory> getFactory() {
+    return java.util.Optional.of(new HoodieTableFactory(this));
   }
 
   @Override

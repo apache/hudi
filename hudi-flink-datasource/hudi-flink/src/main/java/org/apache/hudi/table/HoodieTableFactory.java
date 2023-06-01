@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -31,6 +32,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -56,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -79,11 +82,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   public static final String FACTORY_ID = "hudi";
 
+  private final HoodieHiveCatalog catalog;
+
+  public HoodieTableFactory() {
+    this(null);
+  }
+
+  public HoodieTableFactory(HoodieHiveCatalog catalog) {
+    this.catalog = catalog;
+  }
+
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
+    HiveConf hiveConf = new HiveConf();
+    if (null != catalog) {
+      hiveConf = catalog.getHiveConf();
+    }
+    hiveConf.iterator().forEachRemaining((Map.Entry<String, String> entry) -> conf.setString(entry.getKey(), entry.getValue()));
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
@@ -100,6 +118,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
+    HiveConf hiveConf = new HiveConf();
+    if (null != catalog) {
+      hiveConf = catalog.getHiveConf();
+    }
+    hiveConf.iterator().forEachRemaining((Map.Entry<String, String> entry) -> conf.setString(entry.getKey(), entry.getValue()));
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);

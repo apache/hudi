@@ -22,6 +22,7 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -71,6 +72,6 @@ public class FlinkTables {
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
-    return HoodieFlinkTable.create(writeConfig, HoodieFlinkEngineContext.DEFAULT);
+    return HoodieFlinkTable.create(writeConfig, new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)));
   }
 }
