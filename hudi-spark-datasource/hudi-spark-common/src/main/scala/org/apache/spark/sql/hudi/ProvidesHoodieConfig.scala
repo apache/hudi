@@ -110,15 +110,14 @@ trait ProvidesHoodieConfig extends Logging {
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
-    val defaultOps: Map[String, String] = if (!hoodieCatalogTable.metaClient.reloadActiveTimeline().lastInstant().isPresent) {
-      //table is new so we should force bulk_insert
-      Map(DataSourceWriteOptions.OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL)
-    } else {
-      Map.empty
-    }
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
-      defaultOpts = defaultOps, overridingOpts = extraOptions)
+    var combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = extraOptions)
+    if (!combinedOpts.getOrElse(INSERT_DROP_DUPS.key(),INSERT_DROP_DUPS.defaultValue()).toBoolean &&
+      (!hoodieCatalogTable.metaClient.reloadActiveTimeline().lastInstant().isPresent || isOverwriteTable) && !isOverwritePartition) {
+      //new table so bulk insert should be enabled
+      combinedOpts =  combinedOpts ++ Map(DataSourceWriteOptions.OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL)
+    }
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
     val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")

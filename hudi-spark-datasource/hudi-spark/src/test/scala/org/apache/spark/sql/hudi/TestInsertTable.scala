@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
@@ -33,6 +34,48 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import java.io.File
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
+
+  def assertBulkInsertFirstCommit(basePath: String): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val timeline =  metaClient.getActiveTimeline.getAllCommitsTimeline
+    assert(timeline.countInstants() == 1)
+    val firstCommit = timeline.firstInstant()
+    assert(firstCommit.isPresent)
+    assert(firstCommit.get().isCompleted)
+    val metadata = TimelineUtils.getCommitMetadata(firstCommit.get(), timeline)
+    assert(metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
+  }
+
+  def assertBulkInsertLastCommit(basePath: String, count: Int): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
+    assert(timeline.countInstants() == count)
+    val latestCommit = timeline.lastInstant()
+    assert(latestCommit.isPresent)
+    assert(latestCommit.get().isCompleted)
+    val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
+    assert(metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
+  }
+
+  def assertLatestCommitNotBulkInsert(basePath: String, count: Int): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val timeline =  metaClient.getActiveTimeline.getAllCommitsTimeline
+    assert(timeline.countInstants() == count)
+    val latestCommit = timeline.lastInstant()
+    assert(latestCommit.isPresent)
+    assert(latestCommit.get().isCompleted)
+    val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
+    assert(!metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
+  }
 
   test("Test Insert Into with values") {
     withRecordType()(withTempDir { tmp =>
@@ -66,6 +109,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
         Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
     })
   }
 
@@ -92,12 +136,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt = '2021-01-05')
            | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
               """.stripMargin)
-
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
       spark.sql(
         s"""
            | insert into $tableName partition(dt = '2021-01-06')
            | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
               """.stripMargin)
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath,2)
       // should not mess with the original order after write the out-of-order data.
       val metaClient = HoodieTableMetaClient.builder()
         .setBasePath(tmp.getCanonicalPath)
@@ -113,7 +158,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName
            | select 3, 'a3', 30, 3000, '2021-01-07'
         """.stripMargin)
-
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath,3)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05"),
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
@@ -146,6 +191,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt)
            | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
       // should not mess with the original order after write the out-of-order data.
       val metaClient = HoodieTableMetaClient.builder()
         .setBasePath(tmp.getCanonicalPath)
@@ -160,6 +206,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName
            | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '2021-01-06' as dt
         """.stripMargin)
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 2)
 
       // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
@@ -167,6 +214,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName
            | select 3, 'a3', 30, 3000, '2021-01-07'
         """.stripMargin)
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 3)
 
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05"),
@@ -199,6 +247,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt, ht)
            | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
               """.stripMargin)
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
 
       // Insert into static partition and dynamic partition
       spark.sql(
@@ -206,12 +255,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt = '20210102', ht)
            | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
               """.stripMargin)
-
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 2)
       spark.sql(
         s"""
            | insert into $tableName partition(dt, ht = '03')
            | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
               """.stripMargin)
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 3)
 
       // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
@@ -219,6 +269,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName
            | select 4, 'a4', 40, 4000, '20210104', '04'
         """.stripMargin)
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 4)
 
       checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
         Seq(1, "a1", 10.0, 1000, "20210101", "01"),
@@ -254,10 +305,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+     assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
      checkAnswer(s"select id, name, price, ts from $tableName")(
        Seq(1, "a1", 10.0, 1000)
      )
      spark.sql(s"insert into $tableName select 2, 'a2', 12, 1000")
+     assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
      checkAnswer(s"select id, name, price, ts from $tableName")(
        Seq(1, "a1", 10.0, 1000),
        Seq(2, "a2", 12.0, 1000)
@@ -295,8 +348,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")
+     assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName2", 1)
      // This record will be drop when dropDup is true
      spark.sql(s"insert into $tableName2 select 1, 'a1', 12, 1000")
+     assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName2", 2)
      checkAnswer(s"select id, name, price, ts from $tableName2")(
        Seq(1, "a1", 10.0, 1000)
      )
@@ -325,10 +380,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
       spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
       checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0)
       )
       spark.sql(s"insert into $tableName select 2, 'a2', 12")
+      assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
       checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0),
         Seq(2, "a2", 12.0)
@@ -369,13 +426,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
-
       //  Insert overwrite table
       spark.sql(
         s"""
            | insert overwrite table $tableName
            | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-01-05' as dt
         """.stripMargin)
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05")
       )
@@ -386,6 +443,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert overwrite table $tableName
            | select 2 as id, 'a2' as name, 10 as price, 1000 as ts, '2021-01-06' as dt
         """.stripMargin)
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
       checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
         Seq(2, "a2", 10.0, 1000, "2021-01-06")
       )
@@ -396,6 +454,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert overwrite table $tableName partition(dt = '2021-01-05')
            | select * from (select 2 , 'a2', 12, 1000) limit 10
         """.stripMargin)
+      assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
       checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
         Seq(2, "a2", 12.0, 1000, "2021-01-05"),
         Seq(2, "a2", 10.0, 1000, "2021-01-06")
@@ -415,11 +474,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}/$tblNonPartition'
          """.stripMargin)
       spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10, 1000")
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tblNonPartition")
       spark.sql(
         s"""
            | insert overwrite table $tableName partition(dt ='2021-01-04')
            | select * from $tblNonPartition limit 10
         """.stripMargin)
+      assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 3)
       checkAnswer(s"select id, name, price, ts, dt from $tableName order by id,dt")(
         Seq(1, "a1", 10.0, 1000, "2021-01-04"),
         Seq(2, "a2", 12.0, 1000, "2021-01-05"),
@@ -431,6 +492,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert overwrite table $tableName
            | select id + 2, name, price, ts , '2021-01-04' from $tblNonPartition limit 10
         """.stripMargin)
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
       checkAnswer(s"select id, name, price, ts, dt from $tableName " +
         s"where dt >='2021-01-04' and dt <= '2021-01-06' order by id,dt")(
         Seq(3, "a1", 10.0, 1000, "2021-01-04")
@@ -438,11 +500,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // Test insert overwrite non-partitioned table
       spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10, 1000")
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tblNonPartition")
       checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
         Seq(2, "a2", 10.0, 1000)
       )
 
       spark.sql(s"insert overwrite table $tblNonPartition select 3, 'a3', 10, 1000")
+      assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tblNonPartition")
       checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
         Seq(3, "a3", 10.0, 1000)
       )
@@ -549,6 +613,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |   preCombineField = 'ts'
              | )
           """.stripMargin)
+        //First time is always bulk insert
+        spark.sql(s"insert into $tableName2 values(0, 'a0', 9, 999)")
         checkException(s"insert into $tableName2 values(1, 'a1', 10, 1000)")(
           "Table with primaryKey can not use bulk insert in strict mode."
         )
@@ -566,7 +632,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | tblproperties (primaryKey = 'id')
              | partitioned by (dt)
        """.stripMargin)
-        checkException(s"insert overwrite table $tableName3 partition(dt = '2021-07-18') values(1, 'a1', 10, '2021-07-18')")(
+        checkException(s"insert overwrite table $tableName3 partition(dt = '2021-07-18') values(1, 'a1', 10)")(
           "Insert Overwrite Partition can not use bulk insert."
         )
       }
@@ -958,7 +1024,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          """.stripMargin)
     // NOTE: We have to drop type-literal prefix since Spark doesn't parse type literals appropriately
     spark.sql(s"insert into $tableName partition(dt = ${dropTypeLiteralPrefix(partitionValue)}) select 1, 'a1', 10")
+    assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
     spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
+    assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
     checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
       Seq(1, "a1", 10, extractRawValue(partitionValue).toString),
       Seq(2, "a2", 10, extractRawValue(partitionValue).toString)
@@ -988,16 +1056,19 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | )
         """.stripMargin)
         spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+        assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a1", 10, 1000, "2021-12-25")
         )
         spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
         spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a2', 20, 1001)")
+        assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a2", 20, 1001, "2021-12-25")
         )
         spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
         spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a3', 30, 1002)")
+        assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 3)
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a2", 20, 1001, "2021-12-25"),
           Seq(1, "a3", 30, 1002, "2021-12-25")
@@ -1038,7 +1109,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | (2, 'a2', 20, 2000, "2021-01-06"),
            | (3, 'a3', 30, 3000, "2021-01-07")
               """.stripMargin)
-
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
@@ -1050,7 +1121,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName values
            | (1, 'a1,1', 10, 1000, "2021-01-05")
               """.stripMargin)
-
+      assertLatestCommitNotBulkInsert(tmp.getCanonicalPath, 2)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
@@ -1090,6 +1161,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | (2, 'a2', 20, 2000, "2021-01-06"),
              | (3, 'a3,3', 30, 3000, "2021-01-07")
               """.stripMargin)
+        assertBulkInsertFirstCommit(tmp.getCanonicalPath)
 
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
@@ -1103,6 +1175,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | (1, 'a1', 10, 1000, "2021-01-05"),
              | (3, "a3", 30, 3000, "2021-01-07")
               """.stripMargin)
+        assertBulkInsertLastCommit(tmp.getCanonicalPath, 2)
 
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
@@ -1217,6 +1290,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |(9, 'a', 22, 1000, '2021-01-05'),
                |(7, 'a', 23, 1000, '2021-01-05')
                |""".stripMargin)
+          assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
 
           // Insert overwrite static partition
           spark.sql(
@@ -1224,6 +1298,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                | insert overwrite table $tableName partition(dt = '2021-01-05')
                | select * from (select 13 , 'a2', 12, 1000) limit 10
         """.stripMargin)
+          assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
           checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
             Seq(13, "a2", 12.0, 1000, "2021-01-05")
           )
@@ -1270,6 +1345,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |(9, 'a', 22, 1000, '2021-01-05'),
              |(7, 'a', 23, 1000, '2021-01-05')
              |""".stripMargin)
+        assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
 
         // Insert overwrite static partition
         spark.sql(
@@ -1277,6 +1353,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | insert overwrite table $tableName partition(dt = '2021-01-05')
              | select * from (select 13 , 'a2', 12, 1000) limit 10
         """.stripMargin)
+        assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
+
 
         // Double insert overwrite static partition
         spark.sql(
@@ -1284,6 +1362,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | insert overwrite table $tableName partition(dt = '2021-01-05')
              | select * from (select 13 , 'a3', 12, 1000) limit 10
         """.stripMargin)
+        assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 3)
         checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
           Seq(13, "a3", 12.0, 1000, "2021-01-05")
         )
@@ -1307,6 +1386,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         """.stripMargin)
 
         spark.sql(s"insert into $tableName select 1, 'name1', 11")
+        assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "name1", 11.0)
         )
@@ -1315,12 +1395,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(2, "name2", 12.0)
         )
+        assertBulkInsertFirstCommit(s"${tmp.getCanonicalPath}/$tableName")
 
         spark.sql(s"insert into $tableName select 3, 'name3', 13")
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(2, "name2", 12.0),
           Seq(3, "name3", 13.0)
         )
+        assertLatestCommitNotBulkInsert(s"${tmp.getCanonicalPath}/$tableName", 2)
       })
     }
   }
@@ -1350,6 +1432,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | (2, 'a2', 20, 2000, "2021-01-06"),
            | (3, 'a3', 30, 3000, "2021-01-07")
               """.stripMargin)
+      assertBulkInsertFirstCommit(tmp.getCanonicalPath)
 
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05"),
