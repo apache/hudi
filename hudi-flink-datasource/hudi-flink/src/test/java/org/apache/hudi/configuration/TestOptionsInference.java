@@ -76,6 +76,7 @@ public class TestOptionsInference {
     OptionsInference.setupClientId(conf);
     assertNotNull(conf.getString(FlinkOptions.WRITE_CLIENT_ID), "auto generate client failed!");
   }
+
   private Configuration getConf() {
     Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
