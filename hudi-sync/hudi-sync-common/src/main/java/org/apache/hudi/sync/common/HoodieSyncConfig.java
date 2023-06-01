@@ -176,6 +176,8 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_SNAPSHOT_WITH_TABLE_NAME = ConfigProperty
           .key("hoodie.meta.sync.sync_snapshot_with_table_name")
           .defaultValue("false")
+          .markAdvanced()
+          .sinceVersion("0.14.0")
           .withDocumentation("sync meta info to origin table if enable");
 
   private Configuration hadoopConf;
