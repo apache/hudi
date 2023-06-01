@@ -29,7 +29,6 @@ import java.util.Map;
  * Utilities for fetching hadoop configurations.
  */
 public class HadoopConfigurations {
-  private static final String HADOOP_PREFIX = "hadoop.";
   private static final String PARQUET_PREFIX = "parquet.";
 
   /**
@@ -49,8 +48,7 @@ public class HadoopConfigurations {
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-    Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-    options.forEach(hadoopConf::set);
+    conf.toMap().forEach(hadoopConf::set);
     return hadoopConf;
   }
 
