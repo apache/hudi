@@ -52,7 +52,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class RunCompactionActionExecutor<T> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(LogCompactionExecutionHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RunCompactionActionExecutor.class);
 
   private final HoodieCompactor compactor;
   private final HoodieCompactionHandler compactionHandler;
@@ -78,7 +78,7 @@ public class RunCompactionActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    LOG.info("Compaction requested.");
+    LOG.info("Compaction requested. Instant time: {}.", instantTime);
     metrics.emitCompactionRequested();
 
     HoodieTimeline pendingMajorOrMinorCompactionTimeline = WriteOperationType.COMPACT.equals(operationType)
@@ -128,7 +128,7 @@ public class RunCompactionActionExecutor<T> extends
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
-    LOG.info("Compaction completed.");
+    LOG.info("Compaction completed. Instant time: {}.", instantTime);
     metrics.emitCompactionCompleted();
     return compactionMetadata;
   }
