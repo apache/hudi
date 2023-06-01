@@ -55,8 +55,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
-
 /**
  * A DynamoDB based lock. This {@link LockProvider} implementation allows to lock table operations
  * using DynamoDB. Users need to have access to AWS DynamoDB to be able to use this lock.
@@ -71,7 +69,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   private final AmazonDynamoDBLockClient client;
   private final String tableName;
   private final String dynamoDBPartitionKey;
-  protected LockConfiguration lockConfiguration;
+  protected DynamoDbBasedLockConfig dynamoDBLockConfiguration;
   private volatile LockItem lock;
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
@@ -79,11 +77,11 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, AmazonDynamoDB dynamoDB) {
-    checkRequiredProps(lockConfiguration);
-    this.lockConfiguration = lockConfiguration;
-    this.tableName = lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key());
-    this.dynamoDBPartitionKey = lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key());
-    long leaseDuration = Long.parseLong(lockConfiguration.getConfig().getString(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY));
+    this.dynamoDBLockConfiguration = DynamoDbBasedLockConfig.newBuilder().fromProperties(lockConfiguration.getConfig());
+    checkRequiredProps(this.dynamoDBLockConfiguration);
+    this.tableName = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
+    this.dynamoDBPartitionKey = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY);
+    long leaseDuration = dynamoDBLockConfiguration.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
     if (dynamoDB == null) {
       dynamoDB = getDynamoDBClient();
     }
@@ -156,20 +154,20 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   private AmazonDynamoDB getDynamoDBClient() {
-    String region = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key());
-    String endpointURL = this.lockConfiguration.getConfig().containsKey(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
-                          ? this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
+    String region = this.dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION);
+    String endpointURL = this.dynamoDBLockConfiguration.contains(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
+                          ? this.dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL)
                           : RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX);
     AwsClientBuilder.EndpointConfiguration dynamodbEndpoint =
             new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
     return AmazonDynamoDBClientBuilder.standard()
             .withEndpointConfiguration(dynamodbEndpoint)
-            .withCredentials(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(lockConfiguration.getConfig()))
+            .withCredentials(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(dynamoDBLockConfiguration.getProps()))
             .build();
   }
 
   private void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName) {
-    String billingMode = lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key());
+    String billingMode = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE);
     KeySchemaElement partitionKeyElement = new KeySchemaElement();
     partitionKeyElement.setAttributeName(DYNAMODB_ATTRIBUTE_NAME);
     partitionKeyElement.setKeyType(KeyType.HASH);
@@ -185,14 +183,14 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     createTableRequest.setBillingMode(billingMode);
     if (billingMode.equals(BillingMode.PROVISIONED.name())) {
       createTableRequest.setProvisionedThroughput(new ProvisionedThroughput()
-              .withReadCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key())))
-              .withWriteCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key()))));
+              .withReadCapacityUnits(Long.parseLong(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY)))
+              .withWriteCapacityUnits(Long.parseLong(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY))));
     }
     dynamoDB.createTable(createTableRequest);
 
     LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
     try {
-      TableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT.key())), 20 * 1000);
+      TableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT)), 20 * 1000);
     } catch (TableUtils.TableNeverTransitionedToStateException e) {
       throw new HoodieLockException("Created dynamoDB table never transits to active", e);
     } catch (InterruptedException e) {
@@ -201,14 +199,10 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     LOG.info("Created dynamoDB table " + tableName);
   }
 
-  private void checkRequiredProps(final LockConfiguration config) {
-    ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()) != null);
-    config.getConfig().putIfAbsent(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key(), BillingMode.PAY_PER_REQUEST.name());
-    config.getConfig().putIfAbsent(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key(), "20");
-    config.getConfig().putIfAbsent(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key(), "10");
-    config.getConfig().putIfAbsent(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT.key(), "600000");
+  private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
+    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()));
+    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()));
+    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()));
   }
 
   private String generateLogSuffixString() {
