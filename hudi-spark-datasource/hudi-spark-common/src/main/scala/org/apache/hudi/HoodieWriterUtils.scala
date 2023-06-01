@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
-import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
@@ -167,8 +167,16 @@ object HoodieWriterUtils {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
         }
 
-        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
-        val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        var datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        var tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        if(tableConfigKeyGen != null && (tableConfigKeyGen.equals(classOf[CustomKeyGenerator].getCanonicalName) || tableConfigKeyGen.equals(classOf[CustomAvroKeyGenerator].getCanonicalName)) ){
+          datasourcePartitionFields = datasourcePartitionFields.split(",").map(pathField => {
+            pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX).headOption.getOrElse(pathField)
+          }).mkString(",")
+          tableConfigPartitionFields = tableConfigPartitionFields.split(",").map(pathField => {
+            pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX).headOption.getOrElse(pathField)
+          }).mkString(",")
+        }
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
           && datasourcePartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
