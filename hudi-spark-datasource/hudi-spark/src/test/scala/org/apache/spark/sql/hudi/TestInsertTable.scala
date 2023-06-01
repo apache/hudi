@@ -36,20 +36,18 @@ import java.io.File
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
   def assertBulkInsertFirstCommit(basePath: String): Unit = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
-    val timeline =  metaClient.getActiveTimeline.getAllCommitsTimeline
-    assert(timeline.countInstants() == 1)
-    val firstCommit = timeline.firstInstant()
-    assert(firstCommit.isPresent)
-    assert(firstCommit.get().isCompleted)
-    val metadata = TimelineUtils.getCommitMetadata(firstCommit.get(), timeline)
-    assert(metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
+    assertBulkInsertLastCommit(basePath, 1)
   }
 
   def assertBulkInsertLastCommit(basePath: String, count: Int): Unit = {
+    assert(assertCommitCountAndIsLastBulkInsert(basePath, count))
+  }
+
+  def assertLatestCommitNotBulkInsert(basePath: String, count: Int): Unit = {
+    assert(!assertCommitCountAndIsLastBulkInsert(basePath, count))
+  }
+
+  def assertCommitCountAndIsLastBulkInsert(basePath: String, count: Int): Boolean = {
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
       .setConf(spark.sessionState.newHadoopConf())
@@ -60,21 +58,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     assert(latestCommit.isPresent)
     assert(latestCommit.get().isCompleted)
     val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
-    assert(metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
-  }
-
-  def assertLatestCommitNotBulkInsert(basePath: String, count: Int): Unit = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
-    val timeline =  metaClient.getActiveTimeline.getAllCommitsTimeline
-    assert(timeline.countInstants() == count)
-    val latestCommit = timeline.lastInstant()
-    assert(latestCommit.isPresent)
-    assert(latestCommit.get().isCompleted)
-    val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
-    assert(!metadata.getOperationType.equals(WriteOperationType.BULK_INSERT))
+    metadata.getOperationType.equals(WriteOperationType.BULK_INSERT)
   }
 
   test("Test Insert Into with values") {
