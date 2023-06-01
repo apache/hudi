@@ -55,8 +55,8 @@ trait ProvidesHoodieConfig extends Logging {
     // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
 
-    require(hoodieCatalogTable.primaryKeys.nonEmpty,
-      s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
+//    require(hoodieCatalogTable.primaryKeys.nonEmpty,
+//      s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
@@ -111,7 +111,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    var combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
@@ -137,6 +137,10 @@ trait ProvidesHoodieConfig extends Logging {
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
+    val hasPrimaryKey = hoodieCatalogTable.primaryKeys.nonEmpty
+    if (hoodieCatalogTable.primaryKeys.length == 0) { // auto generation or record keys
+      combinedOpts += DataSourceWriteOptions.OPERATION.key -> "insert"
+    }
 
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
@@ -182,8 +186,8 @@ trait ProvidesHoodieConfig extends Logging {
     val defaultOpts = Map(
       PAYLOAD_CLASS_NAME.key -> payloadClassName,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
-      //       for the table
-      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
+      //       for the table and table has a primary key.
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrimaryKey && hasPrecombineColumn),
       KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
       SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL,

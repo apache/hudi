@@ -249,7 +249,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            ut.copy(table = projectOutResolvedMetaFieldsAttributes(relation))
+            ut.copy(table = relation)
         }
       }
 
