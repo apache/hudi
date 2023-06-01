@@ -238,4 +238,44 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+//  test("Test Update Table Without Primary Key") {
+//    withRecordType()(withTempDir { tmp =>
+//      Seq("cow", "mor").foreach { tableType =>
+//        val tableName = generateTableName
+//        // create table
+//        spark.sql(
+//          s"""
+//             |create table $tableName (
+//             |  id int,
+//             |  name string,
+//             |  price double,
+//             |  ts long
+//             |) using hudi
+//             | location '${tmp.getCanonicalPath}/$tableName'
+//             | tblproperties (
+//             |  type = '$tableType'
+//             | )
+//     """.stripMargin)
+//
+//        // insert data to table
+//        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+//        checkAnswer(s"select id, name, price, ts from $tableName")(
+//          Seq(1, "a1", 10.0, 1000)
+//        )
+//
+//        // update data
+//        spark.sql(s"update $tableName set price = 20 where id = 1")
+//        checkAnswer(s"select id, name, price, ts from $tableName")(
+//          Seq(1, "a1", 20.0, 1000)
+//        )
+//
+//        // update data
+//        spark.sql(s"update $tableName set price = price * 2 where id = 1")
+//        checkAnswer(s"select id, name, price, ts from $tableName")(
+//          Seq(1, "a1", 40.0, 1000)
+//        )
+//      }
+//    })
+//  }
 }

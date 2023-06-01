@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, DATASOURCE_WRITE_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -144,20 +144,25 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
+    val dfPrepped = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false")
+      .equalsIgnoreCase("true")) {
+      df // Don't remove meta columns for prepped write.
+    } else {
+      df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+    }
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfPrepped)
       HoodieSparkSqlWriter.cleanup()
     } else {
-      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfPrepped)
       HoodieSparkSqlWriter.cleanup()
       if (!success) {
         throw new HoodieException("Write to Hudi failed")
       }
     }
 
-    new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
+    new HoodieEmptyRelation(sqlContext, dfPrepped.schema)
   }
 
   override def createSink(sqlContext: SQLContext,
