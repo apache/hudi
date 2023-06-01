@@ -400,7 +400,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
+            .retainCommits(Math.min(writeConfig.getCleanerCommitsRetained(),DEFAULT_METADATA_CLEANER_COMMITS_RETAINED))
             .build())
         // we will trigger archival manually, to control the instant times
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
