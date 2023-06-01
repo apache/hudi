@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
-import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
@@ -110,9 +110,15 @@ trait ProvidesHoodieConfig extends Logging {
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
+    val defaultOps: Map[String, String] = if (!hoodieCatalogTable.metaClient.reloadActiveTimeline().lastInstant().isPresent) {
+      //table is new so we should force bulk_insert
+      Map(DataSourceWriteOptions.OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL)
+    } else {
+      Map.empty
+    }
 
     val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
-      defaultOpts = Map.empty, overridingOpts = extraOptions)
+      defaultOpts = defaultOps, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
     val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
