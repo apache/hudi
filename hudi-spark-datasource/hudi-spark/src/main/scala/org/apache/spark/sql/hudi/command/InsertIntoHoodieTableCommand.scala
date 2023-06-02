@@ -17,8 +17,11 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, INSERT_DROP_DUPS}
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
@@ -101,7 +104,18 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       isOverWritePartition = overwrite
     }
 
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
+   val extraOps =  if (!sparkSession.conf.getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue()).toBoolean &&
+     (!sparkSession.conf.contains(DataSourceWriteOptions.OPERATION.key)  || sparkSession.conf.get(DataSourceWriteOptions.OPERATION.key).equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)) &&
+     (!sparkSession.conf.contains(DataSourceWriteOptions.SQL_INSERT_MODE.key) || sparkSession.conf.get(DataSourceWriteOptions.SQL_INSERT_MODE.key).equals(InsertMode.NON_STRICT.value)) &&
+      sparkSession.conf.getOption(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key).getOrElse("true").toBoolean &&
+      !isOverWritePartition) {
+      extraOptions + (DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
+        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true")
+    } else {
+     extraOptions
+   }
+
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOps)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
