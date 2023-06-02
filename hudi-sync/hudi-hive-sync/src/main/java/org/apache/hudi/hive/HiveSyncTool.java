@@ -73,6 +73,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SNAPSHOT_WITH_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
@@ -191,6 +192,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             syncHoodieTable(roTableName.get(), false, true);
             // sync a RT table for MOR
             syncHoodieTable(snapshotTableName, true, false);
+            // sync origin table for MOR
+            if (config.getBoolean(META_SYNC_SNAPSHOT_WITH_TABLE_NAME)) {
+              syncHoodieTable(tableName, true, false);
+            }
         }
         break;
       default:
