@@ -101,9 +101,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     return HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build();
   }
 
-  private long getCompactionMetricCount(String action, String metric) {
+  private long getCompactionMetricCount(String metric) {
     HoodieMetrics metrics = writeClient.getMetrics();
-    String metricName = metrics.getMetricsName(action, metric);
+    String metricName = metrics.getMetricsName("counter", metric);
     SortedMap<String, Counter> counters = metrics.getMetrics().getRegistry().getCounters();
 
     return counters.containsKey(metricName) ? counters.get(metricName).getCount() : 0;
@@ -132,8 +132,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       });
 
       // Verify compaction.requested, compaction.completed metrics counts.
-      assertEquals(0, getCompactionMetricCount("counter", "compaction.requested"));
-      assertEquals(0, getCompactionMetricCount("counter", "compaction.completed"));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
     }
   }
 
@@ -154,8 +154,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       assertFalse(plan.isPresent(), "If there is nothing to compact, result will be empty");
 
       // Verify compaction.requested, compaction.completed metrics counts.
-      assertEquals(0, getCompactionMetricCount("counter", "compaction.requested"));
-      assertEquals(0, getCompactionMetricCount("counter", "compaction.completed"));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
     }
   }
 
@@ -210,8 +210,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       verifyCompaction(result);
 
       // Verify compaction.requested, compaction.completed metrics counts.
-      assertEquals(1, getCompactionMetricCount("counter", "compaction.requested"));
-      assertEquals(1, getCompactionMetricCount("counter", "compaction.completed"));
+      assertEquals(1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
     }
   }
 
@@ -246,8 +246,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         verifyCompaction(result);
 
         // Verify compaction.requested, compaction.completed metrics counts.
-        assertEquals(i / 2 + 1, getCompactionMetricCount("counter", "compaction.requested"));
-        assertEquals(i / 2 + 1, getCompactionMetricCount("counter", "compaction.completed"));
+        assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+        assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
       }
     }
   }
