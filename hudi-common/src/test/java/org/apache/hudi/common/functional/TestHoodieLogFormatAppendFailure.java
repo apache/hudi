@@ -58,7 +58,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-@Disabled
 public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;

@@ -122,7 +122,6 @@ import static org.mockito.Mockito.when;
  * Tests hoodie log format {@link HoodieLogFormat}.
  */
 @SuppressWarnings("Duplicates")
-@Disabled
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;

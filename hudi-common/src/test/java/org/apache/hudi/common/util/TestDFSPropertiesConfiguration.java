@@ -49,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests basic functionality of {@link DFSPropertiesConfiguration}.
  */
-@Disabled
 public class TestDFSPropertiesConfiguration {
 
   private static String dfsBasePath;
