@@ -132,6 +132,31 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Set disable bulk insert in tblproperties") {
+    withTempDir({ basePath =>
+      val tableName = generateTableName
+      val tableBasePath = basePath.getCanonicalPath + "/" + tableName
+      val writeOptions =
+        s"""
+           |tblproperties (
+           |  primaryKey = '_row_key',
+           |  preCombineField = 'timestamp',
+           |  hoodie.database.name = "databaseName",
+           |  hoodie.sql.insert.mode = "upsert",
+           |  hoodie.sql.bulk.insert.enable = "false",
+           |  hoodie.table.name = "$tableName"
+           | )""".stripMargin
+      createTable(tableName, writeOptions, tableBasePath)
+      //Insert Operation
+      val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
+      doInsert(dataGen, tableName, "000")
+      assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 1))
+      doInsert(dataGen, tableName, "001")
+      assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
+
+    })
+  }
+
   test("Set upsert sql op in conf") {
     withTempDir({ basePath =>
       try {
@@ -218,6 +243,39 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
         assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 4))
       } finally {
         spark.conf.unset("hoodie.sql.insert.mode")
+      }
+    })
+  }
+
+  test("Set bulk insert enable sql op in conf") {
+    withTempDir({ basePath =>
+      try {
+        val tableName = generateTableName
+        val tableBasePath = basePath.getCanonicalPath + "/" + tableName
+        val writeOptions =
+          s"""
+             |tblproperties (
+             |  primaryKey = '_row_key',
+             |  preCombineField = 'timestamp',
+             |  hoodie.database.name = "databaseName",
+             |  hoodie.table.name = "$tableName"
+             | )""".stripMargin
+        createTable(tableName, writeOptions, tableBasePath)
+        spark.conf.set("hoodie.sql.bulk.insert.enable", "true")
+        //Insert Operation
+        val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
+        doInsert(dataGen, tableName, "000")
+        assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 1))
+        doInsert(dataGen, tableName, "001")
+        assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
+        spark.conf.set("hoodie.sql.bulk.insert.enable", "false")
+        doInsert(dataGen, tableName, "002")
+        assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 3))
+        spark.conf.set("hoodie.sql.bulk.insert.enable", "true")
+        doInsert(dataGen, tableName, "003")
+        assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 4))
+      } finally {
+        spark.conf.unset("hoodie.sql.bulk.insert.enable")
       }
     })
   }
