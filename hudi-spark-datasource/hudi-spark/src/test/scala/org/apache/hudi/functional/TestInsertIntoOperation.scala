@@ -157,6 +157,30 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test fallback to deduce") {
+    withTempDir({ basePath =>
+      val tableName = generateTableName
+      val tableBasePath = basePath.getCanonicalPath + "/" + tableName
+      val writeOptions =
+        s"""
+           |tblproperties (
+           |  primaryKey = '_row_key',
+           |  preCombineField = 'timestamp',
+           |  hoodie.database.name = "databaseName",
+           |  hoodie.sql.bulk.insert.enable = "true",
+           |  hoodie.sql.insert.mode = "upsert",
+           |  hoodie.table.name = "$tableName"
+           | )""".stripMargin
+      createTable(tableName, writeOptions, tableBasePath)
+      //Insert Operation
+      val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
+      generateInserts(dataGen, "000", 100).select("timestamp", "_row_key", "rider", "driver",
+        "begin_lat", "begin_lon", "end_lat", "end_lon", "fare", "_hoodie_is_deleted", "partition_path").
+        createOrReplaceTempView("insert_temp_table")
+      checkException(s"insert into $tableName select * from insert_temp_table")("Table with primaryKey can only use bulk insert in non-strict mode.")
+    })
+  }
+
   test("Set upsert sql op in conf") {
     withTempDir({ basePath =>
       try {
