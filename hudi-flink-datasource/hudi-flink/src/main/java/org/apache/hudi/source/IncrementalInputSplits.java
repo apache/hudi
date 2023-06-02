@@ -70,6 +70,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.filterTimelineForIncrementalQueryIfNeeded;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -543,14 +544,16 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsByCondition(timeline);
+    HoodieTimeline timeline = filterTimelineForIncrementalQueryIfNeeded(metaClient,
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants());
+    return filterInstantsAsPerUserConfigs(timeline);
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
-    HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsByCondition(archivedCompleteTimeline);
+    HoodieTimeline archivedCompleteTimeline = filterTimelineForIncrementalQueryIfNeeded(metaClient,
+        archivedTimeline.getCommitsTimeline().filterCompletedInstants());
+    return filterInstantsAsPerUserConfigs(archivedCompleteTimeline);
   }
 
   /**
@@ -601,7 +604,7 @@ public class IncrementalInputSplits implements Serializable {
    * @return the filtered timeline
    */
   @VisibleForTesting
-  public HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
+  public HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTimeline timeline) {
     final HoodieTimeline oriTimeline = timeline;
     if (this.skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky

@@ -24,6 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
+import org.apache.hudi.common.table.timeline.TimelineUtils.filterTimelineForIncrementalQueryIfNeeded
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
@@ -63,7 +64,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
-  private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
+  private val commitTimeline = filterTimelineForIncrementalQueryIfNeeded(hoodieTable.getMetaClient,
+    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants)
 
   private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
     .map(_.toBoolean)

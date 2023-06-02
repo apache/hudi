@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -309,5 +310,25 @@ public class TimelineUtils {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * Find the earliest incomplete commit, deltacommit, or non-clustering replacecommit,
+   * so that the incremental pulls should be strictly before this instant.
+   * This is to guard around multi-writer scenarios where a commit starting later than
+   * another commit from a concurrent writer can finish earlier, leaving an inflight commit
+   * before a completed commit.
+   */
+  public static HoodieTimeline filterTimelineForIncrementalQueryIfNeeded(
+      HoodieTableMetaClient metaClient, HoodieTimeline completedCommitTimeline) {
+    Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
+        .filterInflightsAndRequested()
+        .filter(instant ->
+            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
+                || !ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
+        .firstInstant();
+    return firstIncompleteCommit.map(
+        commit -> completedCommitTimeline.findInstantsBefore(commit.getTimestamp())
+    ).orElse(completedCommitTimeline);
   }
 }
