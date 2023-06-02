@@ -642,6 +642,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final String TIME_ELAPSED = "time_elapsed";
   public static final String NUM_AND_TIME = "num_and_time";
   public static final String NUM_OR_TIME = "num_or_time";
+  public static final String NUM_COMMITS_AFTER_LAST_REQUEST = "num_commits_after_last_request";
   @AdvancedConfig
   public static final ConfigOption<String> COMPACTION_TRIGGER_STRATEGY = ConfigOptions
       .key("compaction.trigger.strategy")
