@@ -103,21 +103,21 @@ import java.util.stream.Collectors;
  * in the 1st batch, we got two records from both sources:
  * Source1:
  *
- * id	ts	name
- * 1	1	name_1
+ * id    ts    name
+ * 1    1    name_1
  * Source 2:
  *
- * id	ts	price
- * 1	3	price_3
+ * id    ts    price
+ * 1    3    price_3
  * so the records in the target table should be:
  *
- * id	ts	name	price
- * 1	3	name_1	price_3
+ * id    ts    name    price
+ * 1    3    name_1    price_3
  * let's say in the 2nd batch, we got one event from the source1:
  * Source1:
  *
- * id	ts	name
- * 1	2	name_2
+ * id    ts    name
+ * 1    2    name_2
  * but name_2 won't be updated to the target table, since its ts value is smaller than the ts value in the target table.
  *
  * This feature will allow users to perform partial updates across sub-tables/sources by determining the state of a set of columns in a row based on an ordering/precombine column.
