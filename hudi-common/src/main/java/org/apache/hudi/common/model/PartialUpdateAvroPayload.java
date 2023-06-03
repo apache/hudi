@@ -128,7 +128,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   private PartialUpdateAvroPayload getPayloadWithSingleOrderFields(OverwriteWithLatestAvroPayload oldValue, Schema schema) throws IOException {
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
-    Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
+    Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
     if (mergedRecord.isPresent()) {
       return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
           shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
@@ -195,7 +195,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     if (!isMultipleOrderFields(this.orderingVal.toString())) {
-      return this.mergeOldRecord(currentValue, schema, false);
+      return this.mergeOldRecord(currentValue, schema, false, false);
     } else {
       GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
       MultipleOrderingInfo multipleOrderingInfo = MultipleOrderingInfo.newBuilder().withMultipleOrderingConfig(this.orderingVal.toString())
@@ -207,7 +207,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
     if (!isMultipleOrderFields(this.orderingVal.toString())) {
-      return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
+      return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop), false);
     } else {
       GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
       MultipleOrderingInfo multipleOrderingInfo = MultipleOrderingInfo.newBuilder().withMultipleOrderingConfig(this.orderingVal.toString())
@@ -240,9 +240,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @throws IOException
    */
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
-                                               Schema schema,
-                                               boolean isOldRecordNewer) throws IOException {
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
                                                Schema schema,
                                                boolean isOldRecordNewer, boolean isPreCombining) throws IOException {
     Option<IndexedRecord> recordOption = getInsertValue(schema, isPreCombining);
