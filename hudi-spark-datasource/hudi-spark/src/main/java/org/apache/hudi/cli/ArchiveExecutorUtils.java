@@ -57,6 +57,15 @@ public final class ArchiveExecutorUtils {
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+
+    // Check if the metadata is already initialized. If it is initialize ignore the input arguments enableMetadata.
+    boolean metadataEnabled = table.getMetaClient().getTableConfig().isMetadataTableEnabled();
+    if (metadataEnabled && !enableMetadata) {
+      config = HoodieWriteConfig.newBuilder()
+          .withProperties(config.getProps())
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+          .build();
+    }
     try {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
       archiver.archiveIfRequired(context, true);

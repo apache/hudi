@@ -2335,6 +2335,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
 
+  public int getMetadataLogCompactBlocksThreshold() {
+    return getInt(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD);
+  }
+
+  public boolean isLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_LOG_COMPACTION);
+  }
+
   /**
    * Hoodie Client Lock Configs.
    *

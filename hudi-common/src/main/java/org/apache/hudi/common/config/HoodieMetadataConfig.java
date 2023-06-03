@@ -94,6 +94,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
+  // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
+  public static final ConfigProperty<Integer> LOG_COMPACT_BLOCKS_THRESHOLD = ConfigProperty
+      .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
+      .defaultValue(5)
+      .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
+
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -405,6 +411,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
       metadataConfig.setValue(COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withLogCompactBlocksThreshold(int logCompactBlocksThreshold) {
+      metadataConfig.setValue(LOG_COMPACT_BLOCKS_THRESHOLD, Integer.toString(logCompactBlocksThreshold));
       return this;
     }
 

@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -49,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -96,6 +98,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -111,6 +114,7 @@ public class HoodieTableMetadataUtil {
   // Suffix to use for compaction
   private static final String COMPACTION_TIMESTAMP_SUFFIX = "001";
 
+
   // Suffix to use for clean
   private static final String CLEAN_TIMESTAMP_SUFFIX = "002";
 
@@ -118,6 +122,9 @@ public class HoodieTableMetadataUtil {
   // when the `indexUptoInstantTime` already exists in the metadata table,
   // to avoid collision.
   public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
+
+  // Suffix to use for log compaction
+  private static final String LOG_COMPACTION_TIMESTAMP_SUFFIX = "005";
 
   // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
   // are reserved for future operations on the MDT.
@@ -1325,6 +1332,39 @@ public class HoodieTableMetadataUtil {
     return inflightAndCompletedPartitions;
   }
 
+  public static Set<String> getValidInstantTimestamps(HoodieTableMetaClient dataMetaClient,
+                                                      HoodieTableMetaClient metadataMetaClient) {
+    // Only those log files which have a corresponding completed instant on the dataset should be read
+    // This is because the metadata table is updated before the dataset instants are committed.
+    HoodieActiveTimeline datasetTimeline = dataMetaClient.getActiveTimeline();
+    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstantsAsStream()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+
+    // We should also add completed indexing delta commits in the metadata table, as they do not
+    // have corresponding completed instant in the data table
+    validInstantTimestamps.addAll(
+        metadataMetaClient.getActiveTimeline()
+            .filter(instant -> instant.isCompleted()
+                && (isIndexingCommit(instant.getTimestamp()) || isLogCompactionInstant(instant)))
+            .getInstantsAsStream()
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList()));
+
+    // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
+    // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
+    // instant which we have a log block for.
+    final String earliestInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
+    datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
+        .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, earliestInstantTime))
+        .forEach(instant -> {
+          validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline));
+        });
+
+    // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
+    validInstantTimestamps.add(SOLO_COMMIT_TIMESTAMP);
+    return validInstantTimestamps;
+  }
+
   /**
    * Checks if a delta commit in metadata table is written by async indexer.
    * <p>
@@ -1337,6 +1377,58 @@ public class HoodieTableMetadataUtil {
   public static boolean isIndexingCommit(String instantTime) {
     return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
             && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
+  }
+
+  /**
+   * This method returns true if the instant provided belongs to Log compaction instant.
+   * For metadata table, log compaction instant are created with Suffix "004" provided in LOG_COMPACTION_TIMESTAMP_SUFFIX.
+   * @param instant Hoodie completed instant.
+   * @return true for logcompaction instants flase otherwise.
+   */
+  public static boolean isLogCompactionInstant(HoodieInstant instant) {
+    return instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+        && instant.getTimestamp().length() == MILLIS_INSTANT_ID_LENGTH + LOG_COMPACTION_TIMESTAMP_SUFFIX.length()
+        && instant.getTimestamp().endsWith(LOG_COMPACTION_TIMESTAMP_SUFFIX);
+  }
+
+  /**
+   * Returns a list of commits which were rolled back as part of a Rollback or Restore operation.
+   *
+   * @param instant  The Rollback operation to read
+   * @param timeline instant of timeline from dataset.
+   */
+  private static List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline) {
+    try {
+      List<String> commitsToRollback;
+      if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
+        try {
+          HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
+              timeline.getInstantDetails(instant).get());
+          commitsToRollback = rollbackMetadata.getCommitsRollback();
+        } catch (IOException e) {
+          // if file is empty, fetch the commits to rollback from rollback.requested file
+          HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
+              timeline.readRollbackInfoAsBytes(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
+                  instant.getTimestamp())).get(), HoodieRollbackPlan.class);
+          commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
+          LOG.warn("Had to fetch rollback info from requested instant since completed file is empty " + instant.toString());
+        }
+        return commitsToRollback;
+      }
+
+      List<String> rollbackedCommits = new LinkedList<>();
+      if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
+        // Restore is made up of several rollbacks
+        HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
+            timeline.getInstantDetails(instant).get());
+        restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
+          rms.forEach(rm -> rollbackedCommits.addAll(rm.getCommitsRollback()));
+        });
+      }
+      return rollbackedCommits;
+    } catch (IOException e) {
+      throw new HoodieMetadataException("Error retrieving rollback commits for instant " + instant, e);
+    }
   }
 
   /**
@@ -1520,5 +1612,12 @@ public class HoodieTableMetadataUtil {
    */
   public static String createIndexInitTimestamp(String timestamp, int offset) {
     return String.format("%s%03d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
+  }
+
+  /**
+   * Create the timestamp for a compaction operation on the metadata table.
+   */
+  public static String createLogCompactionTimestamp(String timestamp) {
+    return timestamp + LOG_COMPACTION_TIMESTAMP_SUFFIX;
   }
 }
