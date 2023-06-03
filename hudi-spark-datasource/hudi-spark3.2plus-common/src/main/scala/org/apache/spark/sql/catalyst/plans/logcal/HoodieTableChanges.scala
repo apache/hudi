@@ -22,25 +22,14 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 
-case class HoodieTableChanges(args: Seq[Expression]) extends LeafNode {
-
-  override def output: Seq[Attribute] = Nil
-
-  override lazy val resolved: Boolean = false
-
-}
-
-object HoodieTableChanges {
-
-  val FUNC_NAME = "hudi_table_changes";
-
-  def parseOptions(exprs: Seq[Expression]): (String, Map[String, String]) = {
+object HoodieTableChangesOptionsParser {
+  def parseOptions(exprs: Seq[Expression], funcName: String): (String, Map[String, String]) = {
     val args = exprs.map(_.eval().toString)
 
     if (args.size < 3) {
-      throw new AnalysisException(s"Too few arguments for function `$FUNC_NAME`")
+      throw new AnalysisException(s"Too few arguments for function `$funcName`")
     } else if (args.size > 4) {
-      throw new AnalysisException(s"Too many arguments for function `$FUNC_NAME`")
+      throw new AnalysisException(s"Too many arguments for function `$funcName`")
     }
 
     val identifier = args.head
@@ -69,4 +58,34 @@ object HoodieTableChanges {
 
     (identifier, opts)
   }
+
+}
+
+
+case class HoodieTableChanges(args: Seq[Expression]) extends LeafNode {
+
+  override def output: Seq[Attribute] = Nil
+
+  override lazy val resolved: Boolean = false
+
+}
+
+object HoodieTableChanges {
+
+  val FUNC_NAME = "hudi_table_changes";
+
+}
+
+case class HoodieTableChangesByPath(args: Seq[Expression]) extends LeafNode {
+
+  override def output: Seq[Attribute] = Nil
+
+  override lazy val resolved: Boolean = false
+
+}
+
+object HoodieTableChangesByPath {
+
+  val FUNC_NAME = "hudi_table_changes_by_path";
+
 }
