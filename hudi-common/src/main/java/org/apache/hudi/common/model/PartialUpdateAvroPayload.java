@@ -124,7 +124,8 @@ import java.util.stream.Collectors;
  *
  * As such, a table can have MULTIPLE ordering fields.
  *
- * This use case is suitable for wide Hudi tables that are created from smaller sub-tables, where each of its sub-tables has its own precombine column, and where its records could be upserted out of order.
+ * This use case is suitable for wide Hudi tables that are created from smaller sub-tables,
+ * where each of its sub-tables has its own precombine column, and where its records could be upserted out of order.
  * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
