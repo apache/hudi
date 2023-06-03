@@ -89,6 +89,43 @@ import java.util.stream.Collectors;
  *  Result data after preCombine or combineAndGetUpdateValue:
  *      id      ts      name    price
  *      1       2       name_1  price_1
+ *
+ * Multiple ordering fields partial update Logic:
+ * This feature aims to improve PartialUpdatePayload to handle multiple sources properly
+ * Let's give you some cases about why we need multiple ordering fields
+ * For example, we have 2 sources, one target table
+ *
+ * source1's fields: id, ts, name
+ * source2's fields:id, ts, price
+ * target tables's fields:
+ *   id,ts,name, price
+ * ts is the precombine field;
+ *
+ * in the 1st batch, we got two records from both sources:
+ * Source1:
+ *
+ * id	ts	name
+ * 1	1	name_1
+ * Source 2:
+ *
+ * id	ts	price
+ * 1	3	price_3
+ * so the records in the target table should be:
+ *
+ * id	ts	name	price
+ * 1	3	name_1	price_3
+ * let's say in the 2nd batch, we got one event from the source1:
+ * Source1:
+ *
+ * id	ts	name
+ * 1	2	name_2
+ * but name_2 won't be updated to the target table, since its ts value is smaller than the ts value in the target table.
+ *
+ * This feature will allow users to perform partial updates across sub-tables/sources by determining the state of a set of columns in a row based on an ordering/precombine column.
+ *
+ * As such, a table can have MULTIPLE ordering fields.
+ *
+ * This use case is suitable for wide Hudi tables that are created from smaller sub-tables, where each of its sub-tables has its own precombine column, and where its records could be upserted out of order.
  * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
