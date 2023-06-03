@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-import org.jetbrains.annotations.Nullable;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -161,7 +160,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     return this;
   }
 
-  @Nullable
   private PartialUpdateAvroPayload getPayloadWithSingleOrderFields(OverwriteWithLatestAvroPayload oldValue, Schema schema) throws IOException {
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
@@ -173,7 +171,6 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     return null;
   }
 
-  @Nullable
   private PartialUpdateAvroPayload getPayloadWithMultipleOrderFields(OverwriteWithLatestAvroPayload oldValue, Schema schema) throws IOException {
     GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
