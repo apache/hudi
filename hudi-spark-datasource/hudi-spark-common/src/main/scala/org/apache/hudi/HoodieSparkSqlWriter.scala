@@ -1191,7 +1191,8 @@ object HoodieSparkSqlWriter {
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, config.getString(PAYLOAD_CLASS_NAME))
+              // AKL_TODO: check if this change is needed.
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
             }
             hoodieRecord
           }
@@ -1224,12 +1225,8 @@ object HoodieSparkSqlWriter {
           it.map { sourceRow =>
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType)
 
-            val recordKey = sparkKeyGenerator.getRecordKey(sourceRow, sourceStructType)
-            val partitionPath = sparkKeyGenerator.getPartitionPath(sourceRow, sourceStructType)
-            val key = new HoodieKey(recordKey.toString, partitionPath.toString)
             val finalRow = finalStructTypeRowWriter(sourceRow)
-
-            var hoodieSparkRecord = new HoodieSparkRecord(key, finalRow, dataFileStructType, false)
+            var hoodieSparkRecord = new HoodieSparkRecord(hoodieKey, finalRow, dataFileStructType, false)
             if (recordLocation.getOrElse(null) != null) {
               hoodieSparkRecord.setCurrentLocation(recordLocation.get)
             }

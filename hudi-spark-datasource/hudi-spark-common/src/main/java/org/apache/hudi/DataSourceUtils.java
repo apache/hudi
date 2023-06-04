@@ -248,10 +248,15 @@ public class DataSourceUtils {
     return record;
   }
 
+  // AKL_TODO: check if this change is needed. Also validate change if needed.
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
+                                                String payloadClass, HoodieRecordLocation recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    return new HoodieAvroRecord<>(hKey, payload);
+    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+    if (recordLocation != null) {
+      record.setCurrentLocation(recordLocation);
+    }
+    return record;
   }
 
   /**
