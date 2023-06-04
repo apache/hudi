@@ -329,7 +329,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // instantTime could be a non-standard value, so use `parseDateFromInstantTimeSafely`
       // e.g. INIT_INSTANT_TS, METADATA_BOOTSTRAP_INSTANT_TS and FULL_BOOTSTRAP_INSTANT_TS in HoodieTimeline
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(instantTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, actionType)
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, actionType, config.isCompactionLogBlockMetricsOn())
       );
       writeTimer = null;
     }
