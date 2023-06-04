@@ -66,6 +66,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
@@ -329,13 +330,13 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
-    Assertions.assertNotNull(batchCheckPoint.getValue());
+    assertNotNull(batchCheckPoint.getValue());
     if (expectedCount == 0) {
       assertFalse(batchCheckPoint.getKey().isPresent());
     } else {
       assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
     }
-    Assertions.assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
+    assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,

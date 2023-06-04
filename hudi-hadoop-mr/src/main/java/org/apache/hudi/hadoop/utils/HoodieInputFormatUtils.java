@@ -68,9 +68,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.filterTimelineForIncrementalQueryIfNeeded;
 
 public class HoodieInputFormatUtils {
 
@@ -283,7 +285,13 @@ public class HoodieInputFormatUtils {
     } else {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
-    return Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants());
+    HoodieTimeline filteredTimeline = filterTimelineForIncrementalQueryIfNeeded(
+        tableMetaClient,
+        baseTimeline.getCommitsTimeline(),
+        job.getConfiguration().getBoolean(READ_BY_STATE_TRANSITION_TIME.key(),
+            READ_BY_STATE_TRANSITION_TIME.defaultValue())
+    ).filterCompletedInstants();
+    return Option.of(filteredTimeline);
   }
 
   /**

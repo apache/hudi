@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
@@ -147,7 +148,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     if (cloudObjectMetadataDF.isEmpty()) {
       LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-              + queryInfo.getEndInstant());
+          + queryInfo.getEndInstant());
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
@@ -162,13 +163,17 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
   private QueryInfo getQueryInfo(Option<String> lastCkptStr) {
     Option<String> beginInstant = getBeginInstant(lastCkptStr);
+    boolean useStateTransitionTime = props.getBoolean(READ_BY_STATE_TRANSITION_TIME().key(),
+        READ_BY_STATE_TRANSITION_TIME().defaultValue());
 
     Pair<String, Pair<String, String>> queryInfoPair = calculateBeginAndEndInstants(
-        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy
-    );
+        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, useStateTransitionTime);
 
-    QueryInfo queryInfo = new QueryInfo(queryInfoPair.getLeft(), queryInfoPair.getRight().getLeft(),
-            queryInfoPair.getRight().getRight());
+    QueryInfo queryInfo = new QueryInfo(
+        queryInfoPair.getLeft(),
+        queryInfoPair.getRight().getLeft(),
+        queryInfoPair.getRight().getRight(),
+        useStateTransitionTime);
 
     if (LOG.isDebugEnabled()) {
       queryInfo.logDetails();

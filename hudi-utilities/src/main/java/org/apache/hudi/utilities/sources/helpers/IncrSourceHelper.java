@@ -32,6 +32,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.filterTimelineForIncrementalQueryIfNeeded;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
@@ -64,19 +65,20 @@ public class IncrSourceHelper {
    * @return begin and end instants along with query type.
    */
   public static Pair<String, Pair<String, String>> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
-                                                                                 int numInstantsPerFetch, Option<String> beginInstant,
-                                                                                MissingCheckpointStrategy missingCheckpointStrategy) {
+                                                                                int numInstantsPerFetch, Option<String> beginInstant,
+                                                                                MissingCheckpointStrategy missingCheckpointStrategy,
+                                                                                boolean useStateTransitionTime) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
-    final HoodieTimeline activeCommitTimeline = filterTimelineForIncrementalQueryIfNeeded(srcMetaClient, completedCommitTimeline);
-
+    final HoodieTimeline activeCommitTimeline = filterTimelineForIncrementalQueryIfNeeded(srcMetaClient, completedCommitTimeline, useStateTransitionTime);
+    Function<HoodieInstant, String> timestampForLastInstant = instant -> useStateTransitionTime ? instant.getStateTransitionTime() : instant.getTimestamp();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse(DEFAULT_BEGIN_TIMESTAMP);
+          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(timestampForLastInstant.apply(hoodieInstant))).orElse(DEFAULT_BEGIN_TIMESTAMP);
         } else {
           return DEFAULT_BEGIN_TIMESTAMP;
         }
@@ -93,7 +95,7 @@ public class IncrSourceHelper {
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-      return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, lastInstant.get().getTimestamp()));
+      return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, timestampForLastInstant.apply(lastInstant.get())));
     }
   }
 

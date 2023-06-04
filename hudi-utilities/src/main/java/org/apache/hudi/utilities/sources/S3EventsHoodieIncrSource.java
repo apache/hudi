@@ -43,12 +43,19 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
+import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
+import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
+import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
+import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
+import static org.apache.hudi.DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.loadAsDataset;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
 
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
@@ -112,27 +119,28 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         lastCkptStr.isPresent()
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
             : Option.empty();
+    boolean useStateTransitionTime = props.getBoolean(READ_BY_STATE_TRANSITION_TIME().key(), READ_BY_STATE_TRANSITION_TIME().defaultValue());
 
-    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts =
-        IncrSourceHelper.calculateBeginAndEndInstants(
-            sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
+    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = calculateBeginAndEndInstants(sparkContext, srcPath,
+        numInstantsPerFetch, beginInstant, missingCheckpointStrategy, useStateTransitionTime);
 
     if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
       LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
       return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getValue().getKey());
     }
 
-    Dataset<Row> source = null;
+    Dataset<Row> source;
     // Do incremental pull. Set end instant if available.
-    if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+    if (queryTypeAndInstantEndpts.getKey().equals(QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
       source = sparkSession.read().format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getLeft())
-          .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight()).load(srcPath);
+          .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(READ_BY_STATE_TRANSITION_TIME().key(), useStateTransitionTime)
+          .option(BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getLeft())
+          .option(END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight()).load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
       source = sparkSession.read().format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
+          .option(QUERY_TYPE().key(), QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryTypeAndInstantEndpts.getRight().getLeft()))

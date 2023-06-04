@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.spark.sql.DataFrameReader;
@@ -32,6 +33,7 @@ import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
+import static org.apache.hudi.DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME;
 
 /**
  * Uses the start and end instants of a DeltaStreamer Source to help construct the right kind
@@ -42,13 +44,15 @@ public class QueryInfo {
   private final String queryType;
   private final String startInstant;
   private final String endInstant;
+  private final boolean useStateTransitionTime;
 
   private static final Logger LOG = LoggerFactory.getLogger(QueryInfo.class);
 
-  public QueryInfo(String queryType, String startInstant, String endInstant) {
+  public QueryInfo(String queryType, String startInstant, String endInstant, boolean useStateTransitionTime) {
     this.queryType = queryType;
     this.startInstant = startInstant;
     this.endInstant = endInstant;
+    this.useStateTransitionTime = useStateTransitionTime;
   }
 
   public Dataset<Row> initCloudObjectMetadata(String srcPath, SparkSession sparkSession) {
@@ -68,14 +72,15 @@ public class QueryInfo {
 
   private DataFrameReader snapshotQuery(SparkSession sparkSession) {
     return sparkSession.read().format("org.apache.hudi")
-            .option(QUERY_TYPE().key(), QUERY_TYPE_SNAPSHOT_OPT_VAL());
+        .option(QUERY_TYPE().key(), QUERY_TYPE_SNAPSHOT_OPT_VAL());
   }
 
   private DataFrameReader incrementalQuery(SparkSession sparkSession) {
     return sparkSession.read().format("org.apache.hudi")
-            .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-            .option(BEGIN_INSTANTTIME().key(), getStartInstant())
-            .option(END_INSTANTTIME().key(), getEndInstant());
+        .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(READ_BY_STATE_TRANSITION_TIME().key(), useStateTransitionTime)
+        .option(BEGIN_INSTANTTIME().key(), getStartInstant())
+        .option(END_INSTANTTIME().key(), getEndInstant());
   }
 
   public boolean isIncremental() {

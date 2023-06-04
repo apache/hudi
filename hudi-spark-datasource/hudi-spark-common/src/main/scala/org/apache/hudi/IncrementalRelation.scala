@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME, READ_BY_STATE_TRANSITION_TIME}
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -65,12 +66,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
 
-  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
-    .map(_.toBoolean)
-    .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+  private val useStateTransitionTime: Boolean =
+    optParams.get(READ_BY_STATE_TRANSITION_TIME.key)
+      .map(_.toBoolean)
+      .getOrElse(READ_BY_STATE_TRANSITION_TIME.defaultValue)
 
   private val commitTimeline = filterTimelineForIncrementalQueryIfNeeded(hoodieTable.getMetaClient,
-    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants)
+    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants, useStateTransitionTime)
 
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
@@ -84,8 +86,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
 
-  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
-    DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
+  private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
+    INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 
   private val lastInstant = commitTimeline.lastInstant().get()
 

@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata
+import org.apache.hudi.common.table.timeline.TimelineUtils.{filterTimelineForIncrementalQueryIfNeeded, getCommitMetadata}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -60,11 +60,14 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
-      metaClient.getCommitsAndCompactionTimeline
+      filterTimelineForIncrementalQueryIfNeeded(metaClient,
+        metaClient.getCommitsAndCompactionTimeline, false)
     } else if (useStateTransitionTime) {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
-      metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
+      filterTimelineForIncrementalQueryIfNeeded(metaClient,
+        metaClient.getCommitsAndCompactionTimeline, false)
+        .findInstantsInRange(startTimestamp, endTimestamp)
     }
   }
 

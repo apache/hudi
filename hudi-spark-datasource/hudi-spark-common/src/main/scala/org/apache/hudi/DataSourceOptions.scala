@@ -204,7 +204,7 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
-  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
+  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
 
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
