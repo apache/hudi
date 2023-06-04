@@ -839,6 +839,7 @@ defaultValue="python"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', }
 ]}
 >
 
@@ -897,8 +898,45 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 </TabItem>
 
-</Tabs
->
+<TabItem value="sparksql">
+
+```sql
+-- syntax
+hudi_table_changes(tableName, queryType, beginTime [, endTime]);  
+hudi_table_changes_by_path(path, queryType, beginTime [, endTime]);  
+-- tableName: table identifier, example: db.tableName, tableName,
+-- path: path for of your table, example: path/to/hudiTable  
+--       in this case table does not need to exist in the metastore,
+-- queryType: incremental query mode, example: latest_state, cdc  
+--            (for cdc query, first enable cdc for your table by setting cdc.enabled=true),
+-- beginTime: instantTime to begin query from, example: earliest, 202305150000, 
+-- endTime: optional instantTime to end query at, example: 202305160000, 
+
+-- incrementally query data by table name
+-- start from earliest available commit, end at latest available commit.  
+select * from hudi_table_changes('db.table', 'latest_state', 'earliest');
+
+-- start from earliest, end at 202305160000.  
+select * from hudi_table_changes('table', 'latest_state', 'earliest', '202305160000');  
+
+-- start from 202305150000, end at 202305160000.
+select * from hudi_table_changes('table', 'latest_state', '202305150000', '202305160000');
+
+-- incrementally query data by path
+-- start from earliest available commit, end at latest available commit.
+select * from hudi_table_changes_by_path('path/to/table', 'cdc', 'earliest');
+
+-- start from earliest, end at 202305160000.
+select * from hudi_table_changes_by_path('path/to/table', 'cdc', 'earliest', '202305160000');
+
+-- start from 202305150000, end at 202305160000.
+select * from hudi_table_changes_by_path('path/to/table', 'cdc', '202305150000', '202305160000');
+
+```
+
+</TabItem>
+
+</Tabs>
 
 :::info
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
