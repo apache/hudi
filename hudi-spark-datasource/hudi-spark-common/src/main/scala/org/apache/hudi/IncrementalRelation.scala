@@ -64,12 +64,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
-  private val commitTimeline = filterTimelineForIncrementalQueryIfNeeded(hoodieTable.getMetaClient,
-    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants)
 
   private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
     .map(_.toBoolean)
     .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+
+  private val commitTimeline = filterTimelineForIncrementalQueryIfNeeded(hoodieTable.getMetaClient,
+    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants)
 
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")

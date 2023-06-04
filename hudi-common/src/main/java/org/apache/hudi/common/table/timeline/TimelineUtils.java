@@ -320,7 +320,10 @@ public class TimelineUtils {
    * before a completed commit.
    */
   public static HoodieTimeline filterTimelineForIncrementalQueryIfNeeded(
-      HoodieTableMetaClient metaClient, HoodieTimeline completedCommitTimeline) {
+      HoodieTableMetaClient metaClient, HoodieTimeline completedCommitTimeline, boolean useStateTransitionTime) {
+    if (useStateTransitionTime) {
+      return completedCommitTimeline;
+    }
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
         .filter(instant ->
