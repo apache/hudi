@@ -287,10 +287,9 @@ public class HoodieInputFormatUtils {
     }
     HoodieTimeline filteredTimeline = filterTimelineForIncrementalQueryIfNeeded(
         tableMetaClient,
-        baseTimeline.getCommitsTimeline(),
+        baseTimeline.getCommitsTimeline().filterCompletedInstants(),
         job.getConfiguration().getBoolean(READ_BY_STATE_TRANSITION_TIME.key(),
-            READ_BY_STATE_TRANSITION_TIME.defaultValue())
-    ).filterCompletedInstants();
+            READ_BY_STATE_TRANSITION_TIME.defaultValue()));
     return Option.of(filteredTimeline);
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.spark.sql.DataFrameReader;
