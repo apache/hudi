@@ -1290,7 +1290,7 @@ object HoodieSparkSqlWriter {
 
     val hoodiePartitionPathIndex = getFieldIndex("_hoodie_partition_path")
     val partitionPath = if (isPrepped && hoodiePartitionPathIndex != -1 && !sourceRow.isNullAt(hoodiePartitionPathIndex)) {
-      sourceRow.getString(hoodieRecordKeyIndex)
+      sourceRow.getString(hoodiePartitionPathIndex)
     } else {
       sparkKeyGenerator.getPartitionPath(sourceRow, schema).toString
     };
