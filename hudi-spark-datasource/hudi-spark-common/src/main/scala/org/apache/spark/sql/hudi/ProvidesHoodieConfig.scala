@@ -111,7 +111,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    var combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
@@ -138,6 +138,9 @@ trait ProvidesHoodieConfig extends Logging {
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
     val hasPrimaryKey = hoodieCatalogTable.primaryKeys.nonEmpty
+    if (hoodieCatalogTable.primaryKeys.length == 0) { // auto generation or record keys
+      combinedOpts += DataSourceWriteOptions.OPERATION.key -> "insert"
+    }
 
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type

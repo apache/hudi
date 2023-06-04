@@ -1171,7 +1171,8 @@ object HoodieSparkSqlWriter {
 
           // handle dropping partition columns
           it.map { avroRec =>
-            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromAvroRecord(keyGenerator, avroRec)
+            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromAvroRecord(keyGenerator, avroRec,
+              isPrepped)
 
             val avroRecWithoutMeta: GenericRecord = if (isPrepped) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
@@ -1223,7 +1224,7 @@ object HoodieSparkSqlWriter {
           val finalStructTypeRowWriter = getCachedUnsafeRowWriter(sourceStructType, finalStructType)
 
           it.map { sourceRow =>
-            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType)
+            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped)
 
             val finalRow = finalStructTypeRowWriter(sourceRow)
             var hoodieSparkRecord = new HoodieSparkRecord(hoodieKey, finalRow, dataFileStructType, false)
@@ -1236,22 +1237,31 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def getKeyAndLocatorFromAvroRecord(keyGenerator: BaseKeyGenerator, avroRec: GenericRecord): (HoodieKey, Option[HoodieRecordLocation]) = {
-    val recordKey = if (avroRec.get("_hoodie_record_key") != null) {
+  private def getKeyAndLocatorFromAvroRecord(keyGenerator: BaseKeyGenerator, avroRec: GenericRecord,
+                                             isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    val recordKey = if (isPrepped) {
       avroRec.get("_hoodie_record_key").toString
     } else {
       keyGenerator.getRecordKey(avroRec)
     };
 
-    val partitionPath = if (avroRec.get("_hoodie_partition_path") != null) {
+    val partitionPath = if (isPrepped) {
       avroRec.get("_hoodie_partition_path").toString
     } else {
       keyGenerator.getPartitionPath(avroRec)
     };
 
     val hoodieKey = new HoodieKey(recordKey, partitionPath)
-    val instantTime: Option[String] = Option(avroRec.get("_hoodie_commit_time")).map(_.toString)
-    val fileName: Option[String] = Option(avroRec.get("_hoodie_file_name")).map(_.toString)
+    val instantTime: Option[String] = if (isPrepped) {
+      Option(avroRec.get("_hoodie_commit_time")).map(_.toString) }
+    else {
+      None
+    }
+    val fileName: Option[String] = if (isPrepped) {
+      Option(avroRec.get("_hoodie_file_name")).map(_.toString) }
+    else {
+      None
+    }
     val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
       val fileId = FSUtils.getFileId(fileName.get)
       Some(new HoodieRecordLocation(instantTime.get, fileId))
@@ -1261,7 +1271,8 @@ object HoodieSparkSqlWriter {
     (hoodieKey, recordLocation)
   }
 
-  private def getKeyAndLocatorFromSparkRecord(sparkKeyGenerator: SparkKeyGeneratorInterface, sourceRow: InternalRow, schema: StructType): (HoodieKey, Option[HoodieRecordLocation]) = {
+  private def getKeyAndLocatorFromSparkRecord(sparkKeyGenerator: SparkKeyGeneratorInterface, sourceRow: InternalRow,
+                                              schema: StructType, isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     def getFieldIndex(fieldName: String): Int = {
       if (schema.fieldNames.contains(fieldName)) {
         schema.fieldIndex(fieldName)
@@ -1271,28 +1282,28 @@ object HoodieSparkSqlWriter {
     }
 
     val hoodieRecordKeyIndex = getFieldIndex("_hoodie_record_key")
-    val recordKey = if (hoodieRecordKeyIndex != -1 && !sourceRow.isNullAt(hoodieRecordKeyIndex)) {
+    val recordKey = if (isPrepped && hoodieRecordKeyIndex != -1 && !sourceRow.isNullAt(hoodieRecordKeyIndex)) {
       sourceRow.getString(hoodieRecordKeyIndex);
     } else {
       sparkKeyGenerator.getRecordKey(sourceRow, schema).toString
     }
 
     val hoodiePartitionPathIndex = getFieldIndex("_hoodie_partition_path")
-    val partitionPath = if (hoodiePartitionPathIndex != -1 && !sourceRow.isNullAt(hoodiePartitionPathIndex)) {
+    val partitionPath = if (isPrepped && hoodiePartitionPathIndex != -1 && !sourceRow.isNullAt(hoodiePartitionPathIndex)) {
       sourceRow.getString(hoodieRecordKeyIndex)
     } else {
       sparkKeyGenerator.getPartitionPath(sourceRow, schema).toString
     };
 
     val commitTimeIndex = getFieldIndex("_hoodie_commit_time")
-    val instantTime: Option[String] = if (commitTimeIndex != -1) {
+    val instantTime: Option[String] = if (isPrepped && commitTimeIndex != -1) {
       Option(sourceRow.getString(commitTimeIndex))
     } else {
       None
     }
 
     val fileNameIndex = getFieldIndex("_hoodie_file_name")
-    val fileName: Option[String] = if (fileNameIndex != -1) {
+    val fileName: Option[String] = if (isPrepped && fileNameIndex != -1) {
       Option(sourceRow.getString(fileNameIndex))
     } else {
       None
