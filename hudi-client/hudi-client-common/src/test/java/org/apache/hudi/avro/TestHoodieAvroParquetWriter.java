@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.DummyTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.BloomFilterReader;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -55,108 +57,108 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class TestHoodieAvroParquetWriter {
 
-    @TempDir
-    java.nio.file.Path tmpDir;
+  @TempDir
+  java.nio.file.Path tmpDir;
 
-    @Test
-    public void testProperWriting() throws IOException {
-        Configuration hadoopConf = new Configuration();
+  @Test
+  public void testProperWriting() throws IOException {
+    Configuration hadoopConf = new Configuration();
 
-        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
-        List<GenericRecord> records = dataGen.generateGenericRecords(10);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
+    List<GenericRecord> records = dataGen.generateGenericRecords(10);
 
-        Schema schema = records.get(0).getSchema();
+    Schema schema = records.get(0).getSchema();
 
-        BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
-                BloomFilterTypeCode.DYNAMIC_V0.name());
-        HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-                schema, Option.of(filter));
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
+        BloomFilterTypeCode.DYNAMIC_V0.name());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
+        schema, Option.of(filter));
 
-        HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
-                new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
-                        ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
+    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
+        new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
+            ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
 
-        Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
+    Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
-        try (HoodieAvroParquetWriter writer =
-                     new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
-            for (GenericRecord record : records) {
-                writer.writeAvro((String) record.get("_row_key"), record);
-            }
-        }
-
-        ParquetUtils utils = new ParquetUtils();
-
-        // Step 1: Make sure records are written appropriately
-        List<GenericRecord> readRecords = utils.readAvroRecords(hadoopConf, filePath);
-
-        assertEquals(toJson(records), toJson(readRecords));
-
-        // Step 2: Assert Parquet metadata was written appropriately
-        List<String> recordKeys = records.stream().map(r -> (String) r.get("_row_key")).collect(Collectors.toList());
-
-        String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
-        String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
-
-        FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
-
-        Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
-
-        assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER), minKey);
-        assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER), maxKey);
-        assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
-
-        // Step 3: Make sure Bloom Filter contains all the record keys
-        BloomFilter bloomFilter = utils.readBloomFilterFromMetadata(hadoopConf, filePath);
-        recordKeys.forEach(recordKey -> {
-            assertTrue(bloomFilter.mightContain(recordKey));
-        });
+    try (HoodieAvroParquetWriter writer =
+             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+      for (GenericRecord record : records) {
+        writer.writeAvro((String) record.get("_row_key"), record);
+      }
     }
 
-    private static List<String> toJson(List<GenericRecord> records) {
-        return records.stream().map(r -> {
-            try {
-                return new String(HoodieAvroUtils.avroToJson(r, true));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }).collect(Collectors.toList());
+    ParquetUtils utils = new ParquetUtils();
+
+    // Step 1: Make sure records are written appropriately
+    List<GenericRecord> readRecords = utils.readAvroRecords(hadoopConf, filePath);
+
+    assertEquals(toJson(records), toJson(readRecords));
+
+    // Step 2: Assert Parquet metadata was written appropriately
+    List<String> recordKeys = records.stream().map(r -> (String) r.get("_row_key")).collect(Collectors.toList());
+
+    String minKey = recordKeys.stream().min(Comparator.naturalOrder()).get();
+    String maxKey = recordKeys.stream().max(Comparator.naturalOrder()).get();
+
+    FileMetaData parquetMetadata = ParquetUtils.readMetadata(hadoopConf, filePath).getFileMetaData();
+
+    Map<String, String> extraMetadata = parquetMetadata.getKeyValueMetaData();
+
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER), minKey);
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER), maxKey);
+    assertEquals(extraMetadata.get(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE), BloomFilterTypeCode.DYNAMIC_V0.name());
+
+    // Step 3: Make sure Bloom Filter contains all the record keys
+    BloomFilter bloomFilter = utils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    recordKeys.forEach(recordKey -> {
+      assertTrue(bloomFilter.mightContain(recordKey));
+    });
+  }
+
+  private static List<String> toJson(List<GenericRecord> records) {
+    return records.stream().map(r -> {
+      try {
+        return new String(HoodieAvroUtils.avroToJson(r, true));
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }).collect(Collectors.toList());
+  }
+
+  @Test
+  public void testProperWritingBuiltinParquetBloomFilter() throws IOException {
+
+    Configuration hadoopConf = new Configuration();
+    String columnToAddBloom = "driver";
+    hadoopConf.set("parquet.bloom.filter.enabled#" + columnToAddBloom, "true");
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
+    List<GenericRecord> records = dataGen.generateGenericRecords(10);
+
+    Schema schema = records.get(0).getSchema();
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
+        schema, Option.empty());
+    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
+        new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
+            ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
+    Path filePath = new Path(tmpDir.resolve("test-builtin-bloom.parquet").toAbsolutePath().toString());
+    try (HoodieAvroParquetWriter writer =
+             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+      for (GenericRecord record : records) {
+        writer.writeAvro((String) record.get("_row_key"), record);
+      }
     }
 
-    @Test
-    public void testProperWritingBuiltinParquetBloomFilter() throws IOException {
-
-        Configuration hadoopConf = new Configuration();
-        String columnToAddBloom = "driver";
-        hadoopConf.set("parquet.bloom.filter.enabled#" + columnToAddBloom, "true");
-
-        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
-        List<GenericRecord> records = dataGen.generateGenericRecords(10);
-
-        Schema schema = records.get(0).getSchema();
-        HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-                schema, Option.empty());
-        HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
-                new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
-                        ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024, hadoopConf, 0.1, true);
-        Path filePath = new Path(tmpDir.resolve("test-builtin-bloom.parquet").toAbsolutePath().toString());
-        try (HoodieAvroParquetWriter writer =
-                     new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
-            for (GenericRecord record : records) {
-                writer.writeAvro((String) record.get("_row_key"), record);
-            }
-        }
-
-        // inspired from https://github.com/apache/parquet-mr/pull/958/files
-        InputFile in = HadoopInputFile.fromPath(filePath, hadoopConf);
-        try (ParquetFileReader reader = ParquetFileReader.open(in)) {
-            for (BlockMetaData block : reader.getFooter().getBlocks()) {
-                Optional<ColumnChunkMetaData> maybeColumnMeta = block.getColumns().stream()
-                        .filter(c -> columnToAddBloom.equals(c.getPath().toDotString())).findFirst();
-                BloomFilterReader bloomFilterReader = reader.getBloomFilterDataReader(block);
-                org.apache.parquet.column.values.bloomfilter.BloomFilter bloomFilter = bloomFilterReader.readBloomFilter(maybeColumnMeta.get());
-                assertNotNull(bloomFilter);
-            }
-        }
+    // inspired from https://github.com/apache/parquet-mr/pull/958/files
+    InputFile in = HadoopInputFile.fromPath(filePath, hadoopConf);
+    try (ParquetFileReader reader = ParquetFileReader.open(in)) {
+      for (BlockMetaData block : reader.getFooter().getBlocks()) {
+        Optional<ColumnChunkMetaData> maybeColumnMeta = block.getColumns().stream()
+            .filter(c -> columnToAddBloom.equals(c.getPath().toDotString())).findFirst();
+        BloomFilterReader bloomFilterReader = reader.getBloomFilterDataReader(block);
+        org.apache.parquet.column.values.bloomfilter.BloomFilter bloomFilter = bloomFilterReader.readBloomFilter(maybeColumnMeta.get());
+        assertNotNull(bloomFilter);
+      }
     }
+  }
 }
