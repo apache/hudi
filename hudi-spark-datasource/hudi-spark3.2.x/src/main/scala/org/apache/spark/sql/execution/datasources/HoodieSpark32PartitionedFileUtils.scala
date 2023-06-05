@@ -18,20 +18,22 @@
  */
 
 package org.apache.spark.sql.execution.datasources
-
 import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.catalyst.InternalRow
 
-trait SparkPartitionedFileUtils extends Serializable {
-  /**
-   * Gets the Hadoop [[Path]] instance from Spark [[PartitionedFile]] instance.
-   *
-   * @param partitionedFile Spark [[PartitionedFile]] instance.
-   * @return Hadoop [[Path]] instance.
-   */
-  def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path
+object HoodieSpark32PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
+  override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
+    new Path(partitionedFile.filePath)
+  }
 
-  /**
-   *
-   */
-  def createPartitionedFile(): PartitionedFile
+  override def getStringPathFromPartitionedFile(partitionedFile: PartitionedFile): String = {
+    partitionedFile.filePath
+  }
+
+  override def createPartitionedFile(partitionValues: InternalRow,
+                                     filePath: Path,
+                                     start: Long,
+                                     length: Long): PartitionedFile = {
+    PartitionedFile(partitionValues, filePath.toUri.toString, start, length)
+  }
 }

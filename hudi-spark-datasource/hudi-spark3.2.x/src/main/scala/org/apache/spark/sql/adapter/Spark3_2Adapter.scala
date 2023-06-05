@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark32PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_2ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -70,6 +70,8 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark32CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark32CatalystExpressionUtils
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark32PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_2AvroSerializer(rootCatalystType, rootAvroType, nullable)

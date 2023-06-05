@@ -26,7 +26,6 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.paths.SparkPath
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -235,7 +234,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
 
       val partitionedBaseFile = baseFile.map { file =>
-        PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), SparkPath.fromPath(file.getFileStatus.getPath), 0, file.getFileLen)
+        MergeOnReadSnapshotRelation.createPartitionedFile(
+          getPartitionColumnsAsInternalRow(file.getFileStatus), file.getFileStatus.getPath, 0, file.getFileLen)
       }
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
@@ -243,7 +243,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 }
 
-object MergeOnReadSnapshotRelation {
+object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
 
   /**
    * List of [[HoodieRecordPayload]] classes capable of merging projected records:
@@ -259,4 +259,12 @@ object MergeOnReadSnapshotRelation {
 
   def isProjectionCompatible(tableState: HoodieTableState): Boolean =
     projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
+
+  def createPartitionedFile(partitionValues: InternalRow,
+                            filePath: Path,
+                            start: Long,
+                            length: Long): PartitionedFile = {
+    sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
+      partitionValues, filePath, start, length)
+  }
 }

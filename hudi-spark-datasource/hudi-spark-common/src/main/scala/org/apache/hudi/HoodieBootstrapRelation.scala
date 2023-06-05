@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
-import org.apache.hudi.HoodieBootstrapRelation.{getFilePath, validate}
+import org.apache.hudi.HoodieBootstrapRelation.validate
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
@@ -76,13 +76,16 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
             bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val dataFile = PartitionedFile(partitionValues, getFilePath(baseFile.getBootstrapBaseFile.get.getFileStatus.getPath),
+        val dataFile = HoodieBootstrapRelation.createPartitionedFile(
+          partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getPath,
           0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+        val skeletonFile = Option(HoodieBootstrapRelation.createPartitionedFile(
+          InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
-        val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
+        val dataFile = HoodieBootstrapRelation.createPartitionedFile(
+          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getHadoopPath, 0, baseFile.getFileLen)
         HoodieBootstrapSplit(dataFile)
       }
     }
@@ -204,7 +207,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 }
 
 
-object HoodieBootstrapRelation {
+object HoodieBootstrapRelation extends SparkAdapterSupport {
   private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
     val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq
@@ -214,10 +217,11 @@ object HoodieBootstrapRelation {
     checkState(combinedColumns.sorted == requiredDataColumns.sorted)
   }
 
-  def getFilePath(path: Path): String = {
-
-    //see MergeOnReadSnapshotRelation.getFilePath()
-    path.toUri.toString
+  def createPartitionedFile(partitionValues: InternalRow,
+                            filePath: Path,
+                            start: Long,
+                            length: Long): PartitionedFile = {
+    sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
+      partitionValues, filePath, start, length)
   }
-
 }

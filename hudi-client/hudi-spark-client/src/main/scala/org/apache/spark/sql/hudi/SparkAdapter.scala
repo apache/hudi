@@ -113,9 +113,9 @@ trait SparkAdapter extends Serializable {
   def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
-   * Gets the [[SparkPartitionedFileUtils]].
+   * Gets the [[HoodieSparkPartitionedFileUtils]].
    */
-  def getSparkPartitionedFileUtils: SparkPartitionedFileUtils
+  def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils
 
   /**
    * Get the [[DateFormatter]].

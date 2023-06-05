@@ -18,15 +18,10 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, Cast, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, AttributeSet, Cast, Expression, Like, Literal, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -72,13 +67,23 @@ trait HoodieCatalystExpressionUtils {
   /**
    * Un-applies [[Cast]] expression into
    * <ol>
-   *   <li>Casted [[Expression]]</li>
-   *   <li>Target [[DataType]]</li>
-   *   <li>(Optional) Timezone spec</li>
-   *   <li>Flag whether it's an ANSI cast or not</li>
+   * <li>Casted [[Expression]]</li>
+   * <li>Target [[DataType]]</li>
+   * <li>(Optional) Timezone spec</li>
+   * <li>Flag whether it's an ANSI cast or not</li>
    * </ol>
    */
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
+
+  /**
+   * Checks if input column names have duplicate identifiers. This throws an exception if
+   * the duplication exists.
+   *
+   * @param columnNames column names to check
+   * @param colType     column type name, used in an exception message
+   * @param resolver    resolver used to determine if two identifiers are equal
+   */
+  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, resolver: Resolver): Unit
 }
 
 object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
