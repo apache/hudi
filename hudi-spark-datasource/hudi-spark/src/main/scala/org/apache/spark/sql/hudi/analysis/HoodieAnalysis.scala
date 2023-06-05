@@ -22,13 +22,13 @@ import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, GenericInternalRow}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -78,7 +78,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.isSpark3) {
       val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_3) {
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_2) {
           "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
@@ -130,7 +132,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_3) {
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_2) {
           "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
@@ -186,7 +190,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         plan transformDown {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
-          case mit @ MergeIntoTable(targetTable, query, _, _, _) =>
+          case mit@MatchMergeIntoTable(targetTable, query, _, _, _) =>
             val updatedTargetTable = targetTable match {
               // In the receiving side of the MIT, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
@@ -207,7 +211,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
-              mit.copy(
+              mit.asInstanceOf[MergeIntoTable].copy(
                 targetTable = updatedTargetTable.getOrElse(targetTable),
                 sourceTable = updatedQuery.getOrElse(query)
               )
@@ -311,6 +315,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       .asInstanceOf[Rule[LogicalPlan]]
   }
 
+  private[sql] object MatchMergeIntoTable {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression, Seq[MergeAction], Seq[MergeAction])] =
+      sparkAdapter.getCatalystPlanUtils.unapplyMergeIntoTable(plan)
+  }
+
   private[sql] object MatchInsertIntoStatement {
     def unapply(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] =
       sparkAdapter.getCatalystPlanUtils.unapplyInsertIntoStatement(plan)
@@ -370,15 +379,15 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
-      case mit @ MergeIntoTable(target @ ResolvesToHudiTable(_), _, _, _, _) if mit.resolved =>
-        MergeIntoHoodieTableCommand(mit)
+      case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _, _, _) if mit.resolved =>
+        MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
 
       // Convert to UpdateHoodieTableCommand
-      case ut @ UpdateTable(plan @ ResolvesToHudiTable(_), _, _) if ut.resolved =>
+      case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
         UpdateHoodieTableCommand(ut)
 
       // Convert to DeleteHoodieTableCommand
-      case dft @ DeleteFromTable(plan @ ResolvesToHudiTable(_), _) if dft.resolved =>
+      case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
         DeleteHoodieTableCommand(dft)
 
       // Convert to CompactionHoodieTableCommand

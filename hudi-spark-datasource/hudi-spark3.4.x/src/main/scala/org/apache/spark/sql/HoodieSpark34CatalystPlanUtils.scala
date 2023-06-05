@@ -20,11 +20,19 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeAction, MergeIntoTable, TimeTravelRelation}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+
+  override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression, Seq[MergeAction], Seq[MergeAction])] = {
+    plan match {
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, matchedActions, notMatchedActions, notMatchedBySourceActions) =>
+        Some((targetTable, sourceTable, mergeCondition, matchedActions, notMatchedActions))
+      case _ => None
+    }
+  }
 
   override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
     plan.isInstanceOf[TimeTravelRelation]
