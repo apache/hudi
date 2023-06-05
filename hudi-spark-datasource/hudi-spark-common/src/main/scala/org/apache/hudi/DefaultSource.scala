@@ -95,15 +95,18 @@ class DefaultSource extends RelationProvider
       Seq.empty
     }
 
+    val sessionQueryType = sqlContext.getConf(QUERY_TYPE.key, "")
+    val beginInstantTime = sqlContext.getConf(BEGIN_INSTANTTIME.key, "")
+    val endInstantTime = sqlContext.getConf(END_INSTANTTIME.key, "")
+
     // Add default options for unspecified read options keys.
-    val parameters = (if (globPaths.nonEmpty) {
-      Map(
-        "glob.paths" -> globPaths.mkString(",")
-      )
-    } else {
-      Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams +
-      (DATA_QUERIES_ONLY.key() -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), optParams.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()))))
+    val defaultOpts = Map() ++
+      (if (globPaths.nonEmpty) Seq("glob.paths" -> globPaths.mkString(",")) else Nil) ++
+      (if (sessionQueryType != "") Seq(QUERY_TYPE.key -> sessionQueryType) else Nil) ++
+      (if (beginInstantTime != "") Seq(BEGIN_INSTANTTIME.key -> beginInstantTime) else Nil) ++
+      (if (endInstantTime != "") Seq(END_INSTANTTIME.key -> endInstantTime) else Nil) +
+      (DATA_QUERIES_ONLY.key() -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), optParams.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue())))
+    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams) ++ defaultOpts
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {

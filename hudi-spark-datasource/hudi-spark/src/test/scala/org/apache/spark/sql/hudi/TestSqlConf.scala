@@ -104,6 +104,69 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     }
   }
 
+  test("Test Hudi Conf read") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val partitionVal = "2021"
+      // Create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  year string
+           |) using hudi
+           | partitioned by (year)
+           | location '$tablePath'
+           | options (
+           |  type = 'mor',
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // First insert a new record
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
+
+      // Then update record
+      spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000, $partitionVal)")
+
+      checkAnswer(s"select id, name, price, ts, year from $tableName")(
+        Seq(1, "a2", 10.0, 1000, partitionVal)
+      )
+
+      spark.sql("set hoodie.datasource.query.type=read_optimized")
+      spark.catalog.refreshTable(tableName)
+      checkAnswer(s"select id, name, price, ts, year from $tableName")(
+        Seq(1, "a1", 10.0, 1000, partitionVal)
+      )
+
+      // Then insert two records
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000, $partitionVal)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000, $partitionVal)")
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().nthInstant(0).get().getTimestamp
+      val thirdCommit = metaClient.getActiveTimeline.filterCompletedInstants().nthInstant(2).get().getTimestamp
+
+      spark.sql("set hoodie.datasource.query.type=incremental")
+      spark.sql(s"set hoodie.datasource.read.begin.instanttime=$firstCommit")
+      spark.sql(s"set hoodie.datasource.read.end.instanttime=$thirdCommit")
+      spark.catalog.refreshTable(tableName)
+      // Incremental query will get records in range (startTs, endTs]
+      checkAnswer(s"select id, name, price, ts, year from $tableName")(
+        Seq(1, "a2", 10.0, 1000, partitionVal),
+        Seq(2, "a2", 20.0, 2000, partitionVal)
+      )
+    }
+  }
+
   before {
     val testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath
     setEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath)
