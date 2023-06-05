@@ -51,7 +51,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.parquet.Spark32PlusHoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark34PlusHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -419,7 +419,7 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
   }
 }
 
-object Spark32PlusHoodieParquetFileFormat {
+object Spark34PlusHoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0
