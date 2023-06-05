@@ -699,12 +699,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setConf(hadoopConf)
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
-        Option<HoodieInstant> lastCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().lastInstant();
+        Option<HoodieInstant> latestMdtCompaction = mdtClient.getCommitTimeline().filterCompletedInstants().lastInstant();
         boolean deleteMDT = false;
-        if (lastCompaction.isPresent()) {
-          if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(savepointTime, lastCompaction.get().getTimestamp())) {
+        if (latestMdtCompaction.isPresent()) {
+          if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(savepointTime, latestMdtCompaction.get().getTimestamp())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than oldest compaction %s on MDT",
-                savepointTime, lastCompaction.get().getTimestamp()));
+                savepointTime, latestMdtCompaction.get().getTimestamp()));
             deleteMDT = true;
           }
         }

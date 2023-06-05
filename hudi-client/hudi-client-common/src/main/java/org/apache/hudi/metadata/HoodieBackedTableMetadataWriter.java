@@ -972,7 +972,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // String syncCommitTime = HoodieTableMetadataUtil.createIndexInitTimestamp(HoodieActiveTimeline.createNewInstantTime());
       // TODO: Using METADATA_INDEXER_TIME_SUFFIX for now, but this should have its own suffix. To be fixed after HUDI-6200
       String syncCommitTime = HoodieActiveTimeline.createNewInstantTime() + METADATA_INDEXER_TIME_SUFFIX;
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, cleanMetadata, getRecordsGenerationParams(),
+      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, cleanMetadata, getRecordsGenerationParams(),
           syncCommitTime), false);
       closeInternal();
     } catch (IOException e) {
