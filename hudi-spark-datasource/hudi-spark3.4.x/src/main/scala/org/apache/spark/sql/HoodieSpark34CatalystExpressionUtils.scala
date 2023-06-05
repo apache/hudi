@@ -20,6 +20,7 @@ package org.apache.spark.sql
 import HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, EvalMode, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.util.SchemaUtils
 
 object HoodieSpark34CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils {
 
@@ -92,5 +93,11 @@ object HoodieSpark34CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         case _ => None
       }
     }
+  }
+
+  override def checkColumnNameDuplication(columnNames: Seq[String],
+                                          colType: String,
+                                          caseSensitiveAnalysis: Boolean): Unit = {
+    SchemaUtils.checkColumnNameDuplication(columnNames, caseSensitiveAnalysis)
   }
 }

@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark34PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark34HoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.HoodieSpark3_4ExtendedSqlParser
@@ -34,7 +34,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark34CatalogUtils, HoodieSpark34CatalystExpressionUtils, HoodieSpark34CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
 
 /**
- * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
+ * Implementation of [[SparkAdapter]] for Spark 3.4.x branch
  */
 class Spark3_4Adapter extends BaseSpark3Adapter {
 
@@ -45,6 +45,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark34CatalystExpressionUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark34CatalystPlanUtils
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark34PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_4AvroSerializer(rootCatalystType, rootAvroType, nullable)

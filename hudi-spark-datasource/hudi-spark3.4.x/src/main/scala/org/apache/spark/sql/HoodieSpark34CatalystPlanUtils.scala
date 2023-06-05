@@ -41,7 +41,7 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
   override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
     plan match {
       case timeTravel: TimeTravelRelation =>
-        Some((timeTravel.table, timeTravel.timestamp, timeTravel.version))
+        None//Some((timeTravel.table, timeTravel.timestamp, timeTravel.version))
       case _ =>
         None
     }
