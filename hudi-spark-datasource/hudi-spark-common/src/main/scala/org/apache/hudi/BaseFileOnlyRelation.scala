@@ -66,9 +66,13 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
-    internalSchemaOpt.isEmpty
+  internalSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
+
+  // Pre Spark 3.4: PartitioningAwareFileIndex.BASE_PATH_PARAM
+  // Since Spark 3.4: FileIndexOptions.BASE_PATH_PARAM
+  val BASE_PATH_PARAM = "basePath"
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
@@ -203,7 +207,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
           // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
           //       list of globbed paths which complicates partitioning discovery for Spark.
           //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+          BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
         ),
         partitionColumns = partitionColumns
       )

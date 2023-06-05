@@ -27,11 +27,9 @@ import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.util.SchemaUtils.checkColumnNameDuplication
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 import java.nio.charset.StandardCharsets
@@ -84,7 +82,7 @@ case class AlterHoodieTableAddColumnsCommand(
     }
     sparkSession.catalog.refreshTable(table.identifier.unquotedString)
 
-    checkColumnNameDuplication(
+    AlterHoodieTableAddColumnsCommand.checkColumnNameDuplication(
       newSqlDataSchema.map(_.name),
       "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
@@ -134,11 +132,11 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
    * Checks if input column names have duplicate identifiers. This throws an exception if
    * the duplication exists.
    *
-   * @param columnNames column names to check
-   * @param colType     column type name, used in an exception message
-   * @param resolver    resolver used to determine if two identifiers are equal
+   * @param columnNames           column names to check.
+   * @param colType               column type name, used in an exception message.
+   * @param caseSensitiveAnalysis whether duplication checks should be case sensitive or not.
    */
-  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, resolver: Resolver): Unit = {
-    sparkAdapter.getCatalystExpressionUtils.checkColumnNameDuplication(columnNames, colType, resolver)
+  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, caseSensitiveAnalysis: Boolean): Unit = {
+    sparkAdapter.getCatalystExpressionUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
   }
 }

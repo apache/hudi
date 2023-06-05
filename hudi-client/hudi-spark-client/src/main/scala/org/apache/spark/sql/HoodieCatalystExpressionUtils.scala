@@ -19,7 +19,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, AttributeSet, Cast, Expression, Like, Literal, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.sources._
@@ -79,11 +79,11 @@ trait HoodieCatalystExpressionUtils {
    * Checks if input column names have duplicate identifiers. This throws an exception if
    * the duplication exists.
    *
-   * @param columnNames column names to check
-   * @param colType     column type name, used in an exception message
-   * @param resolver    resolver used to determine if two identifiers are equal
+   * @param columnNames           column names to check.
+   * @param colType               column type name, used in an exception message.
+   * @param caseSensitiveAnalysis whether duplication checks should be case sensitive or not.
    */
-  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, resolver: Resolver): Unit
+  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, caseSensitiveAnalysis: Boolean): Unit
 }
 
 object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
