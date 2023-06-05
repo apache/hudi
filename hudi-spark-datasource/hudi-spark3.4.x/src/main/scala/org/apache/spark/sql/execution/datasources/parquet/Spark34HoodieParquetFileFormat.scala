@@ -18,16 +18,6 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
-
-package org.apache.spark.sql.execution.datasources.parquet
-
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
@@ -51,15 +41,15 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.parquet.Spark34PlusHoodieParquetFileFormat._
-import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
+import org.apache.spark.sql.execution.{FileSourceScanExec, WholeStageCodegenExec}
+import org.apache.spark.sql.execution.datasources.parquet.Spark34HoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
-
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
  * that's not possible to customize in any other way
@@ -71,6 +61,20 @@ import java.net.URI
  * </ol>
  */
 class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+  }
+
+  def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    // Only output columnar if there is WSCG to read it.
+    val requiredWholeStageCodegenSettings =
+      conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
+    requiredWholeStageCodegenSettings &&
+      supportBatch(sparkSession, schema)
+  }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -110,6 +114,8 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       "spark.sql.legacy.parquet.nanosAsLong",
       sparkSession.sessionState.conf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
+    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sparkSession.sessionState.conf.parquetInferTimestampNTZEnabled)
+    hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, sparkSession.sessionState.conf.legacyParquetNanosAsLong)
     val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here
@@ -135,23 +141,25 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
     val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
-    // Whole stage codegen (PhysicalRDD) is able to deal with batches directly
-    val returningBatch = supportBatch(sparkSession, resultSchema)
     val pushDownDate = sqlConf.parquetFilterPushDownDate
     val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
     val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
-    val pushDownStringStartWith = sqlConf.parquetFilterPushDownStringStartWith
+    val pushDownStringStartWith = sqlConf.parquetFilterPushDownStringPredicate
     val pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold
     val isCaseSensitive = sqlConf.caseSensitiveAnalysis
     val parquetOptions = new ParquetOptions(options, sparkSession.sessionState.conf)
     val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
     val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
-    val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
+    // Should always be set by FileSourceScanExec creating this.
+    // Check conf before checking option, to allow working around an issue by changing conf.
+    val returningBatch = sparkSession.sessionState.conf.parquetVectorizedReaderEnabled &&
+      supportsColumnar(sparkSession, resultSchema).toString.equals("true")
+
 
     (file: PartitionedFile) => {
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
-      val filePath = new Path(new URI(file.filePath))
+      val filePath = file.filePath.toPath
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
       val sharedConf = broadcastedHadoopConf.value.value
@@ -389,10 +397,7 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             }).toAttributes ++ partitionSchema.toAttributes
             val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
               if (typeChangeInfos.containsKey(i)) {
-                val srcType = typeChangeInfos.get(i).getRight
-                val dstType = typeChangeInfos.get(i).getLeft
-                val needTimeZone = Cast.needsTimeZone(srcType, dstType)
-                Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
+                Cast(attr, typeChangeInfos.get(i).getLeft)
               } else attr
             }
             GenerateUnsafeProjection.generate(castSchema, newFullSchema)
@@ -419,7 +424,7 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
   }
 }
 
-object Spark34PlusHoodieParquetFileFormat {
+object Spark34HoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0
