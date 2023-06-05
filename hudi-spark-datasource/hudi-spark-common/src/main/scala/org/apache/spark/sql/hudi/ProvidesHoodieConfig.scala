@@ -93,7 +93,7 @@ trait ProvidesHoodieConfig extends Logging {
    * Get the insert operation.
    * See if we are able to set bulk insert, else use deduceOperation
    */
-  private def getOperation(isPartitionedTable: Boolean,
+  private def deduceWriteOperationForInsertInfo(isPartitionedTable: Boolean,
                            isOverwritePartition: Boolean,
                            isOverwriteTable: Boolean,
                            insertModeSet: Boolean,
@@ -103,7 +103,7 @@ trait ProvidesHoodieConfig extends Logging {
                            isNonStrictMode: Boolean,
                            hasPrecombineColumn: Boolean): String = {
     val notSetToNonStrict = !insertModeSet || isNonStrictMode
-    //if options are not set, we assume they are configs to do bulk insert
+    //if selected configs are not set, instead of using the default we assume the values to be those that enable bulk_insert
     (isInsertInto, notSetToNonStrict, enableBulkInsert.getOrElse("true"),
       dropDuplicate.getOrElse("false"), isOverwritePartition, isPartitionedTable) match {
       case (true, true, "true", "false", false, _) => BULK_INSERT_OPERATION_OPT_VAL
@@ -197,7 +197,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
     val operation = combinedOpts.getOrElse(OPERATION.key,
-      getOperation(isPartitionedTable, isOverwritePartition, isOverwriteTable, insertModeSet, dropDuplicate,
+      deduceWriteOperationForInsertInfo(isPartitionedTable, isOverwritePartition, isOverwriteTable, insertModeSet, dropDuplicate,
         enableBulkInsert, isInsertInto, isNonStrictMode, hasPrecombineColumn))
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
