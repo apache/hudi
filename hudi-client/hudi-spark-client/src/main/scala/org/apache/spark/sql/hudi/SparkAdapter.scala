@@ -113,6 +113,11 @@ trait SparkAdapter extends Serializable {
   def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
+   * Gets the [[SparkPartitionedFileUtils]].
+   */
+  def getSparkPartitionedFileUtils: SparkPartitionedFileUtils
+
+  /**
    * Get the [[DateFormatter]].
    */
   def getDateFormatter(tz: TimeZone): DateFormatter
