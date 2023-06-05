@@ -76,7 +76,9 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
     // TODO Issue with setting this to true in spark 332
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    if (HoodieSparkUtils.gteqSpark3_4 || !HoodieSparkUtils.gteqSpark3_3_2) {
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    }
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
@@ -201,7 +203,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
           // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
           //       list of globbed paths which complicates partitioning discovery for Spark.
           //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          FileIndexOptions.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
         ),
         partitionColumns = partitionColumns
       )
