@@ -58,6 +58,7 @@ private[hudi] trait SparkVersionsSupport {
   def gteqSpark3_2_1: Boolean = getSparkVersion >= "3.2.1"
   def gteqSpark3_2_2: Boolean = getSparkVersion >= "3.2.2"
   def gteqSpark3_3: Boolean = getSparkVersion >= "3.3"
+  def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
 }
 
 object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {
@@ -224,15 +225,21 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           }
           Array(UTF8String.fromString(partitionValue))
         } else {
-          // If the partition column size is not equal to the partition fragments size
-          // and the partition column size > 1, we do not know how to map the partition
-          // fragments to the partition columns and therefore return an empty tuple. We don't
-          // fail outright so that in some cases we can fallback to reading the table as non-partitioned
-          // one
-          logWarning(s"Failed to parse partition values: found partition fragments" +
-            s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
-            s" (${partitionColumns.mkString(",")})")
-          Array.empty
+          val prefix = s"${partitionColumns.head}="
+          if (partitionPath.startsWith(prefix)) {
+            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length).
+              map(p => UTF8String.fromString(p)).toArray
+          } else {
+            // If the partition column size is not equal to the partition fragments size
+            // and the partition column size > 1, we do not know how to map the partition
+            // fragments to the partition columns and therefore return an empty tuple. We don't
+            // fail outright so that in some cases we can fallback to reading the table as non-partitioned
+            // one
+            logWarning(s"Failed to parse partition values: found partition fragments" +
+              s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
+              s" (${partitionColumns.mkString(",")})")
+            Array.empty
+          }
         }
       } else {
         // If partitionSeqs.length == partitionSchema.fields.length
@@ -270,5 +277,25 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionCols
     ).toSeq(partitionSchema)
+  }
+
+  def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int): Array[String] = {
+    val partitionVals = new Array[String](nPartitions)
+    var index = 0
+    var first = true
+    for (fragment <- partitionFragments) {
+      if (fragment.contains("=")) {
+        if (first) {
+          first = false
+        } else {
+          index += 1
+        }
+        partitionVals(index) = fragment.substring(fragment.indexOf("=") + 1)
+
+      } else {
+        partitionVals(index) += "/" + fragment
+      }
+    }
+    return partitionVals
   }
 }

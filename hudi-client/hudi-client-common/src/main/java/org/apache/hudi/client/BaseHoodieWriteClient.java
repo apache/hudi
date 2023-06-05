@@ -537,7 +537,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoCleanOnCommit();
-    autoArchiveOnCommit(table);
+    // reload table to that timeline reflects the clean commit
+    autoArchiveOnCommit(createTable(config, hadoopConf));
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -585,8 +586,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Create a savepoint based on the latest commit action on the timeline.
    *
-   * @param user - User creating the savepoint
-   * @param comment - Comment for the savepoint
+   * @param user    User creating the savepoint
+   * @param comment Comment for the savepoint
    */
   public void savepoint(String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
@@ -608,9 +609,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * <p>
    * Savepoint should be on a commit that could not have been cleaned.
    *
-   * @param instantTime - commit that should be savepointed
-   * @param user - User creating the savepoint
-   * @param comment - Comment for the savepoint
+   * @param instantTime Commit that should be savepointed
+   * @param user        User creating the savepoint
+   * @param comment     Comment for the savepoint
    */
   public void savepoint(String instantTime, String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
@@ -618,15 +619,44 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Delete a savepoint based on the latest commit action on the savepoint timeline.
+   */
+  public void deleteSavepoint() {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+    if (savePointTimeline.empty()) {
+      throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
+    }
+
+    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+    LOG.info("Deleting latest savepoint time " + savepointTime);
+    deleteSavepoint(savepointTime);
+  }
+
+  /**
    * Delete a savepoint that was created. Once the savepoint is deleted, the commit can be rolledback and cleaner may
    * clean up data files.
    *
-   * @param savepointTime - delete the savepoint
-   * @return true if the savepoint was deleted successfully
+   * @param savepointTime Savepoint time to delete
    */
   public void deleteSavepoint(String savepointTime) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     SavepointHelpers.deleteSavepoint(table, savepointTime);
+  }
+
+  /**
+   * Restore the data to a savepoint based on the latest commit action on the savepoint timeline.
+   */
+  public void restoreToSavepoint() {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+    if (savePointTimeline.empty()) {
+      throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
+    }
+
+    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+    LOG.info("Restoring to latest savepoint time " + savepointTime);
+    restoreToSavepoint(savepointTime);
   }
 
   /**
@@ -636,8 +666,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Queries accessing the files will mostly fail. This is expected to be a manual operation and no concurrent write or
    * compaction is expected to be running
    *
-   * @param savepointTime - savepoint time to rollback to
-   * @return true if the savepoint was restored to successfully
+   * @param savepointTime Savepoint time to rollback to
    */
   public void restoreToSavepoint(String savepointTime) {
     boolean initialMetadataTableIfNecessary = config.isMetadataTableEnabled();
@@ -1028,7 +1057,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
-  /***
+  /**
    * Schedules compaction inline.
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.

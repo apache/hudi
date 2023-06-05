@@ -18,17 +18,6 @@
 
 package org.apache.hudi.sink.bucket;
 
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.api.EnvironmentSettings;
-import org.apache.flink.table.api.TableEnvironment;
-import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
@@ -46,6 +35,12 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,6 +54,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -136,17 +133,13 @@ public class ITTestBucketStreamWrite {
     Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
     fs.delete(path);
 
-    // marker types are different for COW and MOR
-    IOType ioType = isCow ? IOType.CREATE : IOType.APPEND;
-
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯
       String[] partitionFileNameSplit = relativePath.split("/");
-      String fileInstant = FSUtils.getCommitTime(partitionFileNameSplit[1]);
       String partition = partitionFileNameSplit[0];
-      String writeToken = isCow ? getWriteToken(partitionFileNameSplit[1]) : FSUtils.getWriteTokenFromLogPath(new Path(relativePath));
+      String fileName = partitionFileNameSplit[1];
       try {
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, fileInstant, fileId, ioType, writeToken);
+        FileCreateUtils.createFileMarkerByFileName(tablePath, partition, commitInstant, fileName, IOType.CREATE);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

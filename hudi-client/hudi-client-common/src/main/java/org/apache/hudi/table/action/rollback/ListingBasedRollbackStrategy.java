@@ -104,14 +104,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 metaClient.getFs(), commitMetadataOptional, isCommitMetadataCompleted);
 
         if (HoodieTableType.COPY_ON_WRITE == tableType) {
-          hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
+          hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
         } else if (HoodieTableType.MERGE_ON_READ == tableType) {
           String commit = instantToRollback.getTimestamp();
           HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
           switch (instantToRollback.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
-              hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
+              hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
               // If there is no delta commit present after the current commit (if compaction), no action, else we
@@ -125,14 +125,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // and has not yet finished. In this scenario we should delete only the newly created base files
                 // and not corresponding base commit log files created with this as baseCommit since updates would
                 // have been written to the log files.
-                hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath,
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
                     listFilesToBeDeleted(instantToRollback.getTimestamp(), baseFileExtension, partitionPath,
                         metaClient.getFs())));
               } else {
                 // No deltacommits present after this compaction commit (inflight or requested). In this case, we
                 // can also delete any log files that were created with this compaction commit as base
                 // commit.
-                hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -166,7 +166,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // In case all data was inserts and the commit failed, delete the file belonging to that commit
               // We do not know fileIds for inserts (first inserts are either log files or base files),
               // delete all files for the corresponding failed commit, if present (same as COW)
-              hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
+              hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
 
               // append rollback blocks for updates and inserts as A.2 and B.2
               if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
@@ -194,19 +194,15 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   @NotNull
-  private HoodieRollbackRequest getHoodieRollbackRequest(String partitionPath, FileStatus[] filesToDeletedStatus) {
-    List<String> filesToDelete = getFilesToBeDeleted(filesToDeletedStatus);
-    return new HoodieRollbackRequest(
-        partitionPath, EMPTY_STRING, EMPTY_STRING, filesToDelete, Collections.emptyMap());
-  }
-
-  @NotNull
-  private List<String> getFilesToBeDeleted(FileStatus[] dataFilesToDeletedStatus) {
-    return Arrays.stream(dataFilesToDeletedStatus).map(fileStatus -> {
-      String dataFileToBeDeleted = fileStatus.getPath().toString();
-      // strip scheme E.g: file:/var/folders
-      return dataFileToBeDeleted.substring(dataFileToBeDeleted.indexOf(":") + 1);
-    }).collect(Collectors.toList());
+  private List<HoodieRollbackRequest> getHoodieRollbackRequests(String partitionPath, FileStatus[] filesToDeletedStatus) {
+    return Arrays.stream(filesToDeletedStatus)
+        .map(fileStatus -> {
+          String dataFileToBeDeleted = fileStatus.getPath().toString();
+          // strip scheme E.g: file:/var/folders
+          return dataFileToBeDeleted.substring(dataFileToBeDeleted.indexOf(":") + 1);
+        })
+        .map(s -> new HoodieRollbackRequest(partitionPath, EMPTY_STRING, EMPTY_STRING, Collections.singletonList(s), Collections.emptyMap()))
+        .collect(Collectors.toList());
   }
 
   private FileStatus[] listFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,

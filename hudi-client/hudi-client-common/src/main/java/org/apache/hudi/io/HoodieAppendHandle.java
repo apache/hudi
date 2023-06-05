@@ -65,6 +65,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -201,13 +202,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
             hoodieTable.getPartitionMetafileFormat());
         partitionMetadata.trySave(getPartitionId());
-
-        // Since the actual log file written to can be different based on when rollover happens, we use the
-        // base file to denote some log appends happened on a slice. writeToken will still fence concurrent
-        // writers.
-        // https://issues.apache.org/jira/browse/HUDI-1517
-        createMarkerFile(partitionPath, FSUtils.makeBaseFileName(baseInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
-
         this.writer = createLogWriter(fileSlice, baseInstantTime);
       } catch (Exception e) {
         LOG.error("Error in update task at commit " + instantTime, e);
@@ -498,21 +492,26 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header, true);
       recordItr = null;
-      if (writer != null) {
-        writer.close();
-        writer = null;
 
-        // update final size, once for all log files
-        // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-        //      of the appended block)
-        for (WriteStatus status : statuses) {
-          long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
-          status.getStat().setFileSizeInBytes(logFileSize);
-        }
+      writer.close();
+
+      // update final size, once for all log files
+      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
+      //      of the appended block)
+      for (WriteStatus status : statuses) {
+        long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        status.getStat().setFileSizeInBytes(logFileSize);
       }
+
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);

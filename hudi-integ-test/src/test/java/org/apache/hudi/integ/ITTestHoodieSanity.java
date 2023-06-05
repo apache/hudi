@@ -27,6 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -192,6 +195,17 @@ public class ITTestHoodieSanity extends ITTestBase {
       stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
       assertEquals(80, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
           "Expecting 80 rows to be present in the snapshot table");
+
+      if (partitionType != PartitionType.NON_PARTITIONED) {
+        // Verify queries with partition field predicates, some partitions may be empty, so we query all the partitions.
+        String[] partitions = getPartitions(roTableName.get());
+        assertTrue(partitions.length > 0);
+        String partitionClause = partitionType == PartitionType.SINGLE_KEY_PARTITIONED
+            ? Arrays.stream(partitions).map(String::trim).collect(Collectors.joining(" or "))
+            : Arrays.stream(partitions).map(par -> String.join(" and ", par.trim().split("/"))).collect(Collectors.joining(" or "));
+        stdOutErr = executeHiveCommand("select * from " + roTableName.get() + " where " + partitionClause);
+        assertTrue(stdOutErr.getLeft().split("\n").length > 0, "Expecting at least one row to be present, but got " + stdOutErr);
+      }
     }
 
     // Make the HDFS dataset non-hoodie and run the same query; Checks for interoperability with non-hoodie tables
@@ -207,6 +221,11 @@ public class ITTestHoodieSanity extends ITTestBase {
 
     assertEquals(280, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
         "Expecting 280 rows to be present in the new table");
+  }
+
+  private String[] getPartitions(String tableName) throws Exception {
+    Pair<String, String> stdOutErr = executeHiveCommand("show partitions " + tableName);
+    return stdOutErr.getLeft().split("\n");
   }
 
   private static String lastLine(String output) {

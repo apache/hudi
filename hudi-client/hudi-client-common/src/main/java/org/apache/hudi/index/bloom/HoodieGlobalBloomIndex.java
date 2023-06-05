@@ -23,7 +23,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -38,11 +37,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.index.HoodieIndexUtils.mergeForPartitionUpdates;
 
 /**
  * This filter will only work with hoodie table since it will only load partitions
@@ -101,7 +100,8 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
   @Override
   protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
-      HoodieData<HoodieRecord<R>> records) {
+      HoodieData<HoodieRecord<R>> records,
+      HoodieTable hoodieTable) {
 
     HoodiePairData<String, HoodieRecord<R>> incomingRowKeyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getRecordKey(), record));
@@ -110,33 +110,33 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
         keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
             p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
+    // Pair of a tagged record and the partition+location if tagged
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
-      final HoodieRecord<R> hoodieRecord = record.getLeft();
-      final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
-      if (recordLocationHoodieKeyPair.isPresent()) {
-        // Record key matched to file
-        if (config.getBloomIndexUpdatePartitionPath()
-            && !recordLocationHoodieKeyPair.get().getRight().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
-          // Create an empty record to delete the record in the old partition
-          HoodieRecord<R> deleteRecord = new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(),
-              new EmptyHoodieRecordPayload());
-          deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
-          deleteRecord.seal();
-          // Tag the incoming record for inserting to the new partition
-          HoodieRecord<R> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
-          return Arrays.asList(deleteRecord, insertRecord).iterator();
-        } else {
-          // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
-          // When it differs, the record will still be updated at its old partition.
-          return Collections.singletonList(
-              (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
-                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft()))).iterator();
-        }
-      } else {
-        return Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
-      }
-    });
+    HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedRecordsAndLocationInfo = incomingRowKeyRecordPairs
+        .leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap)
+        .values().map(record -> {
+          final HoodieRecord<R> hoodieRecord = record.getLeft();
+          final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
+          if (recordLocationHoodieKeyPair.isPresent()) {
+            // Record key matched to file
+            if (config.getBloomIndexUpdatePartitionPath()) {
+              Pair<HoodieRecordLocation, HoodieKey> hoodieRecordLocationHoodieKeyPair = recordLocationHoodieKeyPair.get();
+              return Pair.of(hoodieRecord, Option.of(Pair.of(hoodieRecordLocationHoodieKeyPair.getRight().getPartitionPath(), hoodieRecordLocationHoodieKeyPair.getLeft())));
+            } else {
+              // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
+              // When it differs, the record will still be updated at its old partition.
+              return Pair.of(
+                  (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
+                      Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft())), Option.empty());
+            }
+          } else {
+            return Pair.of(HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty()), Option.empty());
+          }
+        });
+
+    return config.getBloomIndexUpdatePartitionPath()
+        ? mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable)
+        : taggedRecordsAndLocationInfo.map(Pair::getLeft);
   }
 
   @Override

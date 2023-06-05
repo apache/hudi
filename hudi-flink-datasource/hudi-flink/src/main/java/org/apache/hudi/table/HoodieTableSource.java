@@ -398,7 +398,7 @@ public class HoodieTableSource implements
             .partitionPruner(partitionPruner)
             .build();
         final boolean cdcEnabled = this.conf.getBoolean(FlinkOptions.CDC_ENABLED);
-        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf, cdcEnabled);
+        final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, cdcEnabled);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
           LOG.warn("No input splits generate for incremental read, returns empty collection instead");

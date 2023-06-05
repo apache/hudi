@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.spark.internal.Logging
@@ -129,9 +130,20 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
 
   /**
-   * Table schema
+   * Firstly try to load table schema from meta directory on filesystem.
+   * If that fails then fallback to retrieving it from the Spark catalog.
    */
-  lazy val tableSchema: StructType = table.schema
+  lazy val tableSchema: StructType = {
+    val schemaFromMetaOpt = loadTableSchemaByMetaClient()
+    if (schemaFromMetaOpt.nonEmpty) {
+      schemaFromMetaOpt.get
+    } else if (table.schema.nonEmpty) {
+      addMetaFields(table.schema)
+    } else {
+      throw new AnalysisException(
+        s"$catalogTableName does not contains schema fields.")
+    }
+  }
 
   /**
    * The schema without hoodie meta fields
@@ -236,16 +248,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
           mapSqlOptionsToTableConfigs(sqlOptions) ++ currentTableConfig
 
-        val schemaFromMetaOpt = loadTableSchemaByMetaClient()
-        val schema = if (schemaFromMetaOpt.nonEmpty) {
-          schemaFromMetaOpt.get
-        } else if (table.schema.nonEmpty) {
-          addMetaFields(table.schema)
-        } else {
-          throw new AnalysisException(
-            s"Missing schema fields when applying CREATE TABLE clause for ${catalogTableName}")
-        }
-        (schema, options)
+        (tableSchema, options)
 
       case (_, false) =>
         checkArgument(table.schema.nonEmpty,
@@ -313,7 +316,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
       // Load table schema from meta on filesystem, and fill in 'comment'
       // information from Spark catalog.
-      val fields = originSchema.fields.map { f =>
+      // Hoodie newly added columns are positioned after partition columns,
+      // so it's necessary to reorder fields.
+      val (partFields, dataFields) = originSchema.fields.map { f =>
         val nullableField: StructField = f.copy(nullable = true)
         val catalogField = findColumnByName(table.schema, nullableField.name, resolver)
         if (catalogField.isDefined) {
@@ -321,8 +326,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         } else {
           nullableField
         }
-      }
-      StructType(fields)
+      }.partition(f => partitionFields.contains(f.name))
+      StructType(dataFields ++ partFields)
     })
   }
 

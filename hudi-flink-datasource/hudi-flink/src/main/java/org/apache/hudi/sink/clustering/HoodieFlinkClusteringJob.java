@@ -309,22 +309,13 @@ public class HoodieFlinkClusteringJob {
       }
 
       HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant.getTimestamp());
-      HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
-      if (!pendingClusteringTimeline.containsInstant(instant)) {
-        // this means that the clustering plan was written to auxiliary path(.tmp)
-        // but not the meta path(.hoodie), this usually happens when the job crush
-        // exceptionally.
 
-        // clean the clustering plan in auxiliary path and cancels the clustering.
-        LOG.warn("The clustering plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
-            + "Clean the clustering plan in auxiliary path and cancels the clustering");
-        CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-        return;
-      }
+      int inputGroupSize = clusteringPlan.getInputGroups().size();
 
       // get clusteringParallelism.
       int clusteringParallelism = conf.getInteger(FlinkOptions.CLUSTERING_TASKS) == -1
-          ? clusteringPlan.getInputGroups().size() : conf.getInteger(FlinkOptions.CLUSTERING_TASKS);
+          ? inputGroupSize
+          : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
       table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());

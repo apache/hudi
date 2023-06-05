@@ -540,6 +540,46 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
+  public void testMetadataArchivalCleanConfig(HoodieTableType tableType) throws Exception {
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(1)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    AtomicInteger commitTime = new AtomicInteger(1);
+    // Trigger 4 regular writes in data table.
+    for (int i = 1; i <= 4; i++) {
+      doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    }
+
+    // The earliest deltacommit in the metadata table should be "0000001",
+    // and the "00000000000000" init deltacommit should be archived.
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    assertEquals("0000001", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+
+    getHoodieWriteClient(writeConfig);
+    // Trigger data table archive, should archive "0000001", "0000002"
+    archiveDataTable(writeConfig, HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build());
+    // Trigger a regular write operation. metadata timeline archival should kick in and catch up with data table.
+    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    assertEquals("0000003", metadataTimeline.getCommitsTimeline().firstInstant().get().getTimestamp());
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
   public void testMetadataInsertUpsertClean(HoodieTableType tableType) throws Exception {
     init(tableType);
     doWriteOperation(testTable, "0000001", INSERT);
@@ -2435,6 +2475,27 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Post rollback commit and metadata should be valid
       validateMetadata(client);
     }
+  }
+
+  @Test
+  public void testMetadataTableWithLongLog() throws Exception {
+    init(COPY_ON_WRITE, false);
+    final int maxNumDeltacommits = 3;
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltacommits + 100)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltacommits)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    testTable.addRequestedCommit(String.format("%016d", 0));
+    for (int i = 1; i <= maxNumDeltacommits; i++) {
+      doWriteOperation(testTable, String.format("%016d", i));
+    }
+    int instant = maxNumDeltacommits + 1;
+    Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, String.format("%016d", instant)));
+    assertTrue(t.getMessage().startsWith(String.format("Metadata table's deltacommits exceeded %d: ", maxNumDeltacommits)));
   }
 
   @Test

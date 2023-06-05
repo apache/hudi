@@ -635,7 +635,8 @@ public abstract class AbstractHoodieLogRecordReader {
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
                 this.partitionNameOverrideOpt,
-                populateMetaFields);
+                populateMetaFields,
+                Option.empty());
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
       }

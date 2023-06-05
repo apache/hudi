@@ -27,7 +27,7 @@ import java.util.function.Supplier
 
 class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "path", DataTypes.StringType),
     ProcedureParameter.optional(1, "is_sub", DataTypes.BooleanType, false),
     ProcedureParameter.optional(2, "sort", DataTypes.BooleanType, true)
   )

@@ -165,9 +165,11 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the field comments for table in metastore, by using the ones from storage.
+   *
+   * @return
    */
-  default void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
-
+  default boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    return false;
   }
 
   /**
@@ -186,16 +188,20 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the table properties in metastore.
+   *
+   * @return true if properties updated.
    */
-  default void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-
+  default boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
+    return false;
   }
 
   /**
    * Update the SerDe properties in metastore.
+   *
+   * @return true if properties updated.
    */
-  default void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
-
+  default boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
+    return false;
   }
 
   /**

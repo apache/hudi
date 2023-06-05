@@ -51,7 +51,7 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private NonThrownExecutor executor;
 
-  private volatile boolean isCleaning;
+  protected volatile boolean isCleaning;
 
   public CleanFunction(Configuration conf) {
     this.conf = conf;
@@ -64,7 +64,14 @@ public class CleanFunction<T> extends AbstractRichFunction
     this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     LOG.info(String.format("exec clean with instant time %s...", instantTime));
-    executor.execute(() -> writeClient.clean(instantTime), "wait for cleaning finish");
+    executor.execute(() -> {
+      this.isCleaning = true;
+      try {
+        this.writeClient.clean(instantTime);
+      } finally {
+        this.isCleaning = false;
+      }
+    }, "wait for cleaning finish");
   }
 
   @Override

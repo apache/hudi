@@ -18,19 +18,27 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Iterator;
 import java.util.function.BiFunction;
 
-public class MergingIterator<T extends HoodieRecord> implements Iterator<T> {
+/**
+ * Iterator providing for the semantic of simultaneously iterating over 2 other iterators
+ * and combining their respective output
+ *
+ * @param <T1> type returned by the first iterator
+ * @param <T2> type returned by the second iterator
+ * @param <R> type returned by this iterator
+ */
+public class MergingIterator<T1, T2, R> implements Iterator<R> {
 
-  private final Iterator<T> leftIterator;
-  private final Iterator<T> rightIterator;
-  private final BiFunction<T, T, T> mergeFunction;
+  protected final Iterator<T1> leftIterator;
+  protected final Iterator<T2> rightIterator;
 
-  public MergingIterator(Iterator<T> leftIterator, Iterator<T> rightIterator, BiFunction<T, T, T> mergeFunction) {
+  private final BiFunction<T1, T2, R> mergeFunction;
+
+  public MergingIterator(Iterator<T1> leftIterator, Iterator<T2> rightIterator, BiFunction<T1, T2, R> mergeFunction) {
     this.leftIterator = leftIterator;
     this.rightIterator = rightIterator;
     this.mergeFunction = mergeFunction;
@@ -45,7 +53,7 @@ public class MergingIterator<T extends HoodieRecord> implements Iterator<T> {
   }
 
   @Override
-  public T next() {
+  public R next() {
     return mergeFunction.apply(leftIterator.next(), rightIterator.next());
   }
 }

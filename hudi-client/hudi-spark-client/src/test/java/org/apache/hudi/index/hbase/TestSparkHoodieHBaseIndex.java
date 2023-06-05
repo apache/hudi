@@ -114,6 +114,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   @BeforeAll
   public static void init() throws Exception {
     // Initialize HbaseMiniCluster
+    System.setProperty("zookeeper.4lw.commands.whitelist", "*");
     hbaseConfig = HBaseConfiguration.create();
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
 

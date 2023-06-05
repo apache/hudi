@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
@@ -42,7 +41,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformer;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformerInternal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -97,7 +96,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
       executor = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
+          getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
       int result = executor.execute();
 
       assertEquals(100, result);
@@ -137,7 +136,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
         new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-            getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
+            getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), getPreExecuteRunnable());
 
     // Interrupt the current thread (therefore triggering executor to throw as soon as it
     // invokes [[get]] on the [[CompletableFuture]])
@@ -154,15 +153,15 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
   @Test
   public void testExecutorTermination() {
-    Iterator<GenericRecord> unboundedRecordIter = new Iterator<GenericRecord>() {
+    Iterator<HoodieRecord> unboundedRecordIter = new Iterator<HoodieRecord>() {
       @Override
       public boolean hasNext() {
         return true;
       }
 
       @Override
-      public GenericRecord next() {
-        return dataGen.generateGenericRecord();
+      public HoodieRecord next() {
+        return dataGen.generateInserts(instantTime, 1).get(0);
       }
     };
 
@@ -180,7 +179,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness 
 
     BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
         new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
-            consumer, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+            consumer, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
             getPreExecuteRunnable());
     executor.shutdownNow();
     boolean terminatedGracefully = executor.awaitTermination();

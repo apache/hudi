@@ -72,11 +72,13 @@ public class HoodieLockMetrics {
 
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {
     String metricName = getMetricsName(metric);
-    synchronized (REGISTRY_LOCK) {
-      if (registry.getMetrics().get(metricName) == null) {
-        lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
-        registry.register(metricName, lockDuration);
-        return lockDuration;
+    if (registry.getMetrics().get(metricName) == null) {
+      synchronized (REGISTRY_LOCK) {
+        if (registry.getMetrics().get(metricName) == null) {
+          lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
+          registry.register(metricName, lockDuration);
+          return lockDuration;
+        }
       }
     }
     return (Timer) registry.getMetrics().get(metricName);

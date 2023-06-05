@@ -490,6 +490,15 @@ object DataSourceWriteOptions {
       + "This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, "
       + "causing spark will retry and rewrite the data.")
 
+  val STREAMING_DISABLE_COMPACTION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.streaming.disable.compaction")
+    .defaultValue("false")
+    .sinceVersion("0.14.0")
+    .withDocumentation("By default for MOR table, async compaction is enabled with spark streaming sink. "
+      + "By setting this config to true, we can disable it and the expectation is that, users will schedule and execute "
+      + "compaction in a different process/job altogether. Some users may wish to run it separately to manage resources "
+      + "across table services and regular ingestion pipeline and so this could be preferred on such cases.")
+
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
     .defaultValue(classOf[HiveSyncTool].getName)
@@ -876,8 +885,8 @@ object DataSourceOptionsHelper {
    */
   def fetchMissingWriteConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]) : Map[String, String] = {
     val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
-    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRecordKeyFieldProp != null) {
-      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRecordKeyFieldProp)
+    if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRawRecordKeyFieldProp != null) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRawRecordKeyFieldProp)
     }
     if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
       missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
@@ -912,7 +921,7 @@ object DataSourceOptionsHelper {
   }
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
-    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(recordsKeyFields, partitionFields))
+    getKeyGeneratorClassNameFromType(inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields))
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {

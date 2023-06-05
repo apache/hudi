@@ -107,7 +107,7 @@ class HoodieStreamSource(
     metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
       case activeInstants if !activeInstants.empty() =>
         val timestamp = if (useStateTransitionTime) {
-          activeInstants.getInstantsOrderedByStateTransitionTs
+          activeInstants.getInstantsOrderedByStateTransitionTime
             .skip(activeInstants.countInstants() - 1)
             .findFirst()
             .get()

@@ -573,7 +573,7 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
       .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key, classOf[FullRecordBootstrapModeSelector].getName)
       .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
@@ -583,10 +583,12 @@ class TestDataSourceForBootstrap {
     assertEquals(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
 
     // Read bootstrapped table and verify count
-    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF1 = spark.read.format("hudi")
+      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath + "/*")
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
-    val hoodieROViewDFWithBasePath = spark.read.format("hudi").load(basePath)
+    val hoodieROViewDFWithBasePath = spark.read.format("hudi")
+      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath)
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert
@@ -606,7 +608,8 @@ class TestDataSourceForBootstrap {
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
     // Read table after upsert and verify count
-    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF2 = spark.read.format("hudi")
+      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
 
@@ -623,7 +626,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, bootstrapKeygenClass)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, bootstrapKeygenClass)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
