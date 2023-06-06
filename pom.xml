@@ -2475,6 +2475,8 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
+        <log4j2.version>2.19.0</log4j2.version>
+        <slf4j.version>2.0.6</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
