@@ -55,7 +55,7 @@ import scala.collection.mutable
 import scala.util.Try
 
 /**
- * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
+ * Provided w/ list of log files, iterates over all of the records stored in
  * Delta Log files (represented as [[InternalRow]]s)
  */
 class LogFileIterator(logFiles: List[HoodieLogFile],
@@ -132,7 +132,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
 }
 
 /**
- * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], provides an iterator over all of the records stored in
+ * Provided w/ list of log files and base file iterator, provides an iterator over all of the records stored in
  * Base file as well as all of the Delta Log files simply returning concatenation of these streams, while not
  * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
  */
@@ -160,7 +160,7 @@ private class SkipMergeIterator(logFiles: List[HoodieLogFile],
 }
 
 /**
- * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], provides an iterator over all of the records stored in
+ * Provided w/ list of log files and base file iterator, provides an iterator over all of the records stored in
  * a) Base file and all of the b) Delta Log files combining records with the same primary key from both of these
  * streams
  */
