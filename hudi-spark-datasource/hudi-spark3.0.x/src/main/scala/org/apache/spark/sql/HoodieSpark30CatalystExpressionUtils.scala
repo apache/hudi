@@ -19,8 +19,9 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{AnsiCast, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, PredicateHelper, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{AnsiCast, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.util.SchemaUtils
 
 object HoodieSpark30CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils {
 
@@ -139,7 +140,7 @@ object HoodieSpark30CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // Other
-        case cast @ Cast(OrderPreservingTransformation(attrRef), _, _)
+        case cast@Cast(OrderPreservingTransformation(attrRef), _, _)
           if isCastPreservingOrdering(cast.child.dataType, cast.dataType) => Some(attrRef)
 
         // Identity transformation
@@ -148,5 +149,11 @@ object HoodieSpark30CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         case _ => None
       }
     }
+  }
+
+  override def checkColumnNameDuplication(columnNames: Seq[String],
+                                          colType: String,
+                                          caseSensitiveAnalysis: Boolean): Unit = {
+    SchemaUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
   }
 }
