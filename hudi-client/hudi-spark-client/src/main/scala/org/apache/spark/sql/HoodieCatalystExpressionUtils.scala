@@ -74,16 +74,6 @@ trait HoodieCatalystExpressionUtils {
    * </ol>
    */
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
-
-  /**
-   * Checks if input column names have duplicate identifiers. This throws an exception if
-   * the duplication exists.
-   *
-   * @param columnNames           column names to check.
-   * @param colType               column type name, used in an exception message.
-   * @param caseSensitiveAnalysis whether duplication checks should be case sensitive or not.
-   */
-  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, caseSensitiveAnalysis: Boolean): Unit
 }
 
 object HoodieCatalystExpressionUtils extends SparkAdapterSupport {

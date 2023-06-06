@@ -36,7 +36,7 @@ import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_4ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark34CatalogUtils, HoodieSpark34CatalystExpressionUtils, HoodieSpark34CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSchemaUtils, HoodieSpark34CatalogUtils, HoodieSpark34CatalystExpressionUtils, HoodieSpark34CatalystPlanUtils, HoodieSpark34SchemaUtils, HoodieSpark3CatalogUtils, SparkSession, SparkSessionExtensions}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -71,6 +71,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark34CatalystExpressionUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark34CatalystPlanUtils
+
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark34SchemaUtils
 
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark34PartitionedFileUtils
 

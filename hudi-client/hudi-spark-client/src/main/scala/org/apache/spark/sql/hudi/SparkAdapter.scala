@@ -81,6 +81,11 @@ trait SparkAdapter extends Serializable {
   def getCatalystPlanUtils: HoodieCatalystPlansUtils
 
   /**
+   * Returns an instance of [[HoodieSchemaUtils]] providing schema utils
+   */
+  def getSchemaUtils: HoodieSchemaUtils
+
+  /**
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
    * Spark's [[InternalRow]] into Avro payloads
    */

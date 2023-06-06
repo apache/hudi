@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkJdbcUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -79,7 +80,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
 import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
 import org.apache.spark.sql.types.StructType;
@@ -474,9 +474,9 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = JdbcUtils.getSchema(rs, dialect, true);
+            structType = SparkJdbcUtils.getSchema(rs, dialect, true);
           } else {
-            structType = JdbcUtils.getSchema(rs, dialect, false);
+            structType = SparkJdbcUtils.getSchema(rs, dialect, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }

@@ -71,6 +71,8 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark30CatalystExpressionUtils
 
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark30SchemaUtils
+
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark30PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =

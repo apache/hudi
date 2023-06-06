@@ -137,6 +137,6 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
    * @param caseSensitiveAnalysis whether duplication checks should be case sensitive or not.
    */
   def checkColumnNameDuplication(columnNames: Seq[String], colType: String, caseSensitiveAnalysis: Boolean): Unit = {
-    sparkAdapter.getCatalystExpressionUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
+    sparkAdapter.getSchemaUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
   }
 }
