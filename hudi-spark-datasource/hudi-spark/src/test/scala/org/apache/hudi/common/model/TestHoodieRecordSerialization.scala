@@ -20,7 +20,7 @@ package org.apache.hudi.common.model
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
@@ -108,8 +108,10 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val legacyRecord = toLegacyAvroRecord(avroRecord, key)
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
 
+    val expectLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 534 else 528
+
     Seq(
-      (legacyRecord, 534),
+      (legacyRecord, expectLagacyRecordSize),
       (avroIndexedRecord, 389)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
@@ -129,10 +131,12 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     }
 
     val key = new HoodieKey("rec-key", "part-path")
-
+    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 30 else 27
     Seq(
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO), 30),
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK), 30)
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO),
+        expectedEmptyRecordSize),
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK),
+        expectedEmptyRecordSize)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 
