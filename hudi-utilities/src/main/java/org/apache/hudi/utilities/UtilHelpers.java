@@ -62,8 +62,8 @@ import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
-import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
+import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.Schema;
@@ -474,9 +474,9 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = JdbcUtils.getSchema(rs, dialect, true, false);
+            structType = JdbcUtils.getSchema(rs, dialect, true);
           } else {
-            structType = JdbcUtils.getSchema(rs, dialect, false, false);
+            structType = JdbcUtils.getSchema(rs, dialect, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }
