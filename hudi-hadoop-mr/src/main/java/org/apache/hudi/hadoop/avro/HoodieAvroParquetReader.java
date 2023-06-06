@@ -40,12 +40,14 @@ import org.apache.parquet.schema.MessageType;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 
 public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
+  private Schema baseSchema;
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
     // if exists read columns, we need to filter columns.
@@ -55,10 +57,14 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       ParquetMetadata fileFooter =
           ParquetFileReader.readFooter(conf, ((ParquetInputSplit) inputSplit).getPath(), ParquetMetadataConverter.NO_FILTER);
       MessageType messageType = fileFooter.getFileMetaData().getSchema();
+      baseSchema = new AvroSchemaConverter(conf).convert(messageType);
       // filter schema for reading
-      messageType.getFields().removeIf(field -> !readColNames.contains(field.getName()));
-      Schema filterSchema = new AvroSchemaConverter(conf).convert(messageType);
-
+      final Schema filterSchema = Schema.createRecord(baseSchema.getName(),
+          baseSchema.getDoc(), baseSchema.getNamespace(), baseSchema.isError(),
+          baseSchema.getFields().stream()
+              .filter(f -> readColNames.contains(f.name()))
+              .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+              .collect(Collectors.toList()));
       AvroReadSupport.setAvroReadSchema(conf, filterSchema);
       AvroReadSupport.setRequestedProjection(conf, filterSchema);
     }
@@ -83,7 +89,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   @Override
   public ArrayWritable getCurrentValue() throws IOException, InterruptedException {
     GenericRecord record = parquetRecordReader.getCurrentValue();
-    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, record.getSchema(), true);
+    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, baseSchema, true);
   }
 
   @Override
