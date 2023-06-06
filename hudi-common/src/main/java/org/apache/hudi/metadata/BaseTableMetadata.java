@@ -25,10 +25,10 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -74,6 +74,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   //       on HFile (serving as persisted binary key-value mapping) to do caching
   protected static final int BUFFER_SIZE = 10 * 1024; // 10Kb
 
+  protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
 
@@ -81,6 +82,11 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
     super(engineContext, engineContext.getHadoopConf(), dataBasePath);
+
+    this.dataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(hadoopConf.get())
+        .setBasePath(dataBasePath)
+        .build();
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 
