@@ -93,8 +93,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     HoodieDefaultTimeline timeline = lastCommitTimeSynced.isPresent()
         ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get())
         : metaClient.getActiveTimeline();
-    timeline = lastCommitCompletionTimeSynced.isPresent() ?
-        timeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
+    timeline = lastCommitCompletionTimeSynced.isPresent()
+        ? timeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
             metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()))
         : timeline;
     return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
