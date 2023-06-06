@@ -42,6 +42,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 
@@ -223,7 +225,7 @@ public class TimelineUtils {
    * @param exclusiveStartInstantTime Start instant time (exclusive).
    * @return Hudi timeline.
    */
-  public static HoodieTimeline getCommitsTimelineAfter(
+  public static HoodieDefaultTimeline getCommitsTimelineAfter(
       HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieDefaultTimeline timeline =
@@ -231,8 +233,15 @@ public class TimelineUtils {
             ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
             .mergeTimeline(activeTimeline)
             : activeTimeline;
-    return timeline.getCommitsTimeline()
+    return (HoodieDefaultTimeline) timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+  }
+
+  public static HoodieDefaultTimeline getHollowInstantsTimeline(
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, String commitCompletionTime) {
+    return (HoodieDefaultTimeline) metaClient.getActiveTimeline().getCommitsTimeline()
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, commitCompletionTime));
   }
   
   /**

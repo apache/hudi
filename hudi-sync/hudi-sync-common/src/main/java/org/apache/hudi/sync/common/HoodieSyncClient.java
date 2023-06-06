@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
@@ -88,10 +89,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * If last sync time is not known then consider only active timeline.
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
-  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced) {
-    HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
+  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
+    HoodieDefaultTimeline timeline = lastCommitTimeSynced.isPresent()
         ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get())
         : metaClient.getActiveTimeline();
+    timeline = lastCommitCompletionTimeSynced.isPresent() ?
+        timeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
+            metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()))
+        : timeline;
     return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
   }
 
@@ -126,7 +131,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
         config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
   }
 
-  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced) {
+  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "
           + config.getString(META_SYNC_BASE_PATH)
@@ -134,8 +139,12 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       return getAllPartitionPathsOnStorage();
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      return TimelineUtils.getWrittenPartitions(
-          TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get()));
+      HoodieDefaultTimeline writeTimeline = TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get());
+      if (lastCommitCompletionTimeSynced.isPresent()) {
+        writeTimeline = writeTimeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
+            metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()));
+      }
+      return TimelineUtils.getWrittenPartitions(writeTimeline);
     }
   }
 

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -323,7 +324,7 @@ public class TestHiveSyncTool {
         + FSUtils.getPartitionPath(basePath, "2050/1/1").toString() + "'");
 
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty());
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
@@ -691,7 +692,7 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1), Option.empty());
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1073,7 +1074,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
 
     reInitHiveSyncClient();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime), Option.empty());
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1103,7 +1104,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2)).size());
+    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2), Option.empty()).size());
   }
 
   @ParameterizedTest
@@ -1503,6 +1504,59 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testHiveSyncWithMultiWriter(String syncMode) throws Exception {
+    String tableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
+
+    String commitTime0 = HoodieInstantTimeGenerator.createNewInstantTime(0);
+    String commitTime1 = HoodieInstantTimeGenerator.createNewInstantTime(1);
+    String commitTime2 = HoodieInstantTimeGenerator.createNewInstantTime(2);
+    String commitTime3 = HoodieInstantTimeGenerator.createNewInstantTime(3);
+    String commitTime4 = HoodieInstantTimeGenerator.createNewInstantTime(4);
+    String commitTime5 = HoodieInstantTimeGenerator.createNewInstantTime(5);
+
+    // Commit 2 and commit3 will be committed first
+    HiveTestUtil.createMORTable(commitTime2, commitTime3, 2, true, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    assertTrue(hiveClient.tableExists(tableName));
+    String lastCommitCompletionTimeSynced = hiveClient.getActiveTimeline()
+        .getInstantsOrderedByStateTransitionTime()
+        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getStateTransitionTime();
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(lastCommitCompletionTimeSynced, hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
+    assertEquals(2, hiveClient.getAllPartitions(tableName).size());
+
+    // Commit0 and commit1 committed after commit2 and commit3
+    HiveTestUtil.addMORPartitions(4, true, true, true, ZonedDateTime.now().plusDays(2), commitTime0, commitTime1);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    lastCommitCompletionTimeSynced = hiveClient.getActiveTimeline()
+        .getInstantsOrderedByStateTransitionTime()
+        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getStateTransitionTime();
+    // LastCommitTimeSynced will still be commit3
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(lastCommitCompletionTimeSynced, hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
+    // Partitions included in commit0 and commit1 will be synced to HMS correctly
+    assertEquals(4, hiveClient.getAllPartitions(tableName).size());
+
+    // Add commit4 and commit5 to the table
+    HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime4, commitTime5);
+    HiveTestUtil.removeCommitFromActiveTimeline(commitTime0, COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline(commitTime1, DELTA_COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline(commitTime2, COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline(commitTime3, DELTA_COMMIT_ACTION);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    // Nothing changed
+    assertEquals(lastCommitCompletionTimeSynced, hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
   }
 
   private void reSyncHiveTable() {
