@@ -54,12 +54,15 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
       bootstrapPartition.split.skeletonFile match {
         case Some(skeletonFile) =>
           val (iterator, schema) = getSkeletonIteratorSchema(bootstrapPartition.split.dataFile, skeletonFile)
-          new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
+          new RecordMergingFileIterator(bootstrapPartition.split.logFiles,
+            LogFileIterator.getPartitionPath(Some(skeletonFile),bootstrapPartition.split.logFiles),
             iterator, schema, tableSchema, requiredSchema, tableState, getHadoopConf)
         case _ =>
           // NOTE: Regular file-reader is already projected into the required schema
-          new RecordMergingFileIterator(HoodieMergeOnReadFileSplit(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
-            regularFileReader.read(bootstrapPartition.split.dataFile), regularFileReader.schema, tableSchema, requiredSchema, tableState, getHadoopConf)
+          new RecordMergingFileIterator(bootstrapPartition.split.logFiles,
+            LogFileIterator.getPartitionPath(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
+            regularFileReader.read(bootstrapPartition.split.dataFile), regularFileReader.schema, tableSchema,
+            requiredSchema, tableState, getHadoopConf)
       }
     }
   }

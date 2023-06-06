@@ -81,24 +81,29 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
+    lazy val partitionPath = LogFileIterator.getPartitionPath(partition.split.dataFile, partition.split.logFiles)
     val iter = partition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
         val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
-        new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf)
+        new LogFileIterator(logFileOnlySplit.logFiles, partitionPath, tableSchema, requiredSchema,
+          tableState, getHadoopConf)
 
       case split =>
         mergeType match {
           case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
             val reader = fileReaders.requiredSchemaReaderSkipMerging
-            new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
+            val iterator = reader(split.dataFile.get)
+            new SkipMergeIterator(split.logFiles, partitionPath, iterator, reader.schema, tableSchema,
+              requiredSchema, tableState, getHadoopConf)
 
           case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
             val reader = pickBaseFileReader()
             val iterator = reader(split.dataFile.get)
-            new RecordMergingFileIterator(split, iterator, reader.schema, tableSchema, requiredSchema, tableState, getHadoopConf)
+            new RecordMergingFileIterator(split.logFiles, partitionPath, iterator, reader.schema, tableSchema,
+              requiredSchema, tableState, getHadoopConf)
 
           case _ => throw new UnsupportedOperationException(s"Not supported merge type ($mergeType)")
         }

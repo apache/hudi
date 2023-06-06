@@ -23,13 +23,13 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
+import org.apache.hudi.LogFileIterator.getPartitionPath
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
@@ -38,10 +38,9 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -429,8 +428,10 @@ class HoodieCDCRDD(
               && currentCDCFileSplit.getBeforeFileSlice.isPresent)
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
             val absLogPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
-            val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
-            val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
+            val logFiles = List(new HoodieLogFile(fs.getFileStatus(absLogPath)))
+            val logFileIterator = new LogFileIterator(logFiles,
+              getPartitionPath(Option.empty, logFiles),
+              originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsPairIterator
           case AS_IS =>
             assert(currentCDCFileSplit.getCdcFiles != null && !currentCDCFileSplit.getCdcFiles.isEmpty)
@@ -540,11 +541,11 @@ class HoodieCDCRDD(
         parquetReader(basePartitionedFile)
       } else {
         // use [[RecordMergingFileIterator]] to load both the base file and log files
-        val morSplit = HoodieMergeOnReadFileSplit(Some(basePartitionedFile), logFiles)
         val reader = BaseFileReader(parquetReader, originTableSchema.structTypeSchema)
-        val iterator = reader(morSplit.dataFile.get)
+        val iterator = reader(basePartitionedFile)
         new RecordMergingFileIterator(
-          morSplit,
+          logFiles,
+          getPartitionPath(Some(basePartitionedFile), logFiles),
           iterator,
           reader.schema,
           originTableSchema,

@@ -19,14 +19,17 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+
+import scala.collection.JavaConverters._
 
 /**
  * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
@@ -74,6 +77,10 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
     } else {
       listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     }
+  }
+
+  protected override def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {
+    HoodieBootstrapSplit(dataFile, skeletonFile, fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
   }
 
   protected override def composeRDD(fileSplits: Seq[FileSplit],

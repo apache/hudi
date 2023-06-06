@@ -33,8 +33,6 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-import scala.collection.JavaConverters._
-
 case class HoodieBootstrapSplit(dataFile: PartitionedFile,
                                 skeletonFile: Option[PartitionedFile],
                                 logFiles: List[HoodieLogFile]) extends HoodieFileSplit
@@ -100,24 +98,25 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     listLatestFileSlices(globPaths, partitionFilters, dataFilters)
   }
 
+  protected def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {
+    HoodieBootstrapSplit(dataFile, skeletonFile, List.empty)
+  }
+
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = getFileSlices(partitionFilters, dataFilters)
     val isPartitioned = metaClient.getTableConfig.isTablePartitioned
     fileSlices.map { fileSlice =>
       val baseFile = fileSlice.getBaseFile.get()
-      val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
-
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
             bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
         val dataFile = PartitionedFile(partitionValues, getFilePath(baseFile.getBootstrapBaseFile.get.getFileStatus.getPath),
           0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
-
-        HoodieBootstrapSplit(dataFile, skeletonFile, logFiles)
+        createFileSplit(fileSlice, dataFile, skeletonFile)
       } else {
         val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
-        HoodieBootstrapSplit(dataFile, Option.empty, logFiles)
+        createFileSplit(fileSlice, dataFile, Option.empty)
       }
     }
   }

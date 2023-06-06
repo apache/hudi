@@ -23,7 +23,6 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
@@ -46,6 +45,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
@@ -58,7 +58,8 @@ import scala.util.Try
  * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
  * Delta Log files (represented as [[InternalRow]]s)
  */
-class LogFileIterator(split: HoodieMergeOnReadFileSplit,
+class LogFileIterator(logFiles: List[HoodieLogFile],
+                      partitionPath: Path,
                       tableSchema: HoodieTableSchema,
                       requiredSchema: HoodieTableSchema,
                       tableState: HoodieTableState,
@@ -88,7 +89,7 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
   private val logRecords = {
     val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
 
-    scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
+    scanLog(logFiles, partitionPath, logFileReaderAvroSchema, tableState,
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
@@ -135,17 +136,17 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
  * Base file as well as all of the Delta Log files simply returning concatenation of these streams, while not
  * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
  */
-private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
-                                baseFileReader: BaseFileReader,
+private class SkipMergeIterator(logFiles: List[HoodieLogFile],
+                                partitionPath: Path,
+                                baseFileIterator: Iterator[InternalRow],
+                                readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
                                 requiredSchema: HoodieTableSchema,
                                 tableState: HoodieTableState,
                                 config: Configuration)
-  extends LogFileIterator(split, dataSchema, requiredSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
 
-  private val requiredSchemaProjection = generateUnsafeProjection(baseFileReader.schema, structTypeSchema)
-
-  private val baseFileIterator = baseFileReader(split.dataFile.get)
+  private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
 
   override def doHasNext: Boolean = {
     if (baseFileIterator.hasNext) {
@@ -163,14 +164,15 @@ private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
  * a) Base file and all of the b) Delta Log files combining records with the same primary key from both of these
  * streams
  */
-class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
+class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
+                                partitionPath: Path,
                                 baseFileIterator: Iterator[InternalRow],
                                 readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
                                 requiredSchema: HoodieTableSchema,
                                 tableState: HoodieTableState,
                                 config: Configuration)
-  extends LogFileIterator(split, dataSchema, requiredSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
 
   // NOTE: Record-merging iterator supports 2 modes of operation merging records bearing either
   //        - Full table's schema
@@ -337,12 +339,12 @@ object LogFileIterator {
     }
   }
 
-  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+  def getPartitionPath(dataFile: Option[PartitionedFile], logFiles: List[HoodieLogFile]): Path = {
     // Determine partition path as an immediate parent folder of either
     //    - The base file
     //    - Some log file
-    split.dataFile.map(baseFile => new Path(baseFile.filePath))
-      .getOrElse(split.logFiles.head.getPath)
+    dataFile.map(baseFile => new Path(baseFile.filePath))
+      .getOrElse(logFiles.head.getPath)
       .getParent
   }
 }
