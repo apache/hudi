@@ -339,7 +339,6 @@ public class SparkRDDWriteClient<T> extends
    */
   private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
     if (!config.isMetadataTableEnabled()) {
-      LOG.error("================================111111111111111111");
       return;
     }
 
@@ -347,8 +346,6 @@ public class SparkRDDWriteClient<T> extends
         context, Option.empty(), inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
         writer.performTableServices(inFlightInstantTimestamp);
-      } else {
-        throw new HoodieException((".................2222222222"));
       }
     } catch (Exception e) {
       throw new HoodieException("Failed to instantiate Metadata table ", e);
