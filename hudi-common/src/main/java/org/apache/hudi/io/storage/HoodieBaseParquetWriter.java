@@ -27,13 +27,15 @@ import org.apache.hudi.common.util.VisibleForTesting;
 
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.atomic.AtomicLong;
+
+import java.lang.reflect.Method;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
@@ -47,6 +49,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   private final long maxFileSize;
   private long recordCountForNextSizeCheck;
   private final ParquetWriter parquetWriter;
+  public static final String BLOOM_FILTER_EXPECTED_NDV = "parquet.bloom.filter.expected.ndv";
+  public static final String BLOOM_FILTER_ENABLED = "parquet.bloom.filter.enabled";
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
@@ -84,17 +88,26 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   }
 
   protected void handleParquetBloomFilters(ParquetWriter.Builder parquetWriterbuilder, Configuration hadoopConf) {
-    parquetWriterbuilder.withBloomFilterEnabled(ParquetOutputFormat.getBloomFilterEnabled(hadoopConf));
     // inspired from https://github.com/apache/parquet-mr/blob/master/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/ParquetOutputFormat.java#L458-L464
     hadoopConf.forEach(conf -> {
       String key = conf.getKey();
-      if (key.startsWith(ParquetOutputFormat.BLOOM_FILTER_ENABLED)) {
-        String column = key.substring(ParquetOutputFormat.BLOOM_FILTER_ENABLED.length() + 1, key.length());
-        parquetWriterbuilder.withBloomFilterEnabled(column, Boolean.valueOf(conf.getValue()));
+      if (key.startsWith(BLOOM_FILTER_ENABLED)) {
+        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
+        try {
+          Method method = parquetWriterbuilder.getClass().getDeclaredMethod("withBloomFilterEnabled");
+          method.invoke(column, Boolean.valueOf(conf.getValue()));
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+          // skip
+        }
       }
-      if (key.startsWith(ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV)) {
-        String column = key.substring(ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
-        parquetWriterbuilder.withBloomFilterNDV(column, Long.valueOf(conf.getValue(), -1));
+      if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
+        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
+        try {
+          Method method = parquetWriterbuilder.getClass().getDeclaredMethod("withBloomFilterNDV");
+          method.invoke(column, Long.valueOf(conf.getValue(), -1));
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+          // skip
+        }
       }
     });
   }
