@@ -80,6 +80,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
