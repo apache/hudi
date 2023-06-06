@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -33,13 +34,6 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
-import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
-import static org.apache.parquet.hadoop.ParquetOutputFormat.BLOOM_FILTER_ENABLED;
-import static org.apache.parquet.hadoop.ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV;
-import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED;
-import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_WRITER_VERSION;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
@@ -74,8 +68,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withPageSize(parquetConfig.getPageSize());
     parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
     parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
-    parquetWriterbuilder.withValidation(DEFAULT_IS_VALIDATING_ENABLED);
-    parquetWriterbuilder.withWriterVersion(DEFAULT_WRITER_VERSION);
+    parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
+    parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
     parquetWriterbuilder.withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
     handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getHadoopConf());
 
@@ -86,7 +80,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     // stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
-    this.recordCountForNextSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+    this.recordCountForNextSizeCheck = ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
   }
 
   protected void handleParquetBloomFilters(ParquetWriter.Builder parquetWriterbuilder, Configuration hadoopConf) {
@@ -94,12 +88,12 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     // inspired from https://github.com/apache/parquet-mr/blob/master/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/ParquetOutputFormat.java#L458-L464
     hadoopConf.forEach(conf -> {
       String key = conf.getKey();
-      if (key.startsWith(BLOOM_FILTER_ENABLED)) {
-        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
+      if (key.startsWith(ParquetOutputFormat.BLOOM_FILTER_ENABLED)) {
+        String column = key.substring(ParquetOutputFormat.BLOOM_FILTER_ENABLED.length() + 1, key.length());
         parquetWriterbuilder.withBloomFilterEnabled(column, Boolean.valueOf(conf.getValue()));
       }
-      if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
-        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
+      if (key.startsWith(ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV)) {
+        String column = key.substring(ParquetOutputFormat.BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
         parquetWriterbuilder.withBloomFilterNDV(column, Long.valueOf(conf.getValue(), -1));
       }
     });
@@ -120,8 +114,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       }
       recordCountForNextSizeCheck = writtenCount + Math.min(
           // Do check it in the halfway
-          Math.max(DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
-          DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
+          Math.max(ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
+          ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
     }
     return true;
   }
