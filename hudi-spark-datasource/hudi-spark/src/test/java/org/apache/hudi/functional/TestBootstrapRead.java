@@ -212,8 +212,8 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void doInsert(Map<String,String> options, String instantTime) {
-    Dataset<Row> updates = generateTestInserts(instantTime, nUpdates);
-    doUpsert(options, updates);
+    Dataset<Row> inserts = generateTestInserts(instantTime, nUpdates);
+    doUpsert(options, inserts);
   }
 
   protected void doUpsert(Map<String,String> options, Dataset<Row> df) {
