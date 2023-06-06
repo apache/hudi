@@ -190,7 +190,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         plan transformDown {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
-          case mit@MatchMergeIntoTable(targetTable, query, _, _, _) =>
+          case mit@MatchMergeIntoTable(targetTable, query, _) =>
             val updatedTargetTable = targetTable match {
               // In the receiving side of the MIT, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
@@ -316,7 +316,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 
   private[sql] object MatchMergeIntoTable {
-    def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression, Seq[MergeAction], Seq[MergeAction])] =
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] =
       sparkAdapter.getCatalystPlanUtils.unapplyMergeIntoTable(plan)
   }
 
@@ -379,7 +379,7 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
-      case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _, _, _) if mit.resolved =>
+      case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
         MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
 
       // Convert to UpdateHoodieTableCommand

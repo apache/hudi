@@ -20,7 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, MergeAction}
+import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -56,7 +56,7 @@ trait HoodieCatalystPlansUtils {
    * Decomposes [[MatchMergeIntoTable]] into its arguments with accommodation for API
    * changes in Spark 3.4
    */
-  def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression, Seq[MergeAction], Seq[MergeAction])]
+  def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
