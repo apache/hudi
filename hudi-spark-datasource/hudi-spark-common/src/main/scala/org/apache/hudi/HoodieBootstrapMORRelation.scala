@@ -31,6 +31,9 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
+case class HoodieBootstrapMORSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile],
+                                   logFiles: List[HoodieLogFile]) extends BaseHoodieBootstrapSplit
+
 /**
  * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
  * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
@@ -80,7 +83,7 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   }
 
   protected override def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {
-    HoodieBootstrapSplit(dataFile, skeletonFile, fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
+    HoodieBootstrapMORSplit(dataFile, skeletonFile, fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
   }
 
   protected override def composeRDD(fileSplits: Seq[FileSplit],

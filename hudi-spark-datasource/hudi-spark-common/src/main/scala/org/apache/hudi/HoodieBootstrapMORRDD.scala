@@ -35,7 +35,7 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
                             tableSchema: HoodieTableSchema,
                             requiredSchema: HoodieTableSchema,
                             tableState: HoodieTableState,
-                            @transient splits: Seq[HoodieBootstrapSplit])
+                            @transient splits: Seq[BaseHoodieBootstrapSplit])
   extends HoodieBootstrapRDD(spark, bootstrapDataFileReader, bootstrapSkeletonFileReader,
     regularFileReader, requiredSchema, splits) {
 
@@ -46,22 +46,23 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val bootstrapPartition = split.asInstanceOf[HoodieBootstrapPartition]
     maybeLog(bootstrapPartition)
+    val bootstrapMORSplit = bootstrapPartition.split.asInstanceOf[HoodieBootstrapMORSplit]
 
-    if (bootstrapPartition.split.logFiles.isEmpty) {
+    if (bootstrapMORSplit.logFiles.isEmpty) {
       //no log files, treat like regular bootstrap
       getIterator(bootstrapPartition)
     } else {
-      bootstrapPartition.split.skeletonFile match {
+      bootstrapMORSplit.skeletonFile match {
         case Some(skeletonFile) =>
-          val (iterator, schema) = getSkeletonIteratorSchema(bootstrapPartition.split.dataFile, skeletonFile)
-          new RecordMergingFileIterator(bootstrapPartition.split.logFiles,
-            LogFileIterator.getPartitionPath(Some(skeletonFile),bootstrapPartition.split.logFiles),
+          val (iterator, schema) = getSkeletonIteratorSchema(bootstrapMORSplit.dataFile, skeletonFile)
+          new RecordMergingFileIterator(bootstrapMORSplit.logFiles,
+            LogFileIterator.getPartitionPath(Some(skeletonFile), bootstrapMORSplit.logFiles),
             iterator, schema, tableSchema, requiredSchema, tableState, getHadoopConf)
         case _ =>
           // NOTE: Regular file-reader is already projected into the required schema
-          new RecordMergingFileIterator(bootstrapPartition.split.logFiles,
-            LogFileIterator.getPartitionPath(Some(bootstrapPartition.split.dataFile), bootstrapPartition.split.logFiles),
-            regularFileReader.read(bootstrapPartition.split.dataFile), regularFileReader.schema, tableSchema,
+          new RecordMergingFileIterator(bootstrapMORSplit.logFiles,
+            LogFileIterator.getPartitionPath(Some(bootstrapMORSplit.dataFile), bootstrapMORSplit.logFiles),
+            regularFileReader.read(bootstrapMORSplit.dataFile), regularFileReader.schema, tableSchema,
             requiredSchema, tableState, getHadoopConf)
       }
     }

@@ -33,9 +33,13 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
+trait BaseHoodieBootstrapSplit extends HoodieFileSplit {
+  val dataFile: PartitionedFile
+  val skeletonFile: Option[PartitionedFile]
+}
+
 case class HoodieBootstrapSplit(dataFile: PartitionedFile,
-                                skeletonFile: Option[PartitionedFile],
-                                logFiles: List[HoodieLogFile]) extends HoodieFileSplit
+                                skeletonFile: Option[PartitionedFile]) extends BaseHoodieBootstrapSplit
 
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
@@ -46,6 +50,10 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) {
 
   override type Relation = HoodieBootstrapRelation
+
+  override protected def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {
+    HoodieBootstrapSplit(dataFile, skeletonFile)
+  }
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
@@ -85,8 +93,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
-  override type FileSplit = HoodieBootstrapSplit
-
+  override type FileSplit = BaseHoodieBootstrapSplit
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
@@ -98,9 +105,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     listLatestFileSlices(globPaths, partitionFilters, dataFilters)
   }
 
-  protected def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {
-    HoodieBootstrapSplit(dataFile, skeletonFile, List.empty)
-  }
+  protected def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = getFileSlices(partitionFilters, dataFilters)

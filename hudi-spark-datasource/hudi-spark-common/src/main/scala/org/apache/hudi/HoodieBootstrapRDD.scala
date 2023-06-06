@@ -34,7 +34,7 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
                          bootstrapSkeletonFileReader: BaseFileReader,
                          regularFileReader: BaseFileReader,
                          requiredSchema: HoodieTableSchema,
-                         @transient splits: Seq[HoodieBootstrapSplit])
+                         @transient splits: Seq[BaseHoodieBootstrapSplit])
   extends RDD[InternalRow](spark.sparkContext, Nil) {
 
 
@@ -73,9 +73,6 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
         bootstrapPartition.split.dataFile.filePath
       if (bootstrapPartition.split.skeletonFile.isDefined) {
         msg += ", Skeleton File: " + bootstrapPartition.split.skeletonFile.get.filePath
-      }
-      if (bootstrapPartition.split.logFiles.nonEmpty) {
-        msg += ", Log Paths: " + bootstrapPartition.split.logFiles
       }
       logDebug(msg)
     }
@@ -129,4 +126,4 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
   }
 }
 
-case class HoodieBootstrapPartition(index: Int, split: HoodieBootstrapSplit) extends Partition
+case class HoodieBootstrapPartition(index: Int, split: BaseHoodieBootstrapSplit) extends Partition
