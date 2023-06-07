@@ -2491,18 +2491,7 @@
         </property>
       </activation>
     </profile>
-    <profile>
-      <id>avro11</id>
-      <properties>
-        <avro.version>1.11.1</avro.version>
-      </properties>
-      <activation>
-        <property>
-          <name>avro11</name>
-        </property>
-      </activation>
-    </profile>
-
+    
     <profile>
       <id>flink1.17</id>
       <properties>
