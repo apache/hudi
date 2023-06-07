@@ -241,7 +241,7 @@ public class TimelineUtils {
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE)
         .getInstantsAsStream();
 
-    // Get 'hollow' instants that have lesser instant time than exclusiveStartInstantTime but with greater commit completion time
+    // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
     Stream<HoodieInstant> hollowInstants = timeline.getCommitsTimeline()
         .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
         .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, commitCompletionTime))
