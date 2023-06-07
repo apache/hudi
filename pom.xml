@@ -2474,6 +2474,8 @@
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <log4j2.version>2.19.0</log4j2.version>
         <slf4j.version>2.0.6</slf4j.version>
@@ -2491,7 +2493,7 @@
         </property>
       </activation>
     </profile>
-    
+
     <profile>
       <id>flink1.17</id>
       <properties>
