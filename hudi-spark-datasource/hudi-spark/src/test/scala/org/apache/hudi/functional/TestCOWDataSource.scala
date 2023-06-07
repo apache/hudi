@@ -1465,7 +1465,35 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-}
+  @Test
+  def testHiveStyleDelete(): Unit = {
+    val df = spark.sql("select cast(1 as bigint) as list_id, 1 as _hudi_last_update, '123' as _hudi_partition")
+    var hudiOptions = Map[String, String](
+      HoodieWriteConfig.TBL_NAME.key() -> "tbl",
+      DataSourceWriteOptions.OPERATION.key() -> "insert",
+      DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "list_id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "_hudi_partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "_hudi_last_update",
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true"
+    )
+
+    df.write.format("org.apache.hudi").options(hudiOptions).mode(SaveMode.Overwrite).save(basePath)
+
+    hudiOptions = Map[String, String](
+      HoodieWriteConfig.TBL_NAME.key() -> "tbl",
+      DataSourceWriteOptions.OPERATION.key() -> "delete",
+      DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "list_id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "_hudi_partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "_hudi_last_update"
+    )
+
+    df.select("list_id", "_hudi_partition").
+      write.format("org.apache.hudi").options(hudiOptions).
+      mode(SaveMode.Append).save(basePath)
+    assertEquals(0, spark.read.format("hudi").load(basePath).count())
+  }
 
 object TestCOWDataSource {
   def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {

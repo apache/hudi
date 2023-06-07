@@ -1075,17 +1075,17 @@ object HoodieSparkSqlWriter {
       // for missing write configs corresponding to table configs, fill them up.
       fetchMissingWriteConfigsFromTableConfig(tableConfig, optParams).foreach((kv) => translatedOptsWithMappedTableConfig += (kv._1 -> kv._2))
     }
+    if (null != tableConfig && mode != SaveMode.Overwrite) {
+      // over-ride only if not explicitly set by the user.
+      tableConfig.getProps.filter(kv => !optParams.contains(kv._1))
+        .foreach { case (key, value) =>
+          translatedOptsWithMappedTableConfig +=  (key -> value)
+        }
+    }
     val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap)
     if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
-    }
-    if (null != tableConfig && mode != SaveMode.Overwrite) {
-      // over-ride only if not explicitly set by the user.
-      tableConfig.getProps.filter( kv => !optParams.contains(kv._1))
-        .foreach { case (key, value) =>
-          mergedParams(key) = value
-      }
     }
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
