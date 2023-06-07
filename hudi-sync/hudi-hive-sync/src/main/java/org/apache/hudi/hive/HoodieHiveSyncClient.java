@@ -352,16 +352,16 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    // Set the last commit time from the TBLproperties
+    // Set the last commit time and commit completion from the TBLproperties
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
-    Option<String> lastCommitCompletionSynced = getActiveTimeline()
+    Option<String> lastCommitCompletionSynced = activeTimeline
         .getInstantsOrderedByStateTransitionTime()
         .skip(activeTimeline.countInstants() - 1)
         .findFirst()
         .map(i -> Option.of(i.getStateTransitionTime()))
         .orElse(Option.empty());
-    if (lastCommitSynced.isPresent() && lastCommitCompletionSynced.isPresent()) {
+    if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
         String basePath = config.getString(META_SYNC_BASE_PATH);

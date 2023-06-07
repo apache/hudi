@@ -90,13 +90,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
   public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
-    HoodieDefaultTimeline timeline = lastCommitTimeSynced.isPresent()
-        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get())
+    HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
+        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get())
         : metaClient.getActiveTimeline();
-    timeline = lastCommitCompletionTimeSynced.isPresent()
-        ? timeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
-            metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()))
-        : timeline;
     return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
   }
 
@@ -139,12 +135,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       return getAllPartitionPathsOnStorage();
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      HoodieDefaultTimeline writeTimeline = TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get());
-      if (lastCommitCompletionTimeSynced.isPresent()) {
-        writeTimeline = writeTimeline.mergeTimeline(TimelineUtils.getHollowInstantsTimeline(
-            metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()));
-      }
-      return TimelineUtils.getWrittenPartitions(writeTimeline);
+      return TimelineUtils.getWrittenPartitions(
+          TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()));
     }
   }
 

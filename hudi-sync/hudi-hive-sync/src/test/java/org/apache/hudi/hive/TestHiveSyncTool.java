@@ -695,7 +695,7 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1), Option.empty());
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1), Option.of(commitTime1));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1077,7 +1077,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
 
     reInitHiveSyncClient();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime), Option.empty());
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime), Option.of(getLastCommitCompletionTimeSynced()));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1107,7 +1107,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2), Option.empty()).size());
+    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2), Option.of(getLastCommitCompletionTimeSynced())).size());
   }
 
   @ParameterizedTest
