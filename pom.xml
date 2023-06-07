@@ -485,10 +485,6 @@
               <pattern>org.apache.htrace.</pattern>
               <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
             </relocation>
-            <relocation>
-              <pattern>com.ctc.wstx</pattern>
-              <shadedPattern>org.apache.hadoop.shaded.com.ctc.wstx</shadedPattern>
-            </relocation>
             <!-- hbase
                  The classes below in org.apache.hadoop.metrics2 package come from
                  hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -858,10 +854,6 @@
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
         <version>${fasterxml.jackson.module.scala.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.woodstox</groupId>
-        <artifactId>woodstox-core</artifactId>
       </dependency>
 
       <!-- Glassfish -->
