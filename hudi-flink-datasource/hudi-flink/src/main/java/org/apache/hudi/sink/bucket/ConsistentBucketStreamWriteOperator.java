@@ -23,13 +23,13 @@ import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.flink.configuration.Configuration;
 
 /**
- * Operator for {@link BucketStreamWriteFunction}.
+ * Operator for {@link ConsistentBucketStreamWriteFunction}.
  *
  * @param <I> The input type
  */
-public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+public class ConsistentBucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
-  public BucketStreamWriteOperator(Configuration conf) {
-    super(new BucketStreamWriteFunction<>(conf));
+  public ConsistentBucketStreamWriteOperator(Configuration conf) {
+    super(new ConsistentBucketStreamWriteFunction<>(conf));
   }
 }

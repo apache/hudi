@@ -45,7 +45,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -143,7 +143,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     Assertions.assertEquals(2000, readRecords(dataGen.getPartitionPaths()).size());
 
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
-      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexHelper.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
 
       // The file slice has no log files
@@ -199,7 +199,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
           throw new RuntimeException(e);
         }
       }
-      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexHelper.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
     });
     writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);

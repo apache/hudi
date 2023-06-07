@@ -18,35 +18,27 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
 /**
- * Bucket index input partitioner.
- * The fields to hash can be a subset of the primary key fields.
- *
- * @param <T> The type of obj to hash
+ * A factory class for {@link Partitioner} of bucket index table.
  */
-public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
+public class BucketIndexPartitionerFactory {
 
-  private final int bucketNum;
-  private final String indexKeyFields;
-
-  public BucketIndexPartitioner(Configuration conf) {
-    this.bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-    this.indexKeyFields = OptionsResolver.getIndexKeyField(conf);
-  }
-
-  @Override
-  public int partition(HoodieKey key, int numPartitions) {
-    int curBucket = BucketIdentifier.getBucketId(key, indexKeyFields, bucketNum);
-    int partitionIndex = (key.getPartitionPath().hashCode() & Integer.MAX_VALUE) % numPartitions;
-    int globalIndex = partitionIndex + curBucket;
-    return BucketIdentifier.mod(globalIndex, numPartitions);
+  public static Partitioner instance(Configuration conf) {
+    HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
+    switch (bucketIndexEngineType) {
+      case SIMPLE:
+        return new BucketIndexPartitioner(conf);
+      case CONSISTENT_HASHING:
+        return new ConsistentHashingBucketIndexPartitioner(conf);
+      default:
+        throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
+    }
   }
 }

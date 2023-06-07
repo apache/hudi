@@ -132,6 +132,11 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
   }
 
+  public static HoodieIndex.BucketIndexEngineType getBucketEngineType(Configuration conf) {
+    String bucketEngineType = conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE);
+    return HoodieIndex.BucketIndexEngineType.valueOf(bucketEngineType);
+  }
+
   /**
    * Returns whether the source should emit changelog.
    *

@@ -159,10 +159,14 @@ public class ITTestDataStreamWrite extends TestLogger {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
+  @ValueSource(strings = {"BUCKET", "FLINK_STATE", "CONSISTENT_BUCKET"})
   public void testWriteMergeOnReadWithCompaction(String indexType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
+    if (indexType.equals("CONSISTENT_BUCKET")) {
+      conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+      conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
+    }
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
