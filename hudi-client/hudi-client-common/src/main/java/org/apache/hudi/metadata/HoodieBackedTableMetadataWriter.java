@@ -310,7 +310,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     final String latestMetadataInstantTimestamp = latestMetadataInstant.get().getTimestamp();
-    if (latestMetadataInstantTimestamp.equals(SOLO_COMMIT_TIMESTAMP)) {
+    if (latestMetadataInstantTimestamp.startsWith(SOLO_COMMIT_TIMESTAMP)) { // the initialization timestamp is SOLO_COMMIT_TIMESTAMP + offset
       return false;
     }
 
@@ -451,7 +451,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // initialized one after the other.
     for (int offset = 0; ; ++offset) {
       final String commitInstantTime = HoodieTableMetadataUtil.createIndexInitTimestamp(initializationTime, offset);
-      if (!metadataMetaClient.getCommitTimeline().containsInstant(commitInstantTime)) {
+      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
         return commitInstantTime;
       }
     }
@@ -601,7 +601,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime) throws IOException {
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
-    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(metadata.getAllPartitionPaths());
+    if (metadata == null) {
+      this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
+          dataWriteConfig.getBasePath(), dataWriteConfig.getSpillableMapBasePath());
+    }
+    List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
+        .map(partitionPath -> dataWriteConfig.getBasePath() + "/" + partitionPath).collect(Collectors.toList());
+    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
     for (Map.Entry<String, FileStatus[]> entry : partitionFileMap.entrySet()) {
       dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
     }
@@ -986,6 +992,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
       allTableServicesExecutedSuccessfullyOrSkipped = false;
+      throw e;
     } finally {
       long timeSpent = metadataTableServicesTimer.endTimer();
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION, timeSpent));
