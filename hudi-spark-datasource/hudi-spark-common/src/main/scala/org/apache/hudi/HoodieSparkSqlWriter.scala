@@ -1082,7 +1082,7 @@ object HoodieSparkSqlWriter {
     }
     if (null != tableConfig && mode != SaveMode.Overwrite) {
       // over-ride only if not explicitly set by the user.
-      tableConfig.getProps.filter( kv => !mergedParams.contains(kv._1))
+      tableConfig.getProps.filter( kv => !optParams.contains(kv._1))
         .foreach { case (key, value) =>
           mergedParams(key) = value
       }
