@@ -19,7 +19,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.{DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -35,8 +35,12 @@ class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport
   override def toString: String = "Hoodie-Parquet"
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val conf = sparkSession.sessionState.conf
-    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      val conf = sparkSession.sessionState.conf
+      conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+    } else {
+      super.supportBatch(sparkSession, schema)
+    }
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
