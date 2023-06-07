@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieIOException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
@@ -66,6 +66,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
         Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
+      throw new HoodieIOException("XXX asdfasd")
     })
   }
 

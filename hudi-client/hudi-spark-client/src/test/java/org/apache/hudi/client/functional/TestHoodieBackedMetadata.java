@@ -1016,7 +1016,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           enableMetaFields);
     }, "Metadata table should have valid log files!");
 
-    // Verify no base file created yet.
     verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
 
     // 2 more commits

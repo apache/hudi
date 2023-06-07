@@ -138,6 +138,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      testTable.updateFilesPartitionInTableConfig();
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }

@@ -1110,6 +1110,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .build();
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
     HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable.updateFilesPartitionInTableConfig();
 
     String p1 = "part_1";
     String p2 = "part_2";
@@ -1125,7 +1126,6 @@ public class TestCleaner extends HoodieClientTestBase {
     });
     commitWithMdt("1", part1ToFileId, testTable, metadataWriter);
     commitWithMdt("2", part1ToFileId, testTable, metadataWriter);
-
 
     // add clean instant
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
@@ -1146,14 +1146,22 @@ public class TestCleaner extends HoodieClientTestBase {
     commitWithMdt("4", part2ToFileId, testTable, metadataWriter);
 
     // empty commits
-    testTable.addCommit("5");
-    testTable.addCommit("6");
+    String file5P2 = UUID.randomUUID().toString();
+    String file6P2 = UUID.randomUUID().toString();
+    part2ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+      {
+        put(p2, CollectionUtils.createImmutableList(file5P2, file6P2));
+      }
+    });
+    commitWithMdt("5", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("6", part2ToFileId, testTable, metadataWriter);
 
     // archive commit 1, 2
     new HoodieTimelineArchiver<>(config, HoodieSparkTable.create(config, context, metaClient))
         .archiveIfRequired(context, false);
-    assertFalse(metaClient.reloadActiveTimeline().containsInstant("1"));
-    assertFalse(metaClient.reloadActiveTimeline().containsInstant("2"));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().containsInstant("1"));
+    assertFalse(metaClient.getActiveTimeline().containsInstant("2"));
 
     runCleaner(config);
     assertFalse(testTable.baseFileExists(p1, "1", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
@@ -1177,6 +1185,7 @@ public class TestCleaner extends HoodieClientTestBase {
         throw new RuntimeException(e);
       }
     });
+    metadataWriter.performTableServices(Option.of(instantTime));
     metadataWriter.update(commitMeta, instantTime);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
