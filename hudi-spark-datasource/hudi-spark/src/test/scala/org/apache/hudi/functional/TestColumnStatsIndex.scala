@@ -51,11 +51,11 @@ import scala.util.Random
 class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
-  val sourceTableSchema: StructType =
+  val sourceTableSchema =
     new StructType()
       .add("c1", IntegerType)
       .add("c2", StringType)
-      .add("c3", DecimalType(9,3))
+      .add("c3", DecimalType(9, 3))
       .add("c4", TimestampType)
       .add("c5", ShortType)
       .add("c6", DateType)
@@ -63,7 +63,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       .add("c8", ByteType)
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp() {
     initPath()
     initSparkContexts()
     initFileSystem()
@@ -75,7 +75,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown(): Unit = {
+  override def tearDown() = {
     cleanupFileSystem()
     cleanupSparkContexts()
   }
