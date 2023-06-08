@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,6 +38,6 @@ public class SparkDeletePreppedCommitActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    return HoodieDeleteHelper.newInstance().execute(instantTime, preppedRecords.map(record -> new HoodieKey(record.getRecordKey(), record.getPartitionPath())), context, config, table, this);
+    return HoodieDeleteHelper.newInstance().executePrepped(instantTime, preppedRecords, context, config, table, this);
   }
 }

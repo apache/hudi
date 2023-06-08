@@ -124,6 +124,16 @@ public class HoodieDeleteHelper<T, R> extends
     }
   }
 
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> executePrepped(String instantTime,
+                                                                     HoodieData<HoodieRecord<T>> preppedRecords,
+                                                                     HoodieEngineContext context,
+                                                                     HoodieWriteConfig config,
+                                                                     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                                     BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> deleteExecutor) {
+    return execute(instantTime, preppedRecords.map(record -> new HoodieKey(record.getRecordKey(), record.getPartitionPath())), context, config, table, deleteExecutor);
+  }
+
   public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
     HoodieRecordType recordType = config.getRecordMerger().getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
