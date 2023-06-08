@@ -258,6 +258,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    throw new HoodieNotSupportedException("This method should not be invoked");
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     return new FlinkDeletePartitionCommitActionExecutor<>(context, config, this, instantTime, partitions).execute();
   }

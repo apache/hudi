@@ -272,6 +272,11 @@ public class HoodieFlinkWriteClient<T> extends
     return postWrite(result, instantTime, table);
   }
 
+  @Override
+  public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
+    throw new HoodieNotSupportedException("DeletePrepped operation is not supported yet");
+  }
+
   public List<WriteStatus> deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));

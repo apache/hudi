@@ -485,6 +485,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O delete(K keys, final String instantTime);
 
   /**
+   * Deletes records from a Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in the
+   * input records.
+   *
+   * @param preppedRecords Empty records with key and locator set.
+   * @param instantTime Commit time handle.
+   * @return Collection of WriteStatus to inspect errors and counts.
+   */
+  public abstract O deletePrepped(I preppedRecords, final String instantTime);
+
+  /**
    * Common method containing steps to be performed before write (upsert/insert/...
    * @param instantTime
    * @param writeOperationType
