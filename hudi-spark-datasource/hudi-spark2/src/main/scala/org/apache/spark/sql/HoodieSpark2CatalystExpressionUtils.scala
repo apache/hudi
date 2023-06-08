@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, And, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.catalyst.expressions.{Add, And, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Like, Log, Log10, Log1p, Log2, Lower, Multiply, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.types.DataType
 
 object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
@@ -140,7 +140,7 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
         case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // Other
-        case cast@Cast(OrderPreservingTransformation(attrRef), _, _)
+        case cast @ Cast(OrderPreservingTransformation(attrRef), _, _)
           if isCastPreservingOrdering(cast.child.dataType, cast.dataType) => Some(attrRef)
 
         // Identity transformation
@@ -150,4 +150,5 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
       }
     }
   }
+
 }

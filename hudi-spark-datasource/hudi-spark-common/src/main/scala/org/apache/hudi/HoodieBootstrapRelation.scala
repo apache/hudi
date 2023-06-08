@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
-import org.apache.hudi.HoodieBootstrapRelation.validate
+import org.apache.hudi.HoodieBootstrapRelation.{createPartitionedFile, validate}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
@@ -75,16 +75,16 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       val baseFile = fileSlice.getBaseFile.get()
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
-            bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
-        val dataFile = HoodieBootstrapRelation.createPartitionedFile(
+          bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
+        val dataFile = createPartitionedFile(
           partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getPath,
           0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(HoodieBootstrapRelation.createPartitionedFile(
+        val skeletonFile = Option(createPartitionedFile(
           InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
-        val dataFile = HoodieBootstrapRelation.createPartitionedFile(
+        val dataFile = createPartitionedFile(
           getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getHadoopPath, 0, baseFile.getFileLen)
         HoodieBootstrapSplit(dataFile)
       }

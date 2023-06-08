@@ -20,18 +20,17 @@ package org.apache.hudi.common.model
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.objects.SerializerSupport
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeRow}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.addMetaFields
 import org.apache.spark.sql.types.{Decimal, StructType}
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -108,10 +107,10 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val legacyRecord = toLegacyAvroRecord(avroRecord, key)
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
 
-    val expectLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 534 else 528
+    val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 534 else 528
 
     Seq(
-      (legacyRecord, expectLagacyRecordSize),
+      (legacyRecord, expectedLagacyRecordSize),
       (avroIndexedRecord, 389)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }

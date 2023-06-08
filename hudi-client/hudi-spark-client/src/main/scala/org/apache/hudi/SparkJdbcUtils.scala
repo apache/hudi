@@ -25,6 +25,9 @@ import org.apache.spark.sql.types.StructType
 
 import java.sql.ResultSet
 
+/**
+ * Util functions for JDBC source and tables in Spark.
+ */
 object SparkJdbcUtils {
   /**
    * Takes a [[ResultSet]] and returns its Catalyst schema.
@@ -37,6 +40,25 @@ object SparkJdbcUtils {
   def getSchema(resultSet: ResultSet,
                 dialect: JdbcDialect,
                 alwaysNullable: Boolean): StructType = {
+    // NOTE: Since Spark 3.4.0, the function signature of [[JdbcUtils.getSchema]] is changed
+    // to have four arguments. Although calling this function in Scala with the first three
+    // arguments works, with the fourth argument using the default value, this breaks the
+    // Java code as Java cannot use the default argument value and has to use four arguments.
+    // Instead of calling this function from Java code directly, we create this util function
+    // in Scala for compatibility in Hudi code.
+    //
+    // Before Spark 3.4.0 (three arguments):
+    // def getSchema(
+    //      resultSet: ResultSet,
+    //      dialect: JdbcDialect,
+    //      alwaysNullable: Boolean = false): StructType
+    //
+    // Since Spark 3.4.0 (four arguments):
+    // def getSchema(
+    //      resultSet: ResultSet,
+    //      dialect: JdbcDialect,
+    //      alwaysNullable: Boolean = false,
+    //      isTimestampNTZ: Boolean = false): StructType
     JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
   }
 }

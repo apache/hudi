@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql
 
+/**
+ * Utils on schema, which have different implementation across Spark versions.
+ */
 trait HoodieSchemaUtils {
   /**
    * Checks if input column names have duplicate identifiers. This throws an exception if

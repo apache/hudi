@@ -22,6 +22,9 @@ package org.apache.spark.sql.execution.datasources
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.InternalRow
 
+/**
+ * Utils on Spark [[PartitionedFile]] for Spark 2.4.
+ */
 object HoodieSpark2PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
   override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
     new Path(partitionedFile.filePath)

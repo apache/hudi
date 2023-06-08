@@ -70,8 +70,8 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
-  // Pre Spark 3.4: PartitioningAwareFileIndex.BASE_PATH_PARAM
-  // Since Spark 3.4: FileIndexOptions.BASE_PATH_PARAM
+  // Before Spark 3.4.0: PartitioningAwareFileIndex.BASE_PATH_PARAM
+  // Since Spark 3.4.0: FileIndexOptions.BASE_PATH_PARAM
   val BASE_PATH_PARAM = "basePath"
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
