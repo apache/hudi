@@ -267,9 +267,6 @@ Spark SQL needs an explicit create table command.
 *Read more in the [table management](/docs/table_management) guide.*
 
 :::note
-1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural
-   discrepancies reported in previous versions. Non-primary-key tables are no longer supported. Any Hudi table created
-   pre-0.10.0 without a `primaryKey` needs to be re-created with a `primaryKey` field with 0.10.0.
 2. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
 3. `preCombineField` is required for MOR tables. 
 4. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`. 
@@ -481,6 +478,7 @@ Here we are using the default write operation : `upsert`. If you have a workload
 
 <TabItem value="sparksql">
 
+Examples writing to partitioned and non-partitioned table:
 ```sql
 -- insert into non-partitioned table
 insert into hudi_cow_nonpcf_tbl select 1, 'a1', 20;
@@ -494,12 +492,23 @@ select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
 insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2', 1000;
 ```
 
-**NOTICE**
-- By default,  if `preCombineKey `  is provided,  `insert into` use `upsert` as the type of write operation, otherwise use `insert`.
-- We support to use `bulk_insert` as the type of write operation, just need to set two configs: `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode`. Example as follow: 
+**Write Modes**
 
+By default, `insert into` uses `bulk_insert` write mode.
+To use other write modes, use the following table. Required Configs must be explicitly set to use the specified insert mode. 
+Optional Configs are not required, but must **not** be set to a **different** value than listed in the column.
+
+
+| Write Mode    | Required Configs                                                                                                                                   | Optional Configs                                                                                                                          |
+|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| `upsert`      | `hoodie.sql.insert.mode=upsert`                                                                                                                    | `hoodie.sql.bulk.insert.enable=false`<br/> `hoodie.datasource.write.insert.drop.duplicates=false`                                         |
+| `insert`      | `hoodie.sql.bulk.insert.enable=false`<br/> <br/>&nbsp;&nbsp;&nbsp;&nbsp;`hoodie.sql.insert.mode=non-strict`<br/>or `hoodie.sql.insert.mode=strict` |                                                                                                                                           |
+| `bulk_insert` |                                                                                                                                                    | `hoodie.sql.bulk.insert.enable=true`<br/> `hoodie.sql.insert.mode=non-strict`<br/> `hoodie.datasource.write.insert.drop.duplicates=false` |
+
+Examples using the different write modes on a non-partitioned table:
 ```sql
--- upsert mode for preCombineField-provided table
+-- upsert mode for table
+set hoodie.sql.insert.mode=upsert;
 insert into hudi_mor_tbl select 1, 'a1_1', 20, 1001;
 select id, name, price, ts from hudi_mor_tbl;
 1	a1_1	20.0	1001
@@ -513,6 +522,7 @@ select id, name, price, ts from hudi_mor_tbl;
 1	a1_1	20.0	1001
 1	a1_2	20.0	1002
 ```
+
 
 </TabItem>
 
@@ -1504,7 +1514,10 @@ spark.read.format("hudi"). \
 
 <TabItem value="sparksql">
 
-`insert overwrite` a partitioned table use the `INSERT_OVERWRITE` type of write operation, while a non-partitioned table to `INSERT_OVERWRITE_TABLE`.
+If a static partition is listed, the `insert_overwrite` operation will be used. The 'insert_overwrite_table' 
+operation is used when no partition is specified. However, if `hoodie.sql.bulk.insert.enable=true` and 
+`hoodie.sql.insert.mode=non-strict`, the table will be deleted and the `bulk_insert` operation will be used to write 
+the values to the table.
 
 ```sql
 -- insert overwrite non-partitioned table
@@ -1514,9 +1527,13 @@ insert overwrite hudi_cow_nonpcf_tbl select 99, 'a99', 20.0;
 -- insert overwrite partitioned table with dynamic partition
 insert overwrite table hudi_cow_pt_tbl select 10, 'a10', 1100, '2021-12-09', '10';
 
+-- insert overwrite partitioned table with dynamic partition, alternate syntax
+insert overwrite hudi_cow_pt_tbl select 10, 'a10', 1100, '2021-12-09', '10';
+
 -- insert overwrite partitioned table with static partition
 insert overwrite hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='12') select 13, 'a13', 1100;
 ```
+
 </TabItem>
 
 </Tabs
