@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -33,14 +34,15 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,26 +58,26 @@ import java.util.stream.Stream;
 /**
  * Implementation of {@link HoodieTableMetadata} based file-system-backed table metadata.
  */
-public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
+public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
-  private final transient HoodieEngineContext engineContext;
-  private final SerializableConfiguration hadoopConf;
-  private final String datasetBasePath;
   private final boolean assumeDatePartitioning;
+
   private final boolean hiveStylePartitioningEnabled;
+  private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String datasetBasePath,
                                        boolean assumeDatePartitioning) {
-    this.engineContext = engineContext;
-    this.hadoopConf = conf;
-    this.datasetBasePath = datasetBasePath;
+    super(engineContext, conf, datasetBasePath);
+
+    FileSystem fs = FSUtils.getFs(dataBasePath.get(), conf.get());
+    Path metaPath = new Path(dataBasePath.get(), HoodieTableMetaClient.METAFOLDER_NAME);
+    TableNotFoundException.checkTableValidity(fs, this.dataBasePath.get(), metaPath);
+    HoodieTableConfig tableConfig = new HoodieTableConfig(fs, metaPath.toString(), null, null);
+    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+    this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
     this.assumeDatePartitioning = assumeDatePartitioning;
-    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(HoodieTableMetaClient.builder()
-        .setConf(hadoopConf.get())
-        .setBasePath(datasetBasePath)
-        .build().getTableConfig().getHiveStylePartitioningEnable());
   }
 
   @Override
@@ -86,22 +88,23 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
-    Path basePath = new Path(datasetBasePath);
+    Path basePath = dataBasePath.get();
     if (assumeDatePartitioning) {
       FileSystem fs = basePath.getFileSystem(hadoopConf.get());
-      return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
+      return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, dataBasePath.toString());
     }
 
     return getPartitionPathWithPathPrefixes(Collections.singletonList(""));
   }
 
   @Override
-  public List<String> getPartitionPathByExpression(List<String> relativePathPrefixes,
-                                                   Types.RecordType partitionFields,
-                                                   Expression expression) throws IOException {
+  public List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                          Types.RecordType partitionFields,
+                                                                          Expression expression) throws IOException {
     return relativePathPrefixes.stream().flatMap(relativePathPrefix -> {
       try {
-        return getPartitionPathWithPathPrefix(relativePathPrefix, partitionFields, expression).stream();
+        return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix,
+            partitionFields, expression).stream();
       } catch (IOException e) {
         throw new HoodieIOException("Error fetching partition paths with relative path: " + relativePathPrefix, e);
       }
@@ -119,38 +122,32 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     }).collect(Collectors.toList());
   }
 
-  private int getRelativePathPartitionLevel(String relativePathPrefix) {
-    if (StringUtils.isNullOrEmpty(relativePathPrefix)) {
-      return 0;
-    }
-
-    int level = 0;
-    for (int i = 1; i < relativePathPrefix.length() - 1; i++) {
-      if (relativePathPrefix.charAt(i) == '/') {
-        level++;
-      }
-    }
-    if (relativePathPrefix.startsWith("/")) {
-      level--;
-    }
-    if (relativePathPrefix.endsWith("/")) {
-      level--;
-    }
-    return level;
-  }
-
   private List<String> getPartitionPathWithPathPrefix(String relativePathPrefix) throws IOException {
-    return getPartitionPathWithPathPrefix(relativePathPrefix, null, null);
+    return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix, null, null);
   }
 
-  private List<String> getPartitionPathWithPathPrefix(String relativePathPrefix,
-                                                      Types.RecordType partitionFields,
-                                                      Expression expression) throws IOException {
+  private List<String> getPartitionPathWithPathPrefixUsingFilterExpression(String relativePathPrefix,
+                                                                           Types.RecordType partitionFields,
+                                                                           Expression expression) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
-        ? new Path(datasetBasePath) : new Path(datasetBasePath, relativePathPrefix));
+        ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
-    int partitionLevel = getRelativePathPartitionLevel(relativePathPrefix);
+
+    int partitionLevel = -1;
+    boolean needPushDownExpressions;
+    // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here,
+    // given it's possible that partition values contains `/`, which could affect
+    // the result to get right `partitionValue` when listing paths, here we have
+    // to make it more strict that `urlEncodePartitioningEnabled` must be enabled.
+    // TODO better enable urlEncodePartitioningEnabled if hiveStylePartitioningEnabled is enabled?
+    if (hiveStylePartitioningEnabled && urlEncodePartitioningEnabled
+        && expression != null && partitionFields != null) {
+      partitionLevel = getPathPartitionLevel(partitionFields, relativePathPrefix);
+      needPushDownExpressions = true;
+    } else {
+      needPushDownExpressions = false;
+    }
 
     while (!pathsToList.isEmpty()) {
       // TODO: Get the parallelism from HoodieWriteConfig
@@ -160,16 +157,39 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add its subdirectory to queue to be processed.
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all partitions with prefix " + relativePathPrefix);
+      Expression boundedExpr;
+      if (needPushDownExpressions) {
+        // Here we assume the path level matches the number of partition columns, so we'll rebuild
+        // new schema based on current path level.
+        // e.g. partition columns are <region, date, hh>, if we're listing the second level, then
+        // currentSchema would be <region, date>
+        // `PartialBindVisitor` will bind reference if it can be found from `currentSchema`, otherwise
+        // will change the expression to `alwaysTrue`. Can see `PartialBindVisitor` for details.
+        Types.RecordType currentSchema = Types.RecordType.get(partitionFields.fields().subList(0, ++partitionLevel));
+        PartialBindVisitor partialBindVisitor = new PartialBindVisitor(currentSchema, caseSensitive);
+        boundedExpr = expression.accept(partialBindVisitor);
+      } else {
+        boundedExpr = Predicates.alwaysTrue();
+      }
       // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
       // and second entry holds optionally a directory path to be processed further.
       List<Pair<Option<String>, Option<Path>>> result = engineContext.flatMap(pathsToList, path -> {
         FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
         if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, path)) {
-          return Stream.of(Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), path)), Option.empty()));
+          String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), path);
+          if (boundedExpr instanceof Predicates.TrueExpression
+              || (Boolean) boundedExpr.eval(
+              extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled))) {
+            return Stream.of(Pair.of(Option.of(relativePartitionPath), Option.empty()));
+          }
         }
         return Arrays.stream(fileSystem.listStatus(path, p -> {
           try {
-            return fileSystem.isDirectory(p) && !p.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME);
+            return fileSystem.isDirectory(p) && !p.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+                && (boundedExpr instanceof Predicates.TrueExpression
+                || (Boolean) boundedExpr.eval(
+                extractPartitionValues(partitionFields,
+                    FSUtils.getRelativePartitionPath(dataBasePath.get(), p), urlEncodePartitioningEnabled)));
           } catch (IOException e) {
             // noop
           }

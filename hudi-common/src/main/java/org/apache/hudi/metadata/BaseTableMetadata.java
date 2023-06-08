@@ -79,6 +79,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected final HoodieMetadataConfig metadataConfig;
 
   protected boolean isMetadataTableInitialized;
+  protected final boolean hiveStylePartitioningEnabled;
+  protected final boolean urlEncodePartitioningEnabled;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
     super(engineContext, engineContext.getHadoopConf(), dataBasePath);
@@ -87,6 +89,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         .setConf(hadoopConf.get())
         .setBasePath(dataBasePath)
         .build();
+
+    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
+    this.urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 

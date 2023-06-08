@@ -20,20 +20,13 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.util.Collections;
 import java.util.List;
@@ -47,9 +40,6 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
   protected final SerializableConfiguration hadoopConf;
   protected final SerializablePath dataBasePath;
 
-  protected final boolean hiveStylePartitioningEnabled;
-  protected final boolean urlEncodePartitioningEnabled;
-
   // TODO get this from HoodieConfig
   protected final boolean caseSensitive = false;
 
@@ -57,12 +47,6 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
     this.engineContext = engineContext;
     this.hadoopConf = conf;
     this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
-    FileSystem fs = FSUtils.getFs(dataBasePath, conf.get());
-    Path metaPath = new Path(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    TableNotFoundException.checkTableValidity(fs, this.dataBasePath.get(), metaPath);
-    HoodieTableConfig tableConfig = new HoodieTableConfig(fs, metaPath.toString(), null, null);
-    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
-    this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
 
   protected int getPathPartitionLevel(Types.RecordType partitionFields, String path) {
