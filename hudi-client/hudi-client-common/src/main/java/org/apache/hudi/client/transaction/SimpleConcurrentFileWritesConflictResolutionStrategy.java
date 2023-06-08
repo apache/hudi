@@ -97,9 +97,11 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     // supported for CLUSTER (https://issues.apache.org/jira/browse/HUDI-1042),
     // add that to the below check so that concurrent updates do not conflict.
     if (otherOperation.getOperationType() == WriteOperationType.COMPACT) {
+      LOG.warn("Found Conflict with thisOperation: " + thisOperation + " and otherOperation: " + otherOperation);
       if (HoodieTimeline.compareTimestamps(otherOperation.getInstantTimestamp(), HoodieTimeline.LESSER_THAN, thisOperation.getInstantTimestamp())) {
         return thisOperation.getCommitMetadataOption();
       }
+      LOG.warn("otherOperation: " + otherOperation + " is not before thisOperation: " + thisOperation);
     } else if (HoodieTimeline.LOG_COMPACTION_ACTION.equals(thisOperation.getInstantActionType())) {
       // Since log compaction is a rewrite operation, it can be committed along with other delta commits.
       // The ordering of the commits is taken care by AbstractHoodieLogRecordReader scan method.
@@ -107,7 +109,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return thisOperation.getCommitMetadataOption();
     }
     // just abort the current write if conflicts are found
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+    throw new HoodieWriteConflictException(new ConcurrentModificationException(
+        "Cannot resolve conflicts for overlapping writes - thisOperation: " + thisOperation + " and otherOperation: " + otherOperation));
   }
 
 }

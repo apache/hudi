@@ -67,12 +67,12 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public void lock() {
-    LOG.info(getLogMessage(LockState.ACQUIRING));
+    LOG.warn("Calling from Lock: " + getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
+      throw new HoodieLockException("Calling from lock: " + getLogMessage(LockState.ALREADY_ACQUIRED));
     }
     lock.writeLock().lock();
-    LOG.info(getLogMessage(LockState.ACQUIRED));
+    LOG.warn("Calling from lock: " + getLogMessage(LockState.ACQUIRED));
   }
 
   @Override
@@ -82,16 +82,16 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public boolean tryLock(long time, @NotNull TimeUnit unit) {
-    LOG.info(getLogMessage(LockState.ACQUIRING));
+    LOG.warn("Calling from tryLock: " + getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
+      throw new HoodieLockException("Calling from tryLock: " + getLogMessage(LockState.ALREADY_ACQUIRED));
     }
 
     boolean isLockAcquired;
     try {
       isLockAcquired = lock.writeLock().tryLock(time, unit);
     } catch (InterruptedException e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
+      throw new HoodieLockException("Calling from tryLock: " + getLogMessage(LockState.FAILED_TO_ACQUIRE));
     }
 
     LOG.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
@@ -100,16 +100,16 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public void unlock() {
-    LOG.info(getLogMessage(LockState.RELEASING));
+    LOG.warn("Calling from unlock: " + getLogMessage(LockState.RELEASING));
     try {
       if (lock.isWriteLockedByCurrentThread()) {
         lock.writeLock().unlock();
-        LOG.info(getLogMessage(LockState.RELEASED));
+        LOG.info("Calling from unlock: " + getLogMessage(LockState.RELEASED));
       } else {
         LOG.warn("Cannot unlock because the current thread does not hold the lock.");
       }
     } catch (Exception e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
+      throw new HoodieLockException("Calling from unlock: " + getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }
   }
 
