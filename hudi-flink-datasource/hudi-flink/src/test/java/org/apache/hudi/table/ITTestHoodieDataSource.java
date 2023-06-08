@@ -1362,11 +1362,10 @@ public class ITTestHoodieDataSource {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, 3);
-    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 4);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 2);
+    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, 4);
+    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 5);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 3);
     conf.setString("hoodie.commits.archival.batch", "1");
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
 
     // write 10 batches of data set
     for (int i = 0; i < 20; i += 2) {
@@ -1380,7 +1379,6 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.READ_START_COMMIT, secondArchived)
-        .option(FlinkOptions.METADATA_ENABLED, false)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 

@@ -133,8 +133,8 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.3.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink1.17.version>1.17.0</flink1.17.version>
-    <flink1.16.version>1.16.0</flink1.16.version>
+    <flink1.17.version>1.17.1</flink1.17.version>
+    <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
@@ -2140,9 +2140,7 @@
       </modules>
       <properties>
         <spark.version>${spark2.version}</spark.version>
-        <sparkbundle.version>2.4</sparkbundle.version>
-        <scala.version>${scala11.version}</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
+        <sparkbundle.version/>
         <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
@@ -2176,8 +2174,6 @@
       <properties>
         <spark.version>${spark2.version}</spark.version>
         <sparkbundle.version>2.4</sparkbundle.version>
-        <scala.version>${scala11.version}</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
         <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>

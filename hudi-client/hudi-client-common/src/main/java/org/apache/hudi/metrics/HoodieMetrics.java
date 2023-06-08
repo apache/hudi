@@ -274,6 +274,17 @@ public class HoodieMetrics {
     return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
+  public void updateClusteringFileCreationMetrics(long durationInMs) {
+    reportMetrics("replacecommit", "fileCreationTime", durationInMs);
+  }
+
+  /**
+   * Given a commit action, metrics name and value this method reports custom metrics.
+   */
+  public void reportMetrics(String commitAction, String metricName, long value) {
+    metrics.registerGauge(getMetricsName(commitAction, metricName), value);
+  }
+
   /**
    * By default, the timer context returns duration with nano seconds. Convert it to millisecond.
    */
