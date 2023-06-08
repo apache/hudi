@@ -24,6 +24,21 @@ import org.apache.spark.sql.types.DataType
 
 object HoodieSpark34CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper {
 
+  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] = {
+    DataSourceStrategy.normalizeExprs(exprs, attributes)
+  }
+
+  override def extractPredicatesWithinOutputSet(condition: Expression, outputSet: AttributeSet): Option[Expression] = {
+    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
+  }
+
+  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] = {
+    expr match {
+      case Cast(child, dataType, timeZoneId, _) => Some((child, dataType, timeZoneId))
+      case _ => None
+    }
+  }
+
   override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {
       case OrderPreservingTransformation(attrRef) => Some(attrRef)
@@ -92,21 +107,6 @@ object HoodieSpark34CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         // No match
         case _ => None
       }
-    }
-  }
-
-  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] = {
-    DataSourceStrategy.normalizeExprs(exprs, attributes)
-  }
-
-  override def extractPredicatesWithinOutputSet(condition: Expression, outputSet: AttributeSet): Option[Expression] = {
-    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
-  }
-
-  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] = {
-    expr match {
-      case Cast(child, dataType, timeZoneId, _) => Some((child, dataType, timeZoneId))
-      case _ => None
     }
   }
 }

@@ -17,16 +17,12 @@
 
 package org.apache.spark.sql.avro
 
-import java.nio.ByteBuffer
-import scala.collection.JavaConverters._
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.LogicalTypes
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
-import org.apache.avro.Schema
+import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
-import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed}
-import org.apache.avro.generic.GenericData.Record
+import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
@@ -39,7 +35,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 
+import java.nio.ByteBuffer
 import java.util.TimeZone
+import scala.collection.JavaConverters._
 
 /**
  * A serializer to serialize data in catalyst format to data in avro format.
@@ -62,7 +60,8 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
 
   def this(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) = {
     this(rootCatalystType, rootAvroType, nullable, positionalFieldMatch = false,
-      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE)))
+      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE,
+        LegacyBehaviorPolicy.CORRECTED.toString)))
   }
 
   def serialize(catalystData: Any): Any = {
