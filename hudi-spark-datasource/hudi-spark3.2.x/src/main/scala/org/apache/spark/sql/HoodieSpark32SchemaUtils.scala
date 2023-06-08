@@ -21,6 +21,9 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.util.SchemaUtils
 
+/**
+ * Utils on schema for Spark 3.2.
+ */
 object HoodieSpark32SchemaUtils extends HoodieSchemaUtils {
   override def checkColumnNameDuplication(columnNames: Seq[String],
                                           colType: String,

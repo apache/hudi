@@ -99,7 +99,7 @@ object HoodieSpark32CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // Other
-        case cast@Cast(OrderPreservingTransformation(attrRef), _, _, _)
+        case cast @ Cast(OrderPreservingTransformation(attrRef), _, _, _)
           if isCastPreservingOrdering(cast.child.dataType, cast.dataType) => Some(attrRef)
 
         // Identity transformation
