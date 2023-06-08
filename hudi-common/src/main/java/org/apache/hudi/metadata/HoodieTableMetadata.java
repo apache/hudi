@@ -69,6 +69,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   }
 
   /**
+   * Return the base-path of the Metadata Table for the given Dataset identified by base-path
+   */
+  static Path getMetadataTableBasePath(Path dataTableBasePath) {
+    return new Path(dataTableBasePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+  }
+
+  /**
    * Returns the base path of the Dataset provided the base-path of the Metadata Table of this
    * Dataset
    */

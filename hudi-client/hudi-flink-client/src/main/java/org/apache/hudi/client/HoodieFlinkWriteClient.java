@@ -384,7 +384,7 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     // do nothing.
 
     // flink executes the upgrade/downgrade once when initializing the first instant on start up,
