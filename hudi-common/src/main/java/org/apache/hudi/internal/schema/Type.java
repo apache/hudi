@@ -52,7 +52,7 @@ public interface Type extends Serializable {
     TIME(Long.class),
     TIMESTAMP(Long.class),
     DECIMAL(BigDecimal.class),
-    UUID(java.util.UUID.class);
+    UUID(UUID.class);
     private final String name;
     private final Class<?> classTag;
 
