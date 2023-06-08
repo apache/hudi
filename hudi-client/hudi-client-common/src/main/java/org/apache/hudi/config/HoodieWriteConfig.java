@@ -102,6 +102,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_IGNORE_APPEND_WRITE_COMMITS;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
@@ -2505,6 +2506,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getRollbackBackupDirectory() {
     return getString(ROLLBACK_INSTANT_BACKUP_DIRECTORY);
+  }
+
+  public Boolean isCleanerIgnoreAppendWriteCommits() {
+    return getBoolean(CLEANER_IGNORE_APPEND_WRITE_COMMITS);
   }
 
   public static class Builder {

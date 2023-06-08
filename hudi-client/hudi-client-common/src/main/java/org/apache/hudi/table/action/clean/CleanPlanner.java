@@ -203,10 +203,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
                       hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
                   return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
                 } else {
-                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                      .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
-                          HoodieCommitMetadata.class);
-                  return commitMetadata.getPartitionToWriteStats().keySet().stream();
+                  if (config.isCleanerIgnoreAppendWriteCommits()) {
+                    // In some case like append write/bulk insert, there is only one file version, so we don't need to clean
+                    return Stream.empty();
+                  } else {
+                    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                        .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
+                            HoodieCommitMetadata.class);
+                    return commitMetadata.getPartitionToWriteStats().keySet().stream();
+                  }
                 }
               } catch (IOException e) {
                 throw new HoodieIOException(e.getMessage(), e);

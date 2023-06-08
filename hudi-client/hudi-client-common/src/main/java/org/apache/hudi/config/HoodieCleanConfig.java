@@ -179,6 +179,12 @@ public class HoodieCleanConfig extends HoodieConfig {
           + " table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + " base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<Boolean> CLEANER_IGNORE_APPEND_WRITE_COMMITS = ConfigProperty
+      .key("hoodie.cleaner.ignore.append.write.commits")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("When set to true, cleaner will ignore partition affected by commits/delta commits. This is usefule for append write mode");
+
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -337,6 +343,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
       cleanConfig.setValue(FAILED_WRITES_CLEANER_POLICY, failedWritesPolicy.name());
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder ignoreAppendWriteCommits(boolean ignoreAppendWriteCommits) {
+      cleanConfig.setValue(CLEANER_IGNORE_APPEND_WRITE_COMMITS, String.valueOf(ignoreAppendWriteCommits));
       return this;
     }
 

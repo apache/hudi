@@ -42,10 +42,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.TestCleaner;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -680,5 +682,71 @@ public class TestCleanPlanExecutor extends TestCleaner {
     assertTrue(testTable.baseFileExists(p1, secondCommitTs, file1P1C0));
     assertFalse(testTable.baseFileExists(p0, firstCommitTs, file1P0C0));
     assertFalse(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
+  }
+
+  /**
+   * Test cleaning service skip listing partition affected by commit/delta commits in append mode
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testIncrementalCleanSkipCleanWriteCommit(boolean ignoreAppendWriteCommits) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .enable(false)
+                    .withAssumeDatePartitioning(true).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                    .withIncrementalCleaningMode(true)
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .ignoreAppendWriteCommits(ignoreAppendWriteCommits)
+                    .retainCommits(1)
+                    .build()).build();
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+
+    // Make 3 files with different file id
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+
+    String file1P1C0 = UUID.randomUUID().toString();
+    String file1P1C1 = UUID.randomUUID().toString();
+
+    String file1P0C1 = UUID.randomUUID().toString();
+    String file1P0C2 = UUID.randomUUID().toString();
+
+    // Add & delete files in p1
+    appendFile(testTable, metaClient, "000000001", p1, file1P1C0);
+    testTable.addDeletePartitionCommit("000000002", p1, Collections.singletonList(file1P1C0));
+    appendFile(testTable, metaClient, "000000003", p1, file1P1C1);
+
+    // Run Clean, will list all partitions
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, false, false, 4, false);
+    assertEquals(1, hoodieCleanStatsOne.size());
+
+    // Delete another file in p1
+    testTable.addDeletePartitionCommit("000000004", p1, Collections.singletonList(file1P1C1));
+    // Add files in  p0
+    appendFile(testTable, metaClient, "000000005", p0, file1P0C1);
+    appendFile(testTable, metaClient, "000000006", p0, file1P0C2);
+
+    hoodieCleanStatsOne = runCleaner(config, false, false, 9, false);
+
+    // when ignoreAppendWriteCommits is true we only need to list one partition
+    assertEquals(ignoreAppendWriteCommits ? 1 : 2, hoodieCleanStatsOne.size());
+    // Only 1 file will be deleted whatever ignoreAppendWriteCommits is
+    assertEquals(1, hoodieCleanStatsOne.stream().flatMap(hoodieCleanStat -> hoodieCleanStat.getSuccessDeleteFiles().stream()).count());
+    assertTrue(testTable.baseFileExists(p0, "000000005", file1P0C1));
+    assertTrue(testTable.baseFileExists(p0, "000000006", file1P0C2));
+  }
+
+  private void appendFile(
+      HoodieTestTable testTable, HoodieTableMetaClient metaClient,
+      String commitTime, String partition, String file) throws Exception {
+    testTable.addInflightCommit(commitTime).withBaseFilesInPartition(partition, file);
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata(commitTime,
+            Collections.singletonMap(partition, Collections.singletonList(file)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 }
