@@ -47,7 +47,6 @@ public interface Type extends Serializable {
     LONG(Long.class),
     FLOAT(Float.class),
     DOUBLE(Double.class),
-    // TODO How to change this
     DATE(Integer.class),
     BOOLEAN(Boolean.class),
     TIME(Long.class),

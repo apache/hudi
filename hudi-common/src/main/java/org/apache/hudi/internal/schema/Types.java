@@ -527,33 +527,33 @@ public class Types {
     /**
      * Case-sensitive get field by name
      */
-    public synchronized Field fieldByName(String name) {
+    public Field fieldByName(String name) {
       if (nameToFields == null) {
-        nameToFields = new HashMap<>();
-        for (Field field : fields) {
-          nameToFields.put(field.name(), field);
-        }
+        nameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::name,
+                field -> field));
       }
       return nameToFields.get(name);
     }
 
-    public synchronized Field fieldByNameCaseInsensitive(String name) {
+    public Field fieldByNameCaseInsensitive(String name) {
       if (lowercaseNameToFields == null) {
-        lowercaseNameToFields = new HashMap<>();
-        for (Field field : fields) {
-          lowercaseNameToFields.put(field.name().toLowerCase(Locale.ROOT), field);
-        }
+        lowercaseNameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                field -> field.name.toLowerCase(Locale.ROOT),
+                field -> field));
       }
       return lowercaseNameToFields.get(name.toLowerCase(Locale.ROOT));
     }
 
     @Override
-    public synchronized Field field(int id) {
+    public Field field(int id) {
       if (idToFields == null) {
-        idToFields = new HashMap<>();
-        for (Field field : fields) {
-          idToFields.put(field.fieldId(), field);
-        }
+        idToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::fieldId,
+                field -> field));
       }
       return idToFields.get(id);
     }
