@@ -319,7 +319,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     } match {
       case Success(partitionRecordType)
         if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size
-          && Conversions.isSchemaSupportedConversion(partitionRecordType) =>
+          && Conversions.isPartitionSchemaSupportedConversion(partitionRecordType) =>
         Some(partitionRecordType)
       case _ =>
         None

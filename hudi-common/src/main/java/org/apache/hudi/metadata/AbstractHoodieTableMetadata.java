@@ -29,8 +29,8 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.utils.Conversions;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -91,7 +91,7 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
     if (partitionFields.fields().size() == 1) {
       // SinglePartPartitionValue, which might contain slashes.
       String partitionValue = relativePartitionPath.split("=")[1];
-      return new ArrayData(Collections.singletonList(Conversions.fromPartitionString(
+      return new ArrayData(Collections.singletonList(Type.fromPartitionString(
           urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
           partitionFields.field(0).type())));
     }
@@ -101,7 +101,7 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
     partitionValues = IntStream.range(0, partitionFragments.length)
         .mapToObj(idx -> {
           String partitionValue = partitionFragments[idx].split("=")[1];
-          return Conversions.fromPartitionString(
+          return Type.fromPartitionString(
               urlEncodePartitioningEnabled ? PartitionPathEncodeUtils.unescapePathName(partitionValue) : partitionValue,
               partitionFields.field(idx).type());
         }).collect(Collectors.toList());

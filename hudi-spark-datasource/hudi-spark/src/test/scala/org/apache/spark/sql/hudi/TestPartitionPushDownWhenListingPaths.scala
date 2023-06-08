@@ -47,8 +47,7 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
                  |  hoodie.datasource.write.hive_style_partitioning = 'true',
                  |  hoodie.datasource.write.partitionpath.urlencode = 'true'
                  | )
-                 | PARTITIONED BY (date_par, country, hour, longValue)
-   """.stripMargin)
+                 | PARTITIONED BY (date_par, country, hour, longValue)""".stripMargin)
             spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date '2023-02-27', 'ID', 1, 102345L)")
             spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date '2023-02-28', 'US', 4, 102346L)")
             spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date '2023-03-01', 'CN', 10, 102347L)")

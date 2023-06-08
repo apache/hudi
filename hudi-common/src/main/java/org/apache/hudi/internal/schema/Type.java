@@ -18,9 +18,17 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +41,10 @@ import java.util.UUID;
  * to do add support for localTime if avro version is updated
  */
 public interface Type extends Serializable {
+
+  OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
+  LocalDate EPOCH_DAY = EPOCH.toLocalDate();
+
   /**
    * Enums for type names.
    */
@@ -75,6 +87,40 @@ public interface Type extends Serializable {
       return TypeID.valueOf(value.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(String.format("Invalid value of Type: %s", value));
+    }
+  }
+
+  static Object fromPartitionString(String partitionValue, Type type) {
+    if (partitionValue == null
+        || PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH.equals(partitionValue)
+        || PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH.equals(partitionValue)) {
+      return null;
+    }
+
+    switch (type.typeId()) {
+      case INT:
+        return Integer.parseInt(partitionValue);
+      case LONG:
+        return Long.parseLong(partitionValue);
+      case BOOLEAN:
+        return Boolean.parseBoolean(partitionValue);
+      case FLOAT:
+        return Float.parseFloat(partitionValue);
+      case DECIMAL:
+        return new BigDecimal(partitionValue);
+      case DOUBLE:
+        return Double.parseDouble(partitionValue);
+      case UUID:
+        return UUID.fromString(partitionValue);
+      case DATE:
+        // TODO Support zoneId and different date format
+        return Math.toIntExact(ChronoUnit.DAYS.between(
+            EPOCH_DAY, LocalDate.parse(partitionValue, DateTimeFormatter.ISO_LOCAL_DATE)));
+      case STRING:
+        return partitionValue;
+      default:
+        throw new UnsupportedOperationException("Cast value " + partitionValue
+            + " to type " + type + " is not supported yet");
     }
   }
 
