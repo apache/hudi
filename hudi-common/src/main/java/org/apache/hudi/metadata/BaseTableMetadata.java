@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -372,12 +373,17 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
           final String partitionId = e.getKey();
           Path partitionPath = partitionIdToPathMap.get(partitionId);
 
-          HoodieMetadataPayload metadataPayload = e.getValue().getData();
-          checkForSpuriousDeletes(metadataPayload, partitionId);
+          if (partitionPath != null) {
+            HoodieMetadataPayload metadataPayload = e.getValue().getData();
+            checkForSpuriousDeletes(metadataPayload, partitionId);
 
-          FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
-          return Pair.of(partitionPath.toString(), files);
+            FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
+            return Pair.of(partitionPath.toString(), files);
+          } else {
+            return null;
+          }
         })
+        .filter(Objects::nonNull)
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));

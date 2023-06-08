@@ -534,6 +534,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return metadataMetaClient;
   }
 
+  public long getMetadataPartitionFileGroupCount(MetadataPartitionType partitionType) {
+    return metadataFileSystemView.getAllFileGroups(partitionType.getPartitionPath()).count();
+  }
+
   public Map<String, String> stats() {
     return metrics.map(m -> m.getStats(true, metadataMetaClient, this)).orElse(new HashMap<>());
   }
