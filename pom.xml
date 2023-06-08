@@ -1790,7 +1790,7 @@
         </property>
       </activation>
       <properties>
-        <surefire-log4j.file>log4j2-surefire-quiet.properties</surefire-log4j.file>
+        <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
       </properties>
     </profile>
     <profile>
