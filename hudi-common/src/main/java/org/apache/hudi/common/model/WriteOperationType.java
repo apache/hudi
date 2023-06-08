@@ -37,6 +37,7 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
+  DELETE_PREPPED("delete_prepped"),
   BOOTSTRAP("bootstrap"),
   // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
@@ -126,6 +127,7 @@ public enum WriteOperationType {
   public static boolean isDataChange(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED
         || operation == WriteOperationType.DELETE
         || operation == WriteOperationType.BULK_INSERT
         || operation == WriteOperationType.DELETE_PARTITION
