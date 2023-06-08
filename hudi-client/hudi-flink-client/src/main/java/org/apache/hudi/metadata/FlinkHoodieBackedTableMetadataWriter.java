@@ -118,6 +118,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (writeClient.rollbackFailedWrites()) {
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
       }
+      metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> compactIfNecessary(writeClient, instant.getTimestamp()));
 
       if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
@@ -156,6 +157,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
+      metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> cleanIfNecessary(writeClient, instant.getTimestamp()));
+      writeClient.archive();
     }
 
     // Update total size of the metadata and count of base/log files
@@ -165,7 +168,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   /**
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
-  protected boolean canTriggerCompaction(String latestDeltaCommitTimeInMetadataTable) {
+  @Override
+  protected boolean validateTimelineBeforeSchedulingCompaction(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
     // Allows compaction of the metadata table to run regardless of inflight instants
     return true;
   }

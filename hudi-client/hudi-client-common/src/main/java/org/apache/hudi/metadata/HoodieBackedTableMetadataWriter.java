@@ -18,11 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
@@ -64,6 +59,12 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1019,7 +1020,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    * deltacommit.
    */
-  private void compactIfNecessary(BaseHoodieWriteClient writeClient, String latestDeltacommitTime) {
+  protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String latestDeltacommitTime) {
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -1058,7 +1059,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
-  private boolean validateTimelineBeforeSchedulingCompaction(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+  protected boolean validateTimelineBeforeSchedulingCompaction(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
     // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
     // Whenever you want to change this logic, please ensure all below scenarios are considered.
     // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
