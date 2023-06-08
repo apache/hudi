@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.timeline.TimelineUtils
 
 import scala.collection.JavaConversions._
 
-@DisableCI
 class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
 
   /**

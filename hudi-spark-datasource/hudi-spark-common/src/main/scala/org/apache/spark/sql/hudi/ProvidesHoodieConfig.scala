@@ -102,9 +102,9 @@ trait ProvidesHoodieConfig extends Logging {
                            isInsertInto: Boolean,
                            isNonStrictMode: Boolean,
                            hasPrecombineColumn: Boolean): String = {
-    val notSetToNonStrict = !insertModeSet || isNonStrictMode
+    val canEnforceNonStrictMode = !insertModeSet || isNonStrictMode
     //if selected configs are not set, instead of using the default we assume the values to be those that enable bulk_insert
-    (isInsertInto, notSetToNonStrict, enableBulkInsert.getOrElse("true"),
+    (isInsertInto, canEnforceNonStrictMode, enableBulkInsert.getOrElse("true"),
       dropDuplicate.getOrElse("false"), isOverwritePartition, isPartitionedTable) match {
       case (true, true, "true", "false", false, _) => BULK_INSERT_OPERATION_OPT_VAL
       case (true, true, "true", "false", true, false) => BULK_INSERT_OPERATION_OPT_VAL
