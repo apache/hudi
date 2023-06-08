@@ -126,6 +126,9 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     }
   }
 
+  /**
+   * get all the file readers required for composeRDD
+   */
   protected def getFileReaders(tableSchema: HoodieTableSchema,
                                requiredSchema: HoodieTableSchema,
                                requestedColumns: Array[String],
@@ -152,6 +155,9 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
       requiredSchema, fileSplits)
   }
 
+  /**
+   * Creates skeleton and base file reader
+   */
   private def createBootstrapFileReaders(tableSchema: HoodieTableSchema,
                                          requiredSchema: HoodieTableSchema,
                                          requiredSkeletonFileSchema: StructType,
@@ -204,6 +210,9 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     (bootstrapDataFileReader, boostrapSkeletonFileReader)
   }
 
+  /**
+   * create reader for hudi base files
+   */
   private def createRegularFileReader(tableSchema: HoodieTableSchema,
                                      requiredSchema: HoodieTableSchema,
                                      filters: Array[Filter]): BaseFileReader = {

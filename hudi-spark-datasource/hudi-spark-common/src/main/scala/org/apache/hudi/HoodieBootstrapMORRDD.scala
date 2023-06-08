@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieBootstrapMORRDD.CONFIG_INSTANTIATION_LOCK
@@ -55,13 +56,12 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
       bootstrapMORSplit.skeletonFile match {
         case Some(skeletonFile) =>
           val (iterator, schema) = getSkeletonIteratorSchema(bootstrapMORSplit.dataFile, skeletonFile)
-          new RecordMergingFileIterator(bootstrapMORSplit.logFiles,
-            LogFileIterator.getPartitionPath(Some(skeletonFile), bootstrapMORSplit.logFiles),
+          new RecordMergingFileIterator(bootstrapMORSplit.logFiles, new Path(skeletonFile.filePath).getParent,
             iterator, schema, tableSchema, requiredSchema, tableState, getHadoopConf)
         case _ =>
           // NOTE: Regular file-reader is already projected into the required schema
           new RecordMergingFileIterator(bootstrapMORSplit.logFiles,
-            LogFileIterator.getPartitionPath(Some(bootstrapMORSplit.dataFile), bootstrapMORSplit.logFiles),
+            new Path(bootstrapMORSplit.dataFile.filePath).getParent,
             regularFileReader.read(bootstrapMORSplit.dataFile), regularFileReader.schema, tableSchema,
             requiredSchema, tableState, getHadoopConf)
       }

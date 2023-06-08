@@ -23,6 +23,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
@@ -45,7 +46,6 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
-import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
@@ -66,6 +66,12 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
                       config: Configuration)
   extends CachingIterator[InternalRow] with AvroDeserializerSupport {
 
+  def this(split: HoodieMergeOnReadFileSplit,
+           tableSchema: HoodieTableSchema,
+           requiredSchema: HoodieTableSchema,
+           tableState: HoodieTableState, config: Configuration) {
+    this(split.logFiles, getPartitionPath(split), tableSchema, requiredSchema, tableState, config)
+  }
   private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
@@ -146,6 +152,12 @@ private class SkipMergeIterator(logFiles: List[HoodieLogFile],
                                 config: Configuration)
   extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
 
+  def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
+           requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
+    this(split.logFiles, getPartitionPath(split), baseFileReader(split.dataFile.get),
+      baseFileReader.schema, dataSchema, requiredSchema, tableState, config)
+  }
+
   private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
 
   override def doHasNext: Boolean = {
@@ -173,6 +185,12 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
                                 tableState: HoodieTableState,
                                 config: Configuration)
   extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
+
+  def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
+           requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
+    this(split.logFiles, getPartitionPath(split), baseFileReader(split.dataFile.get),
+      baseFileReader.schema, dataSchema, requiredSchema, tableState, config)
+  }
 
   // NOTE: Record-merging iterator supports 2 modes of operation merging records bearing either
   //        - Full table's schema
@@ -339,12 +357,12 @@ object LogFileIterator {
     }
   }
 
-  def getPartitionPath(dataFile: Option[PartitionedFile], logFiles: List[HoodieLogFile]): Path = {
+  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
     // Determine partition path as an immediate parent folder of either
     //    - The base file
     //    - Some log file
-    dataFile.map(baseFile => new Path(baseFile.filePath))
-      .getOrElse(logFiles.head.getPath)
+    split.dataFile.map(baseFile => new Path(baseFile.filePath))
+      .getOrElse(split.logFiles.head.getPath)
       .getParent
   }
 }
