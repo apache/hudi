@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -118,6 +119,12 @@ public class HoodieJavaCopyOnWriteTable<T>
                                                        String instantTime,
                                                        List<HoodieKey> keys) {
     return new JavaDeleteCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    // AKL_TODO: Does this method need to be implemented?
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override

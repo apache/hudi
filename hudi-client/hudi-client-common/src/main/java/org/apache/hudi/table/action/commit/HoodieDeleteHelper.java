@@ -91,9 +91,15 @@ public class HoodieDeleteHelper<T, R> extends
 
       HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys);
 
+      boolean isPrepped = config.getBooleanOrDefault("_hoodie.datasource.write.prepped", false);
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
-      HoodieData<HoodieRecord<T>> taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
+      HoodieData<HoodieRecord<T>> taggedRecords = null;
+      if (isPrepped) {
+        taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
+      } else {
+        taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
+      }
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records

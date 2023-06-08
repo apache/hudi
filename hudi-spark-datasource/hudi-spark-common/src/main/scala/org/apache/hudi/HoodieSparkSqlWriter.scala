@@ -262,7 +262,11 @@ object HoodieSparkSqlWriter {
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-            val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
+              .asInstanceOf[BaseKeyGenerator]
+            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
+            val hoodieKeysAndLocationsToDelete = genericRecords.map(gr => {
+              getKeyAndLocatorFromAvroRecord(keyGenerator, gr, isPrepped)
+            }).toJavaRDD()
 
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
@@ -284,7 +288,7 @@ object HoodieSparkSqlWriter {
 
             // Issue deletes
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
+            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, isPrepped)
             (writeStatuses, client)
 
           case WriteOperationType.DELETE_PARTITION =>

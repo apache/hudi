@@ -193,6 +193,12 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
+  public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
+    // AKL_TODO: Does this function need to be implemented?
+    throw new HoodieNotSupportedException("DeletePrepped operation is not supported yet");
+  }
+
+  @Override
   protected List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
                                         String instantTime,
                                         HoodieTable hoodieTable) {
