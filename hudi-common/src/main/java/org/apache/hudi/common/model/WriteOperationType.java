@@ -37,7 +37,6 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
-  DELETE_PREPPED("delete_prepped"),
   BOOTSTRAP("bootstrap"),
   // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
