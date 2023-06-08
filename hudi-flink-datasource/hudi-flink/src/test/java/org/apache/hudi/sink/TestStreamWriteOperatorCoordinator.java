@@ -241,13 +241,10 @@ public class TestStreamWriteOperatorCoordinator {
       assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(i + 1));
       assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
     }
-    // the 5th commit triggers the compaction
     mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(7));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant + "001"));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(6));
     // write another 2 commits
     for (int i = 7; i < 8; i++) {
       instant = mockWriteWithMetadata();
@@ -255,6 +252,9 @@ public class TestStreamWriteOperatorCoordinator {
       completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
       assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(i + 1));
       assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+      // last but one will be compaction instant
+      assertThat(completedTimeline.nthFromLastInstant(2).get().getTimestamp(), is(instant + "001"));
+      assertThat(completedTimeline.nthFromLastInstant(2).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
     }
 
     // write another commit to trigger clean
