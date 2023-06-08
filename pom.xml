@@ -398,7 +398,6 @@
               <rules>
                 <bannedDependencies>
                   <excludes>
-                    <exclude>org.slf4j:slf4j-log4j12</exclude>
                     <exclude>org.sl4fj:slf4j-simple</exclude>
                     <exclude>org.sl4fj:slf4j-jdk14</exclude>
                     <exclude>org.sl4fj:slf4j-nop</exclude>
@@ -2487,6 +2486,14 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
       <activation>
         <property>
           <name>spark3.4</name>
