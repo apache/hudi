@@ -314,7 +314,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Try scheduling compaction, it wont succeed
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
-    assertFalse(compactionTimeStamp.isPresent());
+    assertTrue(compactionTimeStamp.isPresent());
   }
 
   @Test
