@@ -332,7 +332,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private String keyFieldOverride;
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
-    // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger;
 

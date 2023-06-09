@@ -111,6 +111,10 @@ public class HoodieMetadataWriteUtils {
             // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
             // partitions together requiring UnBoundedCompactionStrategy.
             .withCompactionStrategy(new UnBoundedCompactionStrategy())
+            // Check if log compaction is enabled, this is needed for tables with lot of records.
+            .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
+            // Below config is only used if isLogCompactionEnabled is set.
+            .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
             .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)

@@ -584,6 +584,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Run any pending log compactions.
+   */
+  public void runAnyPendingLogCompactions() {
+    tableServiceClient.runAnyPendingLogCompactions(createTable(config, hadoopConf));
+  }
+
+  /**
    * Create a savepoint based on the latest commit action on the timeline.
    *
    * @param user    User creating the savepoint

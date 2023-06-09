@@ -150,7 +150,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
       }
 
-      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
+      if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
       } else {
