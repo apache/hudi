@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
@@ -97,11 +96,6 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * It returns write client for metadata table.
    */
   BaseHoodieWriteClient getWriteClient();
-
-  /**
-   * It returns write client for metadata table.
-   */
-  HoodieTableMetaClient getMetadataMetaClient();
 
   /**
    * Returns true if the metadata table is initialized.

@@ -92,8 +92,7 @@ public class HoodieMetadataWriteUtils {
             .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
             .retainCommits(Math.min(writeConfig.getCleanerCommitsRetained(), DEFAULT_METADATA_CLEANER_COMMITS_RETAINED))
             .build())
@@ -113,7 +112,7 @@ public class HoodieMetadataWriteUtils {
             // partitions together requiring UnBoundedCompactionStrategy.
             .withCompactionStrategy(new UnBoundedCompactionStrategy())
             // Check if log compaction is enabled, this is needed for tables with lot of records.
-            .withLogCompactionEnabled(writeConfig.isLogCompactionEnabled())
+            .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
             .build())

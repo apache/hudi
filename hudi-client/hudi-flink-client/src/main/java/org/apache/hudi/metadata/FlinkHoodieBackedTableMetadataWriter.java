@@ -186,9 +186,4 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
     return writeClient;
   }
-
-  @Override
-  public HoodieTableMetaClient getMetadataMetaClient() {
-    return this.metadataMetaClient;
-  }
 }

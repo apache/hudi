@@ -207,9 +207,4 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
     return writeClient;
   }
-
-  @Override
-  public HoodieTableMetaClient getMetadataMetaClient() {
-    return this.metadataMetaClient;
-  }
 }
