@@ -5,6 +5,61 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2023/06/03/text-based-search-from-elastic-search-to-vector-search",
+            "content_html": "<div url=\"https://medium.com/@m.kaushik90/text-based-search-from-elastic-search-to-vector-search-15d686258bf2\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search",
+            "title": "Text-Based Search: From Elastic Search to Vector Search",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-06-03T00:00:00.000Z",
+            "author": {
+                "name": "Kaushik Muniandi"
+            }
+        },
+        {
+            "id": "/2023/05/29/different-query-types-with-apache-hudi",
+            "content_html": "<div url=\"https://medium.com/@simpsons/different-query-types-with-apache-hudi-e14c2064cfd6\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/29/different-query-types-with-apache-hudi",
+            "title": "Different Query types with Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-29T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
+            "id": "/2023/05/19/hudi-metafields-demystified",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/hudi-metafields-demystified\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/19/hudi-metafields-demystified",
+            "title": "Hudi Metafields demystified",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-19T00:00:00.000Z",
+            "author": {
+                "name": "Bhavani Sudha Saktheeswaran"
+            }
+        },
+        {
+            "id": "/2023/05/16/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/16/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr",
+            "title": "How Zoom implemented streaming log ingestion and efficient GDPR deletes using Apache Hudi on Amazon EMR",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-16T00:00:00.000Z",
+            "author": {
+                "name": "Sekar Srinivasan"
+            }
+        },
+        {
+            "id": "/2023/05/12/ingesting-data-to-apache-hudi-using-spark-sql",
+            "content_html": "<div url=\"https://medium.com/@simpsons/ingesting-data-to-apache-hudi-using-spark-sql-36d9815423b3\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/05/12/ingesting-data-to-apache-hudi-using-spark-sql",
+            "title": "Ingesting data to Apache Hudi using Spark sql",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-05-12T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
             "id": "/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi",
             "content_html": "<div url=\"https://www.onehouse.ai/blog/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi",
@@ -145,6 +200,28 @@
             }
         },
         {
+            "id": "/2023/02/19/bulk-insert-sort-modes-with-apache-hudi",
+            "content_html": "<div url=\"https://medium.com/@simpsons/bulk-insert-sort-modes-with-apache-hudi-c781e77841bc\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/02/19/bulk-insert-sort-modes-with-apache-hudi",
+            "title": "Bulk Insert Sort Modes with Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-02-19T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
+            "id": "/2023/02/12/table-service-deployment-models-in-apache-hudi",
+            "content_html": "<div url=\"https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/02/12/table-service-deployment-models-in-apache-hudi",
+            "title": "Table service deployment models in Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-02-12T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
             "id": "/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue",
@@ -241,6 +318,17 @@
             "date_modified": "2022-10-17T00:00:00.000Z",
             "author": {
                 "name": "Amit Maindola"
+            }
+        },
+        {
+            "id": "/2022/10/08/what-why-and-how-apache-hudis-bloom-index",
+            "content_html": "<div url=\"https://medium.com/@simpsons/what-why-and-how-apache-hudis-bloom-index-8646747520c1\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/10/08/what-why-and-how-apache-hudis-bloom-index",
+            "title": "What, Why and How : Apache Hudi’s Bloom Index",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-10-08T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
             }
         },
         {

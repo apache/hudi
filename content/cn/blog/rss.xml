@@ -4,9 +4,49 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 10 May 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 03 Jun 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Text-Based Search: From Elastic Search to Vector Search]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search</link>
+            <guid>/2023/06/03/text-based-search-from-elastic-search-to-vector-search</guid>
+            <pubDate>Sat, 03 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@m.kaushik90/text-based-search-from-elastic-search-to-vector-search-15d686258bf2">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Different Query types with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/05/29/different-query-types-with-apache-hudi</link>
+            <guid>/2023/05/29/different-query-types-with-apache-hudi</guid>
+            <pubDate>Mon, 29 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/different-query-types-with-apache-hudi-e14c2064cfd6">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Metafields demystified]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/05/19/hudi-metafields-demystified</link>
+            <guid>/2023/05/19/hudi-metafields-demystified</guid>
+            <pubDate>Fri, 19 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/hudi-metafields-demystified">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[How Zoom implemented streaming log ingestion and efficient GDPR deletes using Apache Hudi on Amazon EMR]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/05/16/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr</link>
+            <guid>/2023/05/16/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr</guid>
+            <pubDate>Tue, 16 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/how-zoom-implemented-streaming-log-ingestion-and-efficient-gdpr-deletes-using-apache-hudi-on-amazon-emr/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Ingesting data to Apache Hudi using Spark sql]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/05/12/ingesting-data-to-apache-hudi-using-spark-sql</link>
+            <guid>/2023/05/12/ingesting-data-to-apache-hudi-using-spark-sql</guid>
+            <pubDate>Fri, 12 May 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/ingesting-data-to-apache-hudi-using-spark-sql-36d9815423b3">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Top 3 Things You Can Do to Get Fast Upsert Performance in Apache Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/05/10/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi</link>
@@ -112,6 +152,22 @@
             <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/getting-started-manage-your-hudi-tables-with-the-admin-hudi-cli-tool">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[Bulk Insert Sort Modes with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/02/19/bulk-insert-sort-modes-with-apache-hudi</link>
+            <guid>/2023/02/19/bulk-insert-sort-modes-with-apache-hudi</guid>
+            <pubDate>Sun, 19 Feb 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/bulk-insert-sort-modes-with-apache-hudi-c781e77841bc">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Table service deployment models in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/02/12/table-service-deployment-models-in-apache-hudi</link>
+            <guid>/2023/02/12/table-service-deployment-models-in-apache-hudi</guid>
+            <pubDate>Sun, 12 Feb 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[Automate schema evolution at scale with Apache Hudi in AWS Glue | Amazon Web Services]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</link>
             <guid>/2023/02/07/automate-schema-evolution-at-scale-with-apache-hudi-in-aws-glue</guid>
@@ -190,6 +246,14 @@ where people are sharing and helping each other!</p><img src="/assets/images/blo
             <pubDate>Mon, 17 Oct 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-1-get-started-with-apache-hudi-using-aws-glue-by-implementing-key-design-concepts/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[What, Why and How : Apache Hudi’s Bloom Index]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/10/08/what-why-and-how-apache-hudis-bloom-index</link>
+            <guid>/2022/10/08/what-why-and-how-apache-hudis-bloom-index</guid>
+            <pubDate>Sat, 08 Oct 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/what-why-and-how-apache-hudis-bloom-index-8646747520c1">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Ingest streaming data to Apache Hudi tables using AWS Glue and Apache Hudi DeltaStreamer]]></title>
