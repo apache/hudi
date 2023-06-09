@@ -55,9 +55,6 @@ trait ProvidesHoodieConfig extends Logging {
     // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
 
-//    require(hoodieCatalogTable.primaryKeys.nonEmpty,
-//      s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
-
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -261,9 +258,6 @@ trait ProvidesHoodieConfig extends Logging {
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase(Locale.ROOT))
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
-
-    assert(hoodieCatalogTable.primaryKeys.nonEmpty,
-      s"There are no primary key defined in table ${hoodieCatalogTable.table.identifier}, cannot execute delete operation")
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 

@@ -260,7 +260,6 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
-    // AKL_TODO: Does this function need to be implemented?
     throw new HoodieNotSupportedException("DeletePrepped operation is not supported yet");
   }
 

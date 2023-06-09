@@ -35,7 +35,7 @@ import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.HoodieRecord.{HOODIE_META_COLUMNS_NAME_TO_POS, HoodieMetadataField, HoodieRecordType}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
@@ -265,7 +265,7 @@ object HoodieSparkSqlWriter {
               .asInstanceOf[BaseKeyGenerator]
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
             val hoodieKeysAndLocationsToDelete = genericRecords.map(gr => {
-              getKeyAndLocatorFromAvroRecord(keyGenerator, gr, isPrepped)
+              getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, gr, isPrepped)
             }).toJavaRDD()
 
             if (!tableExists) {
@@ -1175,7 +1175,7 @@ object HoodieSparkSqlWriter {
 
           // handle dropping partition columns
           it.map { avroRec =>
-            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromAvroRecord(keyGenerator, avroRec,
+            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               isPrepped)
 
             val avroRecWithoutMeta: GenericRecord = if (isPrepped) {
@@ -1196,7 +1196,6 @@ object HoodieSparkSqlWriter {
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
             } else {
-              // AKL_TODO: check if this change is needed.
               DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
             }
             hoodieRecord
@@ -1228,7 +1227,7 @@ object HoodieSparkSqlWriter {
           val finalStructTypeRowWriter = getCachedUnsafeRowWriter(sourceStructType, finalStructType)
 
           it.map { sourceRow =>
-            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getKeyAndLocatorFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped)
+            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped)
 
             val finalRow = finalStructTypeRowWriter(sourceRow)
             var hoodieSparkRecord = new HoodieSparkRecord(hoodieKey, finalRow, dataFileStructType, false)
@@ -1241,28 +1240,28 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def getKeyAndLocatorFromAvroRecord(keyGenerator: BaseKeyGenerator, avroRec: GenericRecord,
-                                             isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+  private def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: BaseKeyGenerator, avroRec: GenericRecord,
+                                                         isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     val recordKey = if (isPrepped) {
-      avroRec.get("_hoodie_record_key").toString
+      avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
       keyGenerator.getRecordKey(avroRec)
     };
 
     val partitionPath = if (isPrepped) {
-      avroRec.get("_hoodie_partition_path").toString
+      avroRec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString
     } else {
       keyGenerator.getPartitionPath(avroRec)
     };
 
     val hoodieKey = new HoodieKey(recordKey, partitionPath)
     val instantTime: Option[String] = if (isPrepped) {
-      Option(avroRec.get("_hoodie_commit_time")).map(_.toString) }
+      Option(avroRec.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).map(_.toString) }
     else {
       None
     }
     val fileName: Option[String] = if (isPrepped) {
-      Option(avroRec.get("_hoodie_file_name")).map(_.toString) }
+      Option(avroRec.get(HoodieRecord.FILENAME_METADATA_FIELD)).map(_.toString) }
     else {
       None
     }
@@ -1275,38 +1274,39 @@ object HoodieSparkSqlWriter {
     (hoodieKey, recordLocation)
   }
 
-  private def getKeyAndLocatorFromSparkRecord(sparkKeyGenerator: SparkKeyGeneratorInterface, sourceRow: InternalRow,
-                                              schema: StructType, isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+  private def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: SparkKeyGeneratorInterface,
+                                                          sourceRow: InternalRow, schema: StructType,
+                                                          isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     def getFieldIndex(fieldName: String): Int = {
       if (schema.fieldNames.contains(fieldName)) {
-        schema.fieldIndex(fieldName)
+        HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName)
       } else {
         -1
       }
     }
 
-    val hoodieRecordKeyIndex = getFieldIndex("_hoodie_record_key")
+    val hoodieRecordKeyIndex = getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val recordKey = if (isPrepped && hoodieRecordKeyIndex != -1 && !sourceRow.isNullAt(hoodieRecordKeyIndex)) {
       sourceRow.getString(hoodieRecordKeyIndex);
     } else {
       sparkKeyGenerator.getRecordKey(sourceRow, schema).toString
     }
 
-    val hoodiePartitionPathIndex = getFieldIndex("_hoodie_partition_path")
+    val hoodiePartitionPathIndex = getFieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     val partitionPath = if (isPrepped && hoodiePartitionPathIndex != -1 && !sourceRow.isNullAt(hoodiePartitionPathIndex)) {
       sourceRow.getString(hoodiePartitionPathIndex)
     } else {
       sparkKeyGenerator.getPartitionPath(sourceRow, schema).toString
     };
 
-    val commitTimeIndex = getFieldIndex("_hoodie_commit_time")
+    val commitTimeIndex = getFieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
     val instantTime: Option[String] = if (isPrepped && commitTimeIndex != -1) {
       Option(sourceRow.getString(commitTimeIndex))
     } else {
       None
     }
 
-    val fileNameIndex = getFieldIndex("_hoodie_file_name")
+    val fileNameIndex = getFieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)
     val fileName: Option[String] = if (isPrepped && fileNameIndex != -1) {
       Option(sourceRow.getString(fileNameIndex))
     } else {
