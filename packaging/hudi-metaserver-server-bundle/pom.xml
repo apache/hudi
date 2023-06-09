@@ -102,6 +102,7 @@
                                 <includes>
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-metaserver-server</include>
+                                    <include>com.github.ben-manes.caffeine:caffeine</include>
                                     <include>org.apache.thrift:libthrift</include>
                                     <include>org.apache.logging.log4j:log4j-api</include>
                                     <include>org.apache.logging.log4j:log4j-core</include>

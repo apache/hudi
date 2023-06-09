@@ -33,13 +33,12 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.condition.DisabledIf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
@@ -49,12 +48,10 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
-@DisabledIf(value = "org.apache.hudi.HoodieSparkUtils#gteqSpark3_3",
-  disabledReason = "Jackson version conflicts (HUDI-5352)")
 class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
-  val sourceTableSchema =
+  val sourceTableSchema: StructType =
     new StructType()
       .add("c1", IntegerType)
       .add("c2", StringType)
@@ -66,7 +63,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       .add("c8", ByteType)
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     initFileSystem()
@@ -78,7 +75,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupFileSystem()
     cleanupSparkContexts()
   }

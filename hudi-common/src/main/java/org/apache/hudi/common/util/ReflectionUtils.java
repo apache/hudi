@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,12 +31,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -45,24 +47,106 @@ public class ReflectionUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(ReflectionUtils.class);
 
-  private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
+  private static final Cache<String, Class<?>> LOADED_CLASSES_CACHE =
+      Caffeine.newBuilder()
+          .maximumSize(2000)
+          .weakValues()
+          .expireAfterAccess(Duration.of(5, ChronoUnit.MINUTES))
+          .build();
 
-  public static Class<?> getClass(String clazzName) {
-    if (!CLAZZ_CACHE.containsKey(clazzName)) {
-      synchronized (CLAZZ_CACHE) {
-        if (!CLAZZ_CACHE.containsKey(clazzName)) {
-          try {
-            Class<?> clazz = Class.forName(clazzName);
-            CLAZZ_CACHE.put(clazzName, clazz);
-          } catch (ClassNotFoundException e) {
-            throw new HoodieException("Unable to load class", e);
-          }
-        }
-      }
+  /**
+   * Tries to load class identified by provide {@code qualifiedName}.
+   * Throws {@link HoodieException} in case class couldn't be loaded
+   *
+   * @param qualifiedName target class's qualified name
+   * @return instance of {@link Class} corresponding to the class identified by the {@code qualifiedName}
+   */
+  public static Class<?> getClass(String qualifiedName) {
+    Class<?> klass = getClassNoThrow(qualifiedName);
+    if (klass != null) {
+      return klass;
     }
-    return CLAZZ_CACHE.get(clazzName);
+    throw new HoodieException(String.format("Unable to load class '%s'", qualifiedName));
   }
 
+  /**
+   * Tries to load class identified by provide {@code qualifiedName}.
+   * Returns null in case class couldn't be loaded
+   *
+   * @param qualifiedName target class's qualified name
+   * @return instance of {@link Class} corresponding to the class identified by the {@code qualifiedName}
+   */
+  public static Class<?> getClassNoThrow(String qualifiedName) {
+    return LOADED_CLASSES_CACHE.get(qualifiedName, name -> {
+      try {
+        return Class.forName(qualifiedName);
+      } catch (ClassNotFoundException e) {
+        LOG.info(String.format("Failed to load class '%s'", qualifiedName));
+        return null;
+      }
+    });
+  }
+
+
+  /**
+   * Creates new instance of the class identified by {@code classQualifiedName}.
+   * Will throw in case class couldn't be loaded or instantiated
+   */
+  public static <T> T newInstance(String classQualifiedName) {
+    try {
+      return (T) getClass(classQualifiedName).newInstance();
+    } catch (InstantiationException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Failed to create new instance for class '%s'", classQualifiedName), e);
+    }
+  }
+
+  /**
+   * Creates new instance of the class identified by {@code classQualifiedName}.
+   * Returns null in case class couldn't be loaded or instantiated
+   */
+  public static <T> T newInstanceNoThrow(String classQualifiedName) {
+    try {
+      Class<?> klass = getClassNoThrow(classQualifiedName);
+      return klass != null ? (T) klass.newInstance() : null;
+    } catch (InstantiationException | IllegalAccessException e) {
+      LOG.info(String.format("Failed to create new instance for class '%s'", classQualifiedName));
+      return null;
+    }
+  }
+
+  /**
+   * Creates new instance of the class identified by {@code classQualifiedName}.
+   * Will throw in case class couldn't be loaded or instantiated
+   *
+   * @param classQualifiedName qualified name of the target class
+   * @param constructorArgs    argument values to be passed into the target ctor
+   * @return new instance of the target class
+   */
+  public static Object newInstance(String classQualifiedName, Object... constructorArgs) {
+    Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs).map(Object::getClass).toArray(Class<?>[]::new);
+    return newInstance(classQualifiedName, constructorArgTypes, constructorArgs);
+  }
+
+  /**
+   * Creates new instance of the class identified by {@code classQualifiedName}.
+   * Will throw in case class couldn't be loaded or instantiated
+   *
+   * @param classQualifiedName  qualified name of the target class
+   * @param constructorArgTypes corresponding types of the arguments of class' ctor that should be invoked
+   * @param constructorArgs     argument values to be passed into the target ctor
+   * @return new instance of the target class
+   */
+  public static Object newInstance(String classQualifiedName, Class<?>[] constructorArgTypes, Object... constructorArgs) {
+    try {
+      return getClass(classQualifiedName).getConstructor(constructorArgTypes).newInstance(constructorArgs);
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+      throw new HoodieException("Unable to instantiate class " + classQualifiedName, e);
+    }
+  }
+
+  /**
+   * @deprecated use {@link #newInstance(String)} instead
+   */
   public static <T> T loadClass(String className) {
     try {
       return (T) getClass(className).newInstance();
@@ -72,7 +156,19 @@ public class ReflectionUtils {
   }
 
   /**
+   * Creates an instance of the given class. Constructor arg types are inferred.
+   *
+   * @deprecated Use {@link #newInstance(String, Object...)} instead.
+   */
+  public static Object loadClass(String clazz, Object... constructorArgs) {
+    Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs).map(Object::getClass).toArray(Class<?>[]::new);
+    return loadClass(clazz, constructorArgTypes, constructorArgs);
+  }
+
+  /**
    * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
+   *
+   * @deprecated Use {@link #newInstance(String, Class[], Object...)} instead.
    */
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {
@@ -83,35 +179,35 @@ public class ReflectionUtils {
   }
 
   /**
-   * Check if the clazz has the target constructor or not, without throwing warn-level log.
+   * Check if the class has the target constructor or not.
    *
-   * @param clazz               Class name.
+   * @param className           Qualified class name.
    * @param constructorArgTypes Argument types of the constructor.
-   * @return
+   * @return {@code true} if the constructor exists; {@code false} otherwise.
    */
-  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
-    return hasConstructor(clazz, constructorArgTypes, true);
+  public static boolean hasConstructor(String className, Class<?>[] constructorArgTypes) {
+    return hasConstructor(className, constructorArgTypes, true);
   }
 
   /**
-   * Check if the clazz has the target constructor or not.
+   * Check if the class has the target constructor or not.
    * <p>
    * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
    * due to the instantiation's own logic or missing constructor.
    * <p>
    * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
    *
-   * @param clazz               Class name.
+   * @param className           Qualified class name.
    * @param constructorArgTypes Argument types of the constructor.
    * @param silenceWarning      {@code true} to use debug-level logging; otherwise, use warn-level logging.
    * @return {@code true} if the constructor exists; {@code false} otherwise.
    */
-  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes, boolean silenceWarning) {
+  public static boolean hasConstructor(String className, Class<?>[] constructorArgTypes, boolean silenceWarning) {
     try {
-      getClass(clazz).getConstructor(constructorArgTypes);
+      getClass(className).getConstructor(constructorArgTypes);
       return true;
     } catch (NoSuchMethodException e) {
-      String message = "Unable to instantiate class " + clazz;
+      String message = "Unable to instantiate class " + className;
       if (silenceWarning) {
         LOG.debug(message, e);
       } else {
@@ -122,11 +218,17 @@ public class ReflectionUtils {
   }
 
   /**
-   * Creates an instance of the given class. Constructor arg types are inferred.
+   * Checks whether target class has a method w/ {@code methodName} and list of arguments
+   * designated by {@code paramTypes}
    */
-  public static Object loadClass(String clazz, Object... constructorArgs) {
-    Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs).map(Object::getClass).toArray(Class<?>[]::new);
-    return loadClass(clazz, constructorArgTypes, constructorArgs);
+  public static boolean hasMethod(Class<?> klass, String methodName, Class<?>... paramTypes) {
+    try {
+      klass.getMethod(methodName, paramTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.info(String.format("No method %s found in class '%s'", methodName, klass.getName()));
+      return false;
+    }
   }
 
   /**
@@ -193,23 +295,31 @@ public class ReflectionUtils {
   }
 
   /**
-   * Invoke a static method of a class.
-   * @param clazz
-   * @param methodName
-   * @param args
-   * @param parametersType
-   * @return the return value of the method
+   * Invokes a non-static method of a class on provided object.
    */
-  public static Object invokeStaticMethod(String clazz, String methodName, Object[] args, Class<?>... parametersType) {
+  public static <O, R> R invokeMethod(O obj, String methodName, Object[] args, Class<?>... paramTypes) {
+    Class<?> klass = obj.getClass();
     try {
-      Method method = Class.forName(clazz).getMethod(methodName, parametersType);
-      return method.invoke(null, args);
-    } catch (ClassNotFoundException e) {
-      throw new HoodieException("Unable to find the class " + clazz, e);
+      Method method = klass.getMethod(methodName, paramTypes);
+      return (R) method.invoke(obj, args);
     } catch (NoSuchMethodException e) {
-      throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to find the method '%s' of the class '%s'", methodName, klass.getName()), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
-      throw new HoodieException(String.format("Unable to invoke the method %s of the class %s ", methodName, clazz), e);
+      throw new HoodieException(String.format("Unable to invoke the method '%s' of the class '%s'", methodName, klass.getName()), e);
+    }
+  }
+
+  /**
+   * Invoke a static method of a class.
+   */
+  public static Object invokeStaticMethod(String className, String methodName, Object[] args, Class<?>... parametersType) {
+    try {
+      Method method = getClass(className).getMethod(methodName, parametersType);
+      return method.invoke(null, args);
+    } catch (NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to find the method '%s' of the class '%s' ", methodName, className), e);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new HoodieException(String.format("Unable to invoke the method '%s' of the class '%s' ", methodName, className), e);
     }
   }
 

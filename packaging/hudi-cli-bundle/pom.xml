@@ -93,6 +93,8 @@
                   <include>org.apache.hudi:hudi-cli</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
 
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
+
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>com.esotericsoftware:minlog</include>
