@@ -147,9 +147,9 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
     }
 
     private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
-      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()));
-      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()));
-      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()));
+      ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_TABLE_NAME.key()));
+      ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_REGION.key()));
+      ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_PARTITION_KEY.key()));
     }
   }
 }
