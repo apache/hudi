@@ -985,8 +985,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // Do timeline validation before scheduling compaction/logcompaction operations.
       if (validateTimelineBeforeSchedulingCompaction(inFlightInstantTimestamp, latestDeltacommitTime)) {
-        LOG.info("No inflight commits present in either of the timelines. "
-            + "Proceeding to check compaction.");
         compactIfNecessary(writeClient, latestDeltacommitTime);
       }
       writeClient.archive();
@@ -1023,19 +1021,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * deltacommit.
    */
   protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String latestDeltacommitTime) {
-
-    // Check if there are any pending compaction or log compaction instants in the timeline.
-    // If pending compact/logcompaction operations are found abort scheduling new compaction/logcompaction operations.
-    Option<HoodieInstant> pendingLogCompactionInstant =
-        metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
-    Option<HoodieInstant> pendingCompactionInstant =
-        metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
-    if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.info(String.format("Not scheduling compaction or logcompaction, since a pending compaction instant %s or logcompaction %s instant is present",
-          pendingCompactionInstant, pendingLogCompactionInstant));
-      return;
-    }
-
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -1047,7 +1032,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
       LOG.info(String.format("Compaction with same %s time is already present in the timeline.", compactionInstantTime));
-      return;
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp " + compactionInstantTime);
       writeClient.compact(compactionInstantTime);
@@ -1058,7 +1042,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       final String logCompactionInstantTime = HoodieTableMetadataUtil.createLogCompactionTimestamp(latestDeltacommitTime);
       if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
         LOG.info(String.format("Log compaction with same %s time is already present in the timeline.", logCompactionInstantTime));
-        return;
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp " + logCompactionInstantTime);
         writeClient.logCompact(logCompactionInstantTime);
@@ -1106,6 +1089,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info(String.format(
           "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
           pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
+      return false;
+    }
+
+    // Check if there are any pending compaction or log compaction instants in the timeline.
+    // If pending compact/logcompaction operations are found abort scheduling new compaction/logcompaction operations.
+    Option<HoodieInstant> pendingLogCompactionInstant =
+        metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+    Option<HoodieInstant> pendingCompactionInstant =
+        metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+    if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
+      LOG.warn(String.format("Not scheduling compaction or logcompaction, since a pending compaction instant %s or logcompaction %s instant is present",
+          pendingCompactionInstant, pendingLogCompactionInstant));
       return false;
     }
     return true;

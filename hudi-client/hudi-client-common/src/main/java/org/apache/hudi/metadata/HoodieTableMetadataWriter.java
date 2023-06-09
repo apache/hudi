@@ -115,5 +115,4 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    *                                 deciding if optimizations can be performed.
    */
   void performTableServices(Option<String> inFlightInstantTimestamp);
-
 }

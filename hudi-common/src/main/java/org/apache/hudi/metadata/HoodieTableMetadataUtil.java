@@ -1361,7 +1361,7 @@ public class HoodieTableMetadataUtil {
         });
 
     // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(SOLO_COMMIT_TIMESTAMP);
+    validInstantTimestamps.add(createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, PARTITION_INITIALIZATION_TIME_SUFFIX));
     return validInstantTimestamps;
   }
 

@@ -50,7 +50,7 @@ public class HoodieMergeHandleFactory {
       String fileId,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
-    LOG.info("Get updateHandle for fileId " + fileId + " and partitionPath " + partitionPath + " at commit " + instantTime);
+    LOG.info("Create update handle for fileId {} and partition path {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
@@ -83,7 +83,7 @@ public class HoodieMergeHandleFactory {
       HoodieBaseFile dataFileToBeMerged,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
-    LOG.info("Get updateHandle for fileId " + fileId + " and partitionPath " + partitionPath + " at commit " + instantTime);
+    LOG.info("Get updateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
