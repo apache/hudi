@@ -174,6 +174,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.avro.write.support.class")
       .defaultValue("org.apache.hudi.avro.HoodieAvroWriteSupport")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Provided write support class should extend HoodieAvroWriteSupport class "
           + "and it is loaded at runtime. This is only required when trying to "
           + "override the existing write context.");
