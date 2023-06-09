@@ -22,10 +22,11 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
@@ -136,12 +137,19 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
     public DynamoDbBasedLockConfig build() {
       lockConfig.setDefaults(DynamoDbBasedLockConfig.class.getName());
+      checkRequiredProps(lockConfig);
       return lockConfig;
     }
 
     public DynamoDbBasedLockConfig fromProperties(TypedProperties props) {
       build().getProps().putAll(props);
       return lockConfig;
+    }
+
+    private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
+      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()));
+      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()));
+      ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()));
     }
   }
 }

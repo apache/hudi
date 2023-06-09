@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
@@ -69,7 +68,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   private final AmazonDynamoDBLockClient client;
   private final String tableName;
   private final String dynamoDBPartitionKey;
-  protected DynamoDbBasedLockConfig dynamoDBLockConfiguration;
+  protected final DynamoDbBasedLockConfig dynamoDBLockConfiguration;
   private volatile LockItem lock;
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
@@ -78,7 +77,6 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, AmazonDynamoDB dynamoDB) {
     this.dynamoDBLockConfiguration = DynamoDbBasedLockConfig.newBuilder().fromProperties(lockConfiguration.getConfig());
-    checkRequiredProps(this.dynamoDBLockConfiguration);
     this.tableName = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
     this.dynamoDBPartitionKey = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY);
     long leaseDuration = dynamoDBLockConfiguration.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
@@ -183,26 +181,20 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     createTableRequest.setBillingMode(billingMode);
     if (billingMode.equals(BillingMode.PROVISIONED.name())) {
       createTableRequest.setProvisionedThroughput(new ProvisionedThroughput()
-              .withReadCapacityUnits(Long.parseLong(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY)))
-              .withWriteCapacityUnits(Long.parseLong(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY))));
+          .withReadCapacityUnits(dynamoDBLockConfiguration.getLong(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY))
+          .withWriteCapacityUnits(dynamoDBLockConfiguration.getLong(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY)));
     }
     dynamoDB.createTable(createTableRequest);
 
     LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
     try {
-      TableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT)), 20 * 1000);
+      TableUtils.waitUntilActive(dynamoDB, tableName, dynamoDBLockConfiguration.getInt(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT), 20 * 1000);
     } catch (TableUtils.TableNeverTransitionedToStateException e) {
       throw new HoodieLockException("Created dynamoDB table never transits to active", e);
     } catch (InterruptedException e) {
       throw new HoodieLockException("Thread interrupted while waiting for dynamoDB table to turn active", e);
     }
     LOG.info("Created dynamoDB table " + tableName);
-  }
-
-  private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
-    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()));
-    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()));
-    ValidationUtils.checkArgument(config.contains(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()));
   }
 
   private String generateLogSuffixString() {
