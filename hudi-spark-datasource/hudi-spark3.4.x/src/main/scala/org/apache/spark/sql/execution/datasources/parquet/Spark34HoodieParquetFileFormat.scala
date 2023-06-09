@@ -108,8 +108,10 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
     // Using string value of this conf to preserve compatibility across spark versions.
     hadoopConf.setBoolean(
-      "spark.sql.legacy.parquet.nanosAsLong",
-      sparkSession.sessionState.conf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
+      SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+      sparkSession.sessionState.conf.getConfString(
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sparkSession.sessionState.conf.parquetInferTimestampNTZEnabled)
     hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, sparkSession.sessionState.conf.legacyParquetNanosAsLong)
