@@ -235,3 +235,33 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 96. [Efficiently Managing Ride & Late Arriving Tips Data with Incremental ETL using Apache Hudi :Hands On](https://www.youtube.com/watch?v=vimesCse7zE)- By Soumil Shah, April 29th 2023
 
 97. [Building a Scalable and Resilient Streaming ETL Pipeline with Hudi's Incremental Processing #1](https://www.youtube.com/watch?v=eiOzdLrUrhg)- By Soumil Shah, May 1st 2023
+
+98. [Mastering Slowly Changing Dimension with Hudi: A Step-by-Step Guide to Efficient Data Management|](https://www.youtube.com/watch?v=S93fOMhR-wg)- By Soumil Shah, May 3rd 2023
+
+99. [Build, deploy, and run Spark jobs on Amazon EMR with the open-source EMR CLI tool](https://www.youtube.com/watch?v=USYa8qXsqBQ)- By Soumil Shah, May 3rd 2023
+
+100. [How to Build Your Own Version of AWS Glue Bookmark to get Only New Incremental Files](https://www.youtube.com/watch?v=Pe9tHOfq2z8)- By Soumil Shah, May 6th 2023
+
+101. [Maximizing Efficiency DataLake(Hudi) Glue ETL Jobs with Templated Approach &Serverless Architecture](https://www.youtube.com/watch?v=DhMlFgn8UU4)- By Soumil Shah, May 7th 2023
+
+102. [EMR Serverless for Beginners: | Ingest Data incrementally | Submit Spark Job with EMR-CLI |Data lake](https://www.youtube.com/watch?v=jx1_r6E8V7I)- By Soumil Shah, May 11th 2023
+
+103. [EMR Serverless Made Easy: Submitting Hive SQL Queries for Beginners with NYC Taxi Dataset](https://www.youtube.com/watch?v=zYS2ZSirnWE)- By Soumil Shah, May 13th 2023
+
+104. [Unify Your Event Data:Guide to Mapping Events to Standardized Format with Incremental ETL using Hudi](https://www.youtube.com/watch?v=eP1pRfk-6Tg)- By Soumil Shah, May 16th 2023
+
+105. [Hands-On Lab: Unleashing Efficiency and Flexibility with Partial Updates in Apache Hudi](https://www.youtube.com/watch?v=XpKIVdUJBbQ)- By Soumil Shah, May 19th 2023
+
+106. [Mastering File Sizing in Hudi: Boosting Performance and Efficiency](https://www.youtube.com/watch?v=qg-2aYyvfts)- By Soumil Shah, May 20th 2023
+
+107. [How to Set Up AWS Glue Locally with Docker: Accessing Glue Database & Table in Your LocalEnvironment](https://www.youtube.com/watch?v=sk48a8B8Grs)- By Soumil Shah, May 21st 2023
+
+108. [Automate alerting and reporting for AWS Glue job resource usage](https://www.youtube.com/watch?v=RndpxB88fIo)- By Soumil Shah, May 27th 2023
+
+109. [AWS and Apache Hudi Workshop Overview: Build a ride share lakehouse platform](https://www.youtube.com/watch?v=30q6q9dlGZI)- By Onehouse, May 31st 2023
+
+110. [How to Query Hudi Tables in Incremental Fashion and Get only New data on AWS Glue | Hands on Lab](https://www.youtube.com/watch?v=c6DCJR91rBQ)- By Soumil Shah, June 2nd 2023
+
+111. [How to JOIN Hudi Tables in Incremental fashion with DynamoDB in AWS GLue | Hands on Lab for Begineer](https://www.youtube.com/watch?v=ALhk1vYAwLc)- By Soumil Shah, June 5th 2023
+
+112. [Learn | How to delete Partition in Apache Hudi on AWS Glue | Hands on](https://www.youtube.com/watch?v=QqCiycIgSFk)- By Soumil Shah, June 7th 2023
