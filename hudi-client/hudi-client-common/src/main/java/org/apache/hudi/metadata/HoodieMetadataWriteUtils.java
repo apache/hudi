@@ -114,7 +114,7 @@ public class HoodieMetadataWriteUtils {
             .withCompactionStrategy(new UnBoundedCompactionStrategy())
             // Check if log compaction is enabled, this is needed for tables with lot of records.
             .withLogCompactionEnabled(writeConfig.isLogCompactionEnabled())
-            // This config is only used if enableLogCompactionForMetadata is set.
+            // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
             .build())
         .withParallelism(parallelism, parallelism)
