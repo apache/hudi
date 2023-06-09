@@ -49,9 +49,4 @@ public abstract class BaseDeleteHelper<T, I, K, O, R> extends ParallelismHelper<
                                                  K keys, HoodieEngineContext context,
                                                  HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
                                                  BaseCommitActionExecutor<T, I, K, O, R> deleteExecutor);
-
-  public abstract HoodieWriteMetadata<O> executePrepped(String instantTime,
-                                                        I preppedRecords, HoodieEngineContext context,
-                                                        HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
-                                                        BaseCommitActionExecutor<T, I, K, O, R> deleteExecutor);
 }

@@ -38,6 +38,6 @@ public class SparkDeletePreppedCommitActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    return HoodieDeleteHelper.newInstance().executePrepped(instantTime, preppedRecords, context, config, table, this);
+    return super.execute(preppedRecords);
   }
 }

@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -123,15 +122,5 @@ public class JavaDeleteHelper<R> extends
       }
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
     }
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> executePrepped(String instantTime,
-                                                               List<HoodieRecord<EmptyHoodieRecordPayload>> preppedRecords,
-                                                               HoodieEngineContext context,
-                                                               HoodieWriteConfig config,
-                                                               HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table,
-                                                               BaseCommitActionExecutor<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> deleteExecutor) {
-    throw new HoodieException("Not implemented.");
   }
 }
