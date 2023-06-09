@@ -39,9 +39,8 @@ import scala.util.control.NonFatal
 /**
  * Command for add new columns to the hudi table.
  */
-case class AlterHoodieTableAddColumnsCommand(
-                                              tableId: TableIdentifier,
-   colsToAdd: Seq[StructField])
+case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
+                                             colsToAdd: Seq[StructField])
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
