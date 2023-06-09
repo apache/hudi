@@ -84,8 +84,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
-    LOG.info("Filtered partition paths are " + partitionPaths);
-
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
       return null;
