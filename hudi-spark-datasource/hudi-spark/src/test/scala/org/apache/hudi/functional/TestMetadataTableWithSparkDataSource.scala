@@ -85,7 +85,6 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .save(basePath)
 
     val mdtDf = spark.read.format("hudi").load(s"$basePath/.hoodie/metadata")
-    mdtDf.show()
 
     // files partition
     val filesDf = mdtDf.where("type = 2 or type = 1").select("key")
@@ -97,7 +96,6 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .sorted
 
     val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
-
     assertEquals(expectedKeys, partitions)
 
     // Column Stats Index partition of MT
