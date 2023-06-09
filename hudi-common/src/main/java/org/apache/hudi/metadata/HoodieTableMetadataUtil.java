@@ -18,13 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.AvroTypeException;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
@@ -63,10 +56,19 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.util.Lazy;
+
+import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -1361,7 +1363,13 @@ public class HoodieTableMetadataUtil {
         });
 
     // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, PARTITION_INITIALIZATION_TIME_SUFFIX));
+    List<String> metadataInitializationTimestamps = metadataMetaClient.getActiveTimeline()
+        .filterCompletedInstants()
+        .getInstantsAsStream()
+        .map(HoodieInstant::getTimestamp)
+        .filter(timestamp -> timestamp.startsWith(SOLO_COMMIT_TIMESTAMP))
+        .collect(Collectors.toList());
+    validInstantTimestamps.addAll(metadataInitializationTimestamps);
     return validInstantTimestamps;
   }
 
