@@ -52,7 +52,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
   override def conf: SparkConf = conf(getSparkSqlConf)
 
   @ParameterizedTest
-  @ValueSource(ints = Array(1/*, 5*/)) // TODO: fix for higher compactNumDeltaCommits - HUDI-6340
+  @ValueSource(ints = Array(1, 5))
   def testReadability(compactNumDeltaCommits: Int): Unit = {
     val dataGen = new HoodieTestDataGenerator()
 
@@ -84,23 +84,21 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .mode(SaveMode.Append)
       .save(basePath)
 
-    // Files partition of MT
-    val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
+    val mdtDf = spark.read.format("hudi").load(s"$basePath/.hoodie/metadata")
+    mdtDf.show()
 
-    // Smoke test
-    filesPartitionDF.show()
-
-    // Query w/ 0 requested columns should be working fine
-    assertEquals(4, filesPartitionDF.count())
-
-    val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
-    val keys = filesPartitionDF.select("key")
-      .collect()
+    // files partition
+    val filesDf = mdtDf.where("type = 2 or type = 1").select("key")
+    filesDf.registerTempTable("file_tbl")
+    val fileDf1 = spark.sql("select distinct key from file_tbl")
+    val partitions = fileDf1.collect()
       .map(_.getString(0))
       .toSeq
       .sorted
 
-    assertEquals(expectedKeys, keys)
+    val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
+
+    assertEquals(expectedKeys, partitions)
 
     // Column Stats Index partition of MT
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")

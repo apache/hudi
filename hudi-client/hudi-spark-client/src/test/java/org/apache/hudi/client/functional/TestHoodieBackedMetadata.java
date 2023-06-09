@@ -155,6 +155,8 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -591,6 +593,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     doWriteOperation(testTable, "0000005");
     validateMetadata(testTable, emptyList(), true);
+
+    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metadataTableBasePath)
+        .setConf(context.getHadoopConf().get()).build();
+    HoodieTableFileSystemView mdtFsView = HoodieTableMetadataUtil.getFileSystemView(mdtMetaClient);
+    List<FileSlice> filesFileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(mdtMetaClient, mdtFsView, PARTITION_NAME_FILES);
+    assertEquals(1, filesFileSlices.size());
   }
 
   @Test
@@ -1631,6 +1639,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
       });
     }
+
+    // validate number of file groups in col stats
+    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metadataTableBasePath)
+        .setConf(context.getHadoopConf().get()).build();
+    HoodieTableFileSystemView mdtFsView = HoodieTableMetadataUtil.getFileSystemView(mdtMetaClient);
+    List<FileSlice> colStatsFileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(mdtMetaClient, mdtFsView, PARTITION_NAME_COLUMN_STATS);
+    assertEquals(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue(), colStatsFileSlices.size());
   }
 
   @Test
