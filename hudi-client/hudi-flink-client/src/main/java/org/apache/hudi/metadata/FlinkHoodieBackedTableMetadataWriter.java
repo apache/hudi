@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -107,6 +108,17 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+    doCommit(instantTime, partitionRecordsMap, false);
+  }
+
+  @Override
+  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
+    partitionRecordsMap.put(partitionType, records);
+    doCommit(instantTime, partitionRecordsMap, true);
+  }
+
+  private void doCommit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
@@ -149,9 +161,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         writeClient.getHeartbeatClient().start(instantTime);
       }
 
-      List<WriteStatus> statuses = preppedRecordList.size() > 0
-          ? writeClient.upsertPreppedRecords(preppedRecordList, instantTime)
-          : Collections.emptyList();
+      List<WriteStatus> statuses = isInitializing
+          ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
+          : writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
       // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
       writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
