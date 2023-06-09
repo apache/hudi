@@ -88,9 +88,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * If last sync time is not known then consider only active timeline.
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
-  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced) {
+  public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
-        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get())
+        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get())
         : metaClient.getActiveTimeline();
     return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
   }
@@ -126,7 +126,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
         config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
   }
 
-  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced) {
+  public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "
           + config.getString(META_SYNC_BASE_PATH)
@@ -135,7 +135,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getWrittenPartitions(
-          TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get()));
+          TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced.get()));
     }
   }
 

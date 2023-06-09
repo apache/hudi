@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -323,7 +324,7 @@ public class TestHiveSyncTool {
         + FSUtils.getPartitionPath(basePath, "2050/1/1").toString() + "'");
 
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty());
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
@@ -469,6 +470,7 @@ public class TestHiveSyncTool {
     String sparkTableProperties = getSparkTableProperties(syncAsDataSourceTable, useSchemaFromCommitMetadata);
     assertEquals(
         "EXTERNAL\tTRUE\n"
+            + "last_commit_completion_time_sync\t" + getLastCommitCompletionTimeSynced() + "\n"
             + "last_commit_time_sync\t100\n"
             + sparkTableProperties
             + "tp_0\tp0\n"
@@ -506,8 +508,9 @@ public class TestHiveSyncTool {
     hiveDriver.getResults(results);
 
     assertEquals(
-        String.format("%slast_commit_time_sync\t%s\n%s",
+        String.format("%slast_commit_completion_time_sync\t%s\nlast_commit_time_sync\t%s\n%s",
             createManagedTable ? StringUtils.EMPTY_STRING : "EXTERNAL\tTRUE\n",
+            getLastCommitCompletionTimeSynced(),
             instantTime,
             getSparkTableProperties(true, true)),
         String.format("%s\n", String.join("\n", results.subList(0, results.size() - 1))));
@@ -600,6 +603,7 @@ public class TestHiveSyncTool {
           results.subList(0, results.size() - 1));
       assertEquals(
           "EXTERNAL\tTRUE\n"
+              + "last_commit_completion_time_sync\t" + getLastCommitCompletionTimeSynced() + "\n"
               + "last_commit_time_sync\t101\n"
               + sparkTableProperties
               + "tp_0\tp0\n"
@@ -691,7 +695,7 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(commitTime1), Option.of(commitTime1));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1073,7 +1077,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
 
     reInitHiveSyncClient();
-    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime));
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime), Option.of(getLastCommitCompletionTimeSynced()));
     assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1103,7 +1107,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2)).size());
+    assertEquals(1, hiveClient.getWrittenPartitionsSince(Option.of(commitTime2), Option.of(getLastCommitCompletionTimeSynced())).size());
   }
 
   @ParameterizedTest
@@ -1505,11 +1509,67 @@ public class TestHiveSyncTool {
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
   }
 
+  @ParameterizedTest
+  @MethodSource("syncModeAndEnablePushDown")
+  public void testHiveSyncWithMultiWriter(String syncMode, String enablePushDown) throws Exception {
+    String tableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
+
+    String commitTime1 = HoodieInstantTimeGenerator.createNewInstantTime(1);
+    String commitTime2 = HoodieInstantTimeGenerator.createNewInstantTime(2);
+    String commitTime3 = HoodieInstantTimeGenerator.createNewInstantTime(3);
+    String commitTime4 = HoodieInstantTimeGenerator.createNewInstantTime(4);
+    String commitTime5 = HoodieInstantTimeGenerator.createNewInstantTime(5);
+
+    // Commit 4 and commit5 will be committed first
+    HiveTestUtil.createMORTable(commitTime4, commitTime5, 2, true, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    assertTrue(hiveClient.tableExists(tableName));
+    assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(getLastCommitCompletionTimeSynced(), hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
+    assertEquals(2, hiveClient.getAllPartitions(tableName).size());
+
+    // Commit2 and commit3 committed after commit4 and commit5
+    HiveTestUtil.addMORPartitions(4, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    String lastCommitCompletionTimeSynced = getLastCommitCompletionTimeSynced();
+    // LastCommitTimeSynced will still be commit3
+    assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(lastCommitCompletionTimeSynced, hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
+    // Partitions included in commit0 and commit1 will be synced to HMS correctly
+    assertEquals(4, hiveClient.getAllPartitions(tableName).size());
+
+    List<Partition> partitions = hiveClient.getAllPartitions(tableName);
+    // create two replace commits to delete current partitions, but do not sync in between
+    String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
+    // Add commit1 to the table that replace some partitions
+    HiveTestUtil.createReplaceCommit(commitTime1, partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    assertEquals(getLastCommitCompletionTimeSynced(), hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
+    assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(3, hiveClient.getAllPartitions(tableName).size());
+  }
+
   private void reSyncHiveTable() {
     hiveSyncTool.syncHoodieTable();
     // we need renew the hive client after tool.syncHoodieTable(), because it will close hive
     // session, then lead to connection retry, we can see there is a exception at log.
     reInitHiveSyncClient();
+  }
+
+  private String getLastCommitCompletionTimeSynced() {
+    return hiveClient.getActiveTimeline()
+        .getInstantsOrderedByStateTransitionTime()
+        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getStateTransitionTime();
   }
 
   private void reInitHiveSyncClient() {
