@@ -290,7 +290,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "009"),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "011"),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "012")),
-        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, startTs));
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
     verify(mockMetaClient, never()).getArchivedTimeline(any());
 
     // Should load both archived and active timeline
@@ -311,7 +311,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010"),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011"),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
-        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, startTs));
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
     verify(mockMetaClient, times(1)).getArchivedTimeline(any());
   }
 

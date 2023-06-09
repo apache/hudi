@@ -223,33 +223,31 @@ public class TimelineUtils {
    *
    * @param metaClient                {@link HoodieTableMetaClient} instance.
    * @param exclusiveStartInstantTime Start instant time (exclusive).
-   * @param commitCompletionTime Last commit completion time synced
+   * @param lastMaxCompletionTime     Last commit max completion time synced
    * @return Hudi timeline.
    */
   public static HoodieTimeline getCommitsTimelineAfter(
-      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, String commitCompletionTime) {
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
     HoodieDefaultTimeline activeTimeline = metaClient.getActiveTimeline();
 
-    HoodieDefaultTimeline timeline =
-        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
-            ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
-            .mergeTimeline(activeTimeline)
-            : activeTimeline;
+    HoodieDefaultTimeline timeline = activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+        ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(activeTimeline)
+        : activeTimeline;
 
-    // Get new instants with greater instant time than exclusiveStartInstantTime
-    Stream<HoodieInstant> newInstants = timeline.getCommitsTimeline()
-        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE)
-        .getInstantsAsStream();
+    HoodieDefaultTimeline timelineSinceLastSync = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
 
-    // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
-    Stream<HoodieInstant> hollowInstants = timeline.getCommitsTimeline()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, commitCompletionTime))
-        .getInstantsAsStream();
+    if (lastMaxCompletionTime.isPresent()) {
+      // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
+      HoodieDefaultTimeline hollowInstantsTimeline = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
+          .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
+          .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
+      if (!hollowInstantsTimeline.empty()) {
+        return timelineSinceLastSync.mergeTimeline(hollowInstantsTimeline);
+      }
+    }
 
-    Stream<HoodieInstant> mergedInstantStream = Stream.concat(newInstants, hollowInstants).sorted();
-
-    return new HoodieDefaultTimeline(mergedInstantStream, timeline.details);
+    return timelineSinceLastSync;
   }
 
   /**
