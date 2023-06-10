@@ -29,11 +29,13 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -52,7 +54,12 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<WriteStatus>> {
 
@@ -111,6 +118,71 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     LOG.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
+  @Override
+  protected HoodieWriteMetadata<List<WriteStatus>> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
+    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
+
+    // Check if a commit or compaction instant with a greater timestamp is on the timeline.
+    // If an instant is found then abort log compaction, since it is no longer needed.
+    Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, COMPACTION_ACTION);
+    Option<HoodieInstant> compactionInstantWithGreaterTimestamp =
+        Option.fromJavaOptional(table.getActiveTimeline().getInstantsAsStream()
+            .filter(hoodieInstant -> actions.contains(hoodieInstant.getAction()))
+            .filter(hoodieInstant -> HoodieTimeline.compareTimestamps(hoodieInstant.getTimestamp(),
+                GREATER_THAN, logCompactionInstantTime))
+            .findFirst());
+    if (compactionInstantWithGreaterTimestamp.isPresent()) {
+      throw new HoodieLogCompactException(String.format("Cannot log compact since a compaction instant with greater "
+          + "timestamp exists. Instant details %s", compactionInstantWithGreaterTimestamp.get()));
+    }
+
+    HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getLogCompactionInflightInstant(logCompactionInstantTime);
+    if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
+      LOG.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
+      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.getMetaClient().reloadActiveTimeline();
+      throw new HoodieException("Execution is aborted since it found an Inflight logcompaction,"
+          + "log compaction plans are mutable plans, so reschedule another logcompaction.");
+    }
+    logCompactionTimer = metrics.getLogCompactionCtx();
+    WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
+    HoodieWriteMetadata<List<WriteStatus>> writeMetadata = table.logCompact(context, logCompactionInstantTime);
+    if (shouldComplete && writeMetadata.getCommitMetadata().isPresent()) {
+      completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, logCompactionInstantTime);
+    }
+    return writeMetadata;
+  }
+
+  @Override
+  protected void completeLogCompaction(HoodieCommitMetadata metadata,
+                                       HoodieTable table,
+                                       String logCompactionCommitTime) {
+    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
+    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
+    try {
+      this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
+      preCommit(metadata);
+      finalizeWrite(table, logCompactionCommitTime, writeStats);
+      // commit to data table after committing to metadata table.
+      writeTableMetadata(table, logCompactionCommitTime, HoodieTimeline.LOG_COMPACTION_ACTION, metadata);
+      LOG.info("Committing Log Compaction " + logCompactionCommitTime + ". Finished with result " + metadata);
+      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+    } finally {
+      this.txnManager.endTransaction(Option.of(logCompactionInstant));
+    }
+    WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    if (logCompactionTimer != null) {
+      long durationInMs = metrics.getDurationInMs(logCompactionTimer.stop());
+      HoodieActiveTimeline.parseDateFromInstantTimeSafely(logCompactionCommitTime).ifPresent(parsedInstant ->
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
+      );
+    }
+    LOG.info("Log Compacted successfully on commit " + logCompactionCommitTime);
+  }
+
   protected void completeClustering(
       HoodieReplaceCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
@@ -164,11 +236,11 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return HoodieFlinkTable.create(config, context);
   }
 
   public HoodieFlinkTable<?> getHoodieTable() {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return HoodieFlinkTable.create(config, context);
   }
 
   @Override

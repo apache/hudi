@@ -54,7 +54,7 @@ public abstract class HoodieFlinkTable<T>
     super(config, context, metaClient);
   }
 
-  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -64,7 +64,7 @@ public abstract class HoodieFlinkTable<T>
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                               HoodieFlinkEngineContext context,
+                                               HoodieEngineContext context,
                                                HoodieTableMetaClient metaClient) {
     if (config.getSchemaEvolutionEnable()) {
       setLatestInternalSchema(config, metaClient);
