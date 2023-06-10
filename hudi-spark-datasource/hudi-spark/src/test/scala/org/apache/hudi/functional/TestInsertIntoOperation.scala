@@ -107,6 +107,50 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("No configs set pkless") {
+    withTempDir({ basePath =>
+      val tableName = generateTableName
+      val tableBasePath = basePath.getCanonicalPath + "/" + tableName
+      val writeOptions =
+        s"""
+           |tblproperties (
+           |  preCombineField = 'timestamp',
+           |  hoodie.database.name = "databaseName",
+           |  hoodie.table.name = "$tableName"
+           | )""".stripMargin
+      createTable(tableName, writeOptions, tableBasePath)
+      //Insert Operation
+      val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
+      doInsert(dataGen, tableName, "000")
+      assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 1))
+      doInsert(dataGen, tableName, "001")
+      assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
+
+    })
+  }
+
+  test("No configs set pkless no precombine") {
+    withTempDir({ basePath =>
+      val tableName = generateTableName
+      val tableBasePath = basePath.getCanonicalPath + "/" + tableName
+      val writeOptions =
+        s"""
+           |tblproperties (
+           |  hoodie.database.name = "databaseName",
+           |  hoodie.table.name = "$tableName"
+           | )""".stripMargin
+      createTable(tableName, writeOptions, tableBasePath)
+      //Insert Operation
+      val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
+      doInsert(dataGen, tableName, "000")
+      assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 1))
+      doInsert(dataGen, tableName, "001")
+      assert(assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
+
+    })
+  }
+
+
   test("No configs set pkless cow") {
     withTempDir({ basePath =>
       val tableName = generateTableName
@@ -196,7 +240,6 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
       assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 1))
       doInsert(dataGen, tableName, "001")
       assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
-
     })
   }
 
