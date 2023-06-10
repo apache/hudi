@@ -419,11 +419,23 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .firstInstant();
 
     // Oldest commit to retain is the greatest completed commit, that is less than the oldest pending instant.
+    // In some cases when inflight is the lowest commit then oldest commit to retain will be equal to oldest
+    // inflight commit.
     Option<HoodieInstant> oldestCommitToRetain;
     if (oldestPendingInstant.isPresent()) {
-      oldestCommitToRetain = Option.fromJavaOptional(commitTimeline.getReverseOrderedInstants()
-          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-              LESSER_THAN, oldestPendingInstant.get().getTimestamp())).findFirst());
+      Option<HoodieInstant> completedCommitBeforeOldestPendingInstant =
+          Option.fromJavaOptional(commitTimeline.getReverseOrderedInstants()
+              .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+                  LESSER_THAN, oldestPendingInstant.get().getTimestamp())).findFirst());
+      // Check if the completed instant is higher than the oldest inflight instant
+      // in that case update the oldestCommitToRetain to oldestInflight commit time.
+      if (!completedCommitBeforeOldestPendingInstant.isPresent()
+          || HoodieTimeline.compareTimestamps(oldestPendingInstant.get().getTimestamp(),
+          LESSER_THAN, completedCommitBeforeOldestPendingInstant.get().getTimestamp())) {
+        oldestCommitToRetain = oldestPendingInstant;
+      } else {
+        oldestCommitToRetain = completedCommitBeforeOldestPendingInstant;
+      }
     } else {
       oldestCommitToRetain = Option.empty();
     }
@@ -466,7 +478,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             }
           }).filter(s -> {
             // oldestCommitToRetain is the highest completed commit instant that is less than the oldest inflight instant.
-            // By filter out any commit >= oldestCommitToRetain, we can ensure there are no gaps in the timeline
+            // By filtering out any commit >= oldestCommitToRetain, we can ensure there are no gaps in the timeline
             // when inflight commits are present.
             return oldestCommitToRetain
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))

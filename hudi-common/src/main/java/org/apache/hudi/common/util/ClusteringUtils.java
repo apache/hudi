@@ -261,7 +261,7 @@ public class ClusteringUtils {
           // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
           // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
           // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
-          // TODO: This case has to be handled.
+          // TODO: This case has to be handled. HUDI-6352
           retainLowerBound = cleanInstant.getTimestamp();
         }
 
