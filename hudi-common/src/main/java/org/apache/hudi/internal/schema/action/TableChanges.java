@@ -106,9 +106,9 @@ public class TableChanges {
       // save update info
       Types.Field update = updates.get(field.fieldId());
       if (update == null) {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), field.name(), newType, field.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), field.name(), newType, field.doc(), field.getDefaultValue()));
       } else {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), update.name(), newType, update.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), update.name(), newType, update.doc(), update.getDefaultValue()));
       }
       return this;
     }
@@ -135,9 +135,38 @@ public class TableChanges {
       // save update info
       Types.Field update = updates.get(field.fieldId());
       if (update == null) {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), field.name(), field.type(), newDoc));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), field.name(), field.type(), newDoc, field.getDefaultValue()));
       } else {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), update.name(), update.type(), newDoc));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), update.name(), update.type(), newDoc, update.getDefaultValue()));
+      }
+      return this;
+    }
+
+    /**
+     * Update a column default value in the schema to a new primitive type.
+     *
+     * @param name            name of the column to update
+     * @param newDefaultValue new default value for the column
+     * @return this
+     * @throws IllegalArgumentException
+     */
+    public ColumnUpdateChange updateColumnDefaultValue(String name, Object newDefaultValue) {
+      checkColModifyIsLegal(name);
+      Types.Field field = internalSchema.findField(name);
+      if (field == null) {
+        throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
+      }
+      // consider null
+      if (Objects.equals(field.getDefaultValue(), newDefaultValue)) {
+        // do nothings
+        return this;
+      }
+      // save update info
+      Types.Field update = updates.get(field.fieldId());
+      if (update == null) {
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), field.name(), field.type(), field.doc(), newDefaultValue));
+      } else {
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), update.name(), update.type(), update.doc(), newDefaultValue));
       }
       return this;
     }
@@ -165,9 +194,9 @@ public class TableChanges {
       // save update info
       Types.Field update = updates.get(field.fieldId());
       if (update == null) {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), newName, field.type(), field.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), field.isOptional(), newName, field.type(), field.doc(), field.getDefaultValue()));
       } else {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), newName, update.type(), update.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), update.isOptional(), newName, update.type(), update.doc(), update.getDefaultValue()));
       }
       return this;
     }
@@ -201,9 +230,9 @@ public class TableChanges {
       // save update info
       Types.Field update = updates.get(field.fieldId());
       if (update == null) {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), nullable, field.name(), field.type(), field.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), nullable, field.name(), field.type(), field.doc(), field.getDefaultValue()));
       } else {
-        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), nullable, update.name(), update.type(), update.doc()));
+        updates.put(field.fieldId(), Types.Field.get(field.fieldId(), nullable, update.name(), update.type(), update.doc(), update.getDefaultValue()));
       }
 
       return this;
@@ -316,18 +345,17 @@ public class TableChanges {
       return type;
     }
 
-    public ColumnAddChange addColumns(String name, Type type, String doc) {
-      checkColModifyIsLegal(name);
-      return addColumns("", name, type, doc);
+    public ColumnAddChange addColumns(String name, Type type, String doc, Object defaultValue) {
+      return addColumns("", name, type, doc, defaultValue);
     }
 
-    public ColumnAddChange addColumns(String parent, String name, Type type, String doc) {
+    public ColumnAddChange addColumns(String parent, String name, Type type, String doc, Object defaultValue) {
       checkColModifyIsLegal(name);
-      addColumnsInternal(parent, name, type, doc);
+      addColumnsInternal(parent, name, type, doc, defaultValue);
       return this;
     }
 
-    private void addColumnsInternal(String parent, String name, Type type, String doc) {
+    private void addColumnsInternal(String parent, String name, Type type, String doc, Object defaultValue) {
       // root record has no parent, so set parentId to -1 as default
       int parentId = -1;
       // do check
@@ -337,7 +365,6 @@ public class TableChanges {
         if (parentField == null) {
           throw new HoodieSchemaException(String.format("cannot add column: %s which parent: %s is not exist", name, parent));
         }
-        Type parentType = parentField.type();
         if (!(parentField.type() instanceof Types.RecordType)) {
           throw new HoodieSchemaException("only support add nested columns to struct column");
         }
@@ -363,7 +390,7 @@ public class TableChanges {
       Type typeWithNewId = InternalSchemaBuilder.getBuilder().refreshNewId(type, assignNextId);
       // only allow add optional columns.
       ArrayList<Types.Field> adds = parentId2AddCols.getOrDefault(parentId, new ArrayList<>());
-      adds.add(Types.Field.get(nextId, true, name, typeWithNewId, doc));
+      adds.add(Types.Field.get(nextId, true, name, typeWithNewId, doc, defaultValue));
       parentId2AddCols.put(parentId, adds);
       nextId = assignNextId.get();
     }

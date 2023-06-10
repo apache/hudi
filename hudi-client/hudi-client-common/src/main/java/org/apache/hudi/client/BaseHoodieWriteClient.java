@@ -1343,18 +1343,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param colName      col name to be added. if we want to add col to a nested filed, the fullName should be specified
    * @param schema       col type to be added.
    * @param doc          col doc to be added.
+   * @param defaultValue col default value to be added.
    * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+  public void addColumn(String colName, Schema schema, String doc, Object defaultValue, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
     InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, AvroInternalSchemaConverter.convertToField(schema), doc, position, positionType);
+        .applyAddChange(colName, AvroInternalSchemaConverter.convertToField(schema), doc, defaultValue, position, positionType);
     commitTableChange(newSchema, pair.getRight());
   }
 
   public void addColumn(String colName, Schema schema) {
-    addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
+    addColumn(colName, schema, null, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
   }
 
   /**
@@ -1415,6 +1416,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
     InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * update col default value for hudi table.
+   *
+   * @param colName      col name to be changed. if we want to change col from a nested filed, the fullName should be specified
+   * @param defaultValue .
+   */
+  public void updateColumnDefaultValue(String colName, Object defaultValue) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnDefaultValueChange(colName, defaultValue);
     commitTableChange(newSchema, pair.getRight());
   }
 

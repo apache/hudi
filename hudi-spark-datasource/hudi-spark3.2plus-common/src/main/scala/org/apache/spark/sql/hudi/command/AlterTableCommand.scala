@@ -88,7 +88,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
       val parentName = AlterTableCommand.getParentName(names)
       // add col change
       val colType = SparkInternalSchemaConverter.buildTypeFromStructType(addColumn.dataType(), true, new AtomicInteger(0))
-      addChange.addColumns(parentName, names.last, colType, addColumn.comment())
+      addChange.addColumns(parentName, names.last, colType, addColumn.comment(), null)
       // add position change
       addColumn.position() match {
         case after: TableChange.After =>

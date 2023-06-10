@@ -95,7 +95,7 @@ public class AvroSchemaEvolutionUtils {
                   && c.startsWith(parentName)
                   && inComingInternalSchema.findIdByName(c) >  inComingInternalSchema.findIdByName(name)
                   && oldTableSchema.findIdByName(c) > 0).sorted((s1, s2) -> oldTableSchema.findIdByName(s1) - oldTableSchema.findIdByName(s2)).findFirst();
-      addChange.addColumns(parentName, rawName, inComingInternalSchema.findType(name), null);
+      addChange.addColumns(parentName, rawName, inComingInternalSchema.findType(name), null, inComingInternalSchema.findField(name).getDefaultValue());
       inferPosition.map(i -> addChange.addPositionChange(name, i, "before"));
     });
 

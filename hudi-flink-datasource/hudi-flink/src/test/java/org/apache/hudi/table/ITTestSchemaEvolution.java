@@ -212,14 +212,14 @@ public class ITTestSchemaEvolution {
       Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
       Schema doubleType = SchemaBuilder.unionOf().nullType().and().doubleType().endUnion();
       Schema stringType = SchemaBuilder.unionOf().nullType().and().stringType().endUnion();
-      writeClient.addColumn("salary", doubleType, null, "name", AFTER);
+      writeClient.addColumn("salary", doubleType, null, null, "name", AFTER);
       writeClient.deleteColumns("gender");
       writeClient.renameColumn("name", "first_name");
       writeClient.updateColumnType("age", Types.StringType.get());
-      writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
+      writeClient.addColumn("last_name", stringType, "empty allowed", null, "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
       // add a field in the middle of the `f_struct` column
-      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", "f_struct.f0", AFTER);
+      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", null, "f_struct.f0", AFTER);
       // add a field at the end of `f_struct` column
       writeClient.addColumn("f_struct.f3", stringType);
 

@@ -120,7 +120,7 @@ public class InternalSchemaMerger {
       if (fileSchema.findField(fieldId) != null) {
         if (fileSchema.findfullName(fieldId).equals(fullName)) {
           // maybe col type changed, deal with it.
-          newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
+          newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc(), oldField.getDefaultValue()));
         } else {
           // find rename, deal with it.
           newFields.add(dealWithRename(fieldId, newType, oldField));
@@ -129,14 +129,14 @@ public class InternalSchemaMerger {
         // buildFullName
         fullName = normalizeFullName(fullName);
         if (fileSchema.findField(fullName) != null) {
-          newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name() + "suffix", oldField.type(), oldField.doc()));
+          newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name() + "suffix", oldField.type(), oldField.doc(), oldField.getDefaultValue()));
         } else {
           // find add column
           // now there exist some bugs when we use spark update/merge api, those operation will change col optional to required.
           if (ignoreRequiredAttribute) {
-            newFields.add(Types.Field.get(oldField.fieldId(), true, oldField.name(), newType, oldField.doc()));
+            newFields.add(Types.Field.get(oldField.fieldId(), true, oldField.name(), newType, oldField.doc(), oldField.getDefaultValue()));
           } else {
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
+            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc(), oldField.getDefaultValue()));
           }
         }
       }
@@ -153,10 +153,10 @@ public class InternalSchemaMerger {
     // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
     if (newType.isNestedType()) {
       return Types.Field.get(oldField.fieldId(), oldField.isOptional(),
-          finalFieldName, newType, oldField.doc());
+          finalFieldName, newType, oldField.doc(), oldField.getDefaultValue());
     } else {
       return Types.Field.get(oldField.fieldId(), oldField.isOptional(),
-          finalFieldName, useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
+          finalFieldName, useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc(), oldField.getDefaultValue());
     }
   }
 

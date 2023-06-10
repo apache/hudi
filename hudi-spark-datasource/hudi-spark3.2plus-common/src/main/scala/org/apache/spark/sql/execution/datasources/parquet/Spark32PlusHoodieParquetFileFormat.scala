@@ -265,7 +265,8 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
               int96RebaseSpec.timeZone,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity,
-              typeChangeInfos)
+              typeChangeInfos,
+              querySchemaOption.orElse(null))
           } else if (HoodieSparkUtils.gteqSpark3_2_1) {
             // NOTE: Below code could only be compiled against >= Spark 3.2.1,
             //       and unfortunately won't compile against Spark 3.2.0

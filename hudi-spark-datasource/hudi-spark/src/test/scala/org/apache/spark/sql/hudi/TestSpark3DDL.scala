@@ -17,14 +17,21 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.avro.{LogicalTypes, SchemaBuilder}
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_NAME}
 import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
+import org.apache.hudi.client.HoodieJavaWriteClient
+import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
+import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -32,6 +39,8 @@ import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 
+import java.math.{BigDecimal, RoundingMode}
+import java.nio.charset.StandardCharsets
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -66,6 +75,67 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          | (4,4,14,100004,104.04,1004.0004,100004.0004,'a000004',DATE'2021-12-26',TIMESTAMP'2021-12-26 12:04:04',true,X'a04',TIMESTAMP'2021-12-26'),
          | (5,5,15,100005,105.05,1005.0005,100005.0005,'a000005',DATE'2021-12-26',TIMESTAMP'2021-12-26 12:05:05',false,X'a05',TIMESTAMP'2021-12-26')
          |""".stripMargin)
+  }
+
+  test("Test add column default value") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_2) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
+          createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
+          val config = HoodieWriteConfig.newBuilder.withEngineType(EngineType.JAVA)
+            .withPath(tablePath)
+            .withProps(CollectionUtils.createImmutableMap(HoodieWriteConfig.TBL_NAME.key, tableName))
+            .build
+          val writeClient = new HoodieJavaWriteClient(new HoodieJavaEngineContext(new Configuration()), config)
+          val typeBuilder = SchemaBuilder.builder()
+          writeClient.addColumn("col10", typeBuilder.intType(), "col10 int", 16, "col9", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col10 from $tableName where id = 1").collect())(
+            Seq(16)
+          )
+          writeClient.addColumn("col11", typeBuilder.longType(), "col11 bigint", 100006L, "col10", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col11 from $tableName where id = 1").collect())(
+            Seq(100006L)
+          )
+          writeClient.addColumn("col12", typeBuilder.floatType(), "col12 float", 106.06F, "col11", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col12 from $tableName where id = 1").collect())(
+            Seq(106.06F)
+          )
+          writeClient.addColumn("col13", typeBuilder.doubleType(), "col13 double", 1006.0006D, "col12", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col13 from $tableName where id = 1").collect())(
+            Seq(1006.0006D)
+          )
+          val bigDecimal = new BigDecimal(100006.0006).setScale(4, RoundingMode.HALF_UP);
+          writeClient.addColumn("col14", LogicalTypes.decimal(10, 4).addToSchema(SchemaBuilder.builder().bytesType()), "col14 decimal(10,4)", bigDecimal, "col13", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col14 from $tableName where id = 1").collect())(
+            Seq(bigDecimal)
+          )
+          writeClient.addColumn("col15", typeBuilder.stringType(), "col15 string", "a000006", "col14", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col15 from $tableName where id = 1").collect())(
+            Seq("a000006")
+          )
+          writeClient.addColumn("col16", typeBuilder.booleanType(), "col16 boolean", true, "col15", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col16 from $tableName where id = 1").collect())(
+            Seq(true)
+          )
+          val bytesArray = "a06".getBytes(StandardCharsets.UTF_8)
+          writeClient.addColumn("col17", typeBuilder.bytesType(), "col17 binary", bytesArray, "col16", ColumnPositionType.AFTER)
+          checkAnswer(spark.sql(s"select col17 from $tableName where id = 1").collect())(
+            Seq(bytesArray)
+          )
+          checkAnswer(spark.sql(s"select col10, col11, col12, col13, col14, col15, col16, col17 from $tableName where id = 1").collect())(
+            Seq(16, 100006L, 106.06F, 1006.0006D, bigDecimal, "a000006", true, bytesArray)
+          )
+          spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
+          spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
+        }
+      }
+    })
   }
 
   test("Test alter column types") {

@@ -29,11 +29,14 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.JsonProperties;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -70,6 +73,7 @@ public class SerDeHelper {
   private static final String OPTIONAL = "optional";
   private static final String ELEMENT_OPTIONAL = "element_optional";
   private static final String VALUE_OPTIONAL = "value_optional";
+  private static final String DEFAULT_VALUE = "default_value";
 
   private static final Pattern FIXED = Pattern.compile("fixed\\[(\\d+)\\]");
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
@@ -143,6 +147,11 @@ public class SerDeHelper {
       toJson(field.type(), generator);
       if (field.doc() != null) {
         generator.writeStringField(DOC, field.doc());
+      }
+      // NOTE: The value of null field is JsonProperties.NULL_VALUE.
+      if (field.getDefaultValue() != null && field.getDefaultValue() != JsonProperties.NULL_VALUE) {
+        generator.writeFieldName(DEFAULT_VALUE);
+        generator.writeObject(field.getDefaultValue());
       }
       generator.writeEndObject();
     }
@@ -242,8 +251,9 @@ public class SerDeHelper {
           Type type = parseTypeFromJson(field.get(TYPE));
           String doc = field.has(DOC) ? field.get(DOC).asText() : null;
           boolean optional = field.get(OPTIONAL).asBoolean();
+          Object defaultValue = parseDefaultValueFromJson(field, type);
           // build fields
-          fields.add(Types.Field.get(id, optional, name, type, doc));
+          fields.add(Types.Field.get(id, optional, name, type, doc, defaultValue));
         }
         return Types.RecordType.get(fields);
       } else if (ARRAY.equals(typeStr)) {
@@ -261,6 +271,31 @@ public class SerDeHelper {
       }
     }
     throw new IllegalArgumentException(String.format("cannot parse type from jsonNode: %s", jsonNode));
+  }
+
+  private static Object parseDefaultValueFromJson(JsonNode jsonNode, Type type) {
+    if (!jsonNode.has(DEFAULT_VALUE)) {
+      return null;
+    }
+    String defaultValue = jsonNode.get(DEFAULT_VALUE).asText();
+    switch (type.typeId()) {
+      case BOOLEAN:
+        return Boolean.parseBoolean(defaultValue);
+      case INT:
+        return Integer.parseInt(defaultValue);
+      case LONG:
+        return Long.parseLong(defaultValue);
+      case FLOAT:
+        return Float.parseFloat(defaultValue);
+      case DOUBLE:
+        return Double.parseDouble(defaultValue);
+      case BINARY:
+        return Base64.getDecoder().decode(defaultValue);
+      case DECIMAL:
+        return new BigDecimal(defaultValue);
+      default:
+        return defaultValue;
+    }
   }
 
   /**
@@ -341,7 +376,7 @@ public class SerDeHelper {
       return "";
     }
     if (oldSchemas == null || oldSchemas.isEmpty()) {
-      return toJson(Arrays.asList(newSchema));
+      return toJson(Collections.singletonList(newSchema));
     }
     String checkedString = "{\"schemas\":[";
     if (!oldSchemas.startsWith("{\"schemas\":")) {

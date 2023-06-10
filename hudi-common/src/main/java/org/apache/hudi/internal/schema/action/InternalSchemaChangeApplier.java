@@ -47,12 +47,13 @@ public class InternalSchemaChangeApplier {
       String colName,
       Type colType,
       String doc,
+      Object defaultValue,
       String position,
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(latestSchema);
     String parentName = TableChangesHelper.getParentName(colName);
     String leafName = TableChangesHelper.getLeafName(colName);
-    add.addColumns(parentName, leafName, colType, doc);
+    add.addColumns(parentName, leafName, colType, doc, defaultValue);
     if (positionType != null) {
       switch (positionType) {
         case NO_OPERATION:
@@ -131,11 +132,23 @@ public class InternalSchemaChangeApplier {
    * Update col comment for hudi table.
    *
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
-   * @param doc .
+   * @param doc     .
    */
   public InternalSchema applyColumnCommentChange(String colName, String doc) {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
     updateChange.updateColumnComment(colName, doc);
+    return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
+  }
+
+  /**
+   * Update col default value for hudi table.
+   *
+   * @param colName      col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param defaultValue .
+   */
+  public InternalSchema applyColumnDefaultValueChange(String colName, Object defaultValue) {
+    TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
+    updateChange.updateColumnDefaultValue(colName, defaultValue);
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
   }
 
