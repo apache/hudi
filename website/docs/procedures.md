@@ -15,12 +15,12 @@ CALL supports passing arguments by name (recommended) or by position. Mixing pos
 #### Named arguments
 All procedure arguments are named. When passing arguments by name, arguments can be in any order and any optional argument can be omitted.
 ```
-CALL system.procedure_name(arg_name_2 => arg_2, arg_name_1 => arg_1, ... arg_name_n => arg_n)
+CALL system.procedure_name(arg_name_2 => arg_2, arg_name_1 => arg_1, ... arg_name_n => arg_n);
 ```
 #### Positional arguments
 When passing arguments by position, the arguments may be omitted if they are optional.
 ```
-CALL system.procedure_name(arg_1, arg_2, ... arg_n)
+CALL system.procedure_name(arg_1, arg_2, ... arg_n);
 ```
 *note:* The system here has no practical meaning, the complete procedure name is system.procedure_name.
 
@@ -571,7 +571,6 @@ Create a savepoint to hudi's table.
 
 **Example**
 
-Roll back test_hudi_table to one instant
 ```
 call create_savepoint(table => 'test_hudi_table', commit_time => '20220109225319449');
 ```
@@ -1263,17 +1262,17 @@ Empty
 
 Clustering test_hudi_table with table name
 ```
-call run_clustering(table => 'test_hudi_table')
+call run_clustering(table => 'test_hudi_table');
 ```
 
 Clustering test_hudi_table with table path
 ```
-call run_clustering(path => '/tmp/hoodie/test_hudi_table')
+call run_clustering(path => '/tmp/hoodie/test_hudi_table');
 ```
 
 Clustering test_hudi_table with table name, predicate and order column
 ```
-call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts')
+call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts');
 ```
 
 ### show_clustering
@@ -1306,7 +1305,7 @@ If both parameters are given, ``table`` will take effect.
 
 Show pending clusterings with table name
 ```
-call show_clustering(table => 'test_hudi_table')
+call show_clustering(table => 'test_hudi_table');
 ```
 | timestamp         | groups | 
 |-------------------|--------|
@@ -1315,7 +1314,7 @@ call show_clustering(table => 'test_hudi_table')
 
 Show pending clusterings with table path
 ```
-call show_clustering(path => '/tmp/hoodie/test_hudi_table')
+call show_clustering(path => '/tmp/hoodie/test_hudi_table');
 ```
 | timestamp         | groups | 
 |-------------------|--------|
@@ -1324,7 +1323,7 @@ call show_clustering(path => '/tmp/hoodie/test_hudi_table')
 
 Show pending clusterings with table name and limit
 ```
-call show_clustering(table => 'test_hudi_table', limit => 1)
+call show_clustering(table => 'test_hudi_table', limit => 1);
 ```
 | timestamp         | groups | 
 |-------------------|--------|
@@ -1368,22 +1367,22 @@ The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
 
 Run compaction with table name
 ```
-call run_compaction(op => 'run', table => 'test_hudi_table')
+call run_compaction(op => 'run', table => 'test_hudi_table');
 ```
 
 Run compaction with table path
 ```
-call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table')
+call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table');
 ```
 
 Run compaction with table path and timestamp
 ```
-call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568')
+call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
 
 Schedule compaction with table name
 ```
-call run_compaction(op => 'schedule', table => 'test_hudi_table')
+call run_compaction(op => 'schedule', table => 'test_hudi_table');
 ```
 | instant           |
 |-------------------|
@@ -1391,7 +1390,7 @@ call run_compaction(op => 'schedule', table => 'test_hudi_table')
 
 Schedule compaction with table path
 ```
-call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table')
+call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table');
 ```
 | instant           |
 |-------------------|
@@ -1399,7 +1398,7 @@ call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table')
 
 Schedule compaction with table path and timestamp
 ```
-call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568')
+call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
 | instant           |
 |-------------------|
@@ -1435,7 +1434,7 @@ If both parameters are given, ``table`` will take effect.
 
 Show compactions with table name
 ```
-call show_compaction(table => 'test_hudi_table')
+call show_compaction(table => 'test_hudi_table');
 ```
 | timestamp         | action     | size    |
 |-------------------|------------|---------|
@@ -1444,7 +1443,7 @@ call show_compaction(table => 'test_hudi_table')
 
 Show compactions with table path
 ```
-call show_compaction(path => '/tmp/hoodie/test_hudi_table')
+call show_compaction(path => '/tmp/hoodie/test_hudi_table');
 ```
 | timestamp         | action     | size    |
 |-------------------|------------|---------|
@@ -1453,7 +1452,7 @@ call show_compaction(path => '/tmp/hoodie/test_hudi_table')
 
 Show compactions with table name and limit
 ```
-call show_compaction(table => 'test_hudi_table', limit => 1)
+call show_compaction(table => 'test_hudi_table', limit => 1);
 ```
 | timestamp         | action     | size    |
 |-------------------|------------|---------|
@@ -1800,7 +1799,7 @@ Show mapping files of a bootstrap table.
 **Example**
 
 ```
-call show_bootstrap_mapping(table => 'test_hudi_table')
+call show_bootstrap_mapping(table => 'test_hudi_table');
 ```
 
 | partition     | file_id                                | source_base_path                                                                                                                    | source_partition | source_file                                | 
@@ -1827,7 +1826,7 @@ Show partitions of a bootstrap table.
 **Example**
 
 ```
-call show_bootstrap_partitions(table => 'test_hudi_table')
+call show_bootstrap_partitions(table => 'test_hudi_table');
 ```
 
 | indexed_partitions | 
