@@ -76,7 +76,9 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, AmazonDynamoDB dynamoDB) {
-    this.dynamoDBLockConfiguration = DynamoDbBasedLockConfig.newBuilder().fromProperties(lockConfiguration.getConfig());
+    this.dynamoDBLockConfiguration = DynamoDbBasedLockConfig.newBuilder()
+        .fromProperties(lockConfiguration.getConfig())
+        .build();
     this.tableName = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
     this.dynamoDBPartitionKey = dynamoDBLockConfiguration.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY);
     long leaseDuration = dynamoDBLockConfiguration.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
@@ -86,11 +88,11 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     // build the dynamoDb lock client
     this.client = new AmazonDynamoDBLockClient(
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
-                .withTimeUnit(TimeUnit.MILLISECONDS)
-                .withLeaseDuration(leaseDuration)
-                .withHeartbeatPeriod(leaseDuration / 3)
-                .withCreateHeartbeatBackgroundThread(true)
-                .build());
+            .withTimeUnit(TimeUnit.MILLISECONDS)
+            .withLeaseDuration(leaseDuration)
+            .withHeartbeatPeriod(leaseDuration / 3)
+            .withCreateHeartbeatBackgroundThread(true)
+            .build());
 
     if (!this.client.lockTableExists()) {
       createLockTableInDynamoDB(dynamoDB, tableName);
