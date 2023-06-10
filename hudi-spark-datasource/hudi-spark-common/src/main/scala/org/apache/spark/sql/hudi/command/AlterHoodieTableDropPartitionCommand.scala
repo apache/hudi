@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SaveMode, SparkSession}
 
 case class AlterHoodieTableDropPartitionCommand(
    tableIdentifier: TableIdentifier,
@@ -69,7 +69,7 @@ case class AlterHoodieTableDropPartitionCommand(
       throw new HoodieException("Alter table command failed")
     }
 
-    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
+    HoodieCatalogUtils.refreshTable(sparkSession, tableIdentifier)
     logInfo(s"Finish execute alter table drop partition command for $fullTableName")
     Seq.empty[Row]
   }

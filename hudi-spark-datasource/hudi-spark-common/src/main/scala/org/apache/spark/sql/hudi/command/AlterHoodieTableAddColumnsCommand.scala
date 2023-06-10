@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieCatalogUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieOptionConfig
@@ -81,7 +81,8 @@ case class AlterHoodieTableAddColumnsCommand(
       case NonFatal(e) =>
         log.warn(s"Exception when attempting to uncache table ${tableId.quotedString}", e)
     }
-    sparkSession.catalog.refreshTable(table.identifier.unquotedString)
+
+    HoodieCatalogUtils.refreshTable(sparkSession, table.identifier)
 
     SchemaUtils.checkColumnNameDuplication(
       newSqlDataSchema.map(_.name),
