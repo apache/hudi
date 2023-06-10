@@ -163,7 +163,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public boolean canIndexLogFiles() {
-    return true;
+    return false;
   }
 
   @Override
