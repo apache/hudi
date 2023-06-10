@@ -39,4 +39,11 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Glue catalog sync based client will skip archiving the table version if this config is set to true");
+
+  public static final ConfigProperty<Boolean> GLUE_ENABLE_METADATA_TABLE = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "enable_metadata_table")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Makes athena use the metadata table to list the files. Currently it won't benefit from other features such stats indexes");
 }
