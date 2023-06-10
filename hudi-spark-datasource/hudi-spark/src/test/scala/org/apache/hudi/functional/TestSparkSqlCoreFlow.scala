@@ -34,7 +34,7 @@ import org.scalatest.Inspectors.forAll
 import java.io.File
 import scala.collection.JavaConversions._
 
-@DisableCI
+@SparkSQLCoreFlow
 class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   val colsToCompare = "timestamp, _row_key, partition_path, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare.amount, fare.currency, _hoodie_is_deleted"
 

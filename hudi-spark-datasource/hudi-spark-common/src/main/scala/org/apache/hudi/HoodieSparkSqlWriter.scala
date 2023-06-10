@@ -1116,11 +1116,10 @@ object HoodieSparkSqlWriter {
                                     instantTime: String) = {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
-    val autoGenerateRecordKeys : Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    val autoGenerateRecordKeys : Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
     val shouldCombine = if (WriteOperationType.isInsert(operation)) {
-      parameters(INSERT_DROP_DUPS.key()).toBoolean ||
-        parameters.getOrElse(
+      parameters.getOrElse(
             HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
             HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
           ).toBoolean

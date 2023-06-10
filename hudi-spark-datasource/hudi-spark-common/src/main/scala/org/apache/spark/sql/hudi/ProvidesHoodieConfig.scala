@@ -94,14 +94,14 @@ trait ProvidesHoodieConfig extends Logging {
    * See if we are able to set bulk insert, else use deduceOperation
    */
   private def deduceWriteOperationForInsertInfo(isPartitionedTable: Boolean,
-                           isOverwritePartition: Boolean,
-                           isOverwriteTable: Boolean,
-                           insertModeSet: Boolean,
-                           dropDuplicate: Option[String],
-                           enableBulkInsert: Option[String],
-                           isInsertInto: Boolean,
-                           isNonStrictMode: Boolean,
-                           hasPrecombineColumn: Boolean): String = {
+                                                isOverwritePartition: Boolean,
+                                                isOverwriteTable: Boolean,
+                                                insertModeSet: Boolean,
+                                                dropDuplicate: Option[String],
+                                                enableBulkInsert: Option[String],
+                                                isInsertInto: Boolean,
+                                                isNonStrictMode: Boolean,
+                                                combineBeforeInsert: Boolean): String = {
     val canEnforceNonStrictMode = !insertModeSet || isNonStrictMode
     //if selected configs are not set, instead of using the default we assume the values to be those that enable bulk_insert
     (isInsertInto, canEnforceNonStrictMode, enableBulkInsert.getOrElse("true"),
@@ -112,7 +112,7 @@ trait ProvidesHoodieConfig extends Logging {
       //if config is set such that we cant make it bulk insert, we need to use defaults for unset configs
       case _ => deduceOperation(enableBulkInsert.getOrElse(SQL_ENABLE_BULK_INSERT.defaultValue).toBoolean,
         isOverwritePartition, isOverwriteTable, dropDuplicate.getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean,
-        isNonStrictMode, isPartitionedTable, hasPrecombineColumn)
+        isNonStrictMode, isPartitionedTable, combineBeforeInsert)
     }
   }
 
@@ -192,13 +192,13 @@ trait ProvidesHoodieConfig extends Logging {
     val insertMode = InsertMode.of(insertModeOpt.getOrElse(SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
+    val combineBeforeInsert = hoodieCatalogTable.preCombineKey.nonEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
 
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
     val operation = combinedOpts.getOrElse(OPERATION.key,
       deduceWriteOperationForInsertInfo(isPartitionedTable, isOverwritePartition, isOverwriteTable, insertModeSet, dropDuplicate,
-        enableBulkInsert, isInsertInto, isNonStrictMode, hasPrecombineColumn))
+        enableBulkInsert, isInsertInto, isNonStrictMode, combineBeforeInsert))
 
     val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
       tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
@@ -218,7 +218,7 @@ trait ProvidesHoodieConfig extends Logging {
       PAYLOAD_CLASS_NAME.key -> payloadClassName,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
-      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),
       KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
       SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL,
