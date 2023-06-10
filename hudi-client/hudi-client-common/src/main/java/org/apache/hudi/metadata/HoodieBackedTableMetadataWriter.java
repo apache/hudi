@@ -287,13 +287,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // the metadata table will need to be initialized again.
     if (exists) {
       metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
-      try {
-        if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
-          LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
-          metadataMetaClient = initializeMetaClient();
-        }
-      } catch (TableNotFoundException e) {
-        // Table not found, retry initializing the metadata table again.
+      if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
+        LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
         metadataMetaClient = initializeMetaClient();
       }
       final Option<HoodieInstant> latestMetadataInstant =
@@ -334,16 +329,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (latestMetadataInstantTimestamp.startsWith(SOLO_COMMIT_TIMESTAMP)) { // the initialization timestamp is SOLO_COMMIT_TIMESTAMP + offset
       return false;
     }
-
-    // Detect the commit gaps if any from the data and the metadata active timeline
-    if (dataMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(latestMetadataInstantTimestamp)
-        && !isCommitRevertedByInFlightAction(actionMetadata, latestMetadataInstantTimestamp)) {
-      LOG.error("Metadata Table will need to be re-initialized as un-synced instants have been archived."
-          + " latestMetadataInstant=" + latestMetadataInstantTimestamp
-          + ", latestDataInstant=" + dataMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
-      return true;
-    }
-
     return false;
   }
 
