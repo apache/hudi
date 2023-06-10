@@ -170,6 +170,15 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
           + "table to send inserts into log files & control the size of compacted parquet file.");
 
+  public static final ConfigProperty<String> HOODIE_AVRO_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.avro.write.support.class")
+      .defaultValue("org.apache.hudi.avro.HoodieAvroWriteSupport")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Provided write support class should extend HoodieAvroWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to "
+          + "override the existing write context.");
+
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead
    */
@@ -392,6 +401,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder orcCompressionCodec(String orcCompressionCodec) {
       storageConfig.setValue(ORC_COMPRESSION_CODEC_NAME, orcCompressionCodec);
+      return this;
+    }
+
+    public Builder withAvroWriteSupport(String avroWriteSupportClassName) {
+      storageConfig.setValue(HOODIE_AVRO_WRITE_SUPPORT_CLASS, avroWriteSupportClassName);
       return this;
     }
 

@@ -256,8 +256,11 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     boolean syncIncremental = config.getBoolean(META_SYNC_INCREMENTAL);
     Option<String> lastCommitTimeSynced = (tableExists && syncIncremental)
         ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
+    Option<String> lastCommitCompletionTimeSynced = (tableExists && syncIncremental)
+        ? syncClient.getLastCommitCompletionTimeSynced(tableName) : Option.empty();
     if (syncIncremental) {
-      LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
+      LOG.info(String.format("Last commit time synced was found to be %s, last commit completion time is found to be %s",
+          lastCommitTimeSynced.orElse("null"), lastCommitCompletionTimeSynced.orElse("null")));
     } else {
       LOG.info(
           "Executing a full partition sync operation since {} is set to false.",
@@ -276,12 +279,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           + ", file system: " + config.getHadoopFileSystem());
       partitionsChanged = syncAllPartitions(tableName);
     } else {
-      List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
+      List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
       LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
       // Sync the partitions if needed
       // find dropped partitions, if any, in the latest commit
-      Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced);
+      Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
 

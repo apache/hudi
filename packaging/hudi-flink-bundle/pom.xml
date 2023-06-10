@@ -109,8 +109,9 @@
                   <include>org.apache.avro:avro</include>
                   <include>joda-time:joda-time</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
-                  <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
 
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>

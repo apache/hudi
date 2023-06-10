@@ -56,8 +56,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * @param metadata commit metadata of interest.
    */
   protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
-    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
-        metadata, instantTime, table.isTableServiceAction(actionType, instantTime)));
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
   }
 
   /**

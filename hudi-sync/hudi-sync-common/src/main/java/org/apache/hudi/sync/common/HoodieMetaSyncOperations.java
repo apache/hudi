@@ -33,6 +33,8 @@ public interface HoodieMetaSyncOperations {
 
   String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
 
+  String HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC = "last_commit_completion_time_sync";
+
   /**
    * Create the table.
    *
@@ -176,6 +178,13 @@ public interface HoodieMetaSyncOperations {
    * Get the timestamp of last sync.
    */
   default Option<String> getLastCommitTimeSynced(String tableName) {
+    return Option.empty();
+  }
+
+  /**
+   * Get the commit completion time of last sync
+   */
+  default Option<String> getLastCommitCompletionTimeSynced(String tableName) {
     return Option.empty();
   }
 

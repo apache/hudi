@@ -98,6 +98,8 @@
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+    <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+    <fasterxml.jackson.datatype.jsr310.module/>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.8.0</kafka.spark3.version>
     <pulsar.version>2.8.1</pulsar.version>
@@ -159,6 +161,7 @@
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.3</spark32.version>
     <spark33.version>3.3.1</spark33.version>
+    <spark34.version>3.4.0</spark34.version>
     <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -395,7 +398,6 @@
               <rules>
                 <bannedDependencies>
                   <excludes>
-                    <exclude>org.slf4j:slf4j-log4j12</exclude>
                     <exclude>org.sl4fj:slf4j-simple</exclude>
                     <exclude>org.sl4fj:slf4j-jdk14</exclude>
                     <exclude>org.sl4fj:slf4j-nop</exclude>
@@ -850,6 +852,12 @@
       <dependency>
         <groupId>com.fasterxml.jackson.datatype</groupId>
         <artifactId>jackson-datatype-guava</artifactId>
+        <version>${fasterxml.version}</version>
+      </dependency>
+      <!-- This one is necessary to support Java 8 Date/Time types (required for Jackson >= 2.13) -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
         <version>${fasterxml.version}</version>
       </dependency>
       <dependency>
@@ -2154,6 +2162,7 @@
         <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <fasterxml.jackson.datatype.jsr310.module>jackson-datatype-jsr310</fasterxml.jackson.datatype.jsr310.module>
         <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
@@ -2187,6 +2196,7 @@
         <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <fasterxml.jackson.datatype.jsr310.module>jackson-datatype-jsr310</fasterxml.jackson.datatype.jsr310.module>
         <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>false</skipITs>
@@ -2211,45 +2221,57 @@
       </activation>
     </profile>
 
-    <!-- "spark3" is an alias for "spark3.3" -->
+    <!-- "spark3" is an alias for "spark3.4" -->
     <!-- NOTE: This profile is deprecated and soon will be removed -->
     <profile>
       <id>spark3</id>
       <properties>
-        <spark3.version>${spark33.version}</spark3.version>
+        <spark3.version>${spark34.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
-        <scala12.version>2.12.15</scala12.version>
+        <scala12.version>2.12.17</scala12.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
-        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.4.x</hudi.spark.module>
         <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
+        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.2</parquet.version>
-        <orc.spark.version>1.7.8</orc.spark.version>
+        <parquet.version>1.12.3</parquet.version>
+        <orc.spark.version>1.8.3</orc.spark.version>
         <avro.version>1.11.1</avro.version>
-        <antlr.version>4.8</antlr.version>
-        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
+        <antlr.version>4.9.3</antlr.version>
+        <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
+        <log4j2.version>2.19.0</log4j2.version>
+        <slf4j.version>2.0.6</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.4.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
         <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
       <activation>
         <property>
           <name>spark3</name>
@@ -2282,6 +2304,8 @@
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
@@ -2322,6 +2346,8 @@
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
@@ -2363,6 +2389,8 @@
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
@@ -2408,6 +2436,8 @@
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
@@ -2420,6 +2450,63 @@
       <activation>
         <property>
           <name>spark3.3</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>spark3.4</id>
+      <properties>
+        <spark3.version>${spark34.version}</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>3.4</sparkbundle.version>
+        <scala12.version>2.12.17</scala12.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3.4.x</hudi.spark.module>
+        <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
+        <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
+        <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
+        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
+        <kafka.version>${kafka.spark3.version}</kafka.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.12.3</parquet.version>
+        <orc.spark.version>1.8.3</orc.spark.version>
+        <avro.version>1.11.1</avro.version>
+        <antlr.version>4.9.3</antlr.version>
+        <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <!-- NOTE: By default we're not including JSR310 module for Jackson since Spark >= 3.x is bundling it anyway -->
+        <fasterxml.jackson.datatype.jsr310.module/>
+        <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
+        <log4j2.version>2.19.0</log4j2.version>
+        <slf4j.version>2.0.6</slf4j.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark3.4.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
+      </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <activation>
+        <property>
+          <name>spark3.4</name>
         </property>
       </activation>
     </profile>

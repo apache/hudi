@@ -42,6 +42,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 
@@ -221,20 +223,33 @@ public class TimelineUtils {
    *
    * @param metaClient                {@link HoodieTableMetaClient} instance.
    * @param exclusiveStartInstantTime Start instant time (exclusive).
+   * @param lastMaxCompletionTime     Last commit max completion time synced
    * @return Hudi timeline.
    */
   public static HoodieTimeline getCommitsTimelineAfter(
-      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieDefaultTimeline timeline =
-        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
-            ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
-            .mergeTimeline(activeTimeline)
-            : activeTimeline;
-    return timeline.getCommitsTimeline()
+      HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
+    HoodieDefaultTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    HoodieDefaultTimeline timeline = activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+        ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(activeTimeline)
+        : activeTimeline;
+
+    HoodieDefaultTimeline timelineSinceLastSync = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+
+    if (lastMaxCompletionTime.isPresent()) {
+      // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
+      HoodieDefaultTimeline hollowInstantsTimeline = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
+          .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
+          .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
+      if (!hollowInstantsTimeline.empty()) {
+        return timelineSinceLastSync.mergeTimeline(hollowInstantsTimeline);
+      }
+    }
+
+    return timelineSinceLastSync;
   }
-  
+
   /**
    * Returns the commit metadata of the given instant.
    *
