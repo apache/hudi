@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -43,17 +42,20 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
-import org.apache.spark.sql.execution.PartitionIdPassthrough;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 
@@ -220,6 +222,32 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       return recordIndexInfo.entrySet().stream()
           .filter(e -> HoodieIndexUtils.checkIfValidCommit(commitsTimeline, e.getValue().getInstantTime()))
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
+    }
+  }
+
+  /**
+   * A dummy partitioner for use with records whose partition ids have been pre-computed (i.e. for
+   * use on RDDs of (Int, Row) pairs where the Int is a partition id in the expected range).
+   *
+   * NOTE: This is a workaround for SPARK-39391, which moved the PartitionIdPassthrough from
+   * {@link org.apache.spark.sql.execution.ShuffledRowRDD} to {@link Partitioner}.
+   */
+  private class PartitionIdPassthrough extends Partitioner {
+
+    private final int numPartitions;
+
+    public PartitionIdPassthrough(int numPartitions) {
+      this.numPartitions = numPartitions;
+    }
+
+    @Override
+    public int numPartitions() {
+      return numPartitions;
+    }
+
+    @Override
+    public int getPartition(Object key) {
+      return (int) key;
     }
   }
 }
