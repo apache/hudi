@@ -106,21 +106,6 @@ public class HoodieSyncConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
-  public static final ConfigProperty<Boolean> META_SYNC_PARTITION_INDEX_FIELDS_ENABLE = ConfigProperty
-      .key("hoodie.datasource.hive_sync.partition_index_fields.enable")
-      .defaultValue(false)
-      .sinceVersion("0.14.0")
-      .withDocumentation("Enable aws glue partition index feature, to speedup partition based query pattern");
-
-  public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
-      .key("hoodie.datasource.hive_sync.partition_index_fields")
-      .defaultValue("")
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
-          .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
-      .sinceVersion("0.14.0")
-      .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by comma.",
-          "By default, when the feature is enabled, all the partition will be indexed.",
-          "You can create up to three indexes, separate them by semicolon. Eg: col1,col2,col3;col2;col3"));
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
