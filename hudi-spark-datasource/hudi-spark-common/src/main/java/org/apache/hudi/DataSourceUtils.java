@@ -251,22 +251,22 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass, HoodieRecordLocation recordLocation) throws IOException {
+      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
 
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
-    if (recordLocation != null) {
-      record.setCurrentLocation(recordLocation);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
     }
     return record;
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass, HoodieRecordLocation recordLocation) throws IOException {
+                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
-    if (recordLocation != null) {
-      record.setCurrentLocation(recordLocation);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
     }
     return record;
   }

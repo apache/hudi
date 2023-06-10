@@ -77,7 +77,6 @@ import java.util.function.BiConsumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 
 object HoodieSparkSqlWriter {
 
@@ -1194,9 +1193,9 @@ object HoodieSparkSqlWriter {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
+                config.getString(PAYLOAD_CLASS_NAME), recordLocation)
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, config.getString(PAYLOAD_CLASS_NAME), recordLocation.getOrElse(null))
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, config.getString(PAYLOAD_CLASS_NAME), recordLocation)
             }
             hoodieRecord
           }
@@ -1231,7 +1230,7 @@ object HoodieSparkSqlWriter {
 
             val finalRow = finalStructTypeRowWriter(sourceRow)
             var hoodieSparkRecord = new HoodieSparkRecord(hoodieKey, finalRow, dataFileStructType, false)
-            if (recordLocation.getOrElse(null) != null) {
+            if (recordLocation.isDefined) {
               hoodieSparkRecord.setCurrentLocation(recordLocation.get)
             }
             hoodieSparkRecord

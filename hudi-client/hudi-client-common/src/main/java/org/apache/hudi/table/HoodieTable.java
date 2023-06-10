@@ -220,8 +220,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
 
   /**
-   * Delete records from Hoodie table, with same keys as that specified in input records, at the supplied instantTime. {@link HoodieKey}s
-   * will be de-duped and non-existent keys will be removed before deleting.
+   * Delete records from Hoodie table, with same keys as that of input records, at the supplied instantTime. {@link HoodieKey}s.
    *
    * @param context    HoodieEngineContext
    * @param instantTime Instant Time for the action
@@ -232,9 +231,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   /**
    * Deletes all data of partitions.
-   * @param context    HoodieEngineContext
+   * @param context HoodieEngineContext
    * @param instantTime Instant Time for the action
-   * @param partitions   {@link List} of partition to be deleted
+   * @param partitions {@link List} of partition to be deleted
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
