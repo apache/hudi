@@ -1119,7 +1119,8 @@ object HoodieSparkSqlWriter {
     val autoGenerateRecordKeys : Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
     val shouldCombine = if (WriteOperationType.isInsert(operation)) {
-      parameters.getOrElse(
+      parameters(INSERT_DROP_DUPS.key()).toBoolean ||
+        parameters.getOrElse(
             HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
             HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
           ).toBoolean
