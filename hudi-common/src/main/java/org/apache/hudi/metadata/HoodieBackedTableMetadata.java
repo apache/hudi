@@ -20,9 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.avro.model.HoodieRestoreMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -37,10 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -50,7 +44,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
@@ -67,7 +60,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -83,7 +75,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -469,37 +460,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Pair.of(baseFileReader, baseFileOpenMs);
   }
 
-  private Set<String> getValidInstantTimestamps() {
-    // Only those log files which have a corresponding completed instant on the dataset should be read
-    // This is because the metadata table is updated before the dataset instants are committed.
-    HoodieActiveTimeline datasetTimeline = dataMetaClient.getActiveTimeline();
-    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
-
-    // We should also add completed indexing delta commits in the metadata table, as they do not
-    // have corresponding completed instant in the data table
-    validInstantTimestamps.addAll(
-        metadataMetaClient.getActiveTimeline()
-            .filter(instant -> instant.isCompleted() && isIndexingCommit(instant.getTimestamp()))
-            .getInstants().stream()
-            .map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toList()));
-
-    // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
-    // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
-    // instant which we have a log block for.
-    final String earliestInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
-    datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
-        .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, earliestInstantTime))
-        .forEach(instant -> {
-          validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline));
-        });
-
-    // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(SOLO_COMMIT_TIMESTAMP);
-    return validInstantTimestamps;
-  }
-
   public Pair<HoodieMetadataLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
                                                                        String partitionName,
                                                                        Option<Boolean> allowFullScanOverride) {
@@ -511,7 +471,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
-    Set<String> validInstantTimestamps = getValidInstantTimestamps();
+    Set<String> validInstantTimestamps = HoodieTableMetadataUtil
+        .getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
 
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
@@ -556,46 +517,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       case PARTITION_NAME_BLOOM_FILTERS:
       default:
         return false;
-    }
-  }
-
-  /**
-   * Returns a list of commits which were rolled back as part of a Rollback or Restore operation.
-   *
-   * @param instant  The Rollback operation to read
-   * @param timeline instant of timeline from dataset.
-   */
-  private List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline) {
-    try {
-      List<String> commitsToRollback = null;
-      if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
-        try {
-          HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-              timeline.getInstantDetails(instant).get());
-          commitsToRollback = rollbackMetadata.getCommitsRollback();
-        } catch (IOException e) {
-          // if file is empty, fetch the commits to rollback from rollback.requested file
-          HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-              timeline.readRollbackInfoAsBytes(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
-                  instant.getTimestamp())).get(), HoodieRollbackPlan.class);
-          commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
-          LOG.warn("Had to fetch rollback info from requested instant since completed file is empty " + instant.toString());
-        }
-        return commitsToRollback;
-      }
-
-      List<String> rollbackedCommits = new LinkedList<>();
-      if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
-        // Restore is made up of several rollbacks
-        HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-            timeline.getInstantDetails(instant).get());
-        restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
-          rms.forEach(rm -> rollbackedCommits.addAll(rm.getCommitsRollback()));
-        });
-      }
-      return rollbackedCommits;
-    } catch (IOException e) {
-      throw new HoodieMetadataException("Error retrieving rollback commits for instant " + instant, e);
     }
   }
 

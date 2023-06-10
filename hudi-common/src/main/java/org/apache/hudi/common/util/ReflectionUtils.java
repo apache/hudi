@@ -83,19 +83,40 @@ public class ReflectionUtils {
   }
 
   /**
-   * Check if the clazz has the target constructor or not.
+   * Check if the clazz has the target constructor or not, without throwing warn-level log.
    *
-   * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
-   * due to the instantiation's own logic or missing constructor.
-   *
-   * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
+   * @param clazz               Class name.
+   * @param constructorArgTypes Argument types of the constructor.
+   * @return
    */
   public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
+    return hasConstructor(clazz, constructorArgTypes, true);
+  }
+
+  /**
+   * Check if the clazz has the target constructor or not.
+   * <p>
+   * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
+   * due to the instantiation's own logic or missing constructor.
+   * <p>
+   * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
+   *
+   * @param clazz               Class name.
+   * @param constructorArgTypes Argument types of the constructor.
+   * @param silenceWarning      {@code true} to use debug-level logging; otherwise, use warn-level logging.
+   * @return {@code true} if the constructor exists; {@code false} otherwise.
+   */
+  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes, boolean silenceWarning) {
     try {
       getClass(clazz).getConstructor(constructorArgTypes);
       return true;
     } catch (NoSuchMethodException e) {
-      LOG.warn("Unable to instantiate class " + clazz, e);
+      String message = "Unable to instantiate class " + clazz;
+      if (silenceWarning) {
+        LOG.debug(message, e);
+      } else {
+        LOG.warn(message, e);
+      }
       return false;
     }
   }

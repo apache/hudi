@@ -374,7 +374,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
-  /***
+  /**
    * @return A list of relative partition paths of all partitions.
    * @throws IOException upon error.
    */
@@ -486,7 +486,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Helper to convert file-status to log-files.
    *
-   * @param statuses List of FIle-Status
+   * @param statuses List of File-Status
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {

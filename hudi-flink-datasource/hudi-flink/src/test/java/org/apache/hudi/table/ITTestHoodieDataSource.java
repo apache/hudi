@@ -1362,11 +1362,10 @@ public class ITTestHoodieDataSource {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, 3);
-    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 4);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 2);
+    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, 4);
+    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 5);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 3);
     conf.setString("hoodie.commits.archival.batch", "1");
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
 
     // write 10 batches of data set
     for (int i = 0; i < 20; i += 2) {
@@ -1380,7 +1379,6 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.READ_START_COMMIT, secondArchived)
-        .option(FlinkOptions.METADATA_ENABLED, false)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -1950,6 +1948,60 @@ public class ITTestHoodieDataSource {
     // stop the streaming query and get data
     List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 10);
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
+  }
+
+  @ParameterizedTest
+  @MethodSource("indexAndTableTypeParams")
+  void testUpdateDelete(String indexType, HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    // update EQ(IN)
+    final String update1 = "update t1 set age=18 where uuid in('id1', 'id2')";
+
+    execInsertSql(tableEnv, update1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<RowData> expected1 = TestData.update(TestData.DATA_SET_SOURCE_INSERT, 2, 18, 0, 1);
+    assertRowsEquals(result1, expected1);
+
+    // update GT(>)
+    final String update2 = "update t1 set age=19 where uuid > 'id5'";
+
+    execInsertSql(tableEnv, update2);
+
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<RowData> expected2 = TestData.update(expected1, 2, 19, 5, 6, 7);
+    assertRowsEquals(result2, expected2);
+
+    // delete EQ(=)
+    final String update3 = "delete from t1 where uuid = 'id1'";
+
+    execInsertSql(tableEnv, update3);
+
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<RowData> expected3 = TestData.delete(expected2, 0);
+    assertRowsEquals(result3, expected3);
+
+    // delete LTE(<=)
+    final String update4 = "delete from t1 where uuid <= 'id5'";
+
+    execInsertSql(tableEnv, update4);
+
+    List<Row> result4 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<RowData> expected4 = TestData.delete(expected3, 0, 1, 2, 3);
+    assertRowsEquals(result4, expected4);
   }
 
   // -------------------------------------------------------------------------

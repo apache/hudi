@@ -54,6 +54,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFileSystemView.class);
 
+  //TODO: [HUDI-6249] change the maps below to implement ConcurrentMap
+  
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
 
@@ -63,7 +65,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
 
   /**
-   * PartitionPath + File-Id to pending compaction instant time.
+   * PartitionPath + File-Id to pending logcompaction instant time.
    */
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingLogCompaction;
 
@@ -145,27 +147,25 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
-    return fileIdToPendingCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingCompaction);
   }
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingLogCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingLogCompaction) {
-    return fileIdToPendingLogCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingLogCompaction);
   }
 
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
-    return fileGroupIdBootstrapBaseFileMap;
+    return new ConcurrentHashMap<>(fileGroupIdBootstrapBaseFileMap);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
-    return replacedFileGroupsMap;
+    return new ConcurrentHashMap<>(replacedFileGroups);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
-    Map<HoodieFileGroupId, HoodieInstant> fgInpendingClustering = new ConcurrentHashMap<>(fileGroupsInClustering);
-    return fgInpendingClustering;
+    return new ConcurrentHashMap<>(fileGroupsInClustering);
   }
 
   /**

@@ -104,6 +104,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -138,6 +139,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      testTable.updateFilesPartitionInTableConfig();
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -1460,7 +1462,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         // later on without archival or compaction
         assertEquals(i + 1, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000000000000")));
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, SOLO_COMMIT_TIMESTAMP + "010")));
         IntStream.range(1, i + 1).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
@@ -1499,9 +1501,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
       } else if (i == 15) {
-        // Only delta commits "00000008" till "00000015" are in the active timeline
-        assertEquals(8, metadataTableInstants.size());
-        assertFalse(metadataTableInstants.contains(
+        // Only delta commits "00000008" till "00000015" are in the active timeline + 007001 for compaction.
+        assertEquals(9, metadataTableInstants.size());
+        assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
         IntStream.range(8, 16).forEach(j ->
             assertTrue(metadataTableInstants.contains(

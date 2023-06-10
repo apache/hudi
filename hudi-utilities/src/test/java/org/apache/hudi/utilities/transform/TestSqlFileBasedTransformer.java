@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.spark.sql.Dataset;
@@ -101,7 +101,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         "hoodie.deltastreamer.transformer.sql.file",
         UtilitiesTestBase.basePath + "/non-exist-sql-file.sql");
     assertThrows(
-        HoodieIOException.class,
+        HoodieTransformException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
   }
 

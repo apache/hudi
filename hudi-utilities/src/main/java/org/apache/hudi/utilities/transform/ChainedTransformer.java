@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,7 +47,7 @@ public class ChainedTransformer implements Transformer {
   // Delimiter used to separate class name and the property key suffix. The suffix comes first.
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
-  private final List<TransformerInfo> transformers;
+  protected final List<TransformerInfo> transformers;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
@@ -72,7 +73,7 @@ public class ChainedTransformer implements Transformer {
       } else {
         String[] splits = configuredTransformer.split(ID_TRANSFORMER_CLASS_NAME_DELIMITER);
         if (splits.length > 2) {
-          throw new IllegalArgumentException("There should only be one colon in a configured transformer");
+          throw new HoodieTransformPlanException("There should only be one colon in a configured transformer");
         }
         String id = splits[0];
         validateIdentifier(id, identifiers, configuredTransformer);
@@ -80,10 +81,10 @@ public class ChainedTransformer implements Transformer {
         transformers.add(new TransformerInfo(transformer, id));
       }
     }
-
-    ValidationUtils.checkArgument(transformers.stream().allMatch(TransformerInfo::hasIdentifier)
-            || transformers.stream().noneMatch(TransformerInfo::hasIdentifier),
-        "Either all transformers should have identifier or none should");
+    if (!(transformers.stream().allMatch(TransformerInfo::hasIdentifier)
+        || transformers.stream().noneMatch(TransformerInfo::hasIdentifier))) {
+      throw new HoodieTransformPlanException("Either all transformers should have identifier or none should");
+    }
   }
 
   public List<String> getTransformersNames() {
@@ -95,21 +96,23 @@ public class ChainedTransformer implements Transformer {
     Dataset<Row> dataset = rowDataset;
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties));
+      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
     }
     return dataset;
   }
 
   private void validateIdentifier(String id, Set<String> identifiers, String configuredTransformer) {
-    ValidationUtils.checkArgument(StringUtils.nonEmpty(id), String.format("Transformer identifier is empty for %s", configuredTransformer));
+    if (StringUtils.isNullOrEmpty(id)) {
+      throw new HoodieTransformPlanException(String.format("Transformer identifier is empty for %s", configuredTransformer));
+    }
     if (identifiers.contains(id)) {
-      throw new IllegalArgumentException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
+      throw new HoodieTransformPlanException(String.format("Duplicate identifier %s found for transformer %s", id, configuredTransformer));
     } else {
       identifiers.add(id);
     }
   }
 
-  private static class TransformerInfo {
+  protected static class TransformerInfo {
     private final Transformer transformer;
     private final Option<String> idOpt;
 
@@ -123,7 +126,7 @@ public class ChainedTransformer implements Transformer {
       this.idOpt = Option.empty();
     }
 
-    private Transformer getTransformer() {
+    protected Transformer getTransformer() {
       return transformer;
     }
 
@@ -131,7 +134,10 @@ public class ChainedTransformer implements Transformer {
       return idOpt.isPresent();
     }
 
-    private TypedProperties getProperties(TypedProperties properties) {
+    protected TypedProperties getProperties(TypedProperties properties, List<TransformerInfo> transformers) {
+      Set<String> transformerIds = transformers.stream().map(transformerInfo -> transformerInfo.idOpt.orElse(null))
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
       TypedProperties transformerProps = properties;
       if (idOpt.isPresent()) {
         // Transformer specific property keys end with the id associated with the transformer.
@@ -142,8 +148,12 @@ public class ChainedTransformer implements Transformer {
         Map<String, Object> overrideKeysMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
           String key = (String) entry.getKey();
-          if (key.endsWith("." + id)) {
+          String keyId = key.replaceAll(".*\\.", "");
+          if (keyId.equals(id)) {
             overrideKeysMap.put(key.substring(0, key.length() - (id.length() + 1)), entry.getValue());
+          }
+          if (transformerIds.contains(keyId)) {
+            transformerProps.remove(key);
           }
         }
         transformerProps.putAll(overrideKeysMap);

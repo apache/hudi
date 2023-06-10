@@ -99,6 +99,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -715,19 +716,24 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         return;
       }
 
-      // we are not including log appends here, since they are already fail-safe.
-      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
-      Set<String> validDataPaths = stats.stream()
+      // we are not including log appends for update here, since they are already fail-safe.
+      // but log files created is included
+      Set<String> invalidFilePaths = getInvalidDataPaths(markers);
+      Set<String> validFilePaths = stats.stream()
           .map(HoodieWriteStat::getPath)
-          .filter(p -> p.endsWith(this.getBaseFileExtension()))
+          .collect(Collectors.toSet());
+      Set<String> validCdcFilePaths = stats.stream()
+          .map(HoodieWriteStat::getCdcStats)
+          .filter(Objects::nonNull)
+          .flatMap(cdcStat -> cdcStat.keySet().stream())
           .collect(Collectors.toSet());
 
       // Contains list of partially created files. These needs to be cleaned up.
-      invalidDataPaths.removeAll(validDataPaths);
-
-      if (!invalidDataPaths.isEmpty()) {
-        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
-        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
+      invalidFilePaths.removeAll(validFilePaths);
+      invalidFilePaths.removeAll(validCdcFilePaths);
+      if (!invalidFilePaths.isEmpty()) {
+        LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidFilePaths);
+        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidFilePaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 

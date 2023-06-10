@@ -109,4 +109,25 @@ public class HoodieColumnProjectionUtils {
         .collect(Collectors.toList());
   }
 
+  /**
+   * If schema contains timestamp columns, this method is used for compatibility when there is no timestamp fields.
+   *
+   * <p>We expect 3 cases to use parquet-avro reader {@link org.apache.hudi.hadoop.avro.HoodieAvroParquetReader} to read timestamp column:
+   *
+   * <ol>
+   *   <li>Read columns contain timestamp type;</li>
+   *   <li>Empty original columns;</li>
+   *   <li>Empty read columns but existing original columns contain timestamp type.</li>
+   * </ol>
+   */
+  public static boolean supportTimestamp(Configuration conf) {
+    List<String> readCols = Arrays.asList(getReadColumnNames(conf));
+    if (readCols.isEmpty()) {
+      return getIOColumnTypes(conf).contains("timestamp");
+    }
+    List<String> names = getIOColumns(conf);
+    List<String> types = getIOColumnTypes(conf);
+    return types.isEmpty() || IntStream.range(0, names.size()).filter(i -> readCols.contains(names.get(i)))
+        .anyMatch(i -> types.get(i).equals("timestamp"));
+  }
 }

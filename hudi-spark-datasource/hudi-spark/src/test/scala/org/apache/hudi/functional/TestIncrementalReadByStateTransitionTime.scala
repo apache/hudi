@@ -80,7 +80,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
       .setLoadActiveTimelineOnLoad(true)
       .build()
 
-    val firstInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsOrderedByStateTransitionTs
+    val firstInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsOrderedByStateTransitionTime
       .findFirst().get()
 
     val result1 = spark.read.format("org.apache.hudi")

@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.table.HoodieSparkTable
@@ -37,7 +37,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
@@ -88,7 +88,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsTimelineToReturn = {
     if (useStateTransitionTime) {
-      commitTimeline.findInstantsInRangeByStateTransitionTs(
+      commitTimeline.findInstantsInRangeByStateTransitionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
     } else {
@@ -261,15 +261,25 @@ class IncrementalRelation(val sqlContext: SQLContext,
             }
 
             if (regularFileIdToFullPath.nonEmpty) {
-              df = df.union(sqlContext.read.options(sOpts)
-                .schema(usedSchema).format(formatClassName)
-                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
-                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
-                .load(filteredRegularFullPaths.toList: _*)
-                .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                  commitsToReturn.head.getTimestamp))
-                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                  commitsToReturn.last.getTimestamp)))
+              try {
+                df = df.union(sqlContext.read.options(sOpts)
+                  .schema(usedSchema).format(formatClassName)
+                  // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                  .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
+                  .load(filteredRegularFullPaths.toList: _*)
+                  .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                    commitsToReturn.head.getTimestamp))
+                  .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                    commitsToReturn.last.getTimestamp)))
+              } catch {
+                case e : AnalysisException =>
+                  if (e.getMessage.contains("Path does not exist")) {
+                    throw new HoodieIncrementalPathNotFoundException(e)
+                  } else {
+                    throw e
+                  }
+              }
+
             }
             df
           }

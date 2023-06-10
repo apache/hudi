@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -404,12 +405,24 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
        * Need to perform getMessage().contains since the exception coming
        * from {@link org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DeltaSyncService} gets wrapped many times into RuntimeExceptions.
        */
-      if (expectConflict && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
+      if (expectConflict && backfillFailed.get() && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
-        if (backfillFailed.get()) {
+        if (!continuousFailed.get()) {
           // if backfill job failed, shutdown the continuous job.
           LOG.warn("Calling shutdown on ingestion job since the backfill job has failed for " + jobId);
           ingestionJob.shutdownGracefully();
+        } else {
+          // both backfill and ingestion job cannot fail.
+          throw new HoodieException("Both backfilling and ingestion job failed ", e);
+        }
+      } else if (expectConflict && continuousFailed.get() && e.getCause().getMessage().contains("Ingestion service was shut down with exception")) {
+        // incase of regular ingestion job failing, ConcurrentModificationException is not throw all the way.
+        if (!backfillFailed.get()) {
+          LOG.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for " + jobId);
+          backfillJob.shutdownGracefully();
+        } else {
+          // both backfill and ingestion job cannot fail.
+          throw new HoodieException("Both backfilling and ingestion job failed ", e);
         }
       } else {
         LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());

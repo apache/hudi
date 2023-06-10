@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.spark.sql.catalyst.analysis.Analyzer
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
@@ -29,6 +30,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
   test("Test Create/Drop/Show/Refresh Index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
+        val databaseName = "default"
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         spark.sql(
@@ -56,11 +58,11 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
         var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
         var resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertResult(s"`default`.`$tableName`")(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table.identifier.quotedString)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
         logicalPlan = sqlParser.parsePlan(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertResult(s"`default`.`$tableName`")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table.identifier.quotedString)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
         assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
         assertResult("lucene")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
         assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
@@ -68,7 +70,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
         logicalPlan = sqlParser.parsePlan(s"create index if not exists idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertResult(s"`default`.`$tableName`")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table.identifier.quotedString)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
         assertResult("idx_price")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
         assertResult("lucene")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
         assertResult(Map("order" -> "desc"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].columns.head._2)
@@ -76,10 +78,17 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
         logicalPlan = sqlParser.parsePlan(s"drop index if exists idx_name on $tableName")
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertResult(s"`default`.`$tableName`")(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].table.identifier.quotedString)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].table, databaseName, tableName)
         assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].indexName)
         assertResult(true)(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].ignoreIfNotExists)
       }
     }
+  }
+
+  private def assertTableIdentifier(catalogTable: CatalogTable,
+                                    expectedDatabaseName: String,
+                                    expectedTableName: String): Unit = {
+    assertResult(Some(expectedDatabaseName))(catalogTable.identifier.database)
+    assertResult(expectedTableName)(catalogTable.identifier.table)
   }
 }

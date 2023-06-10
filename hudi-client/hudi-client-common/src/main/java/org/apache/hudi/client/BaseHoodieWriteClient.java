@@ -354,7 +354,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata);
     } else {
       context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-      table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, false));
+      table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime));
     }
   }
 
@@ -581,6 +581,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void runAnyPendingCompactions() {
     tableServiceClient.runAnyPendingCompactions(createTable(config, hadoopConf));
+  }
+
+  /**
+   * Run any pending log compactions.
+   */
+  public void runAnyPendingLogCompactions() {
+    tableServiceClient.runAnyPendingLogCompactions(createTable(config, hadoopConf));
   }
 
   /**
@@ -1057,7 +1064,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
-  /***
+  /**
    * Schedules compaction inline.
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
@@ -1152,7 +1159,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
    */
-  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
@@ -1160,9 +1167,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
-      if (initialMetadataTableIfNecessary) {
-        initMetadataTable(instantTime);
-      }
+      initMetadataTable(instantTime);
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
@@ -1175,6 +1180,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void initMetadataTable(Option<String> instantTime) {
     // by default do nothing.
+  }
+
+  // TODO: this method will be removed with restore/rollback changes  in MDT
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initMetadataTable) {
+    return initTable(operationType, instantTime);
   }
 
   /**
@@ -1190,14 +1200,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *   <li>Initializing metrics contexts</li>
    * </ul>
    */
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }
 
-    doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
+    doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, hadoopConf, metaClient);
 
     // Validate table properties
@@ -1223,10 +1233,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     return table;
-  }
-
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
-    return initTable(operationType, instantTime, config.isMetadataTableEnabled());
   }
 
   /**

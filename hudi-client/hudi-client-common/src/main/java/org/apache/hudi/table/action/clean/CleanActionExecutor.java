@@ -95,12 +95,12 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       String partitionPath = partitionDelFileTuple.getLeft();
       Path deletePath = new Path(partitionDelFileTuple.getRight().getFilePath());
       String deletePathStr = deletePath.toString();
-      Boolean deletedFileResult = null;
+      boolean deletedFileResult = false;
       try {
         deletedFileResult = deleteFileAndGetResult(fs, deletePathStr);
 
       } catch (IOException e) {
-        LOG.error("Delete file failed: " + deletePathStr);
+        LOG.error("Delete file failed: " + deletePathStr, e);
       }
       final PartitionCleanStat partitionCleanStat =
           partitionCleanStatMap.computeIfAbsent(partitionPath, k -> new PartitionCleanStat(partitionPath));
@@ -247,7 +247,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         // we should not affect original clean logic. Swallow exception and log warn.
         LOG.warn("failed to clean old history schema");
       }
-      pendingCleanInstants.forEach(hoodieInstant -> {
+
+      for (HoodieInstant hoodieInstant : pendingCleanInstants) {
         if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
         } else {
@@ -256,13 +257,14 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
             cleanMetadataList.add(runPendingClean(table, hoodieInstant));
           } catch (Exception e) {
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+            throw e;
           }
         }
         table.getMetaClient().reloadActiveTimeline();
         if (config.isMetadataTableEnabled()) {
           table.getHoodieView().sync();
         }
-      });
+      }
     }
 
     // return the last clean metadata for now

@@ -19,8 +19,8 @@
 EXAMPLES_DIR="$(dirname $(dirname "${BASH_SOURCE[0]}"))"
 PROJECT_DIR="$(dirname ${EXAMPLES_DIR})"
 
-JAR_FILE=`ls ${PROJECT_DIR}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_*.jar | grep -v sources | grep -v tests.jar`
-EXAMPLES_JARS=`ls ${PROJECT_DIR}/hudi-examples/target/hudi-examples-*.jar | grep -v sources | grep -v tests.jar`
+JAR_FILE=`ls ${PROJECT_DIR}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_*.jar | grep -v sources | grep -v javadoc | grep -v tests.jar`
+EXAMPLES_JARS=`ls ${PROJECT_DIR}/hudi-examples/target/hudi-examples-*.jar | grep -v sources | grep -v javadoc | grep -v tests.jar`
 
 if [ -z "${SPARK_MASTER}" ]; then
   SPARK_MASTER="yarn-cluster"
