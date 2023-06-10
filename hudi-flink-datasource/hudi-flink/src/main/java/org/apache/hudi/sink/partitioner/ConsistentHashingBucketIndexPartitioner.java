@@ -18,24 +18,18 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
-import org.apache.hudi.index.bucket.ConsistentBucketIndexHelper;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.FlinkTables;
 
 import org.apache.flink.api.common.functions.Partitioner;
-import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +45,7 @@ import java.util.Map;
  *
  * @param <T> The type of obj to hash
  */
-public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T>, CheckpointListener {
+public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentHashingBucketIndexPartitioner.class);
 
@@ -59,10 +53,8 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
   protected final List<String> indexKeyFields;
   private final int bucketNum;
   private Map<String, ConsistentBucketIdentifier> partitionToBucketIdentifier;
-  private transient boolean initialized = false;
-  private transient String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
-  private transient HoodieTableMetaClient metaClient;
-  private transient HoodieFlinkWriteClient writeClient;
+  private transient boolean initialized;
+  private transient HoodieTable<?, ?, ?, ?> table;
 
   public ConsistentHashingBucketIndexPartitioner(Configuration conf) {
     this.config = conf;
@@ -72,8 +64,7 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
 
   private void initialize() {
     try {
-      this.metaClient = StreamerUtil.createMetaClient(this.config);
-      this.writeClient = FlinkWriteClients.createWriteClient(this.config);
+      this.table = FlinkTables.createTable(this.config);
       this.partitionToBucketIdentifier = new HashMap<>();
       this.initialized = true;
     } catch (Exception e) {
@@ -98,29 +89,9 @@ public class ConsistentHashingBucketIndexPartitioner<T extends HoodieKey> implem
       // NOTE: If the metadata does not exist, there maybe concurrent creation of the metadata. And we allow multiple partitioner
       // trying to create the same metadata as the initial metadata always has the same content for the same partition.
       HoodieConsistentHashingMetadata metadata =
-          ConsistentBucketIndexHelper.loadOrCreateMetadata(writeClient.getHoodieTable(), p, bucketNum);
+          ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, p, bucketNum);
       ValidationUtils.checkState(metadata != null);
       return new ConsistentBucketIdentifier(metadata);
     });
-  }
-
-  /**
-   * Clear up cached bucket identifier if necessary (i.e., resizing happens).
-   *
-   * NOTE: There will be a windows where the partitioner may use outdated identifier (New metadata is
-   *  generated async in coordinator). This does not affect the correctness, because the final file
-   *  path where the records written to is determined by writers. And writers will always use the
-   *  newest identifier during flushing.
-   */
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) throws Exception {
-    Option<HoodieInstant> latestReplaceInstant =  metaClient.reloadActiveTimeline()
-        .filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
-    if (latestReplaceInstant.isPresent() && latestReplaceInstant.get().getTimestamp().compareTo(lastRefreshInstant) > 0) {
-      LOG.info("Clear up cached hashing metadata as new replace commit is spotted, instant: {}", lastRefreshInstant);
-      // TODO Optimize it to clear only partitions affected by the concurrent replace_commits
-      this.lastRefreshInstant = latestReplaceInstant.get().getTimestamp();
-      this.partitionToBucketIdentifier.clear();
-    }
   }
 }

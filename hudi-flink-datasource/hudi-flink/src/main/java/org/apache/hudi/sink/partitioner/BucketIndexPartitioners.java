@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.partitioner;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
@@ -26,17 +27,17 @@ import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
 /**
- * A factory class for {@link Partitioner} of bucket index table.
+ * A factory class for bucket index {@link Partitioner}.
  */
-public class BucketIndexPartitionerFactory {
+public class BucketIndexPartitioners {
 
-  public static Partitioner instance(Configuration conf) {
+  public static <T extends HoodieKey> Partitioner<T> instance(Configuration conf) {
     HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
     switch (bucketIndexEngineType) {
       case SIMPLE:
-        return new BucketIndexPartitioner(conf);
+        return new BucketIndexPartitioner<>(conf);
       case CONSISTENT_HASHING:
-        return new ConsistentHashingBucketIndexPartitioner(conf);
+        return new ConsistentHashingBucketIndexPartitioner<>(conf);
       default:
         throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
     }

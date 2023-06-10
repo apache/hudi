@@ -55,24 +55,26 @@ import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHI
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTimestampFromFile;
 
 /**
- * Helper class to manage consistent bucket index metadata.
+ * Utilities class for consistent bucket index metadata management.
  */
-public class ConsistentBucketIndexHelper {
+public class ConsistentBucketIndexUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketIndexHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketIndexUtils.class);
 
   /**
-   * Load hashing metadata of the given partition, if it is not existed, create a new one (also persist it into storage).
-   * NOTE: When creating a new hashing metadata, the content will always be the same for the same partition.
+   * Loads hashing metadata of the given partition, if it does not exist, creates a new one (also persist it into storage).
+   *
+   * <p>NOTE: When creating a new hashing metadata, the content will always be the same for the same partition.
    * It means when multiple writer are trying to initialize metadata for the same partition,
    * no lock or synchronization is necessary as they are creating the file with the same content.
    *
-   * @param table      hoodie table
-   * @param partition  table partition
-   * @param numBuckets default bucket number
+   * @param table      Hoodie table
+   * @param partition  Table partition
+   * @param numBuckets Default bucket number
+   *
    * @return Consistent hashing metadata
    */
-  public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition, int numBuckets) {
+  public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable<?, ?, ?, ?> table, String partition, int numBuckets) {
     Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(table, partition);
     if (metadataOption.isPresent()) {
       return metadataOption.get();
@@ -94,13 +96,13 @@ public class ConsistentBucketIndexHelper {
   }
 
   /**
-   * Load hashing metadata of the given partition, if it is not existed, return Option.empty
+   * Loads hashing metadata of the given partition, if it does not exist, returns empty.
    *
-   * @param table     hoodie table
-   * @param partition table partition
-   * @return Consistent hashing metadata or Option.empty if it does not exist
+   * @param table     Hoodie table
+   * @param partition Table partition
+   * @return Consistent hashing metadata or empty if it does not exist
    */
-  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
+  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable<?, ?, ?, ?> table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     Path metadataPath = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), partition);
     Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition);
@@ -170,10 +172,10 @@ public class ConsistentBucketIndexHelper {
   }
 
   /**
-   * Save metadata into storage
+   * Saves the metadata into storage
    *
-   * @param metaClient hoodie meta client
-   * @param metadata   hashing metadata to be saved
+   * @param metaClient Hoodie meta client
+   * @param metadata   Hashing metadata to be saved
    * @return true if the metadata is saved successfully
    */
   public static boolean saveMetadata(HoodieTableMetaClient metaClient, HoodieConsistentHashingMetadata metadata) {
@@ -214,10 +216,10 @@ public class ConsistentBucketIndexHelper {
 
   /***
    * Creates commit marker corresponding to hashing metadata file after post commit clustering operation.
-   * @param metaClient  hoodie meta client
-   * @param fileStatus file for which commit marker should be created
-   * @param partitionPath partition path the file belongs to
-   * @throws IOException
+   *
+   * @param metaClient    Hoodie meta client
+   * @param fileStatus    File for which commit marker should be created
+   * @param partitionPath Partition path the file belongs to
    */
   private static void createCommitMarker(HoodieTableMetaClient metaClient, Path fileStatus, Path partitionPath) throws IOException {
     HoodieWrapperFileSystem fs = metaClient.getFs();
@@ -229,9 +231,10 @@ public class ConsistentBucketIndexHelper {
   }
 
   /***
-   * Loads consistent hashing metadata of table from the given meta file
-   * @param metaClient  hoodie meta client
-   * @param metaFile hashing metadata file
+   * Loads consistent hashing metadata of table from the given meta file.
+   *
+   * @param metaClient Hoodie meta client
+   * @param metaFile   Hashing metadata file
    * @return HoodieConsistentHashingMetadata object
    */
   private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTableMetaClient metaClient, FileStatus metaFile) {
@@ -251,17 +254,20 @@ public class ConsistentBucketIndexHelper {
 
   /***
    * COMMIT MARKER RECOVERY JOB.
-   * If particular hashing metadta file doesn't have commit marker then there could be a case where clustering is done but post commit marker
+   *
+   * <p>If particular hashing metadata file doesn't have commit marker then there could be a case where clustering is done but post commit marker
    * creation operation failed. In this case this method will check file group id from consistent hashing metadata against storage base file group ids.
    * if one of the file group matches then we can conclude that this is the latest metadata file.
-   * Note : we will end up calling this method if there is no marker file and no replace commit on active timeline, if replace commit is not present on
-   * active timeline that means old file group id's before clustering operation got cleaned and only new file group id's  of current clustering operation
+   *
+   * <p>Note : we will end up calling this method if there is no marker file and no replace commit on active timeline, if replace commit is not present on
+   * active timeline that means old file group id's before clustering operation got cleaned and only new file group id's of current clustering operation
    * are present on the disk.
-   * @param metaClient  hoodie meta client
-   * @param baseFileOnlyView base file view
-   * @param metaFile metadata file on which sync check needs to be performed
-   * @param partition partition metadata file belongs to
-   * @return true if hashing metadata file is latest else false
+   *
+   * @param metaClient       Hoodie meta client
+   * @param baseFileOnlyView Base file view
+   * @param metaFile         Metadata file on which sync check needs to be performed
+   * @param partition        Partition metadata file belongs to
+   * @return true if hashing metadata file is the latest else false
    */
   private static boolean recommitMetadataFile(HoodieTableMetaClient metaClient, TableFileSystemView.BaseFileOnlyView baseFileOnlyView, FileStatus metaFile, String partition) {
     Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition);

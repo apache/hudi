@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
-import org.apache.hudi.index.bucket.ConsistentBucketIndexHelper;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.utils.TimeWait;
 
@@ -96,10 +96,10 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
       TimeWait timeWait = TimeWait.builder().timeout(30000).action("consistent hashing initialize").build();
-      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexHelper.loadMetadata(this.writeClient.getHoodieTable(), p);
+      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.writeClient.getHoodieTable(), p);
       while (!metadataOption.isPresent()) {
         timeWait.waitFor();
-        metadataOption = ConsistentBucketIndexHelper.loadMetadata(this.writeClient.getHoodieTable(), p);
+        metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.writeClient.getHoodieTable(), p);
       }
       return new ConsistentBucketIdentifier(metadataOption.get());
     });

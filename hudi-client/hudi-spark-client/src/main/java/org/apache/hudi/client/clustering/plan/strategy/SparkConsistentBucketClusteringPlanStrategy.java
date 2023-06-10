@@ -39,7 +39,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
-import org.apache.hudi.index.bucket.ConsistentBucketIndexHelper;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
@@ -126,7 +126,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
    */
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
-    Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexHelper.loadMetadata(getHoodieTable(), partitionPath);
+    Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(getHoodieTable(), partitionPath);
     ValidationUtils.checkArgument(metadata.isPresent(), "Metadata is empty for partition: " + partitionPath);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
 

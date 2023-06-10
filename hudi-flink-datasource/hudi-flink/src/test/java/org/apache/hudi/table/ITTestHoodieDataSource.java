@@ -1075,36 +1075,28 @@ public class ITTestHoodieDataSource {
     String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
     tableEnv.executeSql(csvSourceDDL);
 
-    TestConfigurations.Sql sql = sql("hoodie_sink")
+    String hoodieTableDDL = sql("hoodie_sink")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "bulk_insert")
         .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
-        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
-    if (indexType.equals("CONSISTENT_BUCKET")) {
-      sql = sql.option(FlinkOptions.INDEX_TYPE, "BUCKET")
-          .option(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
-    } else {
-      sql = sql.option(FlinkOptions.INDEX_TYPE, indexType);
-    }
-    String hoodieTableDDL = sql.end();
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .end();
     tableEnv.executeSql(hoodieTableDDL);
 
     String insertInto = "insert into hoodie_sink select * from csv_source";
-    if (indexType.equals("CONSISTENT_BUCKET")) {
-      assertThrows(IllegalArgumentException.class, () -> execInsertSql(tableEnv, insertInto));
-    } else {
-      execInsertSql(tableEnv, insertInto);
-      List<Row> result1 = CollectionUtil.iterableToList(
-          () -> tableEnv.sqlQuery("select * from hoodie_sink").execute().collect());
-      assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
-      // apply filters
-      List<Row> result2 = CollectionUtil.iterableToList(
-          () -> tableEnv.sqlQuery("select * from hoodie_sink where uuid > 'id5'").execute().collect());
-      assertRowsEquals(result2, "["
-          + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
-          + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
-          + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
-    }
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from hoodie_sink").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from hoodie_sink where uuid > 'id5'").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
   @Test
@@ -2080,9 +2072,7 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", false},
             {"FLINK_STATE", true},
             {"BUCKET", false},
-            {"BUCKET", true},
-            {"CONSISTENT_BUCKET", false},
-            {"CONSISTENT_BUCKET", true}};
+            {"BUCKET", true}};
     return Stream.of(data).map(Arguments::of);
   }
 

@@ -27,13 +27,13 @@ import org.apache.hudi.sink.common.WriteOperatorFactory;
 import org.apache.flink.configuration.Configuration;
 
 /**
- * A factory class for {@link WriteOperatorFactory} for bucket index table.
+ * Factory class for {@link WriteOperatorFactory} with bucket index.
  */
-public class BucketStreamWriteOperatorFactory {
+public class BucketStreamWriteOperatorFactories {
 
   public static <I> WriteOperatorFactory<I> instance(Configuration conf) {
     HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
-    AbstractWriteOperator<I> writeOperator;
+    final AbstractWriteOperator<I> writeOperator;
     switch (bucketIndexEngineType) {
       case SIMPLE:
         writeOperator = new BucketStreamWriteOperator<>(conf);

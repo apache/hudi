@@ -31,7 +31,7 @@ import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
-import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorFactory;
+import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorFactories;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -47,7 +47,7 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketIndexPartitionerFactory;
+import org.apache.hudi.sink.partitioner.BucketIndexPartitioners;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -107,7 +107,7 @@ public class Pipelines {
       // TODO support bulk insert for consistent bucket index
       ValidationUtils.checkArgument(OptionsResolver.getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE),
           "Bulk insert is not supported yet for table with Consistent Bucket index");
-      Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.instance(conf);
+      Partitioner<HoodieKey> partitioner = BucketIndexPartitioners.instance(conf);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
@@ -330,8 +330,8 @@ public class Pipelines {
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
-      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperatorFactory.instance(conf);
-      Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.instance(conf);
+      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperatorFactories.instance(conf);
+      Partitioner<HoodieKey> partitioner = BucketIndexPartitioners.instance(conf);
       return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
           .transform(opName("bucket_write", conf), TypeInformation.of(Object.class), operatorFactory)
           .uid(opUID("bucket_write", conf))

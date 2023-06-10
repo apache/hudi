@@ -91,7 +91,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
         seqNo = Integer.parseInt(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
       }
 
-      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexHelper.loadMetadata(hoodieTable, partition);
+      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(hoodieTable, partition);
       ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load metadata for partition: " + partition);
       HoodieConsistentHashingMetadata meta = metadataOption.get();
       ValidationUtils.checkState(meta.getSeqNo() == seqNo,
@@ -104,7 +104,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
           .collect(Collectors.toList());
       HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
           instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
-      ConsistentBucketIndexHelper.saveMetadata(hoodieTable.getMetaClient(), newMeta);
+      ConsistentBucketIndexUtils.saveMetadata(hoodieTable.getMetaClient(), newMeta);
     });
 
     return writeStatuses;

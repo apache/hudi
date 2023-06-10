@@ -85,7 +85,7 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
     public ConsistentBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
       // TODO maybe parallel
       partitionToIdentifier = partitions.stream().collect(Collectors.toMap(p -> p, p -> {
-        HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexHelper.loadOrCreateMetadata(table, p, getNumBuckets());
+        HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(table, p, getNumBuckets());
         return new ConsistentBucketIdentifier(metadata);
       }));
     }
@@ -95,10 +95,8 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
       String partitionPath = key.getPartitionPath();
       ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
-        /**
-         * Dynamic Bucket Index doesn't need the instant time of the latest file group.
-         * We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
-         */
+        // Dynamic Bucket Index doesn't need the instant time of the latest file group.
+        // We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
         return Option.of(new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPrefix(), 0)));
       }
 
