@@ -19,14 +19,22 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.optimizer.SimplifyCasts
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, ExplainCommand}
 import org.apache.spark.sql.internal.SQLConf
 
 object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
+    plan match {
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _) =>
+        Some((targetTable, sourceTable, mergeCondition))
+      case _ => None
+    }
+  }
 
   def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],

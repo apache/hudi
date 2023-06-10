@@ -35,6 +35,9 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
     conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
     // Using string value of this conf to preserve compatibility across spark versions.
     conf.setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
+    // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
+    // Using string value of this conf to preserve compatibility across spark versions.
+    conf.setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
     return new HoodieSparkParquetReader(conf, path);
   }
 

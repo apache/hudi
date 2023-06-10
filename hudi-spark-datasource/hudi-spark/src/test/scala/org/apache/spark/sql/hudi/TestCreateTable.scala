@@ -27,7 +27,7 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
@@ -1081,5 +1081,26 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
     }
     assertTrue(exception.getMessage.contains(s"""$tableName is not a Hudi table"""))
+  }
+
+  test("Test hoodie table schema consistency for non-Avro data types") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id tinyint,
+         |  name varchar(10),
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    val hoodieCatalogTable = new HoodieCatalogTable(spark, table)
+    val hoodieSchema = HoodieSqlCommonUtils.getTableSqlSchema(hoodieCatalogTable.metaClient, true)
+    assertResult(hoodieSchema.get)(table.schema)
   }
 }

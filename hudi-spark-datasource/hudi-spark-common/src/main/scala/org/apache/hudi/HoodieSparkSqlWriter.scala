@@ -45,8 +45,9 @@ import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
-import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
+import org.apache.hudi.execution.bulkinsert.{BucketBulkInsertPartitionerWithRows, BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
@@ -54,11 +55,12 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileN
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{createKeyGenerator, getKeyGeneratorClassName}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
+import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
@@ -702,6 +704,7 @@ object HoodieSparkSqlWriter {
     val bootstrapBasePath = hoodieConfig.getStringOrThrow(BASE_PATH,
       s"'${BASE_PATH.key}' is required for '${BOOTSTRAP_OPERATION_OPT_VAL}'" +
         " operation'")
+    assert(!path.equals(bootstrapBasePath), "Bootstrap base path and Hudi table base path must be different")
     val bootstrapIndexClass = hoodieConfig.getStringOrDefault(INDEX_CLASS_NAME)
 
     var schema: String = null
@@ -808,11 +811,15 @@ object HoodieSparkSqlWriter {
     val populateMetaFields = hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
 
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
-      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
-      if (userDefinedBulkInsertPartitionerOpt.isPresent) {
-        userDefinedBulkInsertPartitionerOpt.get
+      if (writeConfig.getIndexType == IndexType.BUCKET) {
+        new BucketBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault, writeConfig.getBucketIndexNumBuckets)
       } else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned)
+        val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+        if (userDefinedBulkInsertPartitionerOpt.isPresent) {
+          userDefinedBulkInsertPartitionerOpt.get
+        } else {
+          BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned)
+        }
       }
     } else {
       // Sort modes are not yet supported when meta fields are disabled
@@ -904,18 +911,18 @@ object HoodieSparkSqlWriter {
       properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA.key, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
 
       // Collect exceptions in list because we want all sync to run. Then we can throw
-      val metaSyncExceptions = new ListBuffer[HoodieException]()
+      val failedMetaSyncs = new mutable.HashMap[String,HoodieException]()
       syncClientToolClassSet.foreach(impl => {
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, fs.getConf, fs, basePath.toString, baseFileFormat)
         } catch {
           case e: HoodieException =>
             log.info("SyncTool class " + impl.trim + " failed with exception", e)
-            metaSyncExceptions.add(e)
+            failedMetaSyncs.put(impl, e)
         }
       })
-      if (metaSyncExceptions.nonEmpty) {
-        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions)
+      if (failedMetaSyncs.nonEmpty) {
+        throw getHoodieMetaSyncException(failedMetaSyncs)
       }
     }
 

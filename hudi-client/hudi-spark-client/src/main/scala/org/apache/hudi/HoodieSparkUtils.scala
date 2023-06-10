@@ -50,6 +50,7 @@ private[hudi] trait SparkVersionsSupport {
   def isSpark3_1: Boolean = getSparkVersion.startsWith("3.1")
   def isSpark3_2: Boolean = getSparkVersion.startsWith("3.2")
   def isSpark3_3: Boolean = getSparkVersion.startsWith("3.3")
+  def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")
 
   def gteqSpark3_0: Boolean = getSparkVersion >= "3.0"
   def gteqSpark3_1: Boolean = getSparkVersion >= "3.1"
@@ -59,6 +60,7 @@ private[hudi] trait SparkVersionsSupport {
   def gteqSpark3_2_2: Boolean = getSparkVersion >= "3.2.2"
   def gteqSpark3_3: Boolean = getSparkVersion >= "3.3"
   def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
+  def gteqSpark3_4: Boolean = getSparkVersion >= "3.4"
 }
 
 object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {

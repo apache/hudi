@@ -84,8 +84,13 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   @Override
   public Schema getSourceSchema() {
     if (schema == null) {
-      Schema.Parser parser = new Schema.Parser();
-      schema = parser.parse(schemaString);
+      try {
+        Schema.Parser parser = new Schema.Parser();
+        schema = parser.parse(schemaString);
+      } catch (Exception e) {
+        throw new HoodieSchemaException("Failed to parse schema: " + schemaString, e);
+      }
+
     }
     return schema;
   }

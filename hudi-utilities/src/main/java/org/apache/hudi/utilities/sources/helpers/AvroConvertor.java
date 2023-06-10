@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
@@ -29,6 +30,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 import scala.util.Either;
 import scala.util.Left;
@@ -108,9 +110,17 @@ public class AvroConvertor implements Serializable {
   }
 
   public GenericRecord fromJson(String json) {
-    initSchema();
-    initJsonConvertor();
-    return jsonConverter.convert(json, schema);
+    try {
+      initSchema();
+      initJsonConvertor();
+      return jsonConverter.convert(json, schema);
+    } catch (Exception e) {
+      if (json != null) {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
+      } else {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
+      }
+    }
   }
 
   public Either<GenericRecord,String> fromJsonWithError(String json) {
@@ -124,18 +134,35 @@ public class AvroConvertor implements Serializable {
   }
 
   public Schema getSchema() {
-    return new Schema.Parser().parse(schemaStr);
+    try {
+      return new Schema.Parser().parse(schemaStr);
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Failed to parse json schema: " + schemaStr, e);
+    }
   }
 
   public GenericRecord fromAvroBinary(byte[] avroBinary) {
-    initSchema();
-    initInjection();
-    return recordInjection.invert(avroBinary).get();
+    try {
+      initSchema();
+      initInjection();
+      return recordInjection.invert(avroBinary).get();
+    } catch (Exception e) {
+      if (avroBinary != null) {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary: " + Arrays.toString(avroBinary), e);
+      } else {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary. Binary is null", e);
+      }
+    }
+
   }
 
   public GenericRecord fromProtoMessage(Message message) {
-    initSchema();
-    return ProtoConversionUtil.convertToAvro(schema, message);
+    try {
+      initSchema();
+      return ProtoConversionUtil.convertToAvro(schema, message);
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Failed to get avro schema from proto message", e);
+    }
   }
 
   /**

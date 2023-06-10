@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkJdbcUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -47,6 +48,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -61,8 +63,8 @@ import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
-import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
+import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.Schema;
@@ -78,7 +80,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
 import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
 import org.apache.spark.sql.types.StructType;
@@ -191,7 +192,7 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Boolean isErrorTableWriterEnabled) throws IOException {
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, boolean isErrorTableWriterEnabled) throws IOException {
     try {
       return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : 
           isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames) : new ChainedTransformer(classNames)
@@ -432,13 +433,11 @@ public class UtilHelpers {
   /**
    * Returns true if the table already exists in the JDBC database.
    */
-  private static Boolean tableExists(Connection conn, Map<String, String> options) {
+  private static Boolean tableExists(Connection conn, Map<String, String> options) throws SQLException {
     JdbcDialect dialect = JdbcDialects.get(options.get(JDBCOptions.JDBC_URL()));
     try (PreparedStatement statement = conn.prepareStatement(dialect.getTableExistsQuery(options.get(JDBCOptions.JDBC_TABLE_NAME())))) {
       statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
       statement.executeQuery();
-    } catch (SQLException e) {
-      throw new HoodieException(e);
     }
     return true;
   }
@@ -450,28 +449,42 @@ public class UtilHelpers {
    * @return
    * @throws Exception
    */
-  public static Schema getJDBCSchema(Map<String, String> options) throws Exception {
-    Connection conn = createConnectionFactory(options);
-    String url = options.get(JDBCOptions.JDBC_URL());
-    String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
-    boolean tableExists = tableExists(conn, options);
+  public static Schema getJDBCSchema(Map<String, String> options) {
+    Connection conn;
+    String url;
+    String table;
+    boolean tableExists;
+    try {
+      conn = createConnectionFactory(options);
+      url = options.get(JDBCOptions.JDBC_URL());
+      table = options.get(JDBCOptions.JDBC_TABLE_NAME());
+      tableExists = tableExists(conn, options);
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException("Failed to connect to jdbc", e);
+    }
 
-    if (tableExists) {
+    if (!tableExists) {
+      throw new HoodieSchemaFetchException(String.format("%s table does not exists!", table));
+    }
+
+    try {
       JdbcDialect dialect = JdbcDialects.get(url);
       try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
         statement.setQueryTimeout(Integer.parseInt(options.get("queryTimeout")));
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = JdbcUtils.getSchema(rs, dialect, true);
+            structType = SparkJdbcUtils.getSchema(rs, dialect, true);
           } else {
-            structType = JdbcUtils.getSchema(rs, dialect, false);
+            structType = SparkJdbcUtils.getSchema(rs, dialect, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }
       }
-    } else {
-      throw new HoodieException(String.format("%s table does not exists!", table));
+    } catch (HoodieException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException(String.format("Unable to fetch schema from %s table", table), e);
     }
   }
 

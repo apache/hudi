@@ -698,6 +698,16 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
+  public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
+          .key("hoodie.rollback.instant.backup.enabled")
+          .defaultValue(false)
+          .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
+
+  public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
+          .key("hoodie.rollback.instant.backup.dir")
+          .defaultValue(".rollback_backup")
+          .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -1404,6 +1414,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * compaction properties.
    */
 
+  public boolean isLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_LOG_COMPACTION);
+  }
+
   public int getLogCompactionBlocksThreshold() {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
   }
@@ -1944,6 +1958,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
 
+  public String getBucketIndexHashFieldWithDefault() {
+    return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+  }
+
   /**
    * storage properties.
    */
@@ -2179,7 +2197,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getMetricReporterMetricsNamePrefix() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+    // Metrics prefixes should not have a dot as this is usually a separator
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX).replaceAll("\\.", "_");
   }
 
   public String getMetricReporterFileBasedConfigs() {
@@ -2322,6 +2341,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isMetadataAsyncIndex() {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
+  }
+
+  public int getMetadataLogCompactBlocksThreshold() {
+    return getInt(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD);
+  }
+
+  public boolean isLogCompactionEnabledOnMetadata() {
+    return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
   /**
@@ -2486,6 +2513,14 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isTableServiceManagerEnabled() {
     return tableServiceManagerConfig.isTableServiceManagerEnabled();
+  }
+
+  public boolean shouldBackupRollbacks() {
+    return getBoolean(ROLLBACK_INSTANT_BACKUP_ENABLED);
+  }
+
+  public String getRollbackBackupDirectory() {
+    return getString(ROLLBACK_INSTANT_BACKUP_DIRECTORY);
   }
 
   public static class Builder {
@@ -2855,6 +2890,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withHiveStylePartitioningEnabled(boolean enabled) {
+      writeConfig.setValue(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withExternalSchemaTrasformation(boolean enabled) {
       writeConfig.setValue(AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE, String.valueOf(enabled));
       return this;
@@ -2952,6 +2992,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEarlyConflictDetectionStrategy(String className) {
       writeConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withRollbackBackupEnabled(boolean rollbackBackupEnabled) {
+      writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_ENABLED, String.valueOf(rollbackBackupEnabled));
+      return this;
+    }
+
+    public Builder withRollbackBackupDirectory(String backupDir) {
+      writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_DIRECTORY, backupDir);
       return this;
     }
 

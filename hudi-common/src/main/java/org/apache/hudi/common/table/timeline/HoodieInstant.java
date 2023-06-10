@@ -45,7 +45,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private static final String DELIMITER = ".";
 
-  private static final String FILE_NAME_FORMAT_ERROR = "The fileName %s doesn't match instant format";
+  private static final String FILE_NAME_FORMAT_ERROR =
+      "The provided file name %s does not conform to the required format";
 
   /**
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
@@ -70,14 +71,13 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public static String extractTimestamp(String fileName) throws IllegalArgumentException {
-    Objects.requireNonNull(fileName);
-
     Matcher matcher = NAME_FORMAT.matcher(fileName);
     if (matcher.find()) {
       return matcher.group(1);
     }
 
-    throw new IllegalArgumentException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+    throw new IllegalArgumentException("Failed to retrieve timestamp from name: "
+        + String.format(FILE_NAME_FORMAT_ERROR, fileName));
   }
 
   public static String getTimelineFileExtension(String fileName) {
@@ -136,7 +136,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       stateTransitionTime =
           HoodieInstantTimeGenerator.formatDate(new Date(fileStatus.getModificationTime()));
     } else {
-      throw new IllegalArgumentException(String.format(FILE_NAME_FORMAT_ERROR, fileName));
+      throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
   }
 

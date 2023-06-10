@@ -60,6 +60,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -105,6 +106,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRep
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMarker;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
@@ -154,6 +156,11 @@ public class HoodieTestTable {
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
     return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
+  }
+
+  public void updateFilesPartitionInTableConfig() {
+    metaClient.getTableConfig().setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, true);
+    this.metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 
   public static String makeNewCommitTime(int sequence, String instantFormat) {
@@ -569,6 +576,11 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
+    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileId, ioType);
+    return this;
+  }
+
   /**
    * Insert one base file to each of the given distinct partitions.
    *
@@ -744,6 +756,7 @@ public class HoodieTestTable {
 
   public FileStatus[] listAllLogFiles(String fileExtension) throws IOException {
     return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
+        .filter(status -> !status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .filter(status -> status.getPath().getName().contains(fileExtension))
         .toArray(FileStatus[]::new);
   }

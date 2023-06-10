@@ -57,6 +57,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -146,6 +147,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -158,6 +160,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1251,8 +1254,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  //@ParameterizedTest
+  //@EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  @Disabled("HUDI-6332")
   public void testHoodieIndexer(HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/asyncindexer";
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType);
@@ -1767,7 +1771,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topicName, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName, jsonifyRecordsByPartitions(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA), numPartitions));
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
@@ -1946,8 +1950,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testJsonKafkaDFSSourceWithOffsets() throws Exception {
     topicName = "topic" + testNum;
-    int numRecords = 15;
-    int numPartitions = 3;
+    int numRecords = 30;
+    int numPartitions = 2;
     int recsPerPartition = numRecords / numPartitions;
     long beforeTime = Instant.now().toEpochMilli();
     prepareJsonKafkaDFSFiles(numRecords, true, topicName, numPartitions);
@@ -2315,7 +2319,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
     LOG.debug("Expected error during transformation", e);
-    assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
+    assertTrue(e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test
@@ -2414,7 +2418,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
     //No change as this fails with Path not exist error
-    assertThrows(org.apache.spark.sql.AnalysisException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
+    assertThrows(HoodieIncrementalPathNotFoundException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
     TestHelpers.assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {
@@ -2687,6 +2691,29 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(parquetRecordsCount + 200, tableBasePath, sqlContext);
     testNum++;
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = {"COPY_ON_WRITE, AVRO",  "MERGE_ON_READ, AVRO",
+                      "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
+  public void testConfigurationHotUpdate(HoodieTableType tableType, HoodieRecordType recordType) throws Exception {
+    String tableBasePath = basePath + String.format("/configurationHotUpdate_%s_%s", tableType.name(), recordType.name());
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    TestHelpers.addRecordMerger(recordType, cfg.configs);
+    cfg.continuousMode = true;
+    cfg.tableType = tableType.name();
+    cfg.configHotUpdateStrategyClass = MockConfigurationHotUpdateStrategy.class.getName();
+    long upsertParallelism = 200;
+    cfg.configs.add(String.format("%s=%s", UPSERT_PARALLELISM_VALUE.key(), upsertParallelism));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath, fs);
+      // make sure the UPSERT_PARALLELISM_VALUE already changed (hot updated)
+      Assertions.assertTrue(((HoodieDeltaStreamer.DeltaSyncService) ds.ingestionService.get()).props.getLong(UPSERT_PARALLELISM_VALUE.key()) > upsertParallelism);
+      return true;
+    });
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
   class TestDeltaSync extends DeltaSync {

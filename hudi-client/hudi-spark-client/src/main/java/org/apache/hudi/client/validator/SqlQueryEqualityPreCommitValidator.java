@@ -57,9 +57,11 @@ public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<Wr
     String queryWithPrevSnapshot = query.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, prevTableSnapshot);
     String queryWithNewSnapshot = query.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, newTableSnapshot);
     LOG.info("Running query on previous state: " + queryWithPrevSnapshot);
-    Dataset<Row> prevRows = sqlContext.sql(queryWithPrevSnapshot);
+    Dataset<Row> prevRows = sqlContext.sql(queryWithPrevSnapshot).cache();
+    LOG.info("Total rows in prevRows " + prevRows.count());
     LOG.info("Running query on new state: " + queryWithNewSnapshot);
-    Dataset<Row> newRows  = sqlContext.sql(queryWithNewSnapshot);
+    Dataset<Row> newRows  = sqlContext.sql(queryWithNewSnapshot).cache();
+    LOG.info("Total rows in newRows " + newRows.count());
     printAllRowsIfDebugEnabled(prevRows);
     printAllRowsIfDebugEnabled(newRows);
     boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();

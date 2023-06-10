@@ -58,11 +58,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkTableServiceClient.class);
 
-  /**
-   * Cached metadata writer for coordinator to reuse for each commit.
-   */
-  private HoodieBackedTableMetadataWriter metadataWriter;
-
   protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
                                           HoodieWriteConfig clientConfig,
                                           Option<EmbeddedTimelineService> timelineService) {
@@ -178,8 +173,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   public void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter()) {
-      metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType, instantTime));
+    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(Option.empty())) {
+      metadataWriter.update(metadata, instantTime);
     } catch (Exception e) {
       throw new HoodieException("Failed to update metadata", e);
     }
@@ -197,19 +192,23 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    * Initialize the table metadata writer, for e.g, bootstrap the metadata table
    * from the filesystem if it does not exist.
    */
-  private HoodieBackedTableMetadataWriter initMetadataWriter() {
+  private HoodieBackedTableMetadataWriter initMetadataWriter(Option<String> latestPendingInstant) {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
+        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, Option.empty(), latestPendingInstant);
   }
 
   public void initMetadataTable() {
     HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
-      // initialize the metadata table path
-      // guard the metadata writer with concurrent lock
+      Option<String> latestPendingInstant = table.getActiveTimeline()
+          .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getTimestamp);
       try {
+        // initialize the metadata table path
+        // guard the metadata writer with concurrent lock
         this.txnManager.getLockManager().lock();
-        initMetadataWriter().close();
+        try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
+          metadataWriter.performTableServices(Option.empty());
+        }
       } catch (Exception e) {
         throw new HoodieException("Failed to initialize metadata table", e);
       } finally {

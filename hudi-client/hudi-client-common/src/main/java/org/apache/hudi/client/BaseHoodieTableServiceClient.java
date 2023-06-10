@@ -500,7 +500,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     checkArgument(table.isTableServiceAction(actionType, instantTime), String.format("Unsupported action: %s.%s is not table service.", actionType, instantTime));
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, true));
+    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime));
   }
 
   /**

@@ -377,7 +377,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Create logcompaction client.
     HoodieWriteConfig logCompactionConfig = HoodieWriteConfig.newBuilder().withProps(config2.getProps())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withLogCompactionBlocksThreshold("2").build())
+            .withLogCompactionBlocksThreshold(2).build())
         .build();
     SparkRDDWriteClient logCompactionClient = new SparkRDDWriteClient(context, logCompactionConfig);
 
