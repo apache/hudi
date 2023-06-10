@@ -118,12 +118,12 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
         val dataFile = createPartitionedFile(
           partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getPath,
           0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(createPartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+        val skeletonFile = Option(createPartitionedFile(InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen))
 
         createFileSplit(fileSlice, dataFile, skeletonFile)
       } else {
         val dataFile = createPartitionedFile(
-          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
+          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getHadoopPath, 0, baseFile.getFileLen)
         createFileSplit(fileSlice, dataFile, Option.empty)
       }
     }

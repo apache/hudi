@@ -22,10 +22,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.HoodieBootstrapMORRDD.CONFIG_INSTANTIATION_LOCK
+import org.apache.hudi.HoodieBootstrapMORRDD.{CONFIG_INSTANTIATION_LOCK, getPartitionPath}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 
 class HoodieBootstrapMORRDD(@transient spark: SparkSession,
@@ -56,12 +57,12 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
       bootstrapMORSplit.skeletonFile match {
         case Some(skeletonFile) =>
           val (iterator, schema) = getSkeletonIteratorSchema(bootstrapMORSplit.dataFile, skeletonFile)
-          new RecordMergingFileIterator(bootstrapMORSplit.logFiles, new Path(skeletonFile.filePath).getParent,
+          new RecordMergingFileIterator(bootstrapMORSplit.logFiles, getPartitionPath(skeletonFile),
             iterator, schema, tableSchema, requiredSchema, tableState, getHadoopConf)
         case _ =>
           // NOTE: Regular file-reader is already projected into the required schema
           new RecordMergingFileIterator(bootstrapMORSplit.logFiles,
-            new Path(bootstrapMORSplit.dataFile.filePath).getParent,
+            getPartitionPath(bootstrapMORSplit.dataFile),
             regularFileReader.read(bootstrapMORSplit.dataFile), regularFileReader.schema, tableSchema,
             requiredSchema, tableState, getHadoopConf)
       }
@@ -77,6 +78,10 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
   }
 }
 
-object HoodieBootstrapMORRDD {
+object HoodieBootstrapMORRDD extends SparkAdapterSupport {
   val CONFIG_INSTANTIATION_LOCK = new Object()
+
+  def getPartitionPath(file: PartitionedFile): Path = {
+    sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file).getParent
+  }
 }
