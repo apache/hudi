@@ -25,9 +25,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -39,14 +41,11 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.junit.jupiter.api.Assertions;
@@ -153,19 +152,20 @@ public class TestParquetFileMetaToWriteStatusConvertor extends HoodieCommonTestH
                                String instantTime, int recordsCount) throws IOException {
     Schema originalSchema = new Schema.Parser().parse(writeConfig.getSchema());
     Schema hoodieSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(originalSchema);
-    HoodieFileWriter fileWriter =
-        HoodieFileWriterFactory.getFileWriter(instantTime, new Path(fileName), mockedHoodieTable, writeConfig,
-            hoodieSchemaWithMetadataFields, mockedContextSupplier);
+    HoodieAvroParquetWriter fileWriter =
+        (HoodieAvroParquetWriter) HoodieFileWriterFactory.getFileWriter(instantTime, new Path(fileName),
+            metaClient.getHadoopConf(), writeConfig, hoodieSchemaWithMetadataFields, mockedContextSupplier,
+            writeConfig.getRecordMerger().getRecordType());
 
     for (int i = 0; i < recordsCount; i++) {
       String recordKey = UUID.randomUUID().toString();
       HoodieKey key = new HoodieKey(recordKey, partitionPath.replaceAll("/", "-"));
       HoodieRecord<RawTripTestPayload> record =
-          new HoodieRecord(key, dataGen.generateRandomValue(key, instantTime));
+          new HoodieAvroRecord<>(key, dataGen.generateRandomValue(key, instantTime));
       Option<IndexedRecord> indexedRecord = record.getData().getInsertValue(originalSchema);
       IndexedRecord recordWithMetadataInSchema =
           HoodieAvroUtils.rewriteRecord((GenericRecord) indexedRecord.get(), originalSchema);
-      fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+      fileWriter.writeAvroWithMetadata(record.getKey(), recordWithMetadataInSchema);
     }
     fileWriter.close();
   }

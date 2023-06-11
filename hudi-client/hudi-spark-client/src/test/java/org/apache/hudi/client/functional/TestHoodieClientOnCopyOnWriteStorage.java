@@ -1814,8 +1814,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Make an insert on the partition. By setting CLEANER_COMMITS_RETAINED_PROP to 1.
     // Cleaner should clean all the data files replaced by clustering.
     Properties props = new Properties();
-    props.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, "testdb.test_trips");
-    props.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
+    props.put(HoodieTableConfig.NAME.key(), "testdb.test_trips");
+    props.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
@@ -1859,8 +1859,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Make an insert on the partition. By setting CLEANER_COMMITS_RETAINED_PROP to 1.
     // Cleaner should clean all the data files replaced by clustering.
     Properties props = new Properties();
-    props.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, "testdb.test_trips");
-    props.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
+    props.put(HoodieTableConfig.NAME.key(), "testdb.test_trips");
+    props.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
