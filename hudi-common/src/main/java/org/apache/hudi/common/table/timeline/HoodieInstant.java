@@ -107,7 +107,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final State state;
   private final String action;
   private final String timestamp;
-  private String stateTransitionTime;
+  private final String stateTransitionTime;
 
   /**
    * Load the instant from the meta FileStatus.
