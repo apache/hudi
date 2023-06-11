@@ -28,8 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.execution.ParquetFileMetaToWriteStatusConvertor;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -42,7 +42,7 @@ import java.util.Map;
  */
 public class HoodieFileWriteHandler<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieFileWriteHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileWriteHandler.class);
   private final Path path;
   private String prevCommit;
 
@@ -56,7 +56,9 @@ public class HoodieFileWriteHandler<T extends HoodieRecordPayload, I, K, O> exte
     this.prevCommit = srcPath.getName().split("_")[2].split("\\.")[0];
 
     // Create inProgress marker file
-    createInProgressMarkerFile(partitionPath,FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+    createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+    // TODO: Create inprogress marker here and remove above marker file creation, once the marker PR is landed.
+    // createInProgressMarkerFile(partitionPath,FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
     LOG.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
@@ -74,8 +76,9 @@ public class HoodieFileWriteHandler<T extends HoodieRecordPayload, I, K, O> exte
 
       this.writeStatus = generateWriteStatus(path.toString(), partitionPath, executionConfigs);
 
+      // TODO: Create completed marker file here once the marker PR is landed.
       // createCompleteMarkerFile throws hoodieException, if marker directory is not present.
-      createCompletedMarkerFile(partitionPath);
+      // createCompletedMarkerFile(partitionPath);
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));

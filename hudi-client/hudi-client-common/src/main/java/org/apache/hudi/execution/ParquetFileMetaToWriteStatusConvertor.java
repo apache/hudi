@@ -28,12 +28,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -44,7 +44,7 @@ import java.util.Map;
  */
 public class ParquetFileMetaToWriteStatusConvertor<T extends HoodieRecordPayload, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(ParquetFileMetaToWriteStatusConvertor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ParquetFileMetaToWriteStatusConvertor.class);
   private final HoodieTable<T,I,K,O> hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final FileSystem fs;

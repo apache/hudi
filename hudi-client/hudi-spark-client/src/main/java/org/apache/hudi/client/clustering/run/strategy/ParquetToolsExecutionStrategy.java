@@ -33,8 +33,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.HoodieFileWriteHandler;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -48,7 +48,7 @@ import java.util.stream.Stream;
 public abstract class ParquetToolsExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends SingleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LogManager.getLogger(ParquetToolsExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ParquetToolsExecutionStrategy.class);
 
   public ParquetToolsExecutionStrategy(
       HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {

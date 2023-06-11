@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.clustering.run.strategy.SingleSparkJobExecutionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -29,10 +30,8 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -41,7 +40,7 @@ import java.util.Map;
 public class ClusteringIdentityTestExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends SingleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LogManager.getLogger(ClusteringIdentityTestExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringIdentityTestExecutionStrategy.class);
 
   public ClusteringIdentityTestExecutionStrategy(HoodieTable table,
                                                  HoodieEngineContext engineContext,
