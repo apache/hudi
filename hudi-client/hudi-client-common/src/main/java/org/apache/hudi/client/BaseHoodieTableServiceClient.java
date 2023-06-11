@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -53,6 +54,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.rollback.BaseRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 
 import com.codahale.metrics.Timer;
@@ -704,6 +706,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected Boolean rollbackFailedWrites() {
     HoodieTable table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
+    removeInflightFilesAlreadyRolledBack(instantsToRollback, table.getMetaClient());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks);
@@ -763,6 +766,51 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       return Collections.emptyList();
     } else {
       throw new IllegalArgumentException("Invalid Failed Writes Cleaning Policy " + config.getFailedWritesCleanPolicy());
+    }
+  }
+
+  /**
+   * This method filters out the instants that are already rolled back, but their inflight are left because of job failures.
+   * In addition to filtering out the instants, it will also cleanup the inflight instants from timeline.
+   */
+  protected void removeInflightFilesAlreadyRolledBack(List<String> instantsToRollback, HoodieTableMetaClient metaClient) {
+    // Find the oldest inflight timestamp.
+    String lowestInflightCommitTime = Collections.min(instantsToRollback);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    // RollbackInstantMap should only be created for instants that are > oldest inflight file to be removed.
+    Map<String, String> rollbackInstantMap = activeTimeline.getRollbackTimeline().filterCompletedInstants()
+        .findInstantsAfter(lowestInflightCommitTime)
+        .getInstantsAsStream()
+        .map(rollbackInstant -> {
+          try {
+            return Pair.of(TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
+                activeTimeline.getInstantDetails(rollbackInstant).get()).getInstantsRollback().get(0).getCommitTime(),
+                rollbackInstant.getTimestamp());
+          } catch (IOException e) {
+            LOG.error("Error reading rollback metadata for instant {}", rollbackInstant, e);
+            return Pair.of("", rollbackInstant.getTimestamp());
+          }
+        }).collect(Collectors.toMap(Pair::getLeft, Pair::getRight, (v1, v2) -> v1));
+    // List of inflight instants that are already completed.
+    List<String> rollbackCompletedInstants =
+        instantsToRollback.stream()
+            .filter(rollbackInstantMap::containsKey)
+            .collect(Collectors.toList());
+    try {
+      this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      rollbackCompletedInstants.forEach(instant -> {
+        // remove pending commit files.
+        HoodieInstant hoodieInstant = activeTimeline
+            .filter(instantTime ->
+                HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), HoodieTimeline.EQUALS, instant))
+            .firstInstant().get();
+        BaseRollbackActionExecutor.deleteInflightAndRequestedInstant(
+            true, activeTimeline, metaClient, hoodieInstant);
+      });
+      instantsToRollback.removeAll(rollbackCompletedInstants);
+    } finally {
+      this.txnManager.endTransaction(Option.empty());
     }
   }
 
