@@ -372,6 +372,27 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
+  public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
+    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
+    completeLogCompaction(metadata, table, logCompactionInstantTime);
+  }
+
+  @Override
+  protected void completeLogCompaction(HoodieCommitMetadata metadata,
+                                       HoodieTable table,
+                                       String logCompactionCommitTime) {
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
+  }
+
+  @Override
+  protected HoodieWriteMetadata<List<WriteStatus>> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
+    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
+    preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
+    return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Clustering is not supported yet");
   }
