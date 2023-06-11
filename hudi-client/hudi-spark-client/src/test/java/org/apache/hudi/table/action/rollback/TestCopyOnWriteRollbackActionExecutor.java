@@ -229,7 +229,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true})
+  @ValueSource(booleans = {true, false})
   public void testCopyOnWriteRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
