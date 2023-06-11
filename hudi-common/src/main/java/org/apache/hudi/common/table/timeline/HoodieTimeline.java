@@ -244,7 +244,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Create new timeline with all instants that were modified after specified time.
    */
-  HoodieDefaultTimeline findInstantsModifiedAfter(String instantTime);
+  HoodieDefaultTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime);
 
   /**
    * Create a new Timeline with all the instants after startTs.

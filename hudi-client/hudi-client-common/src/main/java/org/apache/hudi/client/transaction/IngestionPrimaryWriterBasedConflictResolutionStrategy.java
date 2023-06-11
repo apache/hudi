@@ -72,7 +72,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
     List<HoodieInstant> completedCommitsInstants = activeTimeline
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
-        .findInstantsModifiedAfter(currentInstant.getTimestamp())
+        .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
         .getInstantsOrderedByStateTransitionTime()
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, completedCommitsInstants));
@@ -91,7 +91,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
         activeTimeline
             .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
             .filterCompletedInstants()
-            .findInstantsModifiedAfter(currentInstant.getTimestamp())
+            .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
             .getInstantsAsStream();
 
     // Fetch list of ingestion inflight commits.
