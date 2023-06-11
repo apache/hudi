@@ -98,8 +98,8 @@ public class SqlFileBasedSource extends RowSource {
   /**
    * Configs supported.
    */
-  private static class Config {
-    private static final String SOURCE_SQL_FILE = "hoodie.deltastreamer.source.sql.file";
-    private static final String EMIT_EPOCH_CHECKPOINT = "hoodie.deltastreamer.source.sql.checkpoint.emit";
+  public static class Config {
+    public static final String SOURCE_SQL_FILE = "hoodie.deltastreamer.source.sql.file";
+    public static final String EMIT_EPOCH_CHECKPOINT = "hoodie.deltastreamer.source.sql.checkpoint.emit";
   }
 }
