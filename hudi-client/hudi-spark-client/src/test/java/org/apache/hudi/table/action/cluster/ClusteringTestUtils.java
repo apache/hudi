@@ -18,16 +18,21 @@
 
 package org.apache.hudi.table.action.cluster;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -35,13 +40,22 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Properties;
 
-public class ClusteringTestBase {
+import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+
+public class ClusteringTestUtils {
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   private static final String COUNT_SQL_QUERY_FOR_VALIDATION = "select count(*) from <TABLE_NAME>";
@@ -105,5 +119,22 @@ public class ClusteringTestBase {
       clusteringClient.cluster(clusteringCommitTime, shouldCommit);
     }
     return clusteringCommitTime;
+  }
+
+  public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
+    try {
+      String basePath = metaClient.getBasePath();
+      String partition = DEFAULT_PARTITION_PATHS[0];
+      createBaseFile(basePath, partition, instantTime, fileId, 1);
+      FileSlice slice = new FileSlice(partition, instantTime, fileId);
+      slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
+          baseFileName(instantTime, fileId)).toString()));
+      List<FileSlice>[] fileSliceGroups = new List[] {Collections.singletonList(slice)};
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
+          fileSliceGroups, Collections.emptyMap());
+      return clusteringPlan;
+    } catch (Exception e) {
+      throw new HoodieException(e.getMessage(), e);
+    }
   }
 }

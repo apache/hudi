@@ -774,6 +774,9 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * In addition to filtering out the instants, it will also cleanup the inflight instants from timeline.
    */
   protected void removeInflightFilesAlreadyRolledBack(List<String> instantsToRollback, HoodieTableMetaClient metaClient) {
+    if (instantsToRollback.isEmpty()) {
+      return;
+    }
     // Find the oldest inflight timestamp.
     String lowestInflightCommitTime = Collections.min(instantsToRollback);
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
