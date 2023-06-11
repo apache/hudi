@@ -267,30 +267,6 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return stateTransitionTime;
   }
 
-  /*
-  public String getStateTransitionTime(HoodieTableMetaClient metaClient) {
-    // if state transition timestamp is already cached, use it.
-    if (this.stateTransitionTime == null) {
-      setStateTransitionTimestamp(metaClient);
-    }
-    return this.stateTransitionTime;
-  }
-
-  public void setStateTransitionTimestamp(HoodieTableMetaClient metaClient) {
-    // if file exists, get modification timestamp of the file and update the cache, otherwise use the instant's timestamp.
-    try {
-      Path filePath = new Path(metaClient.getMetaPath(), getFileName());
-      FileSystem fs = metaClient.getFs();
-      if (fs.exists(filePath)) {
-        stateTransitionTime =
-            HoodieInstantTimeGenerator.formatDate(new Date(fs.getFileStatus(filePath).getModificationTime()));
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Unable to read file associated with the instant %s", timestamp));
-    }
-  }
-   */
-
   @Override
   public int hashCode() {
     return Objects.hash(state, action, timestamp);

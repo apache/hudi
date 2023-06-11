@@ -111,4 +111,9 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
   }
 
+  @Override
+  public boolean isPreCommitRequired() {
+    return false;
+  }
+
 }

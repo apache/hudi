@@ -108,4 +108,9 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, instantsToConsider));
     return instantsToConsider.stream();
   }
+
+  @Override
+  public boolean isPreCommitRequired() {
+    return true;
+  }
 }

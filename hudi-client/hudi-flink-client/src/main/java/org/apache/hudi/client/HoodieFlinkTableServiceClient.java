@@ -127,9 +127,14 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
+      // Only in some cases conflict resolution needs to be performed.
+      // So, check if preCommit method that does conflict resolution needs to be triggered.
+      if (isPreCommitRequired()) {
+        preCommit(metadata);
+      }
       // commit to data table after committing to metadata table.
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+      // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
+      // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata);
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(

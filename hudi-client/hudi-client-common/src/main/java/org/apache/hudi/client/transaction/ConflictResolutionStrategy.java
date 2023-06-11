@@ -61,4 +61,11 @@ public interface ConflictResolutionStrategy {
   Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
 
+  /**
+   * Write clients uses their preCommit API to run conflict resolution.
+   * This method determines whether to execute preCommit for table services like clustering.
+   * @return boolean
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  boolean isPreCommitRequired();
 }
