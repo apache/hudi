@@ -770,8 +770,9 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * This method filters out the instants that are already rolled back, but their inflight are left because of job failures.
-   * In addition to filtering out the instants, it will also cleanup the inflight instants from timeline.
+   * This method filters out the instants that are already rolled back, but their pending commit files are left
+   * because of job failures. In addition to filtering out these instants, it will also cleanup the inflight instants
+   * from the timeline.
    */
   protected void removeInflightFilesAlreadyRolledBack(List<String> instantsToRollback, HoodieTableMetaClient metaClient) {
     if (instantsToRollback.isEmpty()) {
@@ -782,7 +783,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
     // RollbackInstantMap should only be created for instants that are > oldest inflight file to be removed.
-    Map<String, String> rollbackInstantMap = activeTimeline.getRollbackTimeline().filterCompletedInstants()
+    Map<String, String> failedInstantToRollbackCommitMap = activeTimeline.getRollbackTimeline().filterCompletedInstants()
         .findInstantsAfter(lowestInflightCommitTime)
         .getInstantsAsStream()
         .map(rollbackInstant -> {
@@ -798,8 +799,9 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     // List of inflight instants that are already completed.
     List<String> rollbackCompletedInstants =
         instantsToRollback.stream()
-            .filter(rollbackInstantMap::containsKey)
+            .filter(failedInstantToRollbackCommitMap::containsKey)
             .collect(Collectors.toList());
+    LOG.info("Rollback completed instants {}", rollbackCompletedInstants);
     try {
       this.txnManager.beginTransaction(Option.empty(), Option.empty());
       rollbackCompletedInstants.forEach(instant -> {
@@ -812,6 +814,10 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
             true, activeTimeline, metaClient, hoodieInstant);
       });
       instantsToRollback.removeAll(rollbackCompletedInstants);
+    } catch (Exception e) {
+      LOG.error("Error in deleting the inflight instants that are already rolled back {}",
+          rollbackCompletedInstants, e);
+      throw new HoodieRollbackException("Error in deleting the inflight instants that are already rolled back");
     } finally {
       this.txnManager.endTransaction(Option.empty());
     }
