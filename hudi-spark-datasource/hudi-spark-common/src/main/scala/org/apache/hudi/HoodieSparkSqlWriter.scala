@@ -897,7 +897,8 @@ object HoodieSparkSqlWriter {
     // for backward compatibility
     if (hiveSyncEnabled) {
       metaSyncEnabled = true
-      syncClientToolClassSet += classOf[HiveSyncTool].getName
+      if (syncClientToolClassSet.isEmpty)
+        syncClientToolClassSet += classOf[HiveSyncTool].getName
     }
 
     if (metaSyncEnabled) {
