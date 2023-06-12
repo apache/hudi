@@ -18,9 +18,12 @@
 package org.apache.spark.sql.hudi.streaming
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
@@ -65,10 +68,19 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
-  private val useStateTransitionTime: Boolean =
-    parameters.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
-      .map(_.toBoolean)
-      .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+  /**
+   * Note: when hollow commit is found using streaming read, unlike batch incremental query,
+   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we
+   * use [[HollowCommitHandling.FILTER]] to stop processing data beyond the hollow commit to
+   * avoid unintentional skip.
+   *
+   * Users are recommended to set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
+   * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the stopping behavior.
+   */
+  private val hollowCommitHandling: HollowCommitHandling =
+    parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
+      .map(HollowCommitHandling.valueOf)
+      .getOrElse(HollowCommitHandling.FILTER)
 
   @transient private lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
@@ -100,9 +112,11 @@ class HoodieStreamSource(
 
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
-    metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants() match {
+    val filteredTimeline = handleHollowCommitIfNeeded(
+      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+    filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
-        val timestamp = if (useStateTransitionTime) {
+        val timestamp = if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
           activeInstants.getInstantsOrderedByStateTransitionTime
             .skip(activeInstants.countInstants() - 1)
             .findFirst()
@@ -147,9 +161,9 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key() -> useStateTransitionTime.toString,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
-          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
+          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime,
+          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandling.name
         )
 
         val rdd = tableType match {

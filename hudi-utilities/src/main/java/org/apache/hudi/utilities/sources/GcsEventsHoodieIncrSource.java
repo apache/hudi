@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -39,7 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME;
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
@@ -163,17 +164,17 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
   private QueryInfo getQueryInfo(Option<String> lastCkptStr) {
     Option<String> beginInstant = getBeginInstant(lastCkptStr);
-    boolean useStateTransitionTime = props.getBoolean(READ_BY_STATE_TRANSITION_TIME().key(),
-        READ_BY_STATE_TRANSITION_TIME().defaultValue());
 
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(
+        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
     Pair<String, Pair<String, String>> queryInfoPair = calculateBeginAndEndInstants(
-        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, useStateTransitionTime);
+        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 
     QueryInfo queryInfo = new QueryInfo(
         queryInfoPair.getLeft(),
         queryInfoPair.getRight().getLeft(),
         queryInfoPair.getRight().getRight(),
-        useStateTransitionTime);
+        handlingMode);
 
     if (LOG.isDebugEnabled()) {
       queryInfo.logDetails();

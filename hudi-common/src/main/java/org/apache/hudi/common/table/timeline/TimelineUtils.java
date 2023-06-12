@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.slf4j.Logger;
@@ -50,7 +51,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACT
 
 /**
  * TimelineUtils provides a common way to query incremental meta-data changes for a hoodie table.
- *
+ * <p>
  * This is useful in multiple places including:
  * 1) HiveSync - this can be used to query partitions that changed since previous sync.
  * 2) Incremental reads - InputFormats can use this API to query
@@ -184,7 +185,7 @@ public class TimelineUtils {
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
-      LOG.info("reading checkpoint info for:"  + instant + " key: " + extraMetadataKey);
+      LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
           metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
 
@@ -319,19 +320,38 @@ public class TimelineUtils {
    * another commit from a concurrent writer can finish earlier, leaving an inflight commit
    * before a completed commit.
    */
-  public static HoodieTimeline filterTimelineForIncrementalQueryIfNeeded(
-      HoodieTableMetaClient metaClient, HoodieTimeline completedCommitTimeline, boolean useStateTransitionTime) {
-    if (useStateTransitionTime) {
+  public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
+      HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
+    if (handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
       return completedCommitTimeline;
     }
+
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
         .filter(instant ->
             !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
                 || !ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
         .firstInstant();
-    return firstIncompleteCommit.map(
-        commit -> completedCommitTimeline.findInstantsBefore(commit.getTimestamp())
-    ).orElse(completedCommitTimeline);
+
+    boolean noHollowCommit = firstIncompleteCommit
+        .map(i -> completedCommitTimeline.findInstantsAfter(i.getTimestamp()).empty())
+        .orElse(true);
+    if (noHollowCommit) {
+      return completedCommitTimeline;
+    }
+
+    switch (handlingMode) {
+      case EXCEPTION:
+        throw new HoodieException("");
+      case FILTER:
+        LOG.warn("");
+        return completedCommitTimeline.findInstantsBefore(firstIncompleteCommit.get().getTimestamp());
+      default:
+        throw new HoodieException("");
+    }
+  }
+
+  public enum HollowCommitHandling {
+    EXCEPTION, FILTER, USE_STATE_TRANSITION_TIME;
   }
 }

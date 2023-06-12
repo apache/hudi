@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,10 +45,10 @@ import java.util.List;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
-import static org.apache.hudi.DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
@@ -118,10 +119,11 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         lastCkptStr.isPresent()
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
             : Option.empty();
-    boolean useStateTransitionTime = props.getBoolean(READ_BY_STATE_TRANSITION_TIME().key(), READ_BY_STATE_TRANSITION_TIME().defaultValue());
 
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(
+        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
     Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = calculateBeginAndEndInstants(sparkContext, srcPath,
-        numInstantsPerFetch, beginInstant, missingCheckpointStrategy, useStateTransitionTime);
+        numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 
     if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
       LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
@@ -133,9 +135,10 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (queryTypeAndInstantEndpts.getKey().equals(QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
       source = sparkSession.read().format("org.apache.hudi")
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(READ_BY_STATE_TRANSITION_TIME().key(), useStateTransitionTime)
           .option(BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getLeft())
-          .option(END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight()).load(srcPath);
+          .option(END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight())
+          .option(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), handlingMode.name())
+          .load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
       source = sparkSession.read().format("org.apache.hudi")

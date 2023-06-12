@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,7 +35,7 @@ import org.apache.spark.sql.Row;
 import java.util.Objects;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.table.timeline.TimelineUtils.filterTimelineForIncrementalQueryIfNeeded;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
@@ -67,13 +68,14 @@ public class IncrSourceHelper {
   public static Pair<String, Pair<String, String>> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
                                                                                 int numInstantsPerFetch, Option<String> beginInstant,
                                                                                 MissingCheckpointStrategy missingCheckpointStrategy,
-                                                                                boolean useStateTransitionTime) {
+                                                                                HollowCommitHandling handlingMode) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
-    final HoodieTimeline activeCommitTimeline = filterTimelineForIncrementalQueryIfNeeded(srcMetaClient, completedCommitTimeline, useStateTransitionTime);
-    Function<HoodieInstant, String> timestampForLastInstant = instant -> useStateTransitionTime ? instant.getStateTransitionTime() : instant.getTimestamp();
+    final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
+    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME
+        ? instant.getStateTransitionTime() : instant.getTimestamp();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
