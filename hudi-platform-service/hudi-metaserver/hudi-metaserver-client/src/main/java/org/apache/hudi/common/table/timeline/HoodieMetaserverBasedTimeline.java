@@ -46,7 +46,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   }
 
   @Override
-  protected void deleteInstantFile(HoodieInstant instant) {
+  public void deleteInstant(HoodieInstant instant) {
     metaserverClient.deleteInstant(databaseName, tableName, instant);
   }
 
@@ -57,10 +57,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   }
 
   @Override
-  public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
-    FileStatus status = new FileStatus();
-    status.setPath(new Path(filename));
-    HoodieInstant instant = new HoodieInstant(status);
+  public void createInstant(HoodieInstant instant, Option<byte[]> content, boolean allowOverwrite) {
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     metaserverClient.createNewInstant(databaseName, tableName, instant, Option.empty());
   }
