@@ -210,7 +210,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       LOG.info("Creating a new instant " + instant);
       // Create the request replace file
       createInstant(instant,
-              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+          TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
     } catch (IOException e) {
       throw new HoodieIOException("Error create requested replace commit ", e);
     }
