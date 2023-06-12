@@ -336,7 +336,9 @@ public class UtilHelpers {
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
-    sparkConf.set("spark.executor.memory", sparkMemory);
+    if (sparkMemory != null) {
+      sparkConf.set("spark.executor.memory", sparkMemory);
+    }
     return new JavaSparkContext(sparkConf);
   }
 
