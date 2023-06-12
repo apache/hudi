@@ -209,7 +209,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     });
 
     // delete inflight instant
-    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(HoodieTimeline.getIndexInflightInstant(indexInstant.getTimestamp()));
+    table.getMetaClient().reloadActiveTimeline().deleteInstantIfExists(HoodieTimeline.getIndexInflightInstant(indexInstant.getTimestamp()));
   }
 
   private List<HoodieInstant> getInstantsToCatchup(String indexUptoInstant) {

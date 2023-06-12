@@ -197,11 +197,11 @@ public class RepairsCommand {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-        HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        client.getActiveTimeline().deleteInstant(instant);
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+          client.getActiveTimeline().deleteInstant(instant);
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }

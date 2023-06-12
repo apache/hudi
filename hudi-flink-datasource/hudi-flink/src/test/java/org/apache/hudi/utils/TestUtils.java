@@ -20,7 +20,6 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -127,7 +126,7 @@ public class TestUtils {
   public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
-    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant);
+    metaClient.getActiveTimeline().deleteInstant(instant);
     return metadata;
   }
 

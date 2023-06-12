@@ -707,8 +707,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             HoodieIndexPlan indexPlan = deserializeIndexPlan(metaClient.getActiveTimeline().readIndexPlanAsBytes(instant).get());
             if (indexPlan.getIndexPartitionInfos().stream()
                 .anyMatch(indexPartitionInfo -> indexPartitionInfo.getMetadataPartitionPath().equals(partitionPath))) {
-              metaClient.getActiveTimeline().deleteInstantFileIfExists(instant);
-              metaClient.getActiveTimeline().deleteInstantFileIfExists(getIndexInflightInstant(instant.getTimestamp()));
+              metaClient.getActiveTimeline().deleteInstantIfExists(instant);
+              metaClient.getActiveTimeline().deleteInstantIfExists(getIndexInflightInstant(instant.getTimestamp()));
             }
           } catch (IOException e) {
             LOG.error("Failed to delete the instant file corresponding to " + instant);

@@ -139,6 +139,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       }
     });
     // delete requested instant
-    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(indexInstant);
+    table.getMetaClient().reloadActiveTimeline().deleteInstantIfExists(indexInstant);
   }
 }

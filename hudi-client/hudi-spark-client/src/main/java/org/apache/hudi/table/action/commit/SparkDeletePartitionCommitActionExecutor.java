@@ -75,8 +75,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
 
       // created requested
       HoodieInstant dropPartitionsInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
-      if (!table.getMetaClient().getFs().exists(new Path(table.getMetaClient().getMetaPath(),
-          dropPartitionsInstant.getFileName()))) {
+      if (!table.getActiveTimeline().instantExists(dropPartitionsInstant)) {
         HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.DELETE_PARTITION.name())
             .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))

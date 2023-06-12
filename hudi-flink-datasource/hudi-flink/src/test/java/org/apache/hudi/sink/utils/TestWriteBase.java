@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -456,7 +455,7 @@ public class TestWriteBase {
     public TestHarness rollbackLastCompleteInstantToInflight() throws Exception {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
       Option<HoodieInstant> lastCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
+      metaClient.getActiveTimeline().deleteInstant(lastCompletedInstant.get());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream =
           metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + this.lastComplete), true);

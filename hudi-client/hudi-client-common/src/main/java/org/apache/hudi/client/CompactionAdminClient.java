@@ -125,16 +125,14 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (!dryRun && allSuccess.isPresent() && allSuccess.get()) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      if (metaClient.getActiveTimeline().instantExists(inflight)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
       }
       // Leave the trace in aux folder but delete from metapath.
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
-      boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
-      ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
+      metaClient.getActiveTimeline().deleteInstant(instant);
     }
     return res;
   }
@@ -170,8 +168,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      if (metaClient.getActiveTimeline().instantExists(inflight)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }

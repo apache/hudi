@@ -201,7 +201,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void createNewInstant(HoodieInstant instant) {
     LOG.info("Creating a new instant " + instant);
     // Create the in-flight file
-    createFileInMetaPath(instant.getFileName(), Option.empty(), false);
+    createInstant(instant, Option.empty(), false);
   }
 
   public void createRequestedReplaceCommit(String instantTime, String actionType) {
@@ -209,7 +209,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
       LOG.info("Creating a new instant " + instant);
       // Create the request replace file
-      createFileInMetaPath(instant.getFileName(),
+      createInstant(instant,
               TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
     } catch (IOException e) {
       throw new HoodieIOException("Error create requested replace commit ", e);
@@ -234,73 +234,63 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void deleteInflight(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isInflight());
-    deleteInstantFile(instant);
+    deleteInstant(instant);
   }
 
   public void deletePending(HoodieInstant instant) {
     ValidationUtils.checkArgument(!instant.isCompleted());
-    deleteInstantFile(instant);
+    deleteInstant(instant);
   }
 
   public void deleteCompletedRollback(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isCompleted());
-    deleteInstantFile(instant);
-  }
-
-  public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
-    try {
-      fs.delete(new Path(metaPath, instant.getFileName()), false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not delete instant file" + instant.getFileName(), e);
-    }
+    deleteInstant(instant);
   }
 
   public void deleteEmptyInstantIfExists(HoodieInstant instant) {
     ValidationUtils.checkArgument(isEmpty(instant));
-    deleteInstantFileIfExists(instant);
+    deleteInstantIfExists(instant);
   }
 
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
-    deleteInstantFile(instant);
+    deleteInstant(instant);
   }
 
   /**
    * Note: This method should only be used in the case that delete requested/inflight instant or empty clean instant,
    * and completed commit instant in an archive operation.
    */
-  public void deleteInstantFileIfExists(HoodieInstant instant) {
-    LOG.info("Deleting instant " + instant);
-    Path commitFilePath = getInstantFileNamePath(instant.getFileName());
-    try {
-      if (metaClient.getFs().exists(commitFilePath)) {
-        boolean result = metaClient.getFs().delete(commitFilePath, false);
-        if (result) {
-          LOG.info("Removed instant " + instant);
-        } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
-        }
-      } else {
-        LOG.warn("The commit " + commitFilePath + " to remove does not exist");
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not remove commit " + commitFilePath, e);
+  public void deleteInstantIfExists(HoodieInstant instant) {
+    if (instantExists(instant)) {
+      deleteInstant(instant);
+    } else {
+      LOG.warn("The instant " + instant + " to remove does not exist");
     }
   }
 
-  protected void deleteInstantFile(HoodieInstant instant) {
+  public void deleteInstant(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);
-    Path inFlightCommitFilePath = getInstantFileNamePath(instant.getFileName());
+    Path instantFilePath = getInstantFileNamePath(instant.getFileName());
     try {
-      boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
+      boolean result = metaClient.getFs().delete(instantFilePath, false);
       if (result) {
         LOG.info("Removed instant " + instant);
       } else {
         throw new HoodieIOException("Could not delete instant " + instant);
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
+      throw new HoodieIOException("Could not remove instant " + instantFilePath, e);
+    }
+  }
+
+  public boolean instantExists(HoodieInstant instant) {
+    Path instantFilePath = getInstantFileNamePath(instant.getFileName());
+    try {
+      return metaClient.getFs().exists(instantFilePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not check instant exists " + instantFilePath, e);
     }
   }
 
@@ -604,7 +594,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
-        createFileInMetaPath(fromInstant.getFileName(), data, allowRedundantTransitions);
+        createInstant(fromInstant, data, allowRedundantTransitions);
         Path fromInstantPath = getInstantFileNamePath(fromInstant.getFileName());
         Path toInstantPath = getInstantFileNamePath(toInstant.getFileName());
         boolean success = metaClient.getFs().rename(fromInstantPath, toInstantPath);
@@ -688,7 +678,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, overwrite);
+    createInstant(instant, content, overwrite);
   }
 
   public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
@@ -697,7 +687,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, overwrite);
+    createInstant(instant, content, overwrite);
   }
 
   /**
@@ -705,28 +695,28 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createInstant(instant, content, false);
   }
 
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createInstant(instant, content, false);
   }
 
   public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createInstant(instant, content, false);
   }
 
   public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createInstant(instant, content, false);
   }
 
   /**
@@ -785,11 +775,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createInstant(instant, content, false);
   }
 
-  protected void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
-    Path fullPath = getInstantFileNamePath(filename);
+  protected void createInstant(HoodieInstant instant, Option<byte[]> content, boolean allowOverwrite) {
+    Path fullPath = getInstantFileNamePath(instant.getFileName());
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
     } else {

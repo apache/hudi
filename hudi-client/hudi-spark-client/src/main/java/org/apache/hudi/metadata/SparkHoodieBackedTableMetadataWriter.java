@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -163,7 +162,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
           // already part of completed commit. So, we have to manually remove the completed instant and proceed.
           // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-          HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant.get());
+          metadataMetaClient.getActiveTimeline().deleteInstant(alreadyCompletedInstant.get());
           metadataMetaClient.reloadActiveTimeline();
         }
         // If the alreadyCompletedInstant is empty, that means there is a requested or inflight

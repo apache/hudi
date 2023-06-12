@@ -284,7 +284,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     }
 
     metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
-      metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
+      metaClient.getActiveTimeline().deleteInstantIfExists(hoodieInstant);
       metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
     });
 

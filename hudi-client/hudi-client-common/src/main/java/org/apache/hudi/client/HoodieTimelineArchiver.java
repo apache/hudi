@@ -602,14 +602,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     if (!pendingInstants.isEmpty()) {
       context.foreach(
           pendingInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
+          instant -> activeTimeline.deleteInstantIfExists(instant),
           Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
       );
     }
     if (!completedInstants.isEmpty()) {
       context.foreach(
           completedInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
+          instant -> activeTimeline.deleteInstantIfExists(instant),
           Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
       );
     }
