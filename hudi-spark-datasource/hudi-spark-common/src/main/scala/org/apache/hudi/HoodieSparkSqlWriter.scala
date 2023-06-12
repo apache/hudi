@@ -35,7 +35,7 @@ import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord.{HOODIE_META_COLUMNS_NAME_TO_POS, HoodieMetadataField, HoodieRecordType}
+import org.apache.hudi.common.model.HoodieRecord.{HOODIE_META_COLUMNS_NAME_TO_POS, HoodieRecordType}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
@@ -1176,7 +1176,6 @@ object HoodieSparkSqlWriter {
           it.map { avroRec =>
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               isPrepped)
-
             val avroRecWithoutMeta: GenericRecord = if (isPrepped) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
             } else {

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -51,6 +52,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -235,7 +237,10 @@ public class DataSourceUtils {
 
     if (isPrepped) {
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
-        HoodieAvroRecord record = new HoodieAvroRecord(tuple._1(), new EmptyHoodieRecordPayload());
+
+        HoodieRecord record = client.getConfig().getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
+            ? new HoodieAvroRecord(tuple._1(), new EmptyHoodieRecordPayload())
+            : new HoodieSparkRecord(tuple._1(), new UnsafeRow(), false);
         record.setCurrentLocation(tuple._2().get());
         return record;
       });
@@ -253,7 +258,6 @@ public class DataSourceUtils {
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());

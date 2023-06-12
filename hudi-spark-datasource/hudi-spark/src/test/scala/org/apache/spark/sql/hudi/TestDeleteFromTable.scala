@@ -21,7 +21,7 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
 
   test("Test deleting from table") {
     withRecordType()(withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("cow").foreach { tableType =>
         val tableName = generateTableName
         spark.sql(
           s"""

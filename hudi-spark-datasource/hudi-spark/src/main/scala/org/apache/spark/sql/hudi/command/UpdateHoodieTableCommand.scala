@@ -24,7 +24,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, SubqueryAlias, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, UpdateTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 
@@ -56,9 +56,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val condition = ut.condition.getOrElse(TrueLiteral)
     val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
 
+    // Set config to show that this is a prepped write.
     var config = buildHoodieConfig(catalogTable)
-
-    // Set config to indicate that this is a prepped write.
     config = config + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
