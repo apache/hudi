@@ -2496,21 +2496,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metaserverConfig.isMetaserverEnabled();
   }
 
-  /**
-   * CDC supplemental logging mode.
-   */
-  public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.valueOf(
-        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
-  }
-
-  /**
-   * Table Service Manager configs.
-   */
-  public boolean isTableServiceManagerEnabled() {
-    return tableServiceManagerConfig.isTableServiceManagerEnabled();
-  }
-
   public boolean shouldBackupRollbacks() {
     return getBoolean(ROLLBACK_INSTANT_BACKUP_ENABLED);
   }
@@ -2585,11 +2570,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInternalSchemaCacheEnable(boolean enable) {
-      writeConfig.setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withAvroSchemaValidate(boolean enable) {
       writeConfig.setValue(AVRO_SCHEMA_VALIDATE_ENABLE, String.valueOf(enable));
       return this;
@@ -2612,16 +2592,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWritePayLoad(String payload) {
       writeConfig.setValue(WRITE_PAYLOAD_CLASS_NAME, payload);
-      return this;
-    }
-
-    public Builder withRecordMergerImpls(String recordMergerImpls) {
-      writeConfig.setValue(RECORD_MERGER_IMPLS, recordMergerImpls);
-      return this;
-    }
-
-    public Builder withRecordMergerStrategy(String recordMergerStrategy) {
-      writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
       return this;
     }
 
@@ -2660,11 +2630,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
-      writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
-      return this;
-    }
-
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       writeConfig.setValue(INSERT_PARALLELISM_VALUE, String.valueOf(insertShuffleParallelism));
       writeConfig.setValue(UPSERT_PARALLELISM_VALUE, String.valueOf(upsertShuffleParallelism));
@@ -2686,11 +2651,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withWriteExecutorDisruptorWaitStrategy(String waitStrategy) {
-      writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY, String.valueOf(waitStrategy));
-      return this;
-    }
-
     public Builder withWriteExecutorDisruptorWriteBufferLimitBytes(long size) {
       writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES, String.valueOf(size));
       return this;
@@ -2699,16 +2659,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       writeConfig.setValue(COMBINE_BEFORE_INSERT, String.valueOf(onInsert));
       writeConfig.setValue(COMBINE_BEFORE_UPSERT, String.valueOf(onUpsert));
-      return this;
-    }
-
-    public Builder combineDeleteInput(boolean onDelete) {
-      writeConfig.setValue(COMBINE_BEFORE_DELETE, String.valueOf(onDelete));
-      return this;
-    }
-
-    public Builder withWriteStatusStorageLevel(String level) {
-      writeConfig.setValue(WRITE_STATUS_STORAGE_LEVEL_VALUE, level);
       return this;
     }
 
@@ -2846,18 +2796,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMarkersTimelineServerBasedBatchNumThreads(int numThreads) {
-      writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS, String.valueOf(numThreads));
-      return this;
-    }
-
     public Builder withMarkersTimelineServerBasedBatchIntervalMs(long intervalMs) {
       writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
-      return this;
-    }
-
-    public Builder withMarkersDeleteParallelism(int parallelism) {
-      writeConfig.setValue(MARKERS_DELETE_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
     }
 
@@ -2868,11 +2808,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEmbeddedTimelineServerReuseEnabled(boolean enabled) {
       writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED, String.valueOf(enabled));
-      return this;
-    }
-
-    public Builder withEmbeddedTimelineServerPort(int port) {
-      writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_PORT_NUM, String.valueOf(port));
       return this;
     }
 
@@ -2913,11 +2848,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       writeConfig.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS, String.valueOf(heartbeatIntervalInMs));
-      return this;
-    }
-
-    public Builder withHeartbeatTolerableMisses(Integer heartbeatTolerableMisses) {
-      writeConfig.setValue(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES, String.valueOf(heartbeatTolerableMisses));
       return this;
     }
 
@@ -2981,11 +2911,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withEarlyConflictDetectionCheckCommitConflict(boolean enable) {
-      writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withEarlyConflictDetectionStrategy(String className) {
       writeConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
       return this;
@@ -2993,11 +2918,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withRollbackBackupEnabled(boolean rollbackBackupEnabled) {
       writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_ENABLED, String.valueOf(rollbackBackupEnabled));
-      return this;
-    }
-
-    public Builder withRollbackBackupDirectory(String backupDir) {
-      writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_DIRECTORY, backupDir);
       return this;
     }
 

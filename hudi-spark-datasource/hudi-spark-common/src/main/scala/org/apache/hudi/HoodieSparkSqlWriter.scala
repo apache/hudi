@@ -77,7 +77,6 @@ import java.util.function.BiConsumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.setAsJavaSetConverter
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 
 object HoodieSparkSqlWriter {
 
