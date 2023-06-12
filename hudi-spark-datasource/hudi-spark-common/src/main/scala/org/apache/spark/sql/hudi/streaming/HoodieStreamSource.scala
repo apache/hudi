@@ -69,12 +69,11 @@ class HoodieStreamSource(
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
   /**
-   * Note: when hollow commit is found using streaming read, unlike batch incremental query,
-   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we
-   * use [[HollowCommitHandling.FILTER]] to stop processing data beyond the hollow commit to
-   * avoid unintentional skip.
+   * When hollow commits are found while doing streaming read , unlike batch incremental query,
+   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we use [[HollowCommitHandling.FILTER]]
+   * to stop processing data beyond the hollow commit to avoid unintentional skip.
    *
-   * Users are recommended to set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
+   * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
    * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the stopping behavior.
    */
   private val hollowCommitHandling: HollowCommitHandling =

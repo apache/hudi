@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -35,6 +36,7 @@ import org.apache.spark.sql.Row;
 import java.util.Objects;
 import java.util.function.Function;
 
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
@@ -53,6 +55,20 @@ public class IncrSourceHelper {
     ValidationUtils.checkArgument(ts > 0, "Timestamp must be positive");
     long lower = ts - 1;
     return "" + lower;
+  }
+
+  /**
+   * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
+   * unlike batch incremental query, we do not use {@link HollowCommitHandling#EXCEPTION} by default,
+   * instead we use {@link HollowCommitHandling#FILTER} to stop processing data beyond the hollow commit
+   * to avoid unintentional skip.
+   * <p>
+   * Users can set {@link DataSourceReadOptions#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT} to
+   * {@link HollowCommitHandling#USE_STATE_TRANSITION_TIME} to avoid the stopping behavior.
+   */
+  public static HollowCommitHandling getHollowCommitHandleMode(TypedProperties props) {
+    return HollowCommitHandling.valueOf(
+        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
   }
 
   /**

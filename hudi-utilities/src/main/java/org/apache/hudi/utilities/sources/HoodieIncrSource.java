@@ -46,6 +46,7 @@ import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
 public class HoodieIncrSource extends RowSource {
 
@@ -152,8 +153,7 @@ public class HoodieIncrSource extends RowSource {
     Option<String> beginInstant =
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
-    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(
-        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = calculateBeginAndEndInstants(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 

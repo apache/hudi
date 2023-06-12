@@ -50,6 +50,7 @@ import scala.language.implicitConversions
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
+  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"

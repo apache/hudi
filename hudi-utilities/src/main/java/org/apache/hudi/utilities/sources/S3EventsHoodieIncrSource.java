@@ -56,6 +56,7 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FIL
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.loadAsDataset;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
@@ -120,8 +121,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
             : Option.empty();
 
-    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(
-        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = calculateBeginAndEndInstants(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 

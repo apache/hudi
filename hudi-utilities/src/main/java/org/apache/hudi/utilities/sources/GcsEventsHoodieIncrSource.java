@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
@@ -48,6 +47,7 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
 /**
@@ -165,8 +165,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private QueryInfo getQueryInfo(Option<String> lastCkptStr) {
     Option<String> beginInstant = getBeginInstant(lastCkptStr);
 
-    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(
-        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     Pair<String, Pair<String, String>> queryInfoPair = calculateBeginAndEndInstants(
         sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 
