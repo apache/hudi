@@ -346,6 +346,7 @@ public class CompactionUtils {
    */
   public static Option<HoodieInstant> getOldestInstantToRetainForCompaction(
       HoodieActiveTimeline activeTimeline, int maxDeltaCommits) {
+    Option<HoodieInstant> oldestInstantToRetain = Option.empty();
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfoOption =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(activeTimeline);
     if (deltaCommitsInfoOption.isPresent()) {
@@ -353,14 +354,28 @@ public class CompactionUtils {
       HoodieTimeline deltaCommitTimeline = deltaCommitsInfo.getLeft();
       int numDeltaCommits = deltaCommitTimeline.countInstants();
       if (numDeltaCommits < maxDeltaCommits) {
-        return Option.of(deltaCommitsInfo.getRight());
+        oldestInstantToRetain = Option.of(deltaCommitsInfo.getRight());
       } else {
         // delta commits with the last one to keep
         List<HoodieInstant> instants = deltaCommitTimeline.getInstantsAsStream()
             .limit(numDeltaCommits - maxDeltaCommits + 1).collect(Collectors.toList());
-        return Option.of(instants.get(instants.size() - 1));
+        oldestInstantToRetain = Option.of(instants.get(instants.size() - 1));
       }
     }
-    return Option.empty();
+
+    // retain the commit before inflignt compaction to support schema Evolution
+    Option<HoodieInstant> firstPendingCompactionInstant = activeTimeline.filterPendingCompactionTimeline().firstInstant();
+    Option<HoodieInstant> lastInstantBeforeFirstPendingCompaction = firstPendingCompactionInstant.isPresent()
+        ? activeTimeline.getWriteTimeline().findInstantsBefore(firstPendingCompactionInstant.get().getTimestamp()).filterCompletedInstants().lastInstant()
+        : Option.empty();
+
+    if (lastInstantBeforeFirstPendingCompaction.isPresent() && oldestInstantToRetain.isPresent()) {
+      oldestInstantToRetain = lastInstantBeforeFirstPendingCompaction.get().compareTo(oldestInstantToRetain.get()) < 0
+                ? lastInstantBeforeFirstPendingCompaction : oldestInstantToRetain;
+    } else if (lastInstantBeforeFirstPendingCompaction.isPresent()) {
+      oldestInstantToRetain = lastInstantBeforeFirstPendingCompaction;
+    }
+
+    return oldestInstantToRetain;
   }
 }

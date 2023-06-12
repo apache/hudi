@@ -286,18 +286,27 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   public void testGetOldestInstantToKeepForCompaction(boolean hasCompletedCompaction) {
     HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
     Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20);
-
     if (hasCompletedCompaction) {
+
       assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"), actual.get());
+
+      actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
+
+      actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
+
     } else {
       assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"), actual.get());
+
+      actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"), actual.get());
+
+      actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"), actual.get());
     }
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
   }
 
   @Test
@@ -317,7 +326,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
           Stream.of("01", "02", "03", "04", "05", "07", "08"),
           Stream.empty(),
           Stream.of(
-              Pair.of("06", HoodieTimeline.COMMIT_ACTION),
+              Pair.of("06", HoodieTimeline.COMPACTION_ACTION),
               Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
     }
   }
