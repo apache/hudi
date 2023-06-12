@@ -263,8 +263,7 @@ public class HoodieCompactor {
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
         Option<HoodieInstant> firstCompactionInstant =
-            metaClient.getActiveTimeline().firstInstant(
-                HoodieTimeline.COMPACTION_ACTION, HoodieInstant.State.REQUESTED);
+            metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
