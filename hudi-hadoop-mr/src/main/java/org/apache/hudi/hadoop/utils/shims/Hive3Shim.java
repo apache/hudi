@@ -18,6 +18,10 @@
 
 package org.apache.hudi.hadoop.utils.shims;
 
+import java.io.IOException;
+import java.util.Map;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.io.Writable;
@@ -39,6 +43,7 @@ public class Hive3Shim implements HiveShim {
   public static final String HIVE_TIMESTAMP_TYPE_CLASS = "org.apache.hadoop.hive.common.type.Timestamp";
   public static final String TIMESTAMP_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.TimestampWritableV2";
   public static final String DATE_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.DateWritableV2";
+  public static final String HIVE_FORMAT_UTILS_CLASS = "org.apache.hadoop.hive.ql.io.HiveFileFormatUtils";
 
   private static Class<?> TIMESTAMP_CLASS = null;
   private static Method SET_TIME_IN_MILLIS = null;
@@ -48,6 +53,8 @@ public class Hive3Shim implements HiveShim {
   private static Class<?> DATE_WRITEABLE_CLASS = null;
   private static Method GET_DAYS = null;
   private static Constructor<?> DATE_WRITEABLE_V2_CONSTRUCTOR = null;
+  private static Class<?> HIVE_UTILS_CLASS = null;
+  private static Method PATH_RECURSIVELY_METHOD = null;
 
   static {
     // timestamp
@@ -68,6 +75,15 @@ public class Hive3Shim implements HiveShim {
     } catch (ClassNotFoundException | NoSuchMethodException e) {
       LOG.trace("can not find hive3 datev2 class or method, use hive2 class!", e);
     }
+
+    // hiveFormatUtil
+    try{
+      HIVE_UTILS_CLASS = Class.forName(HIVE_FORMAT_UTILS_CLASS);
+      PATH_RECURSIVELY_METHOD = HIVE_UTILS_CLASS.getMethod("getFromPathRecursively", Map.class, Path.class, Map.class);
+    } catch (ClassNotFoundException | NoSuchMethodException e) {
+      LOG.trace("can not find hive3 HiveFileFormatUtils.getFromPathRecursively!", e);
+    }
+
   }
 
   private static final Hive3Shim INSTANCE = new Hive3Shim();
@@ -120,6 +136,16 @@ public class Hive3Shim implements HiveShim {
       return ((Timestamp) TO_SQL_TIMESTAMP.invoke(timestamp)).getTime();
     } catch (IllegalAccessException | InvocationTargetException e) {
       throw new HoodieException("can not create writable v2 class!", e);
+    }
+  }
+
+  @Override
+  public PartitionDesc getPartitionDesc(Map<Path, PartitionDesc> pathToPartitionInfo, Path dir,
+      Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap) throws IOException {
+    try {
+      return (PartitionDesc) PATH_RECURSIVELY_METHOD.invoke(null, pathToPartitionInfo, dir, cacheMap);
+    } catch (Exception e) {
+      throw new IOException(e);
     }
   }
 }

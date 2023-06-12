@@ -18,16 +18,23 @@
 
 package org.apache.hudi.hadoop.utils.shims;
 
+import java.util.Map;
+import java.io.IOException;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.Writable;
 
 import java.sql.Timestamp;
+import org.apache.hudi.hadoop.utils.HudiHiveFileFormatUtils;
 
 /**
  * Shim clazz for Hive2.
  */
+
 public class Hive2Shim implements HiveShim {
+
   private static final Hive2Shim INSTANCE = new Hive2Shim();
 
   private Hive2Shim() {
@@ -52,5 +59,16 @@ public class Hive2Shim implements HiveShim {
 
   public long getMills(Object timestamp) {
     return ((Timestamp) timestamp).getTime();
+  }
+
+  @Override
+  public PartitionDesc getPartitionDesc(Map<Path, PartitionDesc> pathToPartitionInfo, Path dir,
+      Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap) throws IOException {
+
+    try {
+      return HudiHiveFileFormatUtils.getPartitionDescFromPathRecursively( pathToPartitionInfo, dir, cacheMap);
+    } catch (Exception e) {
+      throw new IOException(e);
+    }
   }
 }

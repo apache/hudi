@@ -26,8 +26,19 @@ import java.util.function.Function;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 
+/**
+ * This class is used to assist compatibility with versions smaller than hive 2.3 (hive 2.x).
+ * There have been some API changes on hive (2.0-2.2) and hive 2.3, mainly the data structure
+ * returned in mapwork.getPathToAliases. In 2.3, the key returned was path, while in previous
+ * versions, String was returned. What was done here is to convert it uniformly to Path so
+ * that existing code can accommodate these changes.
+ */
 public class HiveCompatibleUtils {
 
+  /**
+   * Convert the key of the internal map(IOPrepareCache.get().allocatePartitionDescMap)
+   * of PartitionDescMap from String to Path
+   */
   public static <K> Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> convertPartitionDesc(
       Map<Map<K, PartitionDesc>, Map<K, PartitionDesc>> oldMap) {
     Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> resMap = new LinkedHashMap<>();
@@ -40,7 +51,10 @@ public class HiveCompatibleUtils {
     return resMap;
   }
 
-  public static <K, V, T> Map<Path, V> convertMapKeyToPath(Map<K, V> pathToAliases) {
+  /**
+   * Convert the key of PathToAliases map(MapWork.getPathToAliases) from String to Path
+   */
+  public static <K, V> Map<Path, V> convertMapKeyToPath(Map<K, V> pathToAliases) {
     return convertMap(pathToAliases, key -> {
       if (key instanceof String) {
         return new Path(String.valueOf(key));
