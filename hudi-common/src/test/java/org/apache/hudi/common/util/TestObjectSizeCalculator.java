@@ -59,6 +59,26 @@ public class TestObjectSizeCalculator {
     String name = "Alice Bob";
     Person person = new Person(name);
 
+    if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      assertEquals(48, getObjectSize(string));
+      assertEquals(168, getObjectSize(stringArray));
+      assertEquals(144, getObjectSize(stringBuilder));
+      assertEquals(72, getObjectSize(DayOfWeek.TUESDAY));
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1256 : 1176,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(96, getObjectSize(person));
+    } else {
+      assertEquals(56, getObjectSize(string));
+      assertEquals(184, getObjectSize(stringArray));
+      assertEquals(240, getObjectSize(stringBuilder));
+      assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
+      // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
+      // implement props, which will change the size of the object.
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(104, getObjectSize(person));
+    }
+
     assertEquals(40, getObjectSize(emptyString));
     assertEquals(56, getObjectSize(string));
     assertEquals(184, getObjectSize(stringArray));
@@ -82,6 +102,19 @@ public class TestObjectSizeCalculator {
     assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
         getObjectSize(Schema.create(Schema.Type.STRING)));
     assertEquals(104, getObjectSize(person));
+  }
+
+  private static int getJavaVersion() {
+    String version = System.getProperty("java.version");
+    if (version.startsWith("1.")) {
+      version = version.substring(2, 3);
+    } else {
+      int dot = version.indexOf(".");
+      if (dot != -1) {
+        version = version.substring(0, dot);
+      }
+    }
+    return Integer.parseInt(version);
   }
 
   class EmptyClass {
