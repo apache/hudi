@@ -330,6 +330,10 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
 
+  public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par1")));
+
   public static List<RowData> DATA_SET_DISORDER_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
