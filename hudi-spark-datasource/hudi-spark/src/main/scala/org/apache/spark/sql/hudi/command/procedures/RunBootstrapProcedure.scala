@@ -52,7 +52,9 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     ProcedureParameter.optional(13, "parallelism", DataTypes.IntegerType, 1500),
     ProcedureParameter.optional(14, "enable_hive_sync", DataTypes.BooleanType, false),
     ProcedureParameter.optional(15, "props_file_path", DataTypes.StringType, ""),
-    ProcedureParameter.optional(16, "bootstrap_overwrite", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(16, "bootstrap_overwrite", DataTypes.BooleanType, false),
+    // params => key=value, key2=value2
+    ProcedureParameter.optional(17, "options", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -83,6 +85,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     val enableHiveSync = getArgValueOrDefault(args, PARAMETERS(14)).get.asInstanceOf[Boolean]
     val propsFilePath = getArgValueOrDefault(args, PARAMETERS(15)).get.asInstanceOf[String]
     val bootstrapOverwrite = getArgValueOrDefault(args, PARAMETERS(16)).get.asInstanceOf[Boolean]
+    val options = getArgValueOrDefault(args, PARAMETERS(17))
 
     val (tableName, database) = HoodieCLIUtils.getTableIdentifier(table.get.asInstanceOf[String])
     val configs: util.List[String] = new util.ArrayList[String]
@@ -91,6 +94,10 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     else readConfig(jsc.hadoopConfiguration, new Path(propsFilePath), configs).getProps(true)
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key, bootstrapPath)
+
+    if (bootstrapPath.equals(basePath)) {
+      throw new IllegalArgumentException("bootstrap_path and base_path must be different")
+    }
 
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass) && KeyGeneratorType.getNames.contains(keyGeneratorClass.toUpperCase(Locale.ROOT))) {
       properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
@@ -121,6 +128,18 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     // add session bootstrap conf
     TypedProperties.putAll(properties, spark.sqlContext.conf.getAllConfs.asJava)
+
+    // add conf from procedure, may overwrite session conf
+    options match {
+      case Some(p) =>
+        val paramPairs = HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
+        paramPairs.foreach { pair =>
+          properties.setProperty(pair._1, pair._2)
+        }
+      case _ =>
+        logInfo("No options")
+    }
+
     new BootstrapExecutorUtils(cfg, jsc, fs, jsc.hadoopConfiguration, properties).execute()
     Seq(Row(0))
   }

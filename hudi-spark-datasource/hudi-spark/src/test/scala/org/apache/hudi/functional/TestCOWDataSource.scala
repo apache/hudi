@@ -45,14 +45,13 @@ import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
-import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1182,7 +1181,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val snapshotDF0 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(numRecords, snapshotDF0.count())
 
     val df1 = snapshotDF0.limit(numRecordsToDelete)
@@ -1197,7 +1196,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
@@ -1435,45 +1434,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }})
   }
 
-  /**
-   * Validates that clustering dag is triggered only once.
-   * We leverage spark event listener to validate it.
-   */
-  @Test
-  def testValidateClusteringForRepeatedDag(): Unit = {
-    // register stage event listeners
-    val sm = new StageEventManager("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
-    spark.sparkContext.addSparkListener(sm)
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testMapArrayTypeSchemaEvolutionDuringMerge(recordType: HoodieRecordType): Unit = {
+    assertDoesNotThrow(
+      new Executable {
+        override def execute(): Unit = {
+          val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
 
-    var structType: StructType = null
-    for (i <- 1 to 2) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
-      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-      structType = inputDF.schema
-      inputDF.write.format("hudi")
-        .options(commonOpts)
-        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
-        .option("hoodie.metadata.enable", "false")
-        .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
-        .save(basePath)
-    }
+          val schema1 = StructType(
+            StructField("_row_key", StringType, nullable = false) ::
+              StructField("map_col", MapType(StringType, StringType, false)) ::
+              StructField("array_col", ArrayType(LongType, containsNull = false)) ::
+              StructField("timestamp", LongType, nullable = true) ::
+              StructField("partition", LongType, nullable = true) :: Nil)
+          val records = List(Row("1", Map("foo"-> "bar"), Array(1L), 1L, 1L))
+          val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
+          inputDF.write.format("org.apache.hudi")
+            .options(commonOpts ++ writeOpts)
+            .mode(SaveMode.Overwrite)
+            .save(basePath)
 
-    // trigger clustering.
-    val records = recordsToStrings(dataGen.generateInserts("%05d".format(4), 100)).toList
-    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    structType = inputDF.schema
-    inputDF.write.format("hudi")
-      .options(commonOpts)
-      .option("hoodie.cleaner.commits.retained", "0")
-      .option("hoodie.parquet.small.file.limit", "0")
-      .option("hoodie.clustering.inline", "true")
-      .option("hoodie.clustering.inline.max.commits", "2")
-      .option("hoodie.metadata.enable", "false")
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    // verify that clustering is not trigered more than once.
-    assertEquals(sm.triggerCount, 1)
+          val schema2 = StructType(StructField("_row_key", StringType, nullable = false) ::
+            StructField("map_col", MapType(StringType, StringType, true)) ::
+            StructField("array_col", ArrayType(LongType, containsNull = true)) ::
+            StructField("timestamp", LongType, nullable = true) ::
+            StructField("partition", LongType, nullable = true) :: Nil)
+          val records2 = List(Row("2", Map.empty, Array.empty, 1L, 1L))
+          val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
+          inputDF2.write.format("org.apache.hudi")
+            .options(commonOpts ++ writeOpts)
+            .mode(SaveMode.Append)
+            .save(basePath)
+        }
+      })
   }
 
   def getWriterReaderOpts(recordType: HoodieRecordType,
@@ -1507,16 +1501,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  /** ************ Stage Event Listener ************* */
-  class StageEventManager(eventToTrack: String) extends SparkListener() {
-    var triggerCount = 0
-
-    override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
-      if (stageCompleted.stageInfo.details.contains(eventToTrack)) {
-        triggerCount += 1
-      }
-    }
-  }
 }
 
 object TestCOWDataSource {

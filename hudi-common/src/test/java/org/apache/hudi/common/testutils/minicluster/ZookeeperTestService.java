@@ -163,6 +163,7 @@ public class ZookeeperTestService {
     // resulting in test failure (client timeout on first session).
     // set env and directly in order to handle static init/gc issues
     System.setProperty("zookeeper.preAllocSize", "100");
+    System.setProperty("zookeeper.4lw.commands.whitelist", "*");
     FileTxnLog.setPreallocSize(100 * 1024);
   }
 

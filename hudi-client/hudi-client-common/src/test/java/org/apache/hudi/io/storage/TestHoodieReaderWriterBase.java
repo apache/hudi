@@ -20,8 +20,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
@@ -34,6 +34,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -143,20 +145,19 @@ public abstract class TestHoodieReaderWriterBase {
     verifyComplexRecords(createReader(conf).getRecordIterator());
   }
 
-  @Test
-  public void testWriteReadWithEvolvedSchema() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "/exampleEvolvedSchema.avsc",
+      "/exampleEvolvedSchemaChangeOrder.avsc",
+      "/exampleEvolvedSchemaColumnRequire.avsc",
+      "/exampleEvolvedSchemaColumnType.avsc",
+      "/exampleEvolvedSchemaDeleteColumn.avsc"
+  })
+  public void testWriteReadWithEvolvedSchema(String evolvedSchemaPath) throws Exception {
     writeFileWithSimpleSchema();
-
     Configuration conf = new Configuration();
     HoodieAvroFileReader hoodieReader = createReader(conf);
-    String[] schemaList = new String[] {
-        "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
-        "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
-        "/exampleEvolvedSchemaDeleteColumn.avsc"};
-
-    for (String evolvedSchemaPath : schemaList) {
-      verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
-    }
+    verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
   }
 
   @Test
@@ -182,7 +183,7 @@ public abstract class TestHoodieReaderWriterBase {
     writer.close();
   }
 
-  protected void writeFileWithSchemaWithMeta() throws Exception {
+  private void writeFileWithSchemaWithMeta() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
     HoodieAvroFileWriter writer = createWriter(avroSchema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
@@ -209,7 +210,7 @@ public abstract class TestHoodieReaderWriterBase {
     }
   }
 
-  protected void verifyComplexRecords(Iterator<HoodieRecord<IndexedRecord>> iterator) {
+  private void verifyComplexRecords(Iterator<HoodieRecord<IndexedRecord>> iterator) {
     int index = 0;
     while (iterator.hasNext()) {
       GenericRecord record = (GenericRecord) iterator.next().getData();
@@ -259,13 +260,15 @@ public abstract class TestHoodieReaderWriterBase {
     String numStr = String.format("%02d", index);
     assertEquals("key" + numStr, record.get("_row_key").toString());
     assertEquals(Integer.toString(index), record.get("time").toString());
-    if ("/exampleEvolvedSchemaColumnType.avsc".equals(schemaPath)) {
+    if (schemaPath.equals("/exampleEvolvedSchemaColumnType.avsc")) {
       assertEquals(Integer.toString(index), record.get("number").toString());
-    } else if ("/exampleEvolvedSchemaDeleteColumn.avsc".equals(schemaPath)) {
-      assertNull(record.get("number"));
+      assertNull(record.getSchema().getField("added_field"));
+    } else if (schemaPath.equals("/exampleEvolvedSchemaDeleteColumn.avsc")) {
+      assertNull(record.getSchema().getField("number"));
+      assertNull(record.getSchema().getField("added_field"));
     } else {
       assertEquals(index, record.get("number"));
+      assertNull(record.get("added_field"));
     }
-    assertNull(record.get("added_field"));
   }
 }

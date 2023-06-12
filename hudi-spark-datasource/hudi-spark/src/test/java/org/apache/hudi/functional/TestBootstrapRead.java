@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -53,6 +54,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -96,18 +98,17 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    //TODO: add dash partitions false with [HUDI-4944]
-    Boolean[] dashPartitions = {true/*,false*/};
-    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     String[] bootstrapType = {"full", "metadata", "mixed"};
+    Boolean[] dashPartitions = {true,false};
+    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
     Integer[] nPartitions = {0, 1, 2};
-
     for (String tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
           for (Integer n : nPartitions) {
             //can't be mixed bootstrap if it's nonpartitioned
-            if (!bt.equals("mixed") || n > 0) {
+            //don't need to test slash partitions if it's nonpartitioned
+            if ((!bt.equals("mixed") && dash) || n > 0) {
               b.add(Arguments.of(bt, dash, tt, n));
             }
           }
@@ -149,8 +150,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    //TODO: enable timeline server with [HUDI-6201]
-    options.put("hoodie.embed.timeline.server", "false");
     if (nPartitions == 0) {
       options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
     } else {
@@ -173,7 +172,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
-
+    if (!dashPartitions) {
+      options.put(HoodieBootstrapConfig.PARTITION_PATH_TRANSLATOR_CLASS_NAME.key(), DecodedBootstrapPartitionPathTranslator.class.getName());
+    }
     switch (bootstrapType) {
       case "metadata":
         options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), MetadataOnlyBootstrapModeSelector.class.getName());
@@ -210,6 +211,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(hudiBasePath);
     if (bootstrapType.equals("mixed")) {
       //mixed tables have a commit for each of the metadata and full bootstrap modes
+      //so to align with the regular hudi table, we need to compact after 4 commits instead of 3
       nCompactCommits = "4";
     }
     updates.write().format("hudi")
@@ -227,12 +229,16 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     }
     Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
+    Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
+      compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
+    compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
     compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {

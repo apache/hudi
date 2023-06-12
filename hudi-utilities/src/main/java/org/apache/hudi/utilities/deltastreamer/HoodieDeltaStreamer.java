@@ -422,6 +422,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--ingestion-metrics-class"}, description = "Ingestion metrics class for reporting metrics during ingestion lifecycles.")
     public String ingestionMetricsClass = HoodieDeltaStreamerMetrics.class.getCanonicalName();
 
+    @Parameter(names = {"--config-hot-update-strategy-class"}, description = "Configuration hot update in continuous mode")
+    public String configHotUpdateStrategyClass = "";
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -617,6 +620,10 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient JavaSparkContext jssc;
 
+    private transient FileSystem fs;
+
+    private transient Configuration hiveConf;
+
     /**
      * Bag of properties with source, hoodie client, key generator etc.
      */
@@ -644,6 +651,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
     private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
 
+    private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       super(HoodieIngestionConfig.newBuilder()
@@ -651,11 +660,15 @@ public class HoodieDeltaStreamer implements Serializable {
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
       this.jssc = jssc;
+      this.fs = fs;
+      this.hiveConf = conf;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
       this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
           TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
+      this.configurationHotUpdateStrategyOpt = StringUtils.isNullOrEmpty(cfg.configHotUpdateStrategyClass) ? Option.empty() :
+          ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, cfg, properties.get());
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         try {
@@ -711,6 +724,13 @@ public class HoodieDeltaStreamer implements Serializable {
       }
     }
 
+    private void reInitDeltaSync() throws IOException {
+      if (deltaSync != null) {
+        deltaSync.close();
+      }
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf, this::onInitializingWriteClient);
+    }
+
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(1);
@@ -727,6 +747,17 @@ public class HoodieDeltaStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
+              // check if deltastreamer need to update the configuration before the sync
+              if (configurationHotUpdateStrategyOpt.isPresent()) {
+                Option<TypedProperties> newProps = configurationHotUpdateStrategyOpt.get().updateProperties(props);
+                if (newProps.isPresent()) {
+                  this.props = newProps.get();
+                  // reinit the DeltaSync only when the props updated
+                  LOG.info("Re-init delta sync with new config properties:");
+                  LOG.info(toSortedTruncatedString(props));
+                  reInitDeltaSync();
+                }
+              }
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(deltaSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
                 LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");

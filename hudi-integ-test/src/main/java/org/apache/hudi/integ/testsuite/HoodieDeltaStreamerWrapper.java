@@ -80,7 +80,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     DeltaSync service = getDeltaSync();
     service.refreshTimeline();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return service.readFromSource(service.getCommitsTimelineOpt(), instantTime);
+    return service.readFromSource(instantTime);
   }
 
   public DeltaSync getDeltaSync() {

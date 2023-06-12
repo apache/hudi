@@ -61,6 +61,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
           + "execution inline for compaction");
 
+  public static final ConfigProperty<String> ENABLE_LOG_COMPACTION = ConfigProperty
+      .key("hoodie.log.compaction.enable")
+      .defaultValue("false")
+      .sinceVersion("0.14")
+      .withDocumentation("By enabling log compaction through this config, log compaction will also get enabled for the metadata table.");
+
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
       .key("hoodie.log.compaction.inline")
       .defaultValue("false")
@@ -432,8 +438,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
-      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
+    public Builder withLogCompactionEnabled(boolean enableLogCompaction) {
+      compactionConfig.setValue(ENABLE_LOG_COMPACTION, Boolean.toString(enableLogCompaction));
+      return this;
+    }
+
+    public Builder withLogCompactionBlocksThreshold(int logCompactionBlocksThreshold) {
+      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, String.valueOf(logCompactionBlocksThreshold));
       return this;
     }
 

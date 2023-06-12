@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -87,7 +88,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
       ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")));
       fail();
     } catch (Exception e) {
-      assertTrue(e instanceof IllegalArgumentException, e.getMessage());
+      assertTrue(e instanceof HoodieTransformPlanException, e.getMessage());
     }
   }
 

@@ -76,7 +76,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
-  public final HoodieTimer timer = new HoodieTimer();
+  public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
@@ -332,7 +332,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private String keyFieldOverride;
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
-    // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger;
 

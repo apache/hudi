@@ -75,6 +75,7 @@ public class HoodieInternalWriteStatus implements Serializable {
       failedRecordKeys.add(Pair.of(recordKey, t));
     }
     totalRecords++;
+    totalErrorRecords++;
   }
 
   public boolean hasErrors() {
@@ -107,10 +108,6 @@ public class HoodieInternalWriteStatus implements Serializable {
 
   public List<String> getSuccessRecordKeys() {
     return successRecordKeys;
-  }
-
-  public long getFailedRowsSize() {
-    return failedRecordKeys.size();
   }
 
   public List<Pair<String, Throwable>> getFailedRecordKeys() {

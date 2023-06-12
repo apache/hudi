@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
@@ -73,6 +74,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("timestamp.transformer.increment.3", "30");
     properties.setProperty("timestamp.transformer.increment", "20");
     properties.setProperty("timestamp.transformer.multiplier", "2");
+    properties.setProperty("transformer.suffix", ".1,.2,.3");
     deltaStreamer.sync();
 
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
@@ -87,6 +89,11 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
+      String[] suffixes = ((String) properties.get("transformer.suffix")).split(",");
+      for (String suffix : suffixes) {
+        // verify no configs with suffix are in properties
+        properties.keySet().forEach(k -> assertFalse(((String) k).endsWith(suffix)));
+      }
       int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
       int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
       return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));

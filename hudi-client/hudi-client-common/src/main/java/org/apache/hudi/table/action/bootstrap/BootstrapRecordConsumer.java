@@ -41,6 +41,7 @@ public class BootstrapRecordConsumer implements HoodieConsumer<HoodieRecord, Voi
 
   @Override
   public Void finish() {
+    bootstrapHandle.close();
     return null;
   }
 }

@@ -218,7 +218,6 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
                             String instantTime, Dataset<Row> inputRows, List<String> filenames, List<String> fileAbsPaths, boolean populateMetaFields) {
     assertEquals(writeStatus.getPartitionPath(), partitionPath);
     assertEquals(writeStatus.getTotalRecords(), size);
-    assertEquals(writeStatus.getFailedRowsSize(), 0);
     assertEquals(writeStatus.getTotalErrorRecords(), 0);
     assertFalse(writeStatus.hasErrors());
     assertNull(writeStatus.getGlobalError());

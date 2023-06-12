@@ -94,6 +94,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
+  public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".log.compaction.enable")
+      .defaultValue("false")
+      .sinceVersion("0.14")
+      .withDocumentation("This configs enables logcompaction for the metadata table.");
+
+  // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
+  public static final ConfigProperty<Integer> LOG_COMPACT_BLOCKS_THRESHOLD = ConfigProperty
+      .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
+      .defaultValue(5)
+      .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
+
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -226,6 +238,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.");
 
+  public static final ConfigProperty<Integer> METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING = ConfigProperty
+      .key(METADATA_PREFIX + ".max.deltacommits.when_pending")
+      .defaultValue(1000)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
+          + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -304,6 +324,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean doEnableOptimizedLogBlocksScan() {
     return getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
+  }
+
+  public int getMaxNumDeltacommitsWhenPending() {
+    return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
   }
 
   /**
@@ -396,6 +420,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLogCompactionEnabled(boolean enableLogCompaction) {
+      metadataConfig.setValue(ENABLE_LOG_COMPACTION_ON_METADATA_TABLE, Boolean.toString(enableLogCompaction));
+      return this;
+    }
+
+    public Builder withLogCompactBlocksThreshold(int logCompactBlocksThreshold) {
+      metadataConfig.setValue(LOG_COMPACT_BLOCKS_THRESHOLD, Integer.toString(logCompactBlocksThreshold));
+      return this;
+    }
+
     public Builder withFileListingParallelism(int parallelism) {
       metadataConfig.setValue(FILE_LISTING_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -428,6 +462,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       metadataConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, String.valueOf(enableOptimizedLogBlocksScan));
+      return this;
+    }
+
+    public Builder withMaxNumDeltacommitsWhenPending(int maxNumDeltaCommitsWhenPending) {
+      metadataConfig.setValue(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING, String.valueOf(maxNumDeltaCommitsWhenPending));
       return this;
     }
 

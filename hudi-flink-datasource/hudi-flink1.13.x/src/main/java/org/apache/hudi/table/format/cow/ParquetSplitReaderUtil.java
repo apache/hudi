@@ -393,7 +393,7 @@ public class ParquetSplitReaderUtil {
           if (fieldIndex < 0) {
             fieldReaders.add(new EmptyColumnReader());
           } else {
-            fieldReaders.add(i,
+            fieldReaders.add(
                 createColumnReader(
                     utcTimestamp,
                     rowType.getTypeAt(i),

@@ -59,9 +59,9 @@ public class ManifestFileWriter {
   /**
    * Write all the latest base file names to the manifest file.
    */
-  public synchronized void writeManifestFile() {
+  public synchronized void writeManifestFile(boolean useAbsolutePath) {
     try {
-      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, assumeDatePartitioning)
+      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, assumeDatePartitioning, useAbsolutePath)
           .collect(Collectors.toList());
       if (baseFiles.isEmpty()) {
         LOG.warn("No base file to generate manifest file.");
@@ -83,7 +83,7 @@ public class ManifestFileWriter {
   }
 
   public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
-      boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
+      boolean useFileListingFromMetadata, boolean assumeDatePartitioning, boolean useAbsolutePath) {
     try {
       List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
           metaClient.getBasePath(), useFileListingFromMetadata, assumeDatePartitioning);
@@ -94,7 +94,7 @@ public class ManifestFileWriter {
         HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
             metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
             HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
-        return fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName);
+        return fsView.getLatestBaseFiles(p).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName);
       });
     } catch (Exception e) {
       throw new HoodieException("Error in fetching latest base files.", e);
