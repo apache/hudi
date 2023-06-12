@@ -95,7 +95,7 @@ variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.17'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
-  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS) -Djacoco.skip=false'
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
   JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
@@ -138,6 +138,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              bash <(curl -s https://codecov.io/bash)
+            displayName: 'Upload codecoverage to codecov'
       - job: UT_FT_2
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
@@ -162,6 +165,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              bash <(curl -s https://codecov.io/bash)
+            displayName: 'Upload codecoverage to codecov'
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '180'
@@ -186,6 +192,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              bash <(curl -s https://codecov.io/bash)
+            displayName: 'Upload codecoverage to codecov'
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '180'
@@ -219,3 +228,6 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              bash <(curl -s https://codecov.io/bash)
+            displayName: 'Upload codecoverage to codecov'
