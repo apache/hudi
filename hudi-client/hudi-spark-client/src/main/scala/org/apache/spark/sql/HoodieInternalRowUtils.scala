@@ -202,7 +202,7 @@ object HoodieInternalRowUtils {
                                 renamedColumnsMap: JMap[String, String],
                                 fieldNameStack: JDeque[String]): RowFieldUpdater = {
     (newDataType, prevDataType) match {
-      case (newType, prevType) if prevType == newType =>
+      case (newType, prevType) if prevType.sql == newType.sql =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
       case (newStructType: StructType, prevStructType: StructType) =>
