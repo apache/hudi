@@ -952,6 +952,14 @@ public class TestInputFormat {
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     final String baseMergeLogFileResult = TestData.rowDataToString(readData(inputFormat));
     assertThat(baseMergeLogFileResult, is(expected));
+
+    // write another commit with delete messages
+    TestData.writeData(TestData.DATA_SET_SINGLE_DELETE, conf);
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    final String baseMergeLogFileResult2 = TestData.rowDataToString(readData(inputFormat));
+    assertThat(baseMergeLogFileResult2, is("[]"));
   }
 
   @Test
