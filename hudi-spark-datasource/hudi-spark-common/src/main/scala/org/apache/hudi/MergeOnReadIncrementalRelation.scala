@@ -61,11 +61,11 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
-      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, false, hollowCommitHandling)
-    } else if (useStateTransitionTime) {
+      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
+    } else if (hollowCommitHandling == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
-      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, false, hollowCommitHandling)
+      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
         .findInstantsInRange(startTimestamp, endTimestamp)
     }
   }
