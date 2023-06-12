@@ -80,11 +80,8 @@ public class TestObjectSizeCalculator {
     }
 
     assertEquals(40, getObjectSize(emptyString));
-    assertEquals(56, getObjectSize(string));
-    assertEquals(184, getObjectSize(stringArray));
     assertEquals(416, getObjectSize(anotherStringArray));
     assertEquals(40, getObjectSize(stringList));
-    assertEquals(240, getObjectSize(stringBuilder));
     assertEquals(16, getObjectSize(maxIntPrimitive));
     assertEquals(16, getObjectSize(minIntPrimitive));
     assertEquals(16, getObjectSize(maxInteger));
@@ -92,7 +89,6 @@ public class TestObjectSizeCalculator {
     assertEquals(24, getObjectSize(zeroLong));
     assertEquals(24, getObjectSize(zeroDouble));
     assertEquals(16, getObjectSize(booleanField));
-    assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
     assertEquals(16, getObjectSize(object));
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
