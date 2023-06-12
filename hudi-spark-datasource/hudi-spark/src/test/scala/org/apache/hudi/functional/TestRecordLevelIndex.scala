@@ -280,23 +280,19 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     doWriteAndValidateRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    doWriteAndValidateRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
 
-    val lastCompactionInstant = getLatestCompactionInstant()
-    assertTrue(lastCompactionInstant.isPresent)
+    val lastClusteringInstant = getLatestClusteringInstant()
+    assertTrue(lastClusteringInstant.isPresent)
 
     doWriteAndValidateRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestCompactionInstant().get().getTimestamp.compareTo(lastCompactionInstant.get().getTimestamp) > 0)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    assertTrue(getLatestClusteringInstant().get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
 
-    val writeConfig = getWriteConfig(hudiOpts)
-    Using(new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) { client =>
-      val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant()
-      client.rollback(lastInstant.get().getTimestamp)
-    }
+    rollbackLastInstant(hudiOpts)
     validateRecordIndices(hudiOpts)
   }
 
@@ -341,6 +337,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
         .map(c => c.getOperationType == WriteOperationType.COMPACT)
         .get)
       .lastInstant()
+  }
+
+  private def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+    metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
   }
 
   private def doWriteAndValidateRecordIndex(hudiOpts: Map[String, String],
@@ -418,7 +418,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       val fileName: String = row.getAs("_hoodie_file_name")
       val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
-      assertTrue(fileName.contains(recordLocation.getFileId))
+      assertTrue(fileName.contains(recordLocation.getFileId), fileName + " does not contain " + recordLocation.getFileId)
     }
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)

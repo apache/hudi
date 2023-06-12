@@ -720,6 +720,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
   }
 
+  @Deprecated
+  public boolean rollback(final String commitInstantTime, Option<String> rollbackInstant) throws HoodieRollbackException {
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
+    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false, rollbackInstant);
+  }
+
   /**
    * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided instant time.

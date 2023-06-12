@@ -926,7 +926,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
               rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
-      commit(instantTime, records);
+
+      for (String toRollback: rollbackMetadata.getCommitsRollback()) {
+        getWriteClient().rollback(toRollback, Option.of(instantTime));
+      }
+      //commit(instantTime, records);
       closeInternal();
     }
   }
