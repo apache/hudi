@@ -844,7 +844,7 @@ public class MergeOnReadInputFormat
       HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       try {
         Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
-        return resultRecord.get().toIndexedRecord(tableSchema, new Properties());
+        return resultRecord.isPresent()?resultRecord.get().toIndexedRecord(tableSchema, new Properties()):Option.empty();
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }
