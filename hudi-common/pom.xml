@@ -311,12 +311,12 @@
       <version>${disruptor.version}</version>
     </dependency>
 
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>
-      <scope>test</scope>
-      <version>${spark.version}</version>
-    </dependency>
+<!--    <dependency>-->
+<!--      <groupId>org.apache.spark</groupId>-->
+<!--      <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>-->
+<!--      <scope>test</scope>-->
+<!--      <version>${spark.version}</version>-->
+<!--    </dependency>-->
 
     <dependency>
       <groupId>org.apache.avro</groupId>
