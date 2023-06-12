@@ -1331,9 +1331,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
-    // Delete deltacommit -> 100 as well. This way 101's block is removed due to rollback block
-    // not excluded because there is no 101 commit in the timeline.
-    FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
     FileCreateUtils.deleteDeltaCommit(basePath, "101", fs);
 
     readKeys.clear();
@@ -1352,7 +1349,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
-        .withUseScanV2(useScanv2)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     final List<Boolean> newEmptyPayloads = new ArrayList<>();
@@ -1365,22 +1362,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         throw new UncheckedIOException(io);
       }
     });
-    if (useScanv2) {
-      assertEquals(100, readKeys.size(), "Stream collect should return 100 records, since 2nd block is rolled back");
-      assertEquals(50, newEmptyPayloads.size(), "Stream collect should return all 50 records with empty payloads");
-      List<String> firstBlockRecords =
-          copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-              .collect(Collectors.toList());
-      Collections.sort(firstBlockRecords);
-      Collections.sort(readKeys);
-      assertEquals(firstBlockRecords, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
-    } else {
-      assertEquals(200, readKeys.size(), "Stream collect should return all 200 records, since 2nd block that is being rolled back is not next to rollback block.");
-      assertEquals(50, newEmptyPayloads.size(), "Stream collect should returns empty records, since 2nd block that is being rolled back is not next to rollback block.");
-      List<String> firstBlockRecords =
-          copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-              .collect(Collectors.toList());
-    }
+    assertEquals(100, readKeys.size(), "Stream collect should return 100 records, since 2nd block is rolled back");
+    assertEquals(50, newEmptyPayloads.size(), "Stream collect should return all 50 records with empty payloads");
+    List<String> firstBlockRecords =
+        copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+            .collect(Collectors.toList());
+    Collections.sort(firstBlockRecords);
+    Collections.sort(readKeys);
+    assertEquals(firstBlockRecords, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
+    writer.close();
+    scanner.close();
   }
 
   @ParameterizedTest
@@ -1388,7 +1379,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   public void testAvroLogRecordReaderWithCommitBeforeAndAfterRollback(ExternalSpillableMap.DiskMapType diskMapType,
                                                            boolean isCompressionEnabled,
                                                            boolean readBlocksLazily,
-                                                           boolean useScanv2)
+                                                           boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -1466,7 +1457,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withUseScanV2(useScanv2)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
