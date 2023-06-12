@@ -70,7 +70,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val hollowCommitHandling: HollowCommitHandling =
     optParams.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
-      .getOrElse(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue)
+      .getOrElse(HollowCommitHandling.valueOf(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
 
   private val commitTimeline = handleHollowCommitIfNeeded(
     hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants,

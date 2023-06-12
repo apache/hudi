@@ -140,7 +140,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected val hollowCommitHandling: HollowCommitHandling =
     optParams.get(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
-      .getOrElse(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue)
+      .getOrElse(HollowCommitHandling.valueOf(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 

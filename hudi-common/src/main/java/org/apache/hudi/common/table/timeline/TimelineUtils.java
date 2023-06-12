@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -42,6 +43,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
@@ -314,11 +316,8 @@ public class TimelineUtils {
   }
 
   /**
-   * Find the earliest incomplete commit, deltacommit, or non-clustering replacecommit,
-   * so that the incremental pulls should be strictly before this instant.
-   * This is to guard around multi-writer scenarios where a commit starting later than
-   * another commit from a concurrent writer can finish earlier, leaving an inflight commit
-   * before a completed commit.
+   * Handles hollow commit as per {@link HoodieCommonConfig#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT}
+   * and return filtered or non-filtered timeline for incremental query to run against.
    */
   public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
       HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
@@ -340,14 +339,19 @@ public class TimelineUtils {
       return completedCommitTimeline;
     }
 
+    String hollowCommitTimestamp = firstIncompleteCommit.get().getTimestamp();
     switch (handlingMode) {
       case EXCEPTION:
-        throw new HoodieException("");
+        throw new HoodieException(String.format(
+            "Found hollow commit: %s. Adjust config %s accordingly if to avoid throwing this exception.",
+            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
       case FILTER:
-        LOG.warn("");
-        return completedCommitTimeline.findInstantsBefore(firstIncompleteCommit.get().getTimestamp());
+        LOG.warn(String.format(
+            "Found hollow commit %s. Config %s was set to %s: no data will be returned beyond %s until it's completed.",
+            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp));
+        return completedCommitTimeline.findInstantsBefore(hollowCommitTimestamp);
       default:
-        throw new HoodieException("");
+        throw new HoodieException("Unexpected handling mode: " + handlingMode);
     }
   }
 
