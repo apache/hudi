@@ -365,15 +365,14 @@ public class CompactionUtils {
 
     // retain the commit before inflignt compaction to support schema Evolution
     Option<HoodieInstant> firstPendingCompactionInstant = activeTimeline.filterPendingCompactionTimeline().firstInstant();
-    Option<HoodieInstant> lastInstantBeforeFirstPendingCompaction = firstPendingCompactionInstant.isPresent()
-        ? activeTimeline.getWriteTimeline().findInstantsBefore(firstPendingCompactionInstant.get().getTimestamp()).filterCompletedInstants().lastInstant()
-        : Option.empty();
-
-    if (lastInstantBeforeFirstPendingCompaction.isPresent() && oldestInstantToRetain.isPresent()) {
-      oldestInstantToRetain = lastInstantBeforeFirstPendingCompaction.get().compareTo(oldestInstantToRetain.get()) < 0
-                ? lastInstantBeforeFirstPendingCompaction : oldestInstantToRetain;
-    } else if (lastInstantBeforeFirstPendingCompaction.isPresent()) {
-      oldestInstantToRetain = lastInstantBeforeFirstPendingCompaction;
+    if (firstPendingCompactionInstant.isPresent()) {
+      Option<HoodieInstant> lastInstantBeforeFirstPendingCompaction = firstPendingCompactionInstant.isPresent()
+              ? activeTimeline.getWriteTimeline().findInstantsBefore(firstPendingCompactionInstant.get().getTimestamp()).filterCompletedInstants().lastInstant()
+              : Option.empty();
+      if (lastInstantBeforeFirstPendingCompaction.isPresent()
+              && oldestInstantToRetain.map(instant -> instant.compareTo(lastInstantBeforeFirstPendingCompaction.get()) > 0).orElse(true)) {
+        oldestInstantToRetain = lastInstantBeforeFirstPendingCompaction;
+      }
     }
 
     return oldestInstantToRetain;
