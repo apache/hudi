@@ -78,6 +78,43 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
   }
 
   /**
+   * Test rolling back past lastest savepoint
+   * Actions: C1, C2, savepoint C2, C3, savepoint C3, C4, C5, savepoint C5 restore C3.
+   * Should go back to C3,
+   * C4 and C5 should be cleaned up.
+   */
+  @Test
+  void testForceRollback() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String savepointCommit = null;
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      for (int i = 1; i <= 5; i++) {
+        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        // Write 4 inserts with the 2nd commit been rolled back
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty());
+        prevInstant = newCommitTime;
+        if (i == 2 || i == 5) {
+          client.savepoint("user1", "Savepoint for commit " + i);
+        }
+        if (i == 3) {
+          // trigger savepoint
+          savepointCommit = newCommitTime;
+          client.savepoint("user1", "Savepoint for 3rd commit");
+        }
+      }
+      assertRowNumberEqualsTo(50);
+      // restore
+      client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"), true);
+      assertRowNumberEqualsTo(30);
+    }
+  }
+
+  /**
    * The restore should roll back all the pending instants that are beyond the savepoint.
    *
    * <p>Actions: C1, C2, savepoint C2, C3, C4 inflight, restore.

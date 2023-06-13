@@ -674,8 +674,35 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * compaction is expected to be running
    *
    * @param savepointTime Savepoint time to rollback to
+   *
    */
   public void restoreToSavepoint(String savepointTime) {
+    restoreToSavepoint(savepointTime, false);
+  }
+
+  /**
+   * Restore the data to the savepoint.
+   *
+   * WARNING: This rolls back recent commits and deleted data files and also pending compactions after savepoint time.
+   * Queries accessing the files will mostly fail. This is expected to be a manual operation and no concurrent write or
+   * compaction is expected to be running
+   *
+   * @param savepointTime Savepoint time to rollback to
+   * @param force if there are savepoints after this one, they will be deleted
+   *
+   */
+  public void restoreToSavepoint(String savepointTime, Boolean force) {
+    if (force) {
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), false);
+      SavepointHelpers.validateSavepointPresence(table, savepointTime);
+      List<HoodieInstant> savepoints = table.getCompletedSavepointTimeline().getInstants();
+      //ok to do because if we are here, then there is at least 1 savepoint
+      int savepointIndex = savepoints.size() - 1;
+      while (savepoints.get(savepointIndex).getTimestamp().compareTo(savepointTime) > 0) {
+        deleteSavepoint(savepoints.get(savepointIndex).getTimestamp());
+        savepointIndex--;
+      }
+    }
     boolean initialMetadataTableIfNecessary = config.isMetadataTableEnabled();
     if (initialMetadataTableIfNecessary) {
       try {
