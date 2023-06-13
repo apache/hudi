@@ -407,65 +407,67 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create ro/rt Table In The Right Way") {
     withTempDir { tmp =>
-      val parentPath = tmp.getCanonicalPath
-      val tableName1 = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName1 (
-           |  id int,
-           |  name string,
-           |  ts long
-           |) using hudi
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  type = 'mor'
-           | )
-           | location '$parentPath/$tableName1'
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        val parentPath = tmp.getCanonicalPath
+        val tableName1 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = 'mor'
+             | )
+             | location '$parentPath/$tableName1'
        """.stripMargin)
-      spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+        spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
 
-      // drop ro and rt table, and recreate them
-      val roTableName1 = tableName1 + "_ro"
-      val rtTableName1 = tableName1 + "_rt"
-      spark.sql(
-        s"""
-           |create table $roTableName1
-           |using hudi
-           |tblproperties (
-           | 'hoodie.query.as.ro.table' = 'true'
-           |)
-           |location '$parentPath/$tableName1'
-           |""".stripMargin
-      )
-      val roCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(roTableName1))
-      assertResult(roCatalogTable.properties("type"))("mor")
-      assertResult(roCatalogTable.properties("primaryKey"))("id")
-      assertResult(roCatalogTable.properties("preCombineField"))("ts")
-      assertResult(roCatalogTable.storage.properties("hoodie.query.as.ro.table"))("true")
-      checkAnswer(s"select id, name, ts from $roTableName1")(
-        Seq(1, "a1", 1000)
-      )
+        // drop ro and rt table, and recreate them
+        val roTableName1 = tableName1 + "_ro"
+        val rtTableName1 = tableName1 + "_rt"
+        spark.sql(
+          s"""
+             |create table $roTableName1
+             |using hudi
+             |tblproperties (
+             | 'hoodie.query.as.ro.table' = 'true'
+             |)
+             |location '$parentPath/$tableName1'
+             |""".stripMargin
+        )
+        val roCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(roTableName1))
+        assertResult(roCatalogTable.properties("type"))("mor")
+        assertResult(roCatalogTable.properties("primaryKey"))("id")
+        assertResult(roCatalogTable.properties("preCombineField"))("ts")
+        assertResult(roCatalogTable.storage.properties("hoodie.query.as.ro.table"))("true")
+        checkAnswer(s"select id, name, ts from $roTableName1")(
+          Seq(1, "a1", 1000)
+        )
 
-      spark.sql(
-        s"""
-           |create table $rtTableName1
-           |using hudi
-           |tblproperties (
-           | 'hoodie.query.as.ro.table' = 'false'
-           |)
-           |location '$parentPath/$tableName1'
-           |""".stripMargin
-      )
-      val rtCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(rtTableName1))
-      assertResult(rtCatalogTable.properties("type"))("mor")
-      assertResult(rtCatalogTable.properties("primaryKey"))("id")
-      assertResult(rtCatalogTable.properties("preCombineField"))("ts")
-      assertResult(rtCatalogTable.storage.properties("hoodie.query.as.ro.table"))("false")
-      checkAnswer(s"select id, name, ts from $rtTableName1")(
-        Seq(1, "a2", 1100)
-      )
+        spark.sql(
+          s"""
+             |create table $rtTableName1
+             |using hudi
+             |tblproperties (
+             | 'hoodie.query.as.ro.table' = 'false'
+             |)
+             |location '$parentPath/$tableName1'
+             |""".stripMargin
+        )
+        val rtCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(rtTableName1))
+        assertResult(rtCatalogTable.properties("type"))("mor")
+        assertResult(rtCatalogTable.properties("primaryKey"))("id")
+        assertResult(rtCatalogTable.properties("preCombineField"))("ts")
+        assertResult(rtCatalogTable.storage.properties("hoodie.query.as.ro.table"))("false")
+        checkAnswer(s"select id, name, ts from $rtTableName1")(
+          Seq(1, "a2", 1100)
+        )
+      }
     }
   }
 

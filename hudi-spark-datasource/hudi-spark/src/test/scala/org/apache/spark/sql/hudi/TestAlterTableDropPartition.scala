@@ -399,7 +399,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        }
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -415,7 +417,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         assertTrue(totalDeletedFiles > 0)
 
         // insert data
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        }
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
@@ -553,11 +557,13 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | location '$basePath'
            | """.stripMargin)
       // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
+      }
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first compaction plan
@@ -598,11 +604,13 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | """.stripMargin)
       // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
       // Write everything into the same FileGroup but into separate blocks
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
+      }
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first log_compaction plan

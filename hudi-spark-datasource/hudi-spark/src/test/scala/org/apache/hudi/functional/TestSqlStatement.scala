@@ -36,13 +36,15 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_FINISH_ALL = 12
 
   test("Test Sql Statements") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val params = Map(
-          "tableType" -> tableType,
-          "tmpDir" -> tmp.getCanonicalPath
-        )
-        execSqlFile("/sql-statements.sql", params)
+    withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+      Seq("cow", "mor").foreach { tableType =>
+        withTempDir { tmp =>
+          val params = Map(
+            "tableType" -> tableType,
+            "tmpDir" -> tmp.getCanonicalPath
+          )
+          execSqlFile("/sql-statements.sql", params)
+        }
       }
     }
   }
