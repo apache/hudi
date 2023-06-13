@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
-import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -58,13 +57,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -94,7 +91,6 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
@@ -141,16 +137,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
-   * @param actionMetadata             Optional action metadata to help decide initialize operations
-   * @param <T>                        Action metadata types extending Avro generated SpecificRecordBase
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
-  protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
-                                                                           HoodieWriteConfig writeConfig,
-                                                                           HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                           HoodieEngineContext engineContext,
-                                                                           Option<T> actionMetadata,
-                                                                           Option<String> inflightInstantTimestamp) {
+  protected HoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                            HoodieWriteConfig writeConfig,
+                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                            HoodieEngineContext engineContext,
+                                            Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
@@ -166,7 +159,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         enablePartitions();
         initRegistry();
 
-        initialized = initializeIfNeeded(dataMetaClient, actionMetadata, inflightInstantTimestamp);
+        initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
 
       } catch (IOException e) {
         LOG.error("Failed to initialize metadata table", e);
@@ -225,19 +218,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Initialize the metadata table if needed.
    *
    * @param dataMetaClient           - meta client for the data table
-   * @param actionMetadata           - optional action metadata
    * @param inflightInstantTimestamp - timestamp of an instant in progress on the dataset
-   * @param <T>                      - action metadata types extending Avro generated SpecificRecordBase
    * @throws IOException on errors
    */
-  protected <T extends SpecificRecordBase> boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
-                                                                      Option<T> actionMetadata,
-                                                                      Option<String> inflightInstantTimestamp) throws IOException {
+  protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
+                                       Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
     List<MetadataPartitionType> partitionsToInit = new ArrayList<>(MetadataPartitionType.values().length);
 
     try {
-      boolean exists = metadataTableExists(dataMetaClient, actionMetadata);
+      boolean exists = metadataTableExists(dataMetaClient);
       if (!exists) {
         // FILES partition is always required
         partitionsToInit.add(MetadataPartitionType.FILES);
@@ -278,8 +268,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  private <T extends SpecificRecordBase> boolean metadataTableExists(HoodieTableMetaClient dataMetaClient,
-                                                                     Option<T> actionMetadata) throws IOException {
+  private boolean metadataTableExists(HoodieTableMetaClient dataMetaClient) throws IOException {
     boolean exists = dataMetaClient.getTableConfig().isMetadataTableEnabled();
     boolean reInitialize = false;
 
@@ -294,7 +283,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       final Option<HoodieInstant> latestMetadataInstant =
           metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
 
-      reInitialize = isBootstrapNeeded(latestMetadataInstant, actionMetadata);
+      reInitialize = isBootstrapNeeded(latestMetadataInstant);
     }
 
     if (reInitialize) {
@@ -318,8 +307,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *
    * @return True if the initialization is not needed, False otherwise
    */
-  private <T extends SpecificRecordBase> boolean isBootstrapNeeded(Option<HoodieInstant> latestMetadataInstant,
-                                                                   Option<T> actionMetadata) {
+  private boolean isBootstrapNeeded(Option<HoodieInstant> latestMetadataInstant) {
     if (!latestMetadataInstant.isPresent()) {
       LOG.warn("Metadata Table will need to be re-initialized as no instants were found");
       return true;
@@ -328,50 +316,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final String latestMetadataInstantTimestamp = latestMetadataInstant.get().getTimestamp();
     if (latestMetadataInstantTimestamp.startsWith(SOLO_COMMIT_TIMESTAMP)) { // the initialization timestamp is SOLO_COMMIT_TIMESTAMP + offset
       return false;
-    }
-    return false;
-  }
-
-  /**
-   * Is the latest commit instant reverted by the in-flight instant action?
-   *
-   * @param actionMetadata                 - In-flight instant action metadata
-   * @param latestMetadataInstantTimestamp - Metadata table latest instant timestamp
-   * @param <T>                            - ActionMetadata type
-   * @return True if the latest instant action is reverted by the action
-   */
-  private <T extends SpecificRecordBase> boolean isCommitRevertedByInFlightAction(Option<T> actionMetadata,
-                                                                                  final String latestMetadataInstantTimestamp) {
-    if (!actionMetadata.isPresent()) {
-      return false;
-    }
-
-    final String INSTANT_ACTION = (actionMetadata.get() instanceof HoodieRollbackMetadata
-        ? HoodieTimeline.ROLLBACK_ACTION
-        : (actionMetadata.get() instanceof HoodieRestoreMetadata ? HoodieTimeline.RESTORE_ACTION : EMPTY_STRING));
-
-    List<String> affectedInstantTimestamps;
-    switch (INSTANT_ACTION) {
-      case HoodieTimeline.ROLLBACK_ACTION:
-        List<HoodieInstantInfo> rollbackInstants =
-            ((HoodieRollbackMetadata) actionMetadata.get()).getInstantsRollback();
-        affectedInstantTimestamps = rollbackInstants.stream().map(HoodieInstantInfo::getCommitTime).collect(Collectors.toList());
-
-        if (affectedInstantTimestamps.contains(latestMetadataInstantTimestamp)) {
-          return true;
-        }
-        break;
-      case HoodieTimeline.RESTORE_ACTION:
-        List<HoodieInstantInfo> restoredInstants =
-            ((HoodieRestoreMetadata) actionMetadata.get()).getRestoreInstantInfo();
-        affectedInstantTimestamps = restoredInstants.stream().map(HoodieInstantInfo::getCommitTime).collect(Collectors.toList());
-
-        if (affectedInstantTimestamps.contains(latestMetadataInstantTimestamp)) {
-          return true;
-        }
-        break;
-      default:
-        return false;
     }
 
     return false;
@@ -842,7 +786,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
     Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
-    Set<String> inflightIndexes = getInflightMetadataPartitions(dataMetaClient.getTableConfig());
 
     if (initialized && metadata != null) {
       // convert metadata and filter only the entries whose partition path are in partitionsToUpdate
@@ -1075,7 +1018,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info("Latest deltacommit time found is " + latestDeltacommitTime + ", running clean operations.");
       cleanIfNecessary(writeClient, latestDeltacommitTime);
 
-      // Do timeline validation before scheduling compaction/logcompaction operations.
+      // Do timeline validation before scheduling compaction/logCompaction operations.
       if (validateTimelineBeforeSchedulingCompaction(inFlightInstantTimestamp, latestDeltacommitTime)) {
         compactIfNecessary(writeClient, latestDeltacommitTime);
       }
@@ -1185,13 +1128,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // Check if there are any pending compaction or log compaction instants in the timeline.
-    // If pending compact/logcompaction operations are found abort scheduling new compaction/logcompaction operations.
+    // If pending compact/logCompaction operations are found abort scheduling new compaction/logCompaction operations.
     Option<HoodieInstant> pendingLogCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
     Option<HoodieInstant> pendingCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
     if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.warn(String.format("Not scheduling compaction or logcompaction, since a pending compaction instant %s or logcompaction %s instant is present",
+      LOG.warn(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
           pendingCompactionInstant, pendingLogCompactionInstant));
       return false;
     }
@@ -1201,7 +1144,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Return records that represent update to the record index due to write operation on the dataset.
    *
-   * @param writeStatuses (@code WriteStatus} from the write operation
+   * @param writeStatuses {@code WriteStatus} from the write operation
    */
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     return writeStatuses.flatMap(writeStatus -> {
@@ -1223,7 +1166,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               } else {
-                // TODO: This may be required for clustering usecases where record location changes
+                // TODO: This may be required for clustering use-cases where record location changes
                 continue;
               }
             }

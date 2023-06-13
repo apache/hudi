@@ -37,8 +37,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metrics.DistributedRegistry;
-
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
@@ -67,42 +65,38 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * @param conf
    * @param writeConfig
    * @param context
-   * @param actionMetadata
    * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
    *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inflightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, actionMetadata, inflightInstantTimestamp);
+        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inflightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, actionMetadata, inflightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty(), Option.empty());
+    return create(conf, writeConfig, context, Option.empty());
   }
 
-  <T extends SpecificRecordBase> SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
-                                                                      HoodieWriteConfig writeConfig,
-                                                                      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                      HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata,
-                                                                      Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, actionMetadata, inflightInstantTimestamp);
+  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
   @Override

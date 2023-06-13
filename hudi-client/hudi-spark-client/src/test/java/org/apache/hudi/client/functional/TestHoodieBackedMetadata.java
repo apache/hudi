@@ -361,7 +361,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Sync to metadata table
     metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    Option metadataWriter = table.getMetadataWriter(instant1, Option.of(hoodieCommitMetadata));
+    Option metadataWriter = table.getMetadataWriter(instant1);
     validateMetadata(testTable, true);
 
     assertTrue(metadataWriter.isPresent());
@@ -379,7 +379,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata2 = doWriteOperationWithMeta(testTable, instant2, INSERT);
     metaClient.reloadActiveTimeline();
     HoodieTable table2 = HoodieSparkTable.create(writeConfig2, context, metaClient);
-    Option metadataWriter2 = table2.getMetadataWriter(instant2, Option.of(hoodieCommitMetadata2));
+    Option metadataWriter2 = table2.getMetadataWriter(instant2);
     assertFalse(metadataWriter2.isPresent());
 
     HoodieTableConfig hoodieTableConfig2 =
@@ -401,7 +401,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata3 = doWriteOperationWithMeta(testTable, instant3, INSERT);
     metaClient.reloadActiveTimeline();
     HoodieTable table3 = HoodieSparkTable.create(writeConfig3, context, metaClient);
-    Option metadataWriter3 = table3.getMetadataWriter(instant3, Option.of(hoodieCommitMetadata3));
+    Option metadataWriter3 = table3.getMetadataWriter(instant3);
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 =
