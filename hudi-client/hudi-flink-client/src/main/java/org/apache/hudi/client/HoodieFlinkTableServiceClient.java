@@ -275,7 +275,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter initMetadataWriter(Option<String> latestPendingInstant) {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, Option.empty(), latestPendingInstant);
+        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, latestPendingInstant);
   }
 
   public void initMetadataTable() {
