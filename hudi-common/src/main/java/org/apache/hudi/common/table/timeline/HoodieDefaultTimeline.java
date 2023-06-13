@@ -341,12 +341,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean empty() {
-    return getInstants().isEmpty();
+    return instants.isEmpty();
   }
 
   @Override
   public int countInstants() {
-    return getInstants().size();
+    return instants.size();
   }
 
   @Override

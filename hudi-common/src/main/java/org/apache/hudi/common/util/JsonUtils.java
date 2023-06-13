@@ -26,6 +26,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /**
  * Utils for JSON serialization and deserialization.
@@ -35,6 +36,8 @@ public class JsonUtils {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   static {
+    registerModules(MAPPER);
+
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields
     // to derive new fields, so that they are not included in the serialization
@@ -56,5 +59,10 @@ public class JsonUtils {
       throw new HoodieIOException(
           "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
     }
+  }
+
+  private static void registerModules(ObjectMapper mapper) {
+    // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.3)
+    mapper.registerModules(new JavaTimeModule());
   }
 }

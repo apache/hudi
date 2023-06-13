@@ -194,7 +194,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
       writtenPartitionsSince = new ArrayList<>();
     } else {
-      writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
+      writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, Option.empty());
     }
     LOG.info("Scan partitions complete, partitionNum:{}", writtenPartitionsSince.size());
 

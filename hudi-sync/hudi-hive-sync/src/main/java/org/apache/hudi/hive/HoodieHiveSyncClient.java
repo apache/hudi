@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -281,6 +282,17 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
+  @Override
+  public Option<String> getLastCommitCompletionTimeSynced(String tableName) {
+    // Get the last commit completion time from the TBLproperties
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
+    }
+  }
+
   public Option<String> getLastReplicatedTime(String tableName) {
     // Get the last replicated time from the TBLproperties
     try {
@@ -340,8 +352,15 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    // Set the last commit time from the TBLproperties
-    Option<String> lastCommitSynced = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    // Set the last commit time and commit completion from the TBLproperties
+    HoodieTimeline activeTimeline = getActiveTimeline();
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitCompletionSynced = activeTimeline
+        .getInstantsOrderedByStateTransitionTime()
+        .skip(activeTimeline.countInstants() - 1)
+        .findFirst()
+        .map(i -> Option.of(i.getStateTransitionTime()))
+        .orElse(Option.empty());
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
@@ -351,6 +370,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         SerDeInfo serdeInfo = sd.getSerdeInfo();
         serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
+        table.putToParameters(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);

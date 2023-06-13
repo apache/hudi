@@ -22,7 +22,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.MergeOnReadSnapshotRelation.{getFilePath, isProjectionCompatible}
+import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -234,8 +234,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
 
       val partitionedBaseFile = baseFile.map { file =>
-        val filePath = getFilePath(file.getFileStatus.getPath)
-        PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), filePath, 0, file.getFileLen)
+        createPartitionedFile(
+          getPartitionColumnsAsInternalRow(file.getFileStatus), file.getFileStatus.getPath, 0, file.getFileLen)
       }
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
@@ -243,7 +243,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 }
 
-object MergeOnReadSnapshotRelation {
+object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
 
   /**
    * List of [[HoodieRecordPayload]] classes capable of merging projected records:
@@ -260,20 +260,11 @@ object MergeOnReadSnapshotRelation {
   def isProjectionCompatible(tableState: HoodieTableState): Boolean =
     projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
 
-  def getFilePath(path: Path): String = {
-    // Here we use the Path#toUri to encode the path string, as there is a decode in
-    // ParquetFileFormat#buildReaderWithPartitionValues in the spark project when read the table
-    // .So we should encode the file path here. Otherwise, there is a FileNotException throw
-    // out.
-    // For example, If the "pt" is the partition path field, and "pt" = "2021/02/02", If
-    // we enable the URL_ENCODE_PARTITIONING and write data to hudi table.The data path
-    // in the table will just like "/basePath/2021%2F02%2F02/xxxx.parquet". When we read
-    // data from the table, if there are no encode for the file path,
-    // ParquetFileFormat#buildReaderWithPartitionValues will decode it to
-    // "/basePath/2021/02/02/xxxx.parquet" witch will result to a FileNotException.
-    // See FileSourceScanExec#createBucketedReadRDD in spark project which do the same thing
-    // when create PartitionedFile.
-    path.toUri.toString
+  def createPartitionedFile(partitionValues: InternalRow,
+                            filePath: Path,
+                            start: Long,
+                            length: Long): PartitionedFile = {
+    sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
+      partitionValues, filePath, start, length)
   }
-
 }

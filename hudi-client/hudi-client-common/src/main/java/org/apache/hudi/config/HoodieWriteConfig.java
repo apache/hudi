@@ -717,7 +717,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
-  private HoodieMetaserverConfig metastoreConfig;
+  private HoodieMetaserverConfig metaserverConfig;
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
@@ -1111,7 +1111,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
-    this.metastoreConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
+    this.metaserverConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
@@ -1413,6 +1413,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * compaction properties.
    */
+
+  public boolean isLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_LOG_COMPACTION);
+  }
 
   public int getLogCompactionBlocksThreshold() {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
@@ -2335,6 +2339,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
 
+  public int getMetadataLogCompactBlocksThreshold() {
+    return getInt(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD);
+  }
+
+  public boolean isLogCompactionEnabledOnMetadata() {
+    return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
+  }
+
   /**
    * Hoodie Client Lock Configs.
    *
@@ -2478,10 +2490,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Metastore configs.
+   * Metaserver configs.
    */
   public boolean isMetaserverEnabled() {
-    return metastoreConfig.isMetaserverEnabled();
+    return metaserverConfig.isMetaserverEnabled();
   }
 
   /**
