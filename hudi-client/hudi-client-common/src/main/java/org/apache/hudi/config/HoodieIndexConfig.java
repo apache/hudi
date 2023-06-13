@@ -343,6 +343,21 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
           + "as a merge candidate.");
 
+  public static final ConfigProperty<String> RECORD_INDEX_USE_CACHING = ConfigProperty
+      .key("hoodie.record.index.use.caching")
+      .defaultValue("true")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is RECORD_INDEX."
+          + "When true, the input RDD will cached to speed up index lookup by reducing IO "
+          + "for computing parallelism or affected partitions");
+
+  public static final ConfigProperty<String> RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE = ConfigProperty
+      .key("hoodie.record.index.input.storage.level")
+      .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
+      .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
    */
@@ -696,6 +711,16 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withRecordKeyField(String keyField) {
       hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      return this;
+    }
+
+    public Builder recordIndexUseCaching(boolean useCaching) {
+      hoodieIndexConfig.setValue(RECORD_INDEX_USE_CACHING, String.valueOf(useCaching));
+      return this;
+    }
+
+    public Builder withRecordIndexInputStorageLevel(String level) {
+      hoodieIndexConfig.setValue(RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE, level);
       return this;
     }
 
