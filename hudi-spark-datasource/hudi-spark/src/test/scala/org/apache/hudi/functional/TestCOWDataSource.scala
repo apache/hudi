@@ -1468,14 +1468,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @Test
   def testHiveStyleDelete(): Unit = {
-    val df = spark.sql("select cast(1 as bigint) as list_id, 1 as _hudi_last_update, '123' as _hudi_partition")
+    val columns = Seq("id", "precombine", "partition")
+    val data = Seq((1, "1", "2021-01-05"),
+      (2, "2", "2021-01-06"),
+      (3, "3", "2021-01-05"))
+    val rdd = spark.sparkContext.parallelize(data)
+    val df = spark.createDataFrame(rdd).toDF(columns: _*)
     var hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "tbl",
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
-      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "list_id",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "_hudi_partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "_hudi_last_update",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine",
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true"
     )
 
@@ -1485,15 +1490,17 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.TBL_NAME.key() -> "tbl",
       DataSourceWriteOptions.OPERATION.key() -> "delete",
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
-      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "list_id",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "_hudi_partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "_hudi_last_update"
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine"
     )
 
-    df.select("list_id", "_hudi_partition").
+    df.filter(df("id") === 1).
       write.format("org.apache.hudi").options(hudiOptions).
       mode(SaveMode.Append).save(basePath)
-    assertEquals(0, spark.read.format("hudi").load(basePath).count())
+    val result = spark.read.format("hudi").load(basePath)
+    assertEquals(2, result.count())
+    assertEquals(0, result.filter(result("id") === 1).count())
   }
 }
 object TestCOWDataSource {
