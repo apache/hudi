@@ -114,7 +114,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
-  // for block size (4MB), compression (GZ) and disabling the hudi metadata fields.
+  // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
   private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
 
   protected HoodieWriteConfig metadataWriteConfig;
