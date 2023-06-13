@@ -18,7 +18,9 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -42,20 +44,17 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 
@@ -98,6 +97,11 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     // final variable required for lamda functions below
     final int numFileGroups = fileGroupSize;
 
+    // cache the input records if needed
+    if (config.getRecordIndexUseCaching()) {
+      records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    }
+
     // Partition the record keys to lookup such that each partition looks up one record index shard
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
@@ -115,6 +119,10 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
     // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
     // keyToLocationPairRDD and records RDD.
+
+    if (config.getRecordIndexUseCaching()) {
+      records.unpersist();
+    }
 
     return taggedRecords;
   }
