@@ -21,9 +21,9 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
@@ -105,8 +105,10 @@ public class Pipelines {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
     if (OptionsResolver.isBucketIndexType(conf)) {
       // TODO support bulk insert for consistent bucket index
-      ValidationUtils.checkArgument(OptionsResolver.getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE),
-          "Bulk insert is not supported yet for table with Consistent Bucket index");
+      if (OptionsResolver.getBucketEngineType(conf) == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING) {
+        throw new HoodieException(
+            "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
+      }
       Partitioner<HoodieKey> partitioner = BucketIndexPartitioners.instance(conf);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);

@@ -18,7 +18,10 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
@@ -39,11 +42,27 @@ public class BucketStreamWriteOperatorFactories {
         writeOperator = new BucketStreamWriteOperator<>(conf);
         break;
       case CONSISTENT_HASHING:
+        validate(conf);
         writeOperator = new ConsistentBucketStreamWriteOperator<>(conf);
         break;
       default:
         throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
     }
     return WriteOperatorFactory.instance(conf, writeOperator);
+  }
+
+  private static void validate(Configuration conf) {
+    String writeOperation = conf.get(FlinkOptions.OPERATION);
+    switch (WriteOperationType.fromValue(writeOperation)) {
+      case INSERT:
+      case UPSERT:
+      case DELETE:
+        break;
+      case INSERT_OVERWRITE:
+      case INSERT_OVERWRITE_TABLE:
+        throw new HoodieException("Consistent hashing bucket index does not work with insert overwrite using FLINK engine. Use simple bucket index or Spark engine.");
+      default:
+        throw new HoodieNotSupportedException("Unsupported write operation : " + writeOperation);
+    }
   }
 }
