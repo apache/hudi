@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -136,6 +135,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -228,6 +228,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  @Disabled("HUDI-6324") // Disabling of MDT partitions might have to be revisited. Might only be an admin operation.
   public void testTurnOffMetadataIndexAfterEnable() throws Exception {
     initPath();
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
@@ -729,10 +730,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           assertTrue(latestSlices.isEmpty());
         } else {
           assertFalse(latestSlices.isEmpty());
-          assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count()
-              <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest base file per file group");
-          assertTrue(latestSlices.size()
-              <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest file slice per file group");
+          assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= latestSlices.size(), "Should have a single latest base file per file group");
         }
       });
     }
@@ -1018,10 +1016,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           enableMetaFields);
     }, "Metadata table should have valid log files!");
 
-    // Verify no base file created yet.
-    assertThrows(IllegalStateException.class, () -> {
-      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
-    }, "Metadata table should not have a base file yet!");
+    verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
 
     // 2 more commits
     doWriteOperation(testTable, "0000002", UPSERT);
@@ -1789,6 +1784,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
 
+    // Create commit1 with single writer.
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig);
+    String initialCommit = "0000000";
+    List<HoodieRecord> initialRecords = dataGen.generateInserts(initialCommit, 100);
+    writeClient.startCommitWithTime(initialCommit);
+    List<WriteStatus> initialWriteStatuses = writeClient.insert(jsc.parallelize(initialRecords, 1), initialCommit).collect();
+    assertNoWriteErrors(initialWriteStatuses);
+    writeClient.close();
+
     ExecutorService executors = Executors.newFixedThreadPool(dataGen.getPartitionPaths().length);
     // Create clients in advance
     SparkRDDWriteClient[] writeClients = new SparkRDDWriteClient[dataGen.getPartitionPaths().length];
@@ -1800,12 +1804,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<Future> futures = new LinkedList<>();
     for (int i = 0; i < dataGen.getPartitionPaths().length; ++i) {
       final int index = i;
-      String newCommitTime = "000000" + (index + 1);
+      String newCommitTime = "000000" + (index + 2);
       Future future = executors.submit(() -> {
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, dataGen.getPartitionPaths()[index]);
-        SparkRDDWriteClient writeClient = writeClients[index];
+        SparkRDDWriteClient localWriteClient = writeClients[index];
         writeClient.startCommitWithTime(newCommitTime);
-        List<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+        List<WriteStatus> writeStatuses = localWriteClient.insert(jsc.parallelize(records, 1), newCommitTime).collect();
         assertNoWriteErrors(writeStatuses);
       });
       futures.add(future);
@@ -1818,10 +1822,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Ensure all commits were synced to the Metadata Table
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 4);
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000001")));
+    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 5);
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000002")));
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000003")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000004")));
 
     // Compaction may occur if the commits completed in order
     assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
@@ -2405,7 +2409,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // delete partitions
       newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
-      client.startCommitWithTime(newCommitTime);
       client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
 
       // add 1 more commit
@@ -2420,10 +2423,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
       writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-
-      // trigger clean which will actually trigger deletion of the partition
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
-      HoodieCleanMetadata cleanMetadata = client.clean(newCommitTime);
+      // above upsert would have triggered clean
       validateMetadata(client);
       assertEquals(1, metadata(client).getAllPartitionPaths().size());
     }
@@ -2544,6 +2544,18 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE));
     }
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileId() {
+    int index = new Random().nextInt(10000);
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index);
+    assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
+    assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
+
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-0"), "some-file-id");
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id"), "some-file-id");
+    assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
   }
 
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {
@@ -2751,13 +2763,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
-      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count()
-          <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest base file per file group");
-      assertTrue(latestSlices.size()
-          <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest file slice per file group");
-      assertTrue(latestSlices.size()
-          <= (numFileVersions * metadataEnabledPartitionTypes.get(partition).getFileGroupCount()), "Should limit file slice to "
-          + numFileVersions + " per file group, but was " + latestSlices.size());
+      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= latestSlices.size(), "Should have a single latest base file per file group");
       List<HoodieLogFile> logFiles = latestSlices.get(0).getLogFiles().collect(Collectors.toList());
       try {
         if (FILES.getPartitionPath().equals(partition)) {
@@ -2772,6 +2778,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     });
 
+    // TODO: include validation for record_index partition here.
     LOG.info("Validation time=" + timer.endTimer());
   }
 

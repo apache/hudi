@@ -102,6 +102,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
       HoodieData<HoodieRecord<R>> records,
       HoodieTable hoodieTable) {
+    final boolean shouldUpdatePartitionPath = config.getBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
 
     HoodiePairData<String, HoodieRecord<R>> incomingRowKeyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getRecordKey(), record));
@@ -119,7 +120,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
           final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
           if (recordLocationHoodieKeyPair.isPresent()) {
             // Record key matched to file
-            if (config.getBloomIndexUpdatePartitionPath()) {
+            if (shouldUpdatePartitionPath) {
               Pair<HoodieRecordLocation, HoodieKey> hoodieRecordLocationHoodieKeyPair = recordLocationHoodieKeyPair.get();
               return Pair.of(hoodieRecord, Option.of(Pair.of(hoodieRecordLocationHoodieKeyPair.getRight().getPartitionPath(), hoodieRecordLocationHoodieKeyPair.getLeft())));
             } else {
@@ -134,7 +135,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
           }
         });
 
-    return config.getBloomIndexUpdatePartitionPath()
+    return shouldUpdatePartitionPath
         ? mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable)
         : taggedRecordsAndLocationInfo.map(Pair::getLeft);
   }

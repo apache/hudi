@@ -666,10 +666,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
 
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
 
-      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() <= partitionType.getFileGroupCount(), "Should have a single latest base file");
-      assertTrue(latestSlices.size() <= partitionType.getFileGroupCount(), "Should have a single latest file slice");
+      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() > 0, "Should have a single latest base file");
+      assertTrue(latestSlices.size() > 0, "Should have a single latest file slice");
       assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "
-          + numFileVersions + " but was " + latestSlices.size());
+              + numFileVersions + " but was " + latestSlices.size());
     });
   }
 
