@@ -1471,7 +1471,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         throw new UncheckedIOException(io);
       }
     });
-    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records.");
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
     assertEquals(50, newEmptyPayloads.size(), "Stream collect should return 50 records with empty payloads.");
     List<String> recordKeysInserted = allRecordsInserted.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
         .collect(Collectors.toList());
