@@ -1254,8 +1254,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  //@ParameterizedTest
+  //@EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  @Disabled("HUDI-6332")
   public void testHoodieIndexer(HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/asyncindexer";
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType);

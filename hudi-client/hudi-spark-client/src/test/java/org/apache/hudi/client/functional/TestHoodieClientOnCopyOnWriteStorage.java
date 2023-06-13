@@ -1093,6 +1093,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       throws Exception {
     HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(metaClient)
+        .setPartitionFields("time")
         .setTimelineLayoutVersion(VERSION_0)
         .initTable(metaClient.getHadoopConf(), metaClient.getBasePathV2().toString());
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()

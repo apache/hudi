@@ -347,14 +347,17 @@ public class SparkRDDWriteClient<T> extends
    * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
    */
   private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
-    if (config.isMetadataTableEnabled()) {
-      HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, Option.empty(), inFlightInstantTimestamp);
-      try {
-        writer.close();
-      } catch (Exception e) {
-        throw new HoodieException("Failed to instantiate Metadata table ", e);
+    if (!config.isMetadataTableEnabled()) {
+      return;
+    }
+
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+        context, Option.empty(), inFlightInstantTimestamp)) {
+      if (writer.isInitialized()) {
+        writer.performTableServices(inFlightInstantTimestamp);
       }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to instantiate Metadata table ", e);
     }
   }
 

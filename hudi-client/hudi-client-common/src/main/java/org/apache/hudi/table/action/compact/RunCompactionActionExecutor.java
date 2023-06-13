@@ -108,6 +108,7 @@ public class RunCompactionActionExecutor<T> extends
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }
+      // Setting operationType, which is compact.
       metadata.setOperationType(operationType);
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);

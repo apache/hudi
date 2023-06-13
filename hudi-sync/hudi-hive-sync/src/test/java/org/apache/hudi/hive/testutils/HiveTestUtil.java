@@ -86,6 +86,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -437,7 +438,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter));
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -459,7 +460,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter));
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
