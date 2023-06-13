@@ -359,7 +359,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
       try {
         // Check and then open the metadata table reader to create a file system view
-        if (this.metadata != null) {
+        if (this.metadata == null) {
           initMetadataReader();
         }
         switch (partitionType) {
