@@ -60,7 +60,8 @@ case class AlterHoodieTableChangeColumnCommand(
     val newTableSchema = StructType(
       hoodieCatalogTable.tableSchema.fields.map { field =>
       if (field.name == originColumn.name) {
-        newColumn
+        // Create a new column from the origin column with the new comment.
+        addComment(field, newColumn.getComment)
       } else {
         field
       }
@@ -68,7 +69,8 @@ case class AlterHoodieTableChangeColumnCommand(
     val newDataSchema = StructType(
       hoodieCatalogTable.dataSchema.fields.map { field =>
         if (field.name == columnName) {
-          newColumn
+          // Create a new column from the origin column with the new comment.
+          addComment(field, newColumn.getComment)
         } else {
           field
         }
@@ -102,4 +104,8 @@ case class AlterHoodieTableChangeColumnCommand(
         ", origin table schema :" + tableSchema + ", base path :" + metaClient.getBasePath)
     }
   }
+
+  // Add the comment to a column, if comment is empty, return the original column.
+  private def addComment(column: StructField, comment: Option[String]): StructField =
+    comment.map(column.withComment).getOrElse(column)
 }
