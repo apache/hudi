@@ -860,6 +860,16 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     }
   }
 
+  /**
+   * Some writers use SparkAllowUpdateStrategy and treat replacecommit plan as revocable plan.
+   * In those cases, their ConflictResolutionStrategy implementation should run conflict resolution
+   * even for clustering operations.
+   * @return boolean
+   */
+  protected boolean isPreCommitRequired() {
+    return this.config.getWriteConflictResolutionStrategy().isPreCommitRequired();
+  }
+
   private Option<String> delegateToTableServiceManager(TableServiceType tableServiceType, HoodieTable table) {
     if (!config.getTableServiceManagerConfig().isEnabledAndActionSupported(ActionType.compaction)) {
       return Option.empty();
