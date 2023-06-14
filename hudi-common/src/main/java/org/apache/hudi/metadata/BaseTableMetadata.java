@@ -57,10 +57,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -180,20 +180,18 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = HoodieTimer.start();
-    Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
+    Set<String> partitionIDFileIDStrings = new HashSet<>();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
-    // TODO simplify (no sorting is required)
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
-          final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
-              new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));
-          partitionIDFileIDSortedStrings.add(bloomFilterIndexKey);
-          fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
-        }
-    );
+      final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
+          new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));
+      partitionIDFileIDStrings.add(bloomFilterIndexKey);
+      fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
+    });
 
-    List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
+    List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+        getRecordsByKeys(partitionIDFileIDStringsList, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
         (timer.endTimer() / partitionIDFileIDStrings.size())));
 
@@ -230,21 +228,21 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
-    TreeSet<String> sortedKeys = new TreeSet<>();
+    Set<String> columnStatKeyset = new HashSet<>();
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
       final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
           new PartitionIndexID(partitionNameFileNamePair.getLeft()),
           new FileIndexID(partitionNameFileNamePair.getRight()),
           columnIndexID);
-      sortedKeys.add(columnStatsIndexKey);
+      columnStatKeyset.add(columnStatsIndexKey);
       columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
     }
 
-    List<String> columnStatKeys = new ArrayList<>(sortedKeys);
+    List<String> columnStatKeylist = new ArrayList<>(columnStatKeyset);
     HoodieTimer timer = HoodieTimer.start();
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(columnStatKeys, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+        getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
 
     Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatMap = new HashMap<>();
