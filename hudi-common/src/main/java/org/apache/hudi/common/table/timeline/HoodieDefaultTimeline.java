@@ -205,6 +205,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime) {
+    return new HoodieDefaultTimeline(instants.stream()
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(),
+            GREATER_THAN, instantTime) && !s.getTimestamp().equals(instantTime)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),

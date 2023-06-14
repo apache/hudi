@@ -257,6 +257,11 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
+      // Only in some cases conflict resolution needs to be performed.
+      // So, check if preCommit method that does conflict resolution needs to be triggered.
+      if (isPreCommitRequired()) {
+        preCommit(metadata);
+      }
       // Update table's metadata (table)
       updateTableMetadata(table, metadata, clusteringInstant);
 
