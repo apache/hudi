@@ -69,6 +69,9 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-hdfs-test-runner</include>
+                  <include>org.junit.jupiter:junit-jupiter-api</include>
+                  <include>org.junit.jupiter:junit-jupiter-engine</include>
+                  <include>org.junit.platform:junit-platform-launcher</include>
 
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
@@ -182,6 +185,7 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hdfs-test-runner</artifactId>
       <version>${project.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Kryo -->
@@ -205,6 +209,26 @@
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
       <version>${hive.avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- JUnit 5 Testing -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit.jupiter.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>${junit.jupiter.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <version>${junit.platform.version}</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>
