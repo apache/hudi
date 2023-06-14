@@ -445,12 +445,14 @@ public class TestHoodieAvroUtils {
     Schema originalSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
 
     Schema schema1 = HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp"));
-    assertEquals( 2, schema1.getFields().size());
+    assertEquals(2, schema1.getFields().size());
     List<String> fieldNames1 = schema1.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     assertTrue(fieldNames1.contains("_row_key"));
     assertTrue(fieldNames1.contains("timestamp"));
 
-    assertEquals("Field fake_field not found in log schema. Query cannot proceed! Derived Schema Fields: [non_pii_col, _hoodie_commit_time, _row_key, _hoodie_partition_path, _hoodie_record_key, pii_col, _hoodie_commit_seqno, _hoodie_file_name, timestamp]",
+    assertEquals("Field fake_field not found in log schema. Query cannot proceed! Derived Schema Fields: " +
+            "[non_pii_col, _hoodie_commit_time, _row_key, _hoodie_partition_path, _hoodie_record_key, pii_col," +
+            " _hoodie_commit_seqno, _hoodie_file_name, timestamp]",
         assertThrows(HoodieException.class, () ->
             HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field"))).getMessage());
   }
