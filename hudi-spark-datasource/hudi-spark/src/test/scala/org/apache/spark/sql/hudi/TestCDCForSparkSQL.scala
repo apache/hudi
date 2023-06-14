@@ -85,14 +85,14 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             .setBasePath(basePath)
             .setConf(spark.sessionState.newHadoopConf())
             .build()
-          withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
-            spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
-          }
+          //why does it fail without upsert here?
+          spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
+
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
           val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
-          withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+          withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
             spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
           }
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp

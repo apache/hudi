@@ -25,58 +25,57 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
-          withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
-            val tableName = generateTableName
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  price double,
-                 |  ts long
-                 |) using hudi
-                 |tblproperties (
-                 |  type = '$tableType',
-                 |  primaryKey = 'id',
-                 |  preCombineField = 'ts'
-                 |)
-                 |location '${tmp.getCanonicalPath}/$tableName'
-                 |""".stripMargin
-            )
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
 
-            spark.sql(
-              s"""
-                 | insert into $tableName
-                 | values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000), (3, 'a3', 30, 1000)
-                 | """.stripMargin
-            )
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000), (3, 'a3', 30, 1000)
+               | """.stripMargin
+          )
 
-            checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
-              Seq(1, "a1", 10.0, 1000),
-              Seq(2, "a2", 20.0, 1000),
-              Seq(3, "a3", 30.0, 1000)
-            )
+          checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a3", 30.0, 1000)
+          )
 
+          withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
             spark.sql(
               s"""
                  | insert into $tableName
                  | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
                  | """.stripMargin
             )
-
-            if (tableType == "cow") {
-              checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
-                Seq(1, "a1_1", 10.0, 1100),
-                Seq(2, "a2_2", 20.0, 1100),
-                Seq(3, "a3_3", 30.0, 1100)
-              )
-            } else {
-              checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
-                Seq(1, "a1", 10.0, 1000),
-                Seq(2, "a2", 20.0, 1000),
-                Seq(3, "a3", 30.0, 1000)
-              )
-            }
+          }
+          if (tableType == "cow") {
+            checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
+              Seq(1, "a1_1", 10.0, 1100),
+              Seq(2, "a2_2", 20.0, 1100),
+              Seq(3, "a3_3", 30.0, 1100)
+            )
+          } else {
+            checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
+              Seq(1, "a1", 10.0, 1000),
+              Seq(2, "a2", 20.0, 1000),
+              Seq(3, "a3", 30.0, 1000)
+            )
           }
         }
       }

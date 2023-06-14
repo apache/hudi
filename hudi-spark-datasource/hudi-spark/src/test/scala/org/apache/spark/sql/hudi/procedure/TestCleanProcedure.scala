@@ -141,7 +141,8 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              | )
              |""".stripMargin)
 
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          //needs upsert because each commit will create a new filegroup so no cleaning will happen
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")
@@ -180,7 +181,8 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              |   preCombineField = 'ts'
              | )
              |""".stripMargin)
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          //needs upsert because each commit will create a new filegroup so no cleaning will happen
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")

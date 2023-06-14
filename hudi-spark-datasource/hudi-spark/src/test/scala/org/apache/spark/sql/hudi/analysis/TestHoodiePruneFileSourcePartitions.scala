@@ -59,26 +59,27 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     "mor,true", "mor,false"
   ))
   def testPartitionFiltersPushDown(tableType: String, partitioned: Boolean): Unit = {
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  partition string
+         |) USING hudi
+         |${if (partitioned) "PARTITIONED BY (partition)" else ""}
+         |TBLPROPERTIES (
+         |  type = '$tableType',
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         |)
+         |LOCATION '$basePath/$tableName'
+         """.stripMargin)
     try {
+      //needs to be upsert because bulk insert is creating 3 files in nonpartitioned, even when bulk insert parallelism
+      //is 1 and df is repartitioned
       spark.conf.set("hoodie.sql.insert.mode", "upsert")
-      spark.sql(
-        s"""
-           |CREATE TABLE $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  partition string
-           |) USING hudi
-           |${if (partitioned) "PARTITIONED BY (partition)" else ""}
-           |TBLPROPERTIES (
-           |  type = '$tableType',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           |)
-           |LOCATION '$basePath/$tableName'
-           """.stripMargin)
-
       spark.sql(
         s"""
            |INSERT INTO $tableName VALUES
@@ -86,80 +87,80 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
            |  (2, 'a2', 20, 2000, "2021-01-06"),
            |  (3, 'a3', 30, 3000, "2021-01-07")
            """.stripMargin)
+    } finally {
+      spark.conf.unset("hoodie.sql.insert.mode")
+    }
 
-      Seq("eager", "lazy").foreach { listingModeOverride =>
-        // We need to refresh the table to make sure Spark is re-processing the query every time
-        // instead of serving already cached value
-        spark.sessionState.catalog.invalidateAllCachedTables()
+    Seq("eager", "lazy").foreach { listingModeOverride =>
+      // We need to refresh the table to make sure Spark is re-processing the query every time
+      // instead of serving already cached value
+      spark.sessionState.catalog.invalidateAllCachedTables()
 
-        spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
+      spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
 
-        val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
-        val optimizedPlan = df.queryExecution.optimizedPlan
+      val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
+      val optimizedPlan = df.queryExecution.optimizedPlan
 
-        optimizedPlan match {
-          case f@Filter(And(IsNotNull(_), EqualTo(attr: AttributeReference, Literal(value, StringType))), lr: LogicalRelation)
-            if attr.name == "partition" && value.toString.equals("2021-01-05") =>
+      optimizedPlan match {
+        case f @ Filter(And(IsNotNull(_), EqualTo(attr: AttributeReference, Literal(value, StringType))), lr: LogicalRelation)
+          if attr.name == "partition" && value.toString.equals("2021-01-05") =>
 
-            listingModeOverride match {
-              // Case #1: Eager listing (fallback mode).
-              //          Whole table will be _listed_ before partition-pruning would be applied. This is default
-              //          Spark behavior that naturally occurs, since predicate push-down for tables w/o appropriate catalog
-              //          support (for partition-pruning) will only occur during execution phase, while file-listing
-              //          actually happens during analysis stage
-              case "eager" =>
-                // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
-                if (partitioned) {
-                  assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
-                  assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
-                } else {
-                  // NOTE: We're adding 512 to make sure we always round to the next integer value
-                  assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
-                  assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
-                }
-
-              // Case #2: Lazy listing (default mode).
-              //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
-              //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
-              //          list the whole table
-              case "lazy" =>
+          listingModeOverride match {
+            // Case #1: Eager listing (fallback mode).
+            //          Whole table will be _listed_ before partition-pruning would be applied. This is default
+            //          Spark behavior that naturally occurs, since predicate push-down for tables w/o appropriate catalog
+            //          support (for partition-pruning) will only occur during execution phase, while file-listing
+            //          actually happens during analysis stage
+            case "eager" =>
+              // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
+              if (partitioned) {
+                assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              } else {
                 // NOTE: We're adding 512 to make sure we always round to the next integer value
                 assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
                 assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
-
-              case _ => throw new UnsupportedOperationException()
-            }
-
-            if (partitioned) {
-              val executionPlan = df.queryExecution.executedPlan
-              val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-                case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-                case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
               }
 
-              Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+            // Case #2: Lazy listing (default mode).
+            //          In case of lazy listing mode, Hudi will only list partitions matching partition-predicates that are
+            //          eagerly pushed down (w/ help of [[HoodiePruneFileSourcePartitions]]) avoiding the necessity to
+            //          list the whole table
+            case "lazy" =>
+              // NOTE: We're adding 512 to make sure we always round to the next integer value
+              assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
+              assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
+
+            case _ => throw new UnsupportedOperationException()
+          }
+
+          if (partitioned) {
+            val executionPlan = df.queryExecution.executedPlan
+            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
+              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
+              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
             }
 
-          case _ =>
-            val failureHint =
-              s"""Expected to see plan like below:
-                 |```
-                 |== Optimized Logical Plan ==
-                 |Filter (isnotnull(partition#74) AND (partition#74 = 2021-01-05)), Statistics(sizeInBytes=...)
-                 |+- Relation default.hoodie_test[_hoodie_commit_time#65,_hoodie_commit_seqno#66,_hoodie_record_key#67,_hoodie_partition_path#68,_hoodie_file_name#69,id#70,name#71,price#72,ts#73L,partition#74] parquet, Statistics(sizeInBytes=...)
-                 |```
-                 |
-                 |Instead got
-                 |```
-                 |$optimizedPlan
-                 |```
-                 |""".stripMargin.trim
+            Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
+          }
 
-            fail(failureHint)
-        }
+        case _ =>
+          val failureHint =
+            s"""Expected to see plan like below:
+               |```
+               |== Optimized Logical Plan ==
+               |Filter (isnotnull(partition#74) AND (partition#74 = 2021-01-05)), Statistics(sizeInBytes=...)
+               |+- Relation default.hoodie_test[_hoodie_commit_time#65,_hoodie_commit_seqno#66,_hoodie_record_key#67,_hoodie_partition_path#68,_hoodie_file_name#69,id#70,name#71,price#72,ts#73L,partition#74] parquet, Statistics(sizeInBytes=...)
+               |```
+               |
+               |Instead got
+               |```
+               |$optimizedPlan
+               |```
+               |""".stripMargin.trim
+
+          fail(failureHint)
       }
-    } finally {
-      spark.conf.unset("hoodie.sql.insert.mode")
     }
   }
 

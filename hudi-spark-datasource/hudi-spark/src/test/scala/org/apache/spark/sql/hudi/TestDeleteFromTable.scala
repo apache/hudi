@@ -37,19 +37,17 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
              |    tableType = '$tableType'
              | )
              | PARTITIONED BY (dt)
-             | LOCATION '${tmp.getCanonicalPath}'
+             | LOCATION '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
 
         // NOTE: Do not write the field alias, the partition field must be placed last.
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
-          spark.sql(
-            s"""
-               | INSERT INTO $tableName VALUES
-               | (1, 'a1', 10, 1000, "2021-01-05"),
-               | (2, 'a2', 20, 2000, "2021-01-06"),
-               | (3, 'a3', 30, 3000, "2021-01-07")
+        spark.sql(
+          s"""
+             | INSERT INTO $tableName VALUES
+             | (1, 'a1', 10, 1000, "2021-01-05"),
+             | (2, 'a2', 20, 2000, "2021-01-06"),
+             | (3, 'a3', 30, 3000, "2021-01-07")
                 """.stripMargin)
-        }
 
         checkAnswer(s"SELECT id, name, price, ts, dt FROM $tableName")(
           Seq(1, "a1", 10.0, 1000, "2021-01-05"),

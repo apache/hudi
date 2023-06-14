@@ -42,7 +42,8 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
            |  hoodie.compact.inline = 'true'
            | )
        """.stripMargin)
-      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+      //need to upsert so we only create log file
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")

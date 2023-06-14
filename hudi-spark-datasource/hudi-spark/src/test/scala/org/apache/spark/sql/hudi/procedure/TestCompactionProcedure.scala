@@ -195,8 +195,8 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
            | )
            | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
-      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
-        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
         spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
         spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
         spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
@@ -224,8 +224,8 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
              | )
              | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
-          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
           spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
         }
@@ -238,7 +238,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           .collect()
         assertResult(0)(result1.length)
 
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
         }
         val result2 = spark.sql(
