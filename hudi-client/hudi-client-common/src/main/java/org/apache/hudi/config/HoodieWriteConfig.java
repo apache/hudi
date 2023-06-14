@@ -2966,7 +2966,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withEarlyConflictDetectionCheckCommitConflict(boolean enable) {
-    writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
+      writeConfig.setValue(EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT, String.valueOf(enable));
       return this;
     }
 
