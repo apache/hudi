@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
