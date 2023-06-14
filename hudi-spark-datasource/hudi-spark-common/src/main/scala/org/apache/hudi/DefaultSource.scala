@@ -137,32 +137,32 @@ class DefaultSource extends RelationProvider
     * @param sqlContext Spark SQL Context
     * @param mode Mode for saving the DataFrame at the destination
     * @param optParams Parameters passed as part of the DataFrame write operation
-    * @param df Spark DataFrame to be written
+    * @param rawDf Spark DataFrame to be written
     * @return Spark Relation
     */
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
-                              df: DataFrame): BaseRelation = {
-    val dfPrepped = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false")
+                              rawDf: DataFrame): BaseRelation = {
+    val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false")
       .equalsIgnoreCase("true")) {
-      df // Don't remove meta columns for prepped write.
+      rawDf // Don't remove meta columns for prepped write.
     } else {
-      df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+      rawDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
     }
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfPrepped)
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
       HoodieSparkSqlWriter.cleanup()
     } else {
-      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfPrepped)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
       HoodieSparkSqlWriter.cleanup()
       if (!success) {
         throw new HoodieException("Write to Hudi failed")
       }
     }
 
-    new HoodieEmptyRelation(sqlContext, dfPrepped.schema)
+    new HoodieEmptyRelation(sqlContext, df.schema)
   }
 
   override def createSink(sqlContext: SQLContext,

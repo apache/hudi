@@ -54,10 +54,6 @@ trait ProvidesHoodieConfig extends Logging {
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
-
-//    require(hoodieCatalogTable.primaryKeys.nonEmpty,
-//      s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
-
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
