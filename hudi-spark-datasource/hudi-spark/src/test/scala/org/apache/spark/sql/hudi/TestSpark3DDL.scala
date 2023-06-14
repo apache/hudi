@@ -71,7 +71,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column types") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -233,7 +233,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter table properties and add rename drop column") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -337,7 +337,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test Chinese table ") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -518,7 +518,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column with complex schema") {
     withRecordType()(withTempDir { tmp =>
       Seq("mor").foreach { tableType =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -825,7 +825,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test FLOAT to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           // Using INMEMORY index for mor table so that log files will be created instead of parquet
           val tableName = generateTableName
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -864,7 +864,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test DOUBLE to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           // Using INMEMORY index for mor table so that log files will be created instead of parquet
           val tableName = generateTableName
           if (HoodieSparkUtils.gteqSpark3_1) {
@@ -931,7 +931,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test STRING to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
           // Using INMEMORY index for mor table so that log files will be created instead of parquet
           val tableName = generateTableName
           if (HoodieSparkUtils.gteqSpark3_1) {
