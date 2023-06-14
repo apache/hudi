@@ -61,8 +61,6 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
    */
   private final String clusteringInstantTime;
 
-  private boolean isPending;
-
   private final Configuration conf;
 
   public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan, Configuration conf) {
@@ -73,19 +71,19 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline()
-        .getInstantsAsStream().anyMatch(i -> clusteringInstantTime.equals(i.getTimestamp()) && !i.isCompleted());
+    // no operation
   }
 
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
+    boolean isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline().containsInstant(clusteringInstantTime);
     if (isPending) {
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
         LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
         sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
       }
     } else {
-      LOG.warn(clusteringInstantTime + " not found in pending instants.");
+      LOG.warn(clusteringInstantTime + " not found in pending clustering instants.");
     }
   }
 
