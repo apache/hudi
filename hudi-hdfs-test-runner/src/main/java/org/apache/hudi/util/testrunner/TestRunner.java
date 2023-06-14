@@ -37,8 +37,6 @@ import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
 import org.junit.platform.launcher.listeners.TestExecutionSummary;
 import org.junit.platform.launcher.listeners.TestExecutionSummary.Failure;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,8 +47,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 
 public class TestRunner {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestRunner.class);
 
   public static void main(String[] args) {
     final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
@@ -66,9 +62,9 @@ public class TestRunner {
     TestExecutionSummary summary = listener.getSummary();
     long testFoundCount = summary.getTestsFoundCount();
     List<Failure> failures = summary.getFailures();
-    LOG.info("getTestsSucceededCount() - " + summary.getTestsSucceededCount());
-    LOG.info("yxchang: Test runner!!!!!!!");
-    failures.forEach(failure -> LOG.error("failure - " + failure.getException()));
+    System.out.println("getTestsSucceededCount() - " + summary.getTestsSucceededCount());
+    System.out.println("yxchang: Test runner!!!!!!!");
+    failures.forEach(failure -> System.out.println("failure - " + failure.getException()));
 
   }
 
@@ -105,7 +101,11 @@ public class TestRunner {
   private Configuration configureDFSCluster(Configuration config, String dfsBaseDir, String bindIP,
       int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
-    LOG.info("HDFS force binding to ip: " + bindIP);
+    System.out.println("HDFS force binding to ip: " + bindIP);
+    System.out.println("HDFS namenodeRpcPort: " + namenodeRpcPort);
+    System.out.println("HDFS datanodePort: " + datanodePort);
+    System.out.println("HDFS datanodeIpcPort: " + datanodeIpcPort);
+    System.out.println("HDFS datanodeHttpPort: " + datanodeHttpPort);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);
     config.set(DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY, bindIP + ":" + datanodePort);
     config.set(DFSConfigKeys.DFS_DATANODE_IPC_ADDRESS_KEY, bindIP + ":" + datanodeIpcPort);
