@@ -124,6 +124,13 @@ public class ClusteringUtils {
   }
 
   /**
+   * Checks if the replacecommit is clustering commit.
+   */
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+  }
+
+  /**
    * Get filegroups to pending clustering instant mapping for all pending clustering plans.
    * This includes all clustering operations in 'requested' and 'inflight' states.
    */
