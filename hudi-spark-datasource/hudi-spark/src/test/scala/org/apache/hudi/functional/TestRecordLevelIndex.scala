@@ -36,7 +36,7 @@ import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, EnumSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Properties}
@@ -184,9 +184,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Overwrite)
 
     val writeConfig = getWriteConfig(hudiOpts)
-    val dropIndexInstantTime = getInstantTime()
-    getHoodieTable(metaClient, writeConfig).getMetadataWriter(dropIndexInstantTime).get()
-      .deletePartitions(dropIndexInstantTime, Collections.singletonList(MetadataPartitionType.RECORD_INDEX))
+    metadataWriter(writeConfig).dropMetadataPartitions(Collections.singletonList(MetadataPartitionType.RECORD_INDEX))
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient.getTableConfig.getMetadataPartitionsInflight
 
@@ -296,6 +294,36 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     validateRecordIndices(hudiOpts)
   }
 
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,COLUMN_STATS",
+    "COPY_ON_WRITE,BLOOM_FILTERS",
+    "COPY_ON_WRITE,COLUMN_STATS:BLOOM_FILTERS",
+    "MERGE_ON_READ,COLUMN_STATS",
+    "MERGE_ON_READ,BLOOM_FILTERS",
+    "MERGE_ON_READ,COLUMN_STATS:BLOOM_FILTERS")
+  )
+  def testMetadataRecordLevelIndexWithOtherMetadataPartitions(tableType: String, metadataPartitionTypes: String): Unit = {
+    var hudiOpts = commonOpts
+    val metadataPartitions = metadataPartitionTypes.split(":").toStream.map(p => MetadataPartitionType.valueOf(p)).toList
+    for (metadataPartition <- metadataPartitions) {
+      if (metadataPartition == MetadataPartitionType.COLUMN_STATS) {
+        hudiOpts += (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
+      } else if (metadataPartition == MetadataPartitionType.BLOOM_FILTERS) {
+        hudiOpts += (HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key() -> "true")
+      }
+    }
+
+    hudiOpts = hudiOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
+  }
+
   private def rollbackLastInstant(hudiOpts: Map[String, String]): Unit = {
     if (getLatestCompactionInstant() != metaClient.getCommitsAndCompactionTimeline.lastInstant()) {
       dfList = dfList.take(dfList.size - 1)
@@ -348,7 +376,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
                                             saveMode: SaveMode): DataFrame = {
     var records1: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
-      records1 = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime(), 20)).asScala
+      val instantTime = getInstantTime()
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 20))
+      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 20)))
+      records1 = records.asScala
     } else {
       records1 = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
     }
