@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -463,6 +464,31 @@ public class HoodieTableMetaClient implements Serializable {
         }
       }
     }
+  }
+
+  /**
+   * Use this method to remove {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
+   * and {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT} during table
+   * init process as the metadata table is not initialized yet.
+   *
+   * @param props the original properties
+   * @return a {@link Pair} of which left is the updated {@link Properties} and right
+   * is removed {@link Properties}.
+   */
+  public static Pair<Properties, Properties> removeMetadataPartitionsProps(Properties props) {
+    Properties updated = new Properties();
+    updated.putAll(props);
+    Properties removed = new Properties();
+    List<String> removingKeys = Arrays.asList(
+        HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(),
+        HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key());
+    for (String key : removingKeys) {
+      if (updated.containsKey(key)) {
+        Object value = updated.remove(key);
+        removed.put(key, value);
+      }
+    }
+    return Pair.of(updated, removed);
   }
 
   /**

@@ -216,6 +216,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
+    // sort
     Map<String, HoodieRecord<HoodieMetadataPayload>> result;
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
@@ -241,8 +242,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       });
 
       result = new HashMap<>(keys.size());
-      engineContext.setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-      engineContext.map(partitionedKeys, keysList -> {
+      getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }

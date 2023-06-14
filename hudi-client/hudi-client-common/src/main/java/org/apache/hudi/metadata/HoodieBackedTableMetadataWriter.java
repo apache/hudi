@@ -58,6 +58,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -275,10 +276,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // If the un-synced instants have been archived, then
     // the metadata table will need to be initialized again.
     if (exists) {
-      metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
-      if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
-        LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
-        metadataMetaClient = initializeMetaClient();
+      try {
+        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
+        if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
+          LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
+          metadataMetaClient = initializeMetaClient();
+        }
+      } catch (TableNotFoundException e) {
+        return false;
       }
       final Option<HoodieInstant> latestMetadataInstant =
           metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
@@ -369,8 +374,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         switch (partitionType) {
           case FILES:
             fileGroupCountAndRecordsPair = initializeFilesPartition(partitionInfoList);
-            // initialize the metadata reader again so the FILES partition can be read
-            initMetadataReader();
             break;
           case BLOOM_FILTERS:
             fileGroupCountAndRecordsPair = initializeBloomFiltersPartition(initializationTime, partitionToFilesMap);
@@ -403,6 +406,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
+      // initialize the metadata reader again so the MDT partition can be read after initialization
+      initMetadataReader();
     }
 
     return true;

@@ -296,9 +296,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   }
 
   private void updateMetadataPartitionsTableConfig(HoodieTableMetaClient metaClient, Set<String> metadataPartitions) {
-    metadataPartitions.forEach(metadataPartition -> {
-      metaClient.getTableConfig().setMetadataPartitionState(metaClient, MetadataPartitionType.valueOf(metadataPartition), true);
-    });
+    metadataPartitions.forEach(metadataPartition -> metaClient.getTableConfig().setMetadataPartitionState(
+        metaClient, MetadataPartitionType.valueOf(metadataPartition.toUpperCase(Locale.ROOT)), true));
   }
 
   /**

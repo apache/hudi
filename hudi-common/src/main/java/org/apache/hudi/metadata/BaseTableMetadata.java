@@ -29,6 +29,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -71,7 +72,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseTableMetadata.class);
 
-  protected final transient HoodieEngineContext engineContext;
+  protected transient HoodieEngineContext engineContext;
   protected final SerializablePath dataBasePath;
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
@@ -87,7 +88,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .setBasePath(dataBasePath)
         .build();
     this.metadataConfig = metadataConfig;
-
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableEnabled();
 
     if (metadataConfig.enableMetrics()) {
@@ -95,6 +95,13 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     } else {
       this.metrics = Option.empty();
     }
+  }
+
+  protected HoodieEngineContext getEngineContext() {
+    if (engineContext == null) {
+      engineContext = new HoodieLocalEngineContext(dataMetaClient.getHadoopConf());
+    }
+    return engineContext;
   }
 
   /**

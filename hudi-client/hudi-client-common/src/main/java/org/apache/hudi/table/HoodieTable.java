@@ -1030,7 +1030,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
-    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
+    } else if (partitionType.isPresent() && partitions.remove(partitionType.get().getPartitionPath())) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
