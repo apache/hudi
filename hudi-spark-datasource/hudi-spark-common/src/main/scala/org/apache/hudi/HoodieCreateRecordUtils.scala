@@ -193,8 +193,7 @@ object HoodieCreateRecordUtils {
       || getFieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == -1
       || getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD) == -1
       || getFieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.FILENAME_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD) == -1) {
+      || getFieldIndex(HoodieRecord.FILENAME_METADATA_FIELD) == -1) {
       throw new HoodieException("Metadata fields missing from spark prepared record.")
     }
     true
@@ -205,10 +204,8 @@ object HoodieCreateRecordUtils {
     if (avroSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null
       || avroSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) == null
       || avroSchema.getField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null
       || avroSchema.getField(HoodieRecord.PARTITION_PATH_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.FILENAME_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) == null) {
+      || avroSchema.getField(HoodieRecord.FILENAME_METADATA_FIELD) == null) {
       throw new HoodieException("Metadata fields missing from avro prepared record.")
     }
   }
