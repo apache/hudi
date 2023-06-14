@@ -72,6 +72,7 @@
                   <include>org.junit.jupiter:junit-jupiter-api</include>
                   <include>org.junit.jupiter:junit-jupiter-engine</include>
                   <include>org.junit.platform:junit-platform-launcher</include>
+                  <include>org.junit.platform:junit-platform-commons</include>
 
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
@@ -228,6 +229,12 @@
     <dependency>
       <groupId>org.junit.platform</groupId>
       <artifactId>junit-platform-launcher</artifactId>
+      <version>${junit.platform.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-commons</artifactId>
       <version>${junit.platform.version}</version>
       <scope>compile</scope>
     </dependency>

@@ -64,6 +64,12 @@
       <version>${junit.platform.version}</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-commons</artifactId>
+      <version>${junit.platform.version}</version>
+      <scope>compile</scope>
+    </dependency>
 <!--    <dependency>-->
 <!--      <groupId>org.junit.vintage</groupId>-->
 <!--      <artifactId>junit-vintage-engine</artifactId>-->
@@ -91,12 +97,6 @@
 <!--    <dependency>-->
 <!--      <groupId>org.junit.platform</groupId>-->
 <!--      <artifactId>junit-platform-suite-api</artifactId>-->
-<!--      <version>${junit.platform.version}</version>-->
-<!--      <scope>compile</scope>-->
-<!--    </dependency>-->
-<!--    <dependency>-->
-<!--      <groupId>org.junit.platform</groupId>-->
-<!--      <artifactId>junit-platform-commons</artifactId>-->
 <!--      <version>${junit.platform.version}</version>-->
 <!--      <scope>compile</scope>-->
 <!--    </dependency>-->
