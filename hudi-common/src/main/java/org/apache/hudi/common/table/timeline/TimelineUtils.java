@@ -321,7 +321,8 @@ public class TimelineUtils {
    */
   public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
       HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
-    if (handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
+    if (handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME
+        || handlingMode == HollowCommitHandling.MANAGED) {
       return completedCommitTimeline;
     }
 
@@ -356,6 +357,6 @@ public class TimelineUtils {
   }
 
   public enum HollowCommitHandling {
-    EXCEPTION, BLOCK, USE_STATE_TRANSITION_TIME;
+    EXCEPTION, BLOCK, MANAGED, USE_STATE_TRANSITION_TIME;
   }
 }

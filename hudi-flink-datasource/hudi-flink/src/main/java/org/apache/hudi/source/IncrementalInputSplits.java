@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -66,10 +67,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -86,18 +89,16 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_O
 public class IncrementalInputSplits implements Serializable {
 
   private static final long serialVersionUID = 1L;
-
   private static final Logger LOG = LoggerFactory.getLogger(IncrementalInputSplits.class);
+
   private final Configuration conf;
   private final Path path;
   private final RowType rowType;
   private final long maxCompactionMemoryInBytes;
-  // for partition pruning
   private final PartitionPruners.PartitionPruner partitionPruner;
-  // skip compaction
   private final boolean skipCompaction;
-  // skip clustering
   private final boolean skipClustering;
+  private final HollowCommitHandling hollowCommitHandling;
 
   private IncrementalInputSplits(
       Configuration conf,
@@ -106,7 +107,8 @@ public class IncrementalInputSplits implements Serializable {
       long maxCompactionMemoryInBytes,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       boolean skipCompaction,
-      boolean skipClustering) {
+      boolean skipClustering,
+      HollowCommitHandling hollowCommitHandling) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
@@ -114,6 +116,7 @@ public class IncrementalInputSplits implements Serializable {
     this.partitionPruner = partitionPruner;
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
+    this.hollowCommitHandling = hollowCommitHandling;
   }
 
   /**
@@ -544,13 +547,13 @@ public class IncrementalInputSplits implements Serializable {
 
   private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsAsPerUserConfigs(timeline);
+    return filterInstantsAsPerUserConfigs(timeline, metaClient);
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
     HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsAsPerUserConfigs(archivedCompleteTimeline);
+    return filterInstantsAsPerUserConfigs(archivedCompleteTimeline, metaClient);
   }
 
   /**
@@ -596,21 +599,22 @@ public class IncrementalInputSplits implements Serializable {
   /**
    * Filters out the unnecessary instants as per user specified configs.
    *
-   * @param timeline The timeline
+   * @param completedTimeline original completed timeline
+   * @param metaClient
    *
    * @return the filtered timeline
    */
   @VisibleForTesting
-  public HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTimeline timeline) {
-    final HoodieTimeline oriTimeline = timeline;
+  public HoodieTimeline filterInstantsAsPerUserConfigs(final HoodieTimeline completedTimeline, HoodieTableMetaClient metaClient) {
+    HoodieTimeline filteredTimeline = completedTimeline;
     if (this.skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
-      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+      filteredTimeline = filteredTimeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     }
     if (this.skipClustering) {
-      timeline = timeline.filter(instant -> !ClusteringUtil.isClusteringInstant(instant, oriTimeline));
+      filteredTimeline = filteredTimeline.filter(instant -> !ClusteringUtil.isClusteringInstant(instant, completedTimeline));
     }
-    return timeline;
+    return handleHollowCommitIfNeeded(filteredTimeline, metaClient, hollowCommitHandling);
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
@@ -679,12 +683,11 @@ public class IncrementalInputSplits implements Serializable {
     private Path path;
     private RowType rowType;
     private long maxCompactionMemoryInBytes;
-    // for partition pruning
     private PartitionPruners.PartitionPruner partitionPruner;
-    // skip compaction
     private boolean skipCompaction = false;
-    // skip clustering
     private boolean skipClustering = false;
+    private HollowCommitHandling hollowCommitHandling = HollowCommitHandling.valueOf(
+        INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue());
 
     public Builder() {
     }
@@ -724,10 +727,16 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder handleHollowCommit(HollowCommitHandling handlingMode) {
+      this.hollowCommitHandling = handlingMode;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(
           Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
-          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering);
+          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering,
+          this.hollowCommitHandling);
     }
   }
 }
