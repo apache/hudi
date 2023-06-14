@@ -75,4 +75,9 @@ public class ConfigUtils {
 
     throw new IllegalArgumentException("No enum constant found " + enumType.getName() + "." + name);
   }
+
+  public static <T extends Enum<T>> String[] enumNames(Class<T> enumType) {
+    T[] enumConstants = enumType.getEnumConstants();
+    return Arrays.stream(enumConstants).map(Enum::name).toArray(String[]::new);
+  }
 }

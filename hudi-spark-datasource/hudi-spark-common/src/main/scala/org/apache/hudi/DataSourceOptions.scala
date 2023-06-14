@@ -23,6 +23,7 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
@@ -113,18 +114,20 @@ object DataSourceReadOptions {
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily " +
-      "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. " +
-      "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily "
+      + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
+      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to limit incrementally fetched data to. " +
-      "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Instant time to limit incrementally fetched data to. "
+      + "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
+      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -204,8 +207,7 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
-  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
-
+  val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
