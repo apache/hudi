@@ -683,13 +683,6 @@ public class HoodieTableMetaClient implements Serializable {
     initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath.toString(), getFs());
   }
 
-  /**
-   * Reload table config and cache.
-   */
-  public synchronized void reloadTableConfig() {
-    this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), this.tableConfig.getPayloadClass(), this.tableConfig.getRecordMergerStrategy());
-  }
-
   private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
       String payloadClassName, String recordMergerStrategy, FileSystemRetryConfig fileSystemRetryConfig, HoodieMetaserverConfig metaserverConfig) {

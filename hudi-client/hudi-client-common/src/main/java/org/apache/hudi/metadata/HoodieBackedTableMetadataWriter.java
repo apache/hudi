@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -76,7 +77,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -334,14 +334,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       return false;
     }
 
-    // FILES partition is always initialized first
-    ValidationUtils.checkArgument(!partitionsToInit.contains(MetadataPartitionType.FILES)
-        || partitionsToInit.get(0).equals(MetadataPartitionType.FILES), "FILES partition should be initialized first: " + partitionsToInit);
+    // FILES partition is always required and is initialized first
+    boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+    if (!filesPartitionAvailable) {
+      partitionsToInit.remove(MetadataPartitionType.FILES);
+      partitionsToInit.add(0, MetadataPartitionType.FILES);
+    } else {
+      // Check and then open the metadata table reader so FILES partition can be read during initialization of other partitions
+      initMetadataReader();
+    }
+
+    // Already initialized partitions can be ignored
+    partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionEnabled((metadataPartition)));
 
     metadataMetaClient = initializeMetaClient();
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
-    boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES);
     List<DirectoryInfo> partitionInfoList = filesPartitionAvailable ? listAllPartitionsFromMDT(initializationTime) : listAllPartitionsFromFilesystem(initializationTime);
     Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
         .map(p -> {
@@ -358,13 +366,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
       try {
-        // Check and then open the metadata table reader to create a file system view
-        if (this.metadata == null) {
-          initMetadataReader();
-        }
         switch (partitionType) {
           case FILES:
             fileGroupCountAndRecordsPair = initializeFilesPartition(partitionInfoList);
+            // initialize the metadata reader again so the FILES partition can be read
+            initMetadataReader();
             break;
           case BLOOM_FILTERS:
             fileGroupCountAndRecordsPair = initializeBloomFiltersPartition(initializationTime, partitionToFilesMap);
@@ -397,7 +403,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
-      initMetadataReader();
     }
 
     return true;
@@ -492,22 +497,26 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       final String fileId = FSUtils.getFileId(filename);
       final String instantTime = FSUtils.getCommitTime(filename);
-      try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), dataFilePath)) {
-        Iterator<String> recordKeyIterator = reader.getRecordKeyIterator();
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), dataFilePath);
+      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
-        return new Iterator<HoodieRecord>() {
-          @Override
-          public boolean hasNext() {
-            return recordKeyIterator.hasNext();
-          }
+      return new ClosableIterator<HoodieRecord>() {
+        @Override
+        public void close() {
+          recordKeyIterator.close();
+        }
 
-          @Override
-          public HoodieRecord next() {
-            return HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId,
-                instantTime);
-          }
-        };
-      }
+        @Override
+        public boolean hasNext() {
+          return recordKeyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieRecord next() {
+          return HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId,
+              instantTime);
+        }
+      };
     });
   }
 
@@ -633,10 +642,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime) throws IOException {
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
-    if (metadata == null) {
-      this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
-          dataWriteConfig.getBasePath());
-    }
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + "/" + partitionPath).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
@@ -951,9 +956,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
-    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap =
-        Collections.singletonMap(partitionType, records);
-    commit(instantTime, partitionRecordsMap);
+    commit(instantTime, Collections.singletonMap(partitionType, records));
   }
 
   /**

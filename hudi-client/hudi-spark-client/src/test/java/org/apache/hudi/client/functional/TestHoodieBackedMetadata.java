@@ -1436,7 +1436,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withCreateRecordIndex(true)
+            .withEnableRecordIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
         .build();
@@ -1453,7 +1453,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Metadata table should exist
       final Path metadataTablePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()));
       assertTrue(fs.exists(metadataTablePath));
-      metaClient.reloadTableConfig();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
 
       // File groups should be created as in the config
@@ -1470,14 +1470,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableConfig.update(fs, new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME),
         updateProperties);
 
-    metaClient.reloadTableConfig();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getTableConfig().isMetadataTableEnabled());
 
     // Config with 3 fileGroups for record index
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withCreateRecordIndex(true)
+            .withEnableRecordIndex(true)
             .withRecordIndexFileGroupCount(3, 3)
             .build())
         .build();
@@ -1492,7 +1492,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // Metadata table is recreated, during bootstrapping of metadata table.
-      metaClient.reloadTableConfig();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
       validateMetadata(client);
 
@@ -2467,7 +2467,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE);
     // Enable Record index and set index type to record index.
     Properties props = new Properties();
-    props.setProperty(HoodieMetadataConfig.RECORD_INDEX_CREATE_PROP.key(), "true");
+    props.setProperty(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
     props.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), "RECORD_INDEX");
     HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
         .withProps(props).build();
@@ -2786,7 +2786,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enable(true)
             .enableMetrics(false)
             .ignoreSpuriousDeletes(false)
-            .withCreateRecordIndex(true)
+            .withEnableRecordIndex(true)
             .build())
         .build();
 

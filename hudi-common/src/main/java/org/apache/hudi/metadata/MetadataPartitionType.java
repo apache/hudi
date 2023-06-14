@@ -62,7 +62,7 @@ public enum MetadataPartitionType {
    * <p>
    * These partitions need the list of written records so that they can update their metadata.
    */
-  public static List<MetadataPartitionType> needWriteStatusTracking() {
+  public static List<MetadataPartitionType> getMetadataPartitionsNeedingWriteStatusTracking() {
     return Collections.singletonList(MetadataPartitionType.RECORD_INDEX);
   }
 
