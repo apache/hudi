@@ -52,10 +52,10 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
       // use natural order for delete record
       return Option.of(Pair.of(newer, newSchema));
     }
-    if (oldSparkRecord.getOrderingValue(oldSchema, props).compareTo(newSparkRecord.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(Pair.of(oldSparkRecord, oldSchema));
+    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+      return Option.of(Pair.of(older, oldSchema));
     } else {
-      return Option.of(Pair.of(newSparkRecord, newSchema));
+      return Option.of(Pair.of(newer, newSchema));
     }
   }
 

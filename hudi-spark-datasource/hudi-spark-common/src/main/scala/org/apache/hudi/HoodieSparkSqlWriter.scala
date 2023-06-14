@@ -1275,6 +1275,7 @@ object HoodieSparkSqlWriter {
   private def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: SparkKeyGeneratorInterface,
                                                           sourceRow: InternalRow, schema: StructType,
                                                           isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    //  akl_todo: move this out of the iteration.
     def getFieldIndex(fieldName: String): Int = {
       if (schema.fieldNames.contains(fieldName)) {
         HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName)

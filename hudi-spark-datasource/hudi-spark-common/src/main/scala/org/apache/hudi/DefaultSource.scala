@@ -137,18 +137,18 @@ class DefaultSource extends RelationProvider
     * @param sqlContext Spark SQL Context
     * @param mode Mode for saving the DataFrame at the destination
     * @param optParams Parameters passed as part of the DataFrame write operation
-    * @param unprocessedDf Spark DataFrame to be written
+    * @param rawDf Spark DataFrame to be written
     * @return Spark Relation
     */
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
-                              unprocessedDf: DataFrame): BaseRelation = {
+                              rawDf: DataFrame): BaseRelation = {
     val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false")
       .equalsIgnoreCase("true")) {
-      unprocessedDf // Don't remove meta columns for prepped write.
+      rawDf // Don't remove meta columns for prepped write.
     } else {
-      unprocessedDf.drop(HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.toSet.toSeq: _*)
+      rawDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
     }
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
