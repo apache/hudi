@@ -137,8 +137,8 @@ public class HoodieColumnProjectionUtils {
     if (colTypes == null || colTypes.isEmpty()) {
       return true;
     }
-    ArrayList<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(colTypes);
 
+    ArrayList<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(colTypes);
     List<String> names = getIOColumns(conf);
     return IntStream.range(0, names.size()).filter(i -> readCols.contains(names.get(i)))
         .anyMatch(i -> typeContainsTimestamp(types.get(i)));
@@ -151,7 +151,7 @@ public class HoodieColumnProjectionUtils {
       case PRIMITIVE:
         return type.getTypeName().equals(TIMESTAMP_TYPE_NAME);
       case LIST:
-        ListTypeInfo listTypeInfo =  (ListTypeInfo) type;
+        ListTypeInfo listTypeInfo = (ListTypeInfo) type;
         return typeContainsTimestamp(listTypeInfo.getListElementTypeInfo());
       case MAP:
         MapTypeInfo mapTypeInfo = (MapTypeInfo) type;
