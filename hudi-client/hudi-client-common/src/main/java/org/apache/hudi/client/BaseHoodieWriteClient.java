@@ -52,7 +52,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -1327,25 +1326,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
     try {
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
-                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
-              .lastInstant();
-      if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        String extraSchema = commitMetadata.getExtraMetadata().get(SCHEMA_KEY);
-        if (!StringUtils.isNullOrEmpty(extraSchema)) {
-          config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
-        } else {
-          throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
-        }
-      } else {
-        LOG.warn("None rows are deleted because the table is empty");
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
+      String schemaStr = new TableSchemaResolver(metaClient).getTableAvroSchema().toString();
+      config.setSchema(schemaStr);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get schema from MetadataClient", e);
     }
   }
 
