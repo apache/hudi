@@ -756,7 +756,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (recordIndexMetadata.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX) {
       fileId += "-" + recordIndexMetadata.getFileIndex();
     }
-    final Date instantDate = new Date(recordIndexMetadata.getInstantTime());
+    final java.util.Date instantDate = new java.util.Date(recordIndexMetadata.getInstantTime());
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
   }
 

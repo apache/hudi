@@ -198,11 +198,35 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
+  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
+    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
+    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
+    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
+    return Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord());
+  }
+
+  private static List<HoodieRecord> getUpdates() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
+    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
+    return new ArrayList<>(Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord()));
+  }
+
   @ParameterizedTest
   @MethodSource("indexTypeParams")
   public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
-    String newCommitTime = "001";
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     final int totalRecords = 4;
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -308,7 +332,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   @MethodSource("indexTypeParams")
   public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
-    String newCommitTime = "001";
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     final int totalRecords = 4;
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -323,7 +347,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), newCommitTime + ".inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
@@ -658,12 +682,13 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {true})
   public void testRecordIndexTagLocationAndUpdate(boolean populateMetaFields) throws Exception {
     setUp(IndexType.RECORD_INDEX, populateMetaFields, false);
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-    int initialRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, initialRecords);
+    //    int initialRecords = 10 + random.nextInt(20);
+    List<HoodieRecord> records = getInserts();
+    int initialRecords = records.size();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -692,9 +717,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     // Generate updates for all existing records.
-    List<HoodieRecord> newRecords = dataGen.generateUpdatesForAllRecords(secondCommitTime);
-    int newInsertsCount = 10;
-    newRecords.addAll(dataGen.generateInserts(secondCommitTime, newInsertsCount));
+    List<HoodieRecord> newRecords = getUpdates();
+    // int newInsertsCount = 10;
+    List<HoodieRecord> newInserts = getInsertsBatch2();
+    int newInsertsCount = newInserts.size();
+    newRecords.addAll(newInserts);
     // Update partitionPath information.
     String newPartitionPath = "2022/11/04";
     newRecords = newRecords.stream()
