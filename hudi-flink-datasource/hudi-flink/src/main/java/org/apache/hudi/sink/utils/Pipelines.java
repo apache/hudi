@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.CleanFunction;
@@ -447,11 +448,17 @@ public class Pipelines {
   }
 
   public static String opName(String operatorN, Configuration conf) {
-    return operatorN + ": " + conf.getString(FlinkOptions.TABLE_NAME);
+    return operatorN + ": " + getDbTableName(conf);
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    return "uid_" + operatorN + "_" + conf.getString(FlinkOptions.TABLE_NAME);
+    return "uid_" + operatorN + "_" + getDbTableName(conf);
+  }
+
+  public static String getDbTableName(Configuration conf) {
+    String databaseName = conf.getString(FlinkOptions.DATABASE_NAME);
+    return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
+        : databaseName + "#" + conf.getString(FlinkOptions.TABLE_NAME);
   }
 
   /**
