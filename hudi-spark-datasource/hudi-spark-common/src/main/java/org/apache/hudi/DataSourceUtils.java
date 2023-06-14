@@ -52,7 +52,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,7 +239,7 @@ public class DataSourceUtils {
 
         HoodieRecord record = client.getConfig().getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1(), new EmptyHoodieRecordPayload())
-            : new HoodieSparkRecord(tuple._1(), new UnsafeRow(), false);
+            : new HoodieSparkRecord(tuple._1(), null, false);
         record.setCurrentLocation(tuple._2().get());
         return record;
       });

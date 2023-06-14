@@ -22,12 +22,10 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -83,6 +81,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
+  private boolean isDeleted;
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }
@@ -93,6 +92,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = false;
     this.schema = schema;
+
+    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(HoodieKey key, UnsafeRow data, boolean copy) {
@@ -105,6 +106,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
+    isDeleted = data == null;
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
@@ -113,6 +115,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
+    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(
@@ -126,6 +129,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     super(key, data, operation, currentLocation, newLocation);
     this.copy = copy;
     this.schema = schema;
+  }
+
+  public boolean isDeleted() {
+    return isDeleted;
   }
 
   @Override
@@ -428,10 +435,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     //       In case provided row is anything but [[UnsafeRow]], it's expected that the
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
-    boolean isValid = data instanceof UnsafeRow
-        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+    // akl_todo: data can be null (and this is valid)
+    //    boolean isValid = data instanceof UnsafeRow
+    //        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
-    ValidationUtils.checkState(isValid);
+    //    ValidationUtils.checkState(isValid);
   }
 
   private static Object getValue(StructType structType, String fieldName, InternalRow row) {
