@@ -68,6 +68,7 @@
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
+                  <include>org.apache.hudi:hudi-hdfs-test-runner</include>
 
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
@@ -175,6 +176,11 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hdfs-test-runner</artifactId>
       <version>${project.version}</version>
     </dependency>
 
