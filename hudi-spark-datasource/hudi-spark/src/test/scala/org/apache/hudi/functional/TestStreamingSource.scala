@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{FILTER, USE_STATE_TRANSITION_TIME}
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_STATE_TRANSITION_TIME}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.streaming.StreamTest
@@ -40,7 +40,7 @@ class TestStreamingSource extends StreamTest {
   )
   private val columns = Seq("id", "name", "price", "ts")
 
-  val handlingMode: HollowCommitHandling = FILTER
+  val handlingMode: HollowCommitHandling = BLOCK
 
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 

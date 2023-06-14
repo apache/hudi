@@ -70,16 +70,16 @@ class HoodieStreamSource(
 
   /**
    * When hollow commits are found while doing streaming read , unlike batch incremental query,
-   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we use [[HollowCommitHandling.FILTER]]
-   * to stop processing data beyond the hollow commit to avoid unintentional skip.
+   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we use [[HollowCommitHandling.BLOCK]]
+   * to block processing data from going beyond the hollow commits to avoid unintentional skip.
    *
    * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
-   * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the stopping behavior.
+   * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the blocking behavior.
    */
   private val hollowCommitHandling: HollowCommitHandling =
     parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
-      .getOrElse(HollowCommitHandling.FILTER)
+      .getOrElse(HollowCommitHandling.BLOCK)
 
   @transient private lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)

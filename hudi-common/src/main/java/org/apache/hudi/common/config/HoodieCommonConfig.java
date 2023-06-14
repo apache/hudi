@@ -87,7 +87,7 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " The valid values are " + Arrays.toString(enumNames(HollowCommitHandling.class)) + ":"
           + " Use `" + HollowCommitHandling.EXCEPTION + "` to throw an exception when hollow commit is detected. This is helpful when hollow commits"
           + " are not expected."
-          + " Use `" + HollowCommitHandling.FILTER + "` to stop processing commits beyond hollow ones. This fits the case where waiting for hollow commits"
+          + " Use `" + HollowCommitHandling.BLOCK + "` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits"
           + " to finish is acceptable."
           + " Use `" + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "` (experimental) to query commits in range by state transition time (completion time), instead"
           + " of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime` "

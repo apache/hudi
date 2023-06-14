@@ -60,15 +60,15 @@ public class IncrSourceHelper {
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
    * unlike batch incremental query, we do not use {@link HollowCommitHandling#EXCEPTION} by default,
-   * instead we use {@link HollowCommitHandling#FILTER} to stop processing data beyond the hollow commit
-   * to avoid unintentional skip.
+   * instead we use {@link HollowCommitHandling#BLOCK} to block processing data from going beyond the
+   * hollow commits to avoid unintentional skip.
    * <p>
    * Users can set {@link DataSourceReadOptions#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT} to
-   * {@link HollowCommitHandling#USE_STATE_TRANSITION_TIME} to avoid the stopping behavior.
+   * {@link HollowCommitHandling#USE_STATE_TRANSITION_TIME} to avoid the blocking behavior.
    */
   public static HollowCommitHandling getHollowCommitHandleMode(TypedProperties props) {
     return HollowCommitHandling.valueOf(
-        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.FILTER.name()));
+        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.BLOCK.name()));
   }
 
   /**
