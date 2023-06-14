@@ -2644,6 +2644,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
+      writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
+      return this;
+    }
+
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       writeConfig.setValue(INSERT_PARALLELISM_VALUE, String.valueOf(insertShuffleParallelism));
       writeConfig.setValue(UPSERT_PARALLELISM_VALUE, String.valueOf(upsertShuffleParallelism));
@@ -2730,11 +2735,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withLockConfig(HoodieLockConfig lockConfig) {
       writeConfig.getProps().putAll(lockConfig.getProps());
       isLockConfigSet = true;
-      return this;
-    }
-
-    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
-      writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
       return this;
     }
 
