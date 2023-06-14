@@ -129,21 +129,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val needsFiltering = commitTimeMetadataFieldIdx >= 0 && !StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)
     if (needsFiltering) {
       val filterT: Predicate[InternalRow] = getCommitTimeFilter(includeStartTime, commitTimeMetadataFieldIdx)
-      new Iterator[InternalRow] {
-        var row: InternalRow = _
-        override def hasNext: Boolean = {
-          while (iter.hasNext) {
-            row = iter.next();
-            if (filterT.test(row)) {
-              return true
-            }
-          }
-          false
-        }
-
-        override def next(): InternalRow = row
-      }
-    } else {
+      iter.filter(filterT.test)
+    }
+    else {
       iter
     }
   }
