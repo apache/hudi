@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -55,7 +54,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -663,7 +661,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
@@ -710,7 +707,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .withForceFullScan(false)
         .build();
 
@@ -801,7 +797,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .withForceFullScan(false)
         .build();
 
@@ -1300,7 +1295,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1348,7 +1342,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -1377,9 +1370,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testAvroLogRecordReaderWithCommitBeforeAndAfterRollback(ExternalSpillableMap.DiskMapType diskMapType,
-                                                           boolean isCompressionEnabled,
-                                                           boolean readBlocksLazily,
-                                                           boolean enableOptimizedLogBlocksScan)
+                                                                      boolean isCompressionEnabled,
+                                                                      boolean readBlocksLazily,
+                                                                      boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -1458,7 +1451,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     final List<Boolean> newEmptyPayloads = new ArrayList<>();
@@ -1573,7 +1565,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -2130,7 +2121,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .withOptimizedLogBlocksScan(true)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     assertEquals(600, scanner.getTotalLogRecords(), "We would read 600 records from scanner");
     final List<String> readKeys = new ArrayList<>();
@@ -2220,7 +2210,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
           .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-          .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
 
       assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),
@@ -2734,8 +2723,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(spillableBasePath)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
-        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()));
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
     try (HoodieMergedLogRecordScanner scanner = builder.build()) {
       assertEquals(expectedTotalRecords, scanner.getTotalLogRecords(), "There should be " + expectedTotalRecords + " records");
       final Set<String> readKeys = new HashSet<>();

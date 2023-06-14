@@ -1862,7 +1862,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig);
     String partitionPath = dataGen.getPartitionPaths()[0];
     for (int j = 0; j < 6; j++) {
-      String newCommitTime = "000000" + j;
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, partitionPath);
       writeClient.startCommitWithTime(newCommitTime);
       JavaRDD writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);

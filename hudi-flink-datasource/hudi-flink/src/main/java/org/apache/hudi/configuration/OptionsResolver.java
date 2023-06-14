@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,6 +43,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -268,7 +271,9 @@ public class OptionsResolver {
    * in scenarios like multiple writers.
    */
   public static boolean isReadByTxnCompletionTime(Configuration conf) {
-    return conf.getBoolean(HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key(), HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.defaultValue());
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
+        .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
+    return handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME;
   }
 
   /**

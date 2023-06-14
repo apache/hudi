@@ -83,6 +83,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 
 @Tag("functional")
 public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness {

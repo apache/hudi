@@ -47,8 +47,6 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
- *
- * @param <R> Record implementation that permits field access by integer index.
  */
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 

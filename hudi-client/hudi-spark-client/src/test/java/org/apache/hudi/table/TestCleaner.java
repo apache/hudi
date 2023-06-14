@@ -24,12 +24,8 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
-import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -68,7 +64,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -667,37 +662,6 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000003", file3P1C2));
     assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
-  }
-
-  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
-      String instantTime, String partition, String replacedFileId, String newFileId) {
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
-    requestedReplaceMetadata.setVersion(1);
-    HoodieSliceInfo sliceInfo = HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build();
-    List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
-    clusteringGroups.add(HoodieClusteringGroup.newBuilder()
-        .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
-        .setSlices(Collections.singletonList(sliceInfo)).build());
-    requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
-    requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
-        .setVersion(1).setExtraMetadata(Collections.emptyMap())
-        .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
-        .setInputGroups(clusteringGroups).build());
-
-    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    replaceMetadata.addReplaceFileId(partition, replacedFileId);
-    replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
-    if (!StringUtils.isNullOrEmpty(newFileId)) {
-      HoodieWriteStat writeStat = new HoodieWriteStat();
-      writeStat.setPartitionPath(partition);
-      writeStat.setPath(partition + "/" + getBaseFilename(instantTime, newFileId));
-      writeStat.setFileId(newFileId);
-      writeStat.setTotalWriteBytes(1);
-      writeStat.setFileSizeInBytes(1);
-      replaceMetadata.addWriteStat(partition, writeStat);
-    }
-    return Pair.of(requestedReplaceMetadata, replaceMetadata);
   }
 
   @Test
