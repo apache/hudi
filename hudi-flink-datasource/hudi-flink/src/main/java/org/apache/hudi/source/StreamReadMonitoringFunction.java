@@ -19,7 +19,6 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -121,7 +120,6 @@ public class StreamReadMonitoringFunction
         .partitionPruner(partitionPruner)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
-        .handleHollowCommit(TimelineUtils.HollowCommitHandling.MANAGED)
         .build();
   }
 

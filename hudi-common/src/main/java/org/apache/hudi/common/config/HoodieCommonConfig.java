@@ -89,8 +89,6 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " are not expected."
           + " Use `" + HollowCommitHandling.BLOCK + "` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits"
           + " to finish is acceptable."
-          + " Use `" + HollowCommitHandling.MANAGED + "` to ignore the hollow ones as the situation should have been managed by external mechanisms such as checkpointing"
-          + " the commit end time."
           + " Use `" + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "` (experimental) to query commits in range by state transition time (completion time), instead"
           + " of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime` "
           + " instead of the instant's commit time."
