@@ -105,7 +105,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // 1. When the HoodieIndex being used is not implicit with storage
     // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
     final boolean trackSuccessRecords = !hoodieTable.getIndex().isImplicitWithStorage()
-        || HoodieTableMetadataUtil.needsWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
+        || HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         trackSuccessRecords, config.getWriteStatusFailureFraction());
   }

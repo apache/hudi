@@ -20,11 +20,11 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -247,8 +247,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
           + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
 
-  public static final ConfigProperty<Boolean> RECORD_INDEX_CREATE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".record.index.create")
+  public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.enable")
       .defaultValue(false)
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
@@ -291,10 +291,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Max memory to use for the reader buffer while merging log blocks");
 
   public static final ConfigProperty<String> SPILLABLE_MAP_DIR_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".spillable.dir")
-      .defaultValue(FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())
-      .sinceVersion("0.10.0")
-      .withDocumentation("Directory where the spillable maps are saved");
+      .key(METADATA_PREFIX + ".spillable.map.path")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.of(cfg.getStringOrDefault(FileSystemViewStorageConfig.SPILLABLE_DIR)))
+      .sinceVersion("0.14.0")
+      .withDocumentation("Path on local storage to use, when keys read from metadata are held in a spillable map.");
 
   private HoodieMetadataConfig() {
     super();
@@ -380,8 +381,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
   }
 
-  public boolean createRecordIndex() {
-    return enabled() && getBoolean(RECORD_INDEX_CREATE_PROP);
+  public boolean enableRecordIndex() {
+    return enabled() && getBoolean(RECORD_INDEX_ENABLE_PROP);
   }
 
   public int getRecordIndexMinFileGroupCount() {
@@ -552,8 +553,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withCreateRecordIndex(boolean enabled) {
-      metadataConfig.setValue(RECORD_INDEX_CREATE_PROP, String.valueOf(enabled));
+    public Builder withEnableRecordIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_INDEX_ENABLE_PROP, String.valueOf(enabled));
       return this;
     }
 

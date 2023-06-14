@@ -43,7 +43,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -124,10 +124,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void bulkCommit(
           String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
           int fileGroupCount) {
-    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
-    partitionRecordsMap.put(partitionType, records);
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, partitionRecordsMap, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), Option.of(partitioner));
   }
 
   private void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,

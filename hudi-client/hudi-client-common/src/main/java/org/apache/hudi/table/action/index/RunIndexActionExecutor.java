@@ -26,7 +26,9 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -294,15 +296,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   }
 
   private void updateMetadataPartitionsTableConfig(HoodieTableMetaClient metaClient, Set<String> metadataPartitions) {
-    // remove from inflight and update completed indexes
-    Set<String> inflightPartitions = getInflightMetadataPartitions(metaClient.getTableConfig());
-    Set<String> completedPartitions = metaClient.getTableConfig().getMetadataPartitions();
-    inflightPartitions.removeAll(metadataPartitions);
-    completedPartitions.addAll(metadataPartitions);
-    // update table config
-    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
-    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    metadataPartitions.forEach(metadataPartition -> {
+      metaClient.getTableConfig().setMetadataPartitionState(metaClient, MetadataPartitionType.valueOf(metadataPartition), true);
+    });
   }
 
   /**
@@ -347,7 +343,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                 .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
             instant = currentInstant.orElse(instant);
             // so that timeline is not reloaded very frequently
-            // TODO: this does not handle the case that the commit has indeed failed. Maybe use HB detection here.
+            // TODO: HUDI-6371: this does not handle the case that the commit has indeed failed. Maybe use HB detection here.
             Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
           } catch (InterruptedException e) {
             throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
@@ -371,15 +367,15 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               case HoodieTimeline.COMMIT_ACTION:
               case HoodieTimeline.DELTA_COMMIT_ACTION:
               case HoodieTimeline.REPLACE_COMMIT_ACTION:
-                // Indexes may require WriteStatus which cannot be read from the HoodieCommitMetadata. So if the original commit has not
-                // written to the MDT then we cannot sync that commit here
-                // TODO: maybe the above check for timeout should be based on HB rather than busy loop forever.
-                throw new HoodieIndexException(String.format("Cannot sync instant to MDT: %s", instant));
-                //HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                //    table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-                // do not trigger any table service as partition is not fully built out yet
-                //metadataWriter.update(commitMetadata, instant.getTimestamp());
-                //break;
+                // TODO: HUDI-6372: Record index requires WriteStatus which cannot be read from the HoodieCommitMetadata. So if the original commit has not
+                // written to the MDT then we cannot sync that commit here.
+                if (metaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX)) {
+                  throw new HoodieIndexException(String.format("Cannot sync completed instant %s to metadata table as record index is enabled", instant));
+                }
+                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+                    table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                metadataWriter.update(commitMetadata, HoodieListData.eager(Collections.emptyList()), instant.getTimestamp());
+                break;
               case CLEAN_ACTION:
                 HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(table.getMetaClient(), instant);
                 metadataWriter.update(cleanMetadata, instant.getTimestamp());

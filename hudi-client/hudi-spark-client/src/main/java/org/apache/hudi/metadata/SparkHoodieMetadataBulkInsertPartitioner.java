@@ -24,11 +24,11 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-
 import scala.Tuple2;
 
 /**
@@ -89,7 +89,7 @@ public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertParti
         // FileGroupPartitioner returns a fixed number of partition as part of numPartitions(). In the special case that recordsRDD has fewer
         // records than fileGroupCount, some of these partitions (corresponding to fileGroups) will not have any data.
         // But we still need to return a fileID for use within {@code BulkInsertMapFunction}
-        fileIds.add("");
+        fileIds.add(StringUtils.EMPTY_STRING);
       }
       return fileIds.iterator();
     }, true).collect();

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -29,8 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -40,7 +38,6 @@ import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -55,8 +52,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 
 /**
  * Hoodie Index implementation backed by the record index present in the Metadata Table.
@@ -137,31 +132,10 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   @Override
   public boolean rollbackCommit(String instantTime) {
     // Only those deltacommits which have a valid completed commit on the dataset are read. Since, the instantTime
-    // is being rolled back on the dataset, we will not load the records from the deltacommit and it is virtually
-    // rolled back. In other words, there is no need to rollback any deltacommit here except if the deltacommit
-    // was compacted and a new basefile has been created.
-    try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
-          .setConf(new Configuration()).build();
-      HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
-      if (commitTimeline.empty()) {
-        // No compaction yet so no need to check for deltacommits due to the logic above
-        return true;
-      }
-
-      if (HoodieTimeline.compareTimestamps(instantTime, GREATER_THAN, commitTimeline.lastInstant().get().getTimestamp())) {
-        // After the last compaction so no rollback required as per logic above
-        return true;
-      }
-      LOG.warn("Cannot rollback instant " + instantTime + " because the corresponding deltacommit has been compacted "
-          + " in " + commitTimeline.lastInstant().get().getTimestamp());
-      return false;
-    } catch (TableNotFoundException e) {
-      // Metadata table is not setup.  Nothing to rollback.  Exit gracefully.
-      LOG.warn("Cannot rollback instant " + instantTime + " as metadata table is not found");
-      return true;
-    }
+    // is being rolled back on the dataset, we will anyway not load the records from the deltacommit.
+    //
+    // In other words, there is no need to rollback anything here as the MDT rollback mechanism will take care of it.
+    return true;
   }
 
   @Override
@@ -196,7 +170,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
           }
           // Ensure the partitionPath is also set correctly in the key
           if (!record.getPartitionPath().equals(location.get().getPartitionPath())) {
-            record = new HoodieAvroRecord(new HoodieKey(record.getRecordKey(), location.get().getPartitionPath()), (HoodieRecordPayload) record.getData());
+            record = createNewHoodieRecord(record, location.get());
           }
 
           // Perform the tagging. Not using HoodieIndexUtils.getTaggedRecord to prevent an additional copy which is not necessary for this index.
@@ -205,6 +179,13 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
           record.seal();
           return record;
         });
+  }
+
+  private HoodieRecord createNewHoodieRecord(HoodieRecord oldRecord, HoodieRecordGlobalLocation location) {
+    HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
+    return config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
+        ? new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData())
+        : ((HoodieSparkRecord) oldRecord).newInstance();
   }
 
   /**
@@ -224,11 +205,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
       // recordIndexInfo object only contains records that are present in record_index.
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
-
-      HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-      HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
       return recordIndexInfo.entrySet().stream()
-          .filter(e -> HoodieIndexUtils.checkIfValidCommit(commitsTimeline, e.getValue().getInstantTime()))
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }
   }

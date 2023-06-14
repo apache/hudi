@@ -2355,7 +2355,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean createMetadataRecordIndex() {
-    return metadataConfig.createRecordIndex();
+    return metadataConfig.enableRecordIndex();
   }
 
   public int getRecordIndexMinFileGroupCount() {
