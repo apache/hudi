@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -181,9 +182,18 @@ public class HoodieIndexUtils {
     return foundRecordKeys;
   }
 
+  /**
+   * Check if the given commit timestamp is valid for the timeline.
+   *
+   * The commit timestamp is considered to be valid if:
+   *   1. the commit timestamp is present in the timeline, or
+   *   2. the commit timestamp is less than the first commit timestamp in the timeline
+   *
+   * @param commitTimeline  The timeline
+   * @param commitTs        The commit timestamp to check
+   * @return                true if the commit timestamp is valid for the timeline
+   */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
-    // Check if the last commit ts for this row is 1) present in the timeline or
-    // 2) is less than the first commit ts in the timeline
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
   }
 
@@ -221,7 +231,12 @@ public class HoodieIndexUtils {
   /**
    * Merge the incoming record with the matching existing record loaded via {@link HoodieMergedReadHandle}. The existing record is the latest version in the table.
    */
-  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(HoodieRecord<R> incoming, HoodieRecord<R> existing, Schema writeSchema, HoodieWriteConfig config) throws IOException {
+  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
+      HoodieRecord<R> incoming,
+      HoodieRecord<R> existing,
+      Schema writeSchema,
+      HoodieWriteConfig config,
+      HoodieRecordMerger recordMerger) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     // prepend the hoodie meta fields as the incoming record does not have them
@@ -230,7 +245,7 @@ public class HoodieIndexUtils {
     // after prepend the meta fields, convert the record back to the original payload
     HoodieRecord incomingWithMetaFields = incomingPrepended
         .wrapIntoHoodieRecordPayloadWithParams(writeSchema, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false, Option.empty());
-    Option<Pair<HoodieRecord, Schema>> mergeResult = config.getRecordMerger()
+    Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
         .merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
     if (mergeResult.isPresent()) {
       // the merged record needs to be converted back to the original payload
@@ -261,6 +276,7 @@ public class HoodieIndexUtils {
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(partitionLocations, config, hoodieTable);
 
+    final HoodieRecordMerger recordMerger = config.getRecordMerger();
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -277,7 +293,7 @@ public class HoodieIndexUtils {
             return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();
           }
 
-          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config);
+          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config, recordMerger);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();

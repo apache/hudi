@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -244,32 +243,6 @@ public class FSUtils {
     // Partition-Path could be empty for non-partitioned tables
     return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
         : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
-  }
-
-  /**
-   * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE_PREFIX}.
-   *
-   * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
-   * table (a hoodie table within the .hoodie directory) are to be obtained.
-   *
-   * @param fs FileSystem instance
-   * @param basePathStr base directory
-   */
-  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
-    // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
-    // internal table.
-    final boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(basePathStr);
-    final Path basePath = new Path(basePathStr);
-    final List<String> partitions = new ArrayList<>();
-    processFiles(fs, basePathStr, (locatedFileStatus) -> {
-      Path filePath = locatedFileStatus.getPath();
-      if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-        partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
-      }
-      return true;
-    }, !isMetadataTable);
-    return partitions;
   }
 
   /**

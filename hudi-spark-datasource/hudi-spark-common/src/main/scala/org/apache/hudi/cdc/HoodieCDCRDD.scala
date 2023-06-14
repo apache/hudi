@@ -23,13 +23,12 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
@@ -38,8 +37,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.spark.rdd.RDD
@@ -182,6 +180,8 @@ class HoodieCDCRDD(
     )
 
     private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcAvroSchema)
+
+    private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
 
     /**
      * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
@@ -419,7 +419,9 @@ class HoodieCDCRDD(
             assert(currentCDCFileSplit.getCdcFiles != null && currentCDCFileSplit.getCdcFiles.size() == 1)
             val absCDCPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
             val fileStatus = fs.getFileStatus(absCDCPath)
-            val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
+
+            val pf = sparkPartitionedFileUtils.createPartitionedFile(
+              InternalRow.empty, absCDCPath, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
           case BASE_FILE_DELETE =>
             assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -523,9 +525,9 @@ class HoodieCDCRDD(
 
     private def loadFileSlice(fileSlice: FileSlice): Iterator[InternalRow] = {
       val baseFileStatus = fs.getFileStatus(new Path(fileSlice.getBaseFile.get().getPath))
-      val basePartitionedFile = PartitionedFile(
+      val basePartitionedFile = sparkPartitionedFileUtils.createPartitionedFile(
         InternalRow.empty,
-        pathToString(baseFileStatus.getPath),
+        baseFileStatus.getPath,
         0,
         baseFileStatus.getLen
       )

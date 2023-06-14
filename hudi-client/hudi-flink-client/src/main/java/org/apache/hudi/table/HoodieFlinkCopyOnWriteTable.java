@@ -54,6 +54,7 @@ import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeletePartitionCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
@@ -94,7 +95,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *
-   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
    * @param context     HoodieEngineContext
@@ -114,7 +115,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
    *
-   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
    * @param context     HoodieEngineContext
@@ -135,7 +136,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
    * de-duped and non existent keys will be removed before deleting.
    *
-   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
    * @param context     HoodieEngineContext
@@ -157,12 +158,12 @@ public class HoodieFlinkCopyOnWriteTable<T>
    *
    * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
-   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
    * @param context        HoodieEngineContext
    * @param instantTime    Instant Time for the action
-   * @param preppedRecords hoodieRecords to upsert
+   * @param preppedRecords Hoodie records to upsert
    * @return HoodieWriteMetadata
    */
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
@@ -178,12 +179,12 @@ public class HoodieFlinkCopyOnWriteTable<T>
    *
    * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
-   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
    * @param context        HoodieEngineContext
    * @param instantTime    Instant Time for the action
-   * @param preppedRecords hoodieRecords to upsert
+   * @param preppedRecords Hoodie records to insert
    * @return HoodieWriteMetadata
    */
   public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
@@ -192,6 +193,27 @@ public class HoodieFlinkCopyOnWriteTable<T>
       String instantTime,
       List<HoodieRecord<T>> preppedRecords) {
     return new FlinkInsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
+  }
+
+  /**
+   * Bulk inserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
+   * the underneath file.
+   *
+   * @param context        HoodieEngineContext
+   * @param instantTime    Instant Time for the action
+   * @param preppedRecords Hoodie records to bulk_insert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    return new FlinkBulkInsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override

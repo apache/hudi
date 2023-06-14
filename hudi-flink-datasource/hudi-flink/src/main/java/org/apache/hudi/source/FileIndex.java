@@ -285,7 +285,7 @@ public class FileIndex {
     return this.partitionPaths;
   }
 
-  private static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
+  public static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
     Properties properties = new Properties();
 
     // set up metadata.enabled=true in table DDL to enable metadata listing

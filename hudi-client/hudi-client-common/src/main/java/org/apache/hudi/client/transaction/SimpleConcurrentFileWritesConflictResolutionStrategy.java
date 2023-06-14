@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -49,9 +50,9 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   private static final Logger LOG = LoggerFactory.getLogger(SimpleConcurrentFileWritesConflictResolutionStrategy.class);
 
   @Override
-  public Stream<HoodieInstant> getCandidateInstants(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant,
-                                                 Option<HoodieInstant> lastSuccessfulInstant) {
-
+  public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                    Option<HoodieInstant> lastSuccessfulInstant) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     // To find which instants are conflicting, we apply the following logic
     // 1. Get completed instants timeline only for commits that have happened since the last successful write.
     // 2. Get any scheduled or completed compaction or clustering operations that have started and/or finished
@@ -108,6 +109,11 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     }
     // just abort the current write if conflicts are found
     throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+  }
+
+  @Override
+  public boolean isPreCommitRequired() {
+    return false;
   }
 
 }

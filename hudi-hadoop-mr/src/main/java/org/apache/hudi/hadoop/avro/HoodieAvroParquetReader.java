@@ -50,7 +50,6 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   private Schema baseSchema;
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
-    AvroReadSupport avroReadSupport = new AvroReadSupport<>();
     // if exists read columns, we need to filter columns.
     List<String> readColNames = Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(conf));
     if (!readColNames.isEmpty()) {
@@ -66,10 +65,10 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
               .filter(f -> readColNames.contains(f.name()))
               .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
               .collect(Collectors.toList()));
-      avroReadSupport.setAvroReadSchema(conf, filterSchema);
-      avroReadSupport.setRequestedProjection(conf, filterSchema);
+      AvroReadSupport.setAvroReadSchema(conf, filterSchema);
+      AvroReadSupport.setRequestedProjection(conf, filterSchema);
     }
-    parquetRecordReader = new ParquetRecordReader<>(avroReadSupport, getFilter(conf));
+    parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
   }
 
   @Override

@@ -19,9 +19,11 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -106,7 +108,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     // specific configurations
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
-    private HoodieRecordMerger recordMerger;
+    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -174,7 +176,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
     @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = recordMerger;
+      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
     }
 

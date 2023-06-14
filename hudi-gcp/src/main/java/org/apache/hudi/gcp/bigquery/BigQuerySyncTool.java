@@ -96,7 +96,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
         .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
         .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
         .build();
-    manifestFileWriter.writeManifestFile();
+    manifestFileWriter.writeManifestFile(false);
 
     if (!bqSyncClient.tableExists(manifestTableName)) {
       bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri());

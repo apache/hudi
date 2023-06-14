@@ -578,7 +578,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     BaseFileReader(
       read = partitionedFile => {
-        val extension = FSUtils.getFileExtension(partitionedFile.filePath)
+        val filePathString = sparkAdapter.getSparkPartitionedFileUtils.getStringPathFromPartitionedFile(partitionedFile)
+        val extension = FSUtils.getFileExtension(filePathString)
         if (tableBaseFileFormat.getFileExtension.equals(extension)) {
           read(partitionedFile)
         } else {
@@ -731,8 +732,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
-      val reader = new HoodieAvroHFileReader(hadoopConf, new Path(partitionedFile.filePath),
-        new CacheConfig(hadoopConf))
+      val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
+      val reader = new HoodieAvroHFileReader(hadoopConf, filePath, new CacheConfig(hadoopConf))
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable

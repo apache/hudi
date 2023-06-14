@@ -412,7 +412,7 @@ public class DeltaSync implements Serializable, Closeable {
     refreshTimeline();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt, instantTime);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime);
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
@@ -480,38 +480,15 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
-   * @param commitsTimelineOpt Timeline with completed commits, including .commit and .deltacommit
    * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitsTimelineOpt, String instantTime) throws IOException {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
-    } else {
-      // initialize the table for the first time.
-      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
-      HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(cfg.tableType)
-          .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPayloadClassName(cfg.payloadClassName)
-          .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionFields(partitionColumns)
-          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(keyGenClassName)
-          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
-              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
-          .setShouldDropPartitionColumns(isDropPartitionColumns())
-          .setHiveStylePartitioningEnable(props.getBoolean(HIVE_STYLE_PARTITIONING_ENABLE.key(),
-              Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
-          .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
-              Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-          .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
     LOG.debug("Checkpoint from config: " + cfg.checkpoint);

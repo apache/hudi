@@ -23,7 +23,6 @@ import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -78,16 +77,16 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
                                   Schema schema) throws Exception {
-    HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
-    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordMerger.getRecordType())
+    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordType)
             .getFileReader(table.getHadoopConf(), sourceFilePath);
 
     HoodieExecutor<Void> executor = null;
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
         String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
-        return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordMerger.getRecordType())
+        return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordType)
             // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
             //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
             //       it since these records will be inserted into the queue later.

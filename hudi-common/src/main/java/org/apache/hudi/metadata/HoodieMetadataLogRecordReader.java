@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -136,10 +135,9 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     private final HoodieMergedLogRecordScanner.Builder scannerBuilder =
         new HoodieMergedLogRecordScanner.Builder()
             .withKeyFiledOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
-            // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodieAvroRecordMerger}
+            // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
             //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
             //       will be migrated to its own custom instance of {@code RecordMerger}
-            .withRecordMerger(new HoodieAvroRecordMerger())
             .withReadBlocksLazily(true)
             .withReverseReader(false)
             .withOperationField(false);

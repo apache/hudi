@@ -500,7 +500,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     checkArgument(table.isTableServiceAction(actionType, instantTime), String.format("Unsupported action: %s.%s is not table service.", actionType, instantTime));
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, true));
+    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime));
   }
 
   /**
@@ -858,6 +858,16 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       table.rollbackBootstrap(context, HoodieActiveTimeline.createNewInstantTime());
       LOG.info("Finished rolling back pending bootstrap");
     }
+  }
+
+  /**
+   * Some writers use SparkAllowUpdateStrategy and treat replacecommit plan as revocable plan.
+   * In those cases, their ConflictResolutionStrategy implementation should run conflict resolution
+   * even for clustering operations.
+   * @return boolean
+   */
+  protected boolean isPreCommitRequired() {
+    return this.config.getWriteConflictResolutionStrategy().isPreCommitRequired();
   }
 
   private Option<String> delegateToTableServiceManager(TableServiceType tableServiceType, HoodieTable table) {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
@@ -80,13 +82,11 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import scala.Tuple3;
 
 import java.io.File;
 import java.io.IOException;
@@ -103,8 +103,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.Tuple3;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
@@ -598,7 +596,7 @@ public class TestCleaner extends HoodieClientTestBase {
           }
         })
     );
-    metadataWriter.update(commitMetadata, "00000000000001", false);
+    metadataWriter.update(commitMetadata, "00000000000001");
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -1053,7 +1051,7 @@ public class TestCleaner extends HoodieClientTestBase {
           }
         })
     );
-    metadataWriter.update(commitMetadata, "00000000000001", false);
+    metadataWriter.update(commitMetadata, "00000000000001");
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -1112,6 +1110,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .build();
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
     HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable.updateFilesPartitionInTableConfig();
 
     String p1 = "part_1";
     String p2 = "part_2";
@@ -1127,7 +1126,6 @@ public class TestCleaner extends HoodieClientTestBase {
     });
     commitWithMdt("1", part1ToFileId, testTable, metadataWriter);
     commitWithMdt("2", part1ToFileId, testTable, metadataWriter);
-
 
     // add clean instant
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
@@ -1148,14 +1146,22 @@ public class TestCleaner extends HoodieClientTestBase {
     commitWithMdt("4", part2ToFileId, testTable, metadataWriter);
 
     // empty commits
-    testTable.addCommit("5");
-    testTable.addCommit("6");
+    String file5P2 = UUID.randomUUID().toString();
+    String file6P2 = UUID.randomUUID().toString();
+    part2ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+      {
+        put(p2, CollectionUtils.createImmutableList(file5P2, file6P2));
+      }
+    });
+    commitWithMdt("5", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("6", part2ToFileId, testTable, metadataWriter);
 
     // archive commit 1, 2
     new HoodieTimelineArchiver<>(config, HoodieSparkTable.create(config, context, metaClient))
         .archiveIfRequired(context, false);
-    assertFalse(metaClient.reloadActiveTimeline().containsInstant("1"));
-    assertFalse(metaClient.reloadActiveTimeline().containsInstant("2"));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().containsInstant("1"));
+    assertFalse(metaClient.getActiveTimeline().containsInstant("2"));
 
     runCleaner(config);
     assertFalse(testTable.baseFileExists(p1, "1", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
@@ -1179,7 +1185,8 @@ public class TestCleaner extends HoodieClientTestBase {
         throw new RuntimeException(e);
       }
     });
-    metadataWriter.update(commitMeta, instantTime, false);
+    metadataWriter.performTableServices(Option.of(instantTime));
+    metadataWriter.update(commitMeta, instantTime);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
         Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));

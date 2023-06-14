@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -413,15 +412,33 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // with logic above to avoid Stream.concat
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
 
-    Option<HoodieInstant> oldestPendingCompactionAndReplaceInstant = table.getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
-        .filter(s -> !s.isCompleted())
+    // Get the oldest inflight instant and a completed commit before this inflight instant.
+    Option<HoodieInstant> oldestPendingInstant = table.getActiveTimeline()
+        .getWriteTimeline()
+        .filter(instant -> !instant.isCompleted())
         .firstInstant();
 
-    Option<HoodieInstant> oldestInflightCommitInstant =
-        table.getActiveTimeline()
-            .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-            .filterInflights().firstInstant();
+    // Oldest commit to retain is the greatest completed commit, that is less than the oldest pending instant.
+    // In some cases when inflight is the lowest commit then oldest commit to retain will be equal to oldest
+    // inflight commit.
+    Option<HoodieInstant> oldestCommitToRetain;
+    if (oldestPendingInstant.isPresent()) {
+      Option<HoodieInstant> completedCommitBeforeOldestPendingInstant =
+          Option.fromJavaOptional(commitTimeline.getReverseOrderedInstants()
+              .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+                  LESSER_THAN, oldestPendingInstant.get().getTimestamp())).findFirst());
+      // Check if the completed instant is higher than the oldest inflight instant
+      // in that case update the oldestCommitToRetain to oldestInflight commit time.
+      if (!completedCommitBeforeOldestPendingInstant.isPresent()
+          || HoodieTimeline.compareTimestamps(oldestPendingInstant.get().getTimestamp(),
+          LESSER_THAN, completedCommitBeforeOldestPendingInstant.get().getTimestamp())) {
+        oldestCommitToRetain = oldestPendingInstant;
+      } else {
+        oldestCommitToRetain = completedCommitBeforeOldestPendingInstant;
+      }
+    } else {
+      oldestCommitToRetain = Option.empty();
+    }
 
     // NOTE: We cannot have any holes in the commit timeline.
     // We cannot archive any commits which are made after the first savepoint present,
@@ -460,19 +477,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
-            // Ensure commits >= the oldest pending compaction/replace commit is retained
-            return oldestPendingCompactionAndReplaceInstant
+            // oldestCommitToRetain is the highest completed commit instant that is less than the oldest inflight instant.
+            // By filtering out any commit >= oldestCommitToRetain, we can ensure there are no gaps in the timeline
+            // when inflight commits are present.
+            return oldestCommitToRetain
                 .map(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
-          }).filter(s -> {
-            // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
-            // get archived, i.e, instants after the oldestInflight are retained on the timeline
-            if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
-              return oldestInflightCommitInstant.map(instant ->
-                      compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
-                  .orElse(true);
-            }
-            return true;
           }).filter(s ->
               oldestInstantToRetainForCompaction.map(instantToRetain ->
                       compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
@@ -519,7 +529,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
-    if (config.isMetadataTableEnabled()) {
+    if (table.getMetaClient().getTableConfig().isMetadataTableEnabled()) {
       try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
           config.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
