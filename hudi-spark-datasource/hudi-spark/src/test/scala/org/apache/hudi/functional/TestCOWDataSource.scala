@@ -486,7 +486,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testArchivalWithBulkInsert(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
-    var structType : StructType = null
+    var structType: StructType = null
     for (i <- 1 to 7) {
       val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
@@ -1405,33 +1405,34 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertDoesNotThrow(
       new Executable {
         override def execute(): Unit = {
-    val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
+          val (writeOpts, _) = getWriterReaderOpts(recordType, getQuickstartWriteConfigs.asScala.toMap)
 
-    val schema1 = StructType(
-      StructField("_row_key", StringType, nullable = false) ::
-        StructField("name", MapType(StringType,
-          ArrayType(StringType, containsNull = false)), nullable = true) ::
-        StructField("timestamp", LongType, nullable = true) ::
-        StructField("partition", LongType, nullable = true) :: Nil)
-    val records = List(Row("1", null, 1L, 1L))
-    val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
-    inputDF.write.format("org.apache.hudi")
-      .options(commonOpts ++ writeOpts)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+          val schema1 = StructType(
+            StructField("_row_key", StringType, nullable = false) ::
+              StructField("name", MapType(StringType,
+                ArrayType(StringType, containsNull = false)), nullable = true) ::
+              StructField("timestamp", LongType, nullable = true) ::
+              StructField("partition", LongType, nullable = true) :: Nil)
+          val records = List(Row("1", null, 1L, 1L))
+          val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
+          inputDF.write.format("org.apache.hudi")
+            .options(commonOpts ++ writeOpts)
+            .mode(SaveMode.Overwrite)
+            .save(basePath)
 
-    val schema2 = StructType(StructField("_row_key", StringType, nullable = false) ::
-      StructField("name", MapType(StringType, ArrayType(StringType,
-        containsNull = true)), nullable = true) ::
-      StructField("timestamp", LongType, nullable = true) ::
-      StructField("partition", LongType, nullable = true) :: Nil)
-    val records2 = List(Row("1", null, 1L, 1L))
-    val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
-    inputDF2.write.format("org.apache.hudi")
-      .options(commonOpts ++ writeOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
-    }})
+          val schema2 = StructType(StructField("_row_key", StringType, nullable = false) ::
+            StructField("name", MapType(StringType, ArrayType(StringType,
+              containsNull = true)), nullable = true) ::
+            StructField("timestamp", LongType, nullable = true) ::
+            StructField("partition", LongType, nullable = true) :: Nil)
+          val records2 = List(Row("1", null, 1L, 1L))
+          val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
+          inputDF2.write.format("org.apache.hudi")
+            .options(commonOpts ++ writeOpts)
+            .mode(SaveMode.Append)
+            .save(basePath)
+        }
+      })
   }
 
   @ParameterizedTest
@@ -1501,8 +1502,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-}
+  @Test
+  def testHiveStyleDelete(): Unit = {
+    val columns = Seq("id", "precombine", "partition")
+    val data = Seq((1, "1", "2021-01-05"),
+      (2, "2", "2021-01-06"),
+      (3, "3", "2021-01-05"))
+    val rdd = spark.sparkContext.parallelize(data)
+    val df = spark.createDataFrame(rdd).toDF(columns: _*)
+    var hudiOptions = Map[String, String](
+      HoodieWriteConfig.TBL_NAME.key() -> "tbl",
+      DataSourceWriteOptions.OPERATION.key() -> "insert",
+      DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine",
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true"
+    )
 
+    df.write.format("org.apache.hudi").options(hudiOptions).mode(SaveMode.Overwrite).save(basePath)
+
+    hudiOptions = Map[String, String](
+      HoodieWriteConfig.TBL_NAME.key() -> "tbl",
+      DataSourceWriteOptions.OPERATION.key() -> "delete",
+      DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine"
+    )
+
+    df.filter(df("id") === 1).
+      write.format("org.apache.hudi").options(hudiOptions).
+      mode(SaveMode.Append).save(basePath)
+    val result = spark.read.format("hudi").load(basePath)
+    assertEquals(2, result.count())
+    assertEquals(0, result.filter(result("id") === 1).count())
+  }
+}
 object TestCOWDataSource {
   def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {
     cols.foldLeft(df) { (df, c) =>
