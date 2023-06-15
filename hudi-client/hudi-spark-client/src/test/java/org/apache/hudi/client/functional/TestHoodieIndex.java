@@ -155,8 +155,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     this.index = writeClient.getIndex();
   }
 
-  @Override
-  protected Properties getPropertiesForKeyGen() {
+  private Properties getPropertiesForKeyGen() {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     properties.put("hoodie.datasource.write.keygenerator.class", RawTripTestPayloadKeyGenerator.class.getName());

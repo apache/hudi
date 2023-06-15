@@ -19,11 +19,13 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import com.amazonaws.services.glue.AWSGlue;
@@ -239,6 +241,74 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return updateTableParameters(awsGlue, databaseName, tableName, tableProperties, skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update properties for table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    columns.forEach(column -> {
+      String comment = commentsMap.getOrDefault(column.getName(), Option.empty()).orElse(null);
+      column.setComment(comment);
+    });
+  }
+
+  private String getTableDoc() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true).getDoc();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get schema's doc from storage : ", e);
+    }
+  }
+
+  @Override
+  public List<FieldSchema> getStorageFieldSchemas() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true)
+          .getFields()
+          .stream()
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get field schemas from storage : ", e);
+    }
+  }
+
+  @Override
+  public boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    Table table = getTable(awsGlue, databaseName, tableName);
+
+    Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
+
+    StorageDescriptor storageDescriptor = table.getStorageDescriptor();
+    List<Column> columns = storageDescriptor.getColumns();
+    setComments(columns, commentsMap);
+
+    List<Column> partitionKeys = table.getPartitionKeys();
+    setComments(partitionKeys, commentsMap);
+
+    String tableDescription = getTableDoc();
+
+    if (getTable(awsGlue, databaseName, tableName).getStorageDescriptor().equals(storageDescriptor)
+        && getTable(awsGlue, databaseName, tableName).getPartitionKeys().equals(partitionKeys)) {
+      // no comments have been modified / added
+      return false;
+    } else {
+      final Date now = new Date();
+      TableInput updatedTableInput = new TableInput()
+          .withName(tableName)
+          .withDescription(tableDescription)
+          .withTableType(table.getTableType())
+          .withParameters(table.getParameters())
+          .withPartitionKeys(partitionKeys)
+          .withStorageDescriptor(storageDescriptor)
+          .withLastAccessTime(now)
+          .withLastAnalyzedTime(now);
+
+      UpdateTableRequest request = new UpdateTableRequest()
+          .withDatabaseName(databaseName)
+          .withTableInput(updatedTableInput);
+
+      awsGlue.updateTable(request);
+      return true;
     }
   }
 
