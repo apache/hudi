@@ -87,7 +87,7 @@ public class HoodieClusteringJob {
     public int parallelism = 1;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
