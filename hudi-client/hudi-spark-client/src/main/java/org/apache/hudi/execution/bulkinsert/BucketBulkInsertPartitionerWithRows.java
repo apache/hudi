@@ -26,8 +26,6 @@ import org.apache.spark.sql.BucketPartitionUtils$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import scala.Tuple2;
-
 /**
  * Bulk_insert partitioner of Spark row using bucket index.
  */

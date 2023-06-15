@@ -27,10 +27,10 @@ object BucketPartitionUtils {
   def createDataFrame(df: DataFrame, indexKeyFields: String, bucketNum: Int, partitionNum: Int): DataFrame = {
     def getPartitionKeyExtractor(): InternalRow => Int = row => {
       val kb = BucketIdentifier
-        .getBucketId(row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.RECORD_KEY_METADATA_FIELD)), indexKeyFields, bucketNum)
-      val partition = row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+        .getBucketId(row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.RECORD_KEY_META_FIELD_ORD)), indexKeyFields, bucketNum)
+      val partition = row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
       if (partition == null || partition.trim.isEmpty) {
-        kb
+        BucketIdentifier.mod(kb, partitionNum)
       } else {
         val pw = (partition.hashCode & Int.MaxValue) % partitionNum
         BucketIdentifier.mod(kb + pw, partitionNum)
@@ -48,7 +48,7 @@ object BucketPartitionUtils {
       override def getPartition(key: Any): Int = {
         key.asInstanceOf[Int]
       }
-    }).values
+    }).sortBy(_._2.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))).values
     df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
   }
 }
