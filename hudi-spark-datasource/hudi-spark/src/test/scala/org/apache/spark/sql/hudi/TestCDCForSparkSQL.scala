@@ -74,6 +74,8 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         .setConf(spark.sessionState.newHadoopConf())
         .build()
       spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
+      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
+      val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
       val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
       val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
       cdcDataOnly1.show(false)
@@ -82,6 +84,8 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
       spark.sql(s"delete from $tableName where id = 1")
       val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
       assertCDCOpCnt(cdcDataOnly2, 0, 0, 1)
+      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 1)
+      assert(!spark.sql(s"select _hoodie_file_name from $tableName").head().get(0).equals(fgForID1))
     }
   }
 
