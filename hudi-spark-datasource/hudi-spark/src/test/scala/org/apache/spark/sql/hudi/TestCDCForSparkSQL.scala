@@ -85,7 +85,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             .setBasePath(basePath)
             .setConf(spark.sessionState.newHadoopConf())
             .build()
-          //why does it fail without upsert here?
+          
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
 
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
