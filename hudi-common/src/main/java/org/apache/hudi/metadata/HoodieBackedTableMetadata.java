@@ -136,9 +136,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(Collections.singletonList(key), partitionName);
-    return Option.ofNullable(recordsByKeys.get(key));
+  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String keys, String partitionName) {
+    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(Collections.singletonList(keys), partitionName);
+    return Option.ofNullable(recordsByKeys.get(keys));
   }
 
   @Override
@@ -485,6 +485,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public void close() {
     closePartitionReaders();
+    partitionFileSliceMap.clear();
   }
 
   /**
@@ -568,10 +569,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
     closePartitionReaders();
+    partitionFileSliceMap.clear();
   }
 
   @Override
-  public int getNumShards(MetadataPartitionType partition) {
+  public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     partitionFileSliceMap.computeIfAbsent(partition.getPartitionPath(),
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
             metadataFileSystemView, partition.getPartitionPath()));

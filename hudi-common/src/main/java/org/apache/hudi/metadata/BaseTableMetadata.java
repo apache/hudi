@@ -392,7 +392,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
   }
 
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
+  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String keys, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> key, String partitionName);
 

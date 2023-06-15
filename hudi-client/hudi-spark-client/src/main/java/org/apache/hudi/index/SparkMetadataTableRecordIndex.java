@@ -72,7 +72,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     int fileGroupSize;
     try {
       ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX));
-      fileGroupSize = hoodieTable.getMetadataTable().getNumShards(MetadataPartitionType.RECORD_INDEX);
+      fileGroupSize = hoodieTable.getMetadataTable().getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
       ValidationUtils.checkState(fileGroupSize > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
       // This means that record index has not been initialized.
@@ -157,7 +157,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodiePairData<String, HoodieRecordGlobalLocation> keyFilenamePair,
       HoodieData<HoodieRecord<R>> records) {
     HoodiePairData<String, HoodieRecord<R>> keyRecordPairs =
-        records.mapToPair(record -> new ImmutablePair<>(record.getRecordKey(), record));
+        records.mapToPair(record -> ImmutablePair.of(record.getRecordKey(), record));
     // Here as the records might have more data than keyFilenamePairs (some row keys' not found in record index),
     // we will do left outer join.
     return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()

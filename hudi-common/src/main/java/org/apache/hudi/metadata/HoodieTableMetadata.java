@@ -236,5 +236,5 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   /**
    * Returns the number of shards in a metadata table partition.
    */
-  int getNumShards(MetadataPartitionType partition);
+  int getNumFileGroupsForPartition(MetadataPartitionType partition);
 }
