@@ -65,7 +65,7 @@ public class BucketBulkInsertPartitionerWithRows implements BulkInsertPartitione
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return true;
   }
 
   private static int getPartitionKey(Row row, String indexKeyFields, int bucketNum, int partitionNum) {
