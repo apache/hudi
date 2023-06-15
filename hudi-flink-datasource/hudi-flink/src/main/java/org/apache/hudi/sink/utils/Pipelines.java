@@ -458,7 +458,7 @@ public class Pipelines {
   public static String getDbTableName(Configuration conf) {
     String databaseName = conf.getString(FlinkOptions.DATABASE_NAME);
     return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
-        : databaseName + "#" + conf.getString(FlinkOptions.TABLE_NAME);
+        : databaseName + "." + conf.getString(FlinkOptions.TABLE_NAME);
   }
 
   /**
