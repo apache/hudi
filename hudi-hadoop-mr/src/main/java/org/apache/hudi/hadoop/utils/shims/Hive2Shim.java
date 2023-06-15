@@ -66,7 +66,7 @@ public class Hive2Shim implements HiveShim {
       Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap) throws IOException {
 
     try {
-      return HudiHiveFileFormatUtils.getPartitionDescFromPathRecursively( pathToPartitionInfo, dir, cacheMap);
+      return HudiHiveFileFormatUtils.getPartitionDescFromPathRecursively(pathToPartitionInfo, dir, cacheMap);
     } catch (Exception e) {
       throw new IOException(e);
     }

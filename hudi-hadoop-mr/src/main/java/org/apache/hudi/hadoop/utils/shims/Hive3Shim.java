@@ -77,7 +77,7 @@ public class Hive3Shim implements HiveShim {
     }
 
     // hiveFormatUtil
-    try{
+    try {
       HIVE_UTILS_CLASS = Class.forName(HIVE_FORMAT_UTILS_CLASS);
       PATH_RECURSIVELY_METHOD = HIVE_UTILS_CLASS.getMethod("getFromPathRecursively", Map.class, Path.class, Map.class);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
