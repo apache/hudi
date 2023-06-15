@@ -448,14 +448,14 @@ public class Pipelines {
   }
 
   public static String opName(String operatorN, Configuration conf) {
-    return operatorN + ": " + getDbTableName(conf);
+    return operatorN + ": " + getTablePath(conf);
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    return "uid_" + operatorN + "_" + getDbTableName(conf);
+    return "uid_" + operatorN + "_" + getTablePath(conf);
   }
 
-  public static String getDbTableName(Configuration conf) {
+  public static String getTablePath(Configuration conf) {
     String databaseName = conf.getString(FlinkOptions.DATABASE_NAME);
     return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
         : databaseName + "." + conf.getString(FlinkOptions.TABLE_NAME);
