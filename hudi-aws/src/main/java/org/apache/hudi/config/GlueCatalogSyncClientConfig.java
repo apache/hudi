@@ -40,8 +40,8 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Glue catalog sync based client will skip archiving the table version if this config is set to true");
 
-  public static final ConfigProperty<Boolean> GLUE_ENABLE_METADATA_TABLE = ConfigProperty
-      .key(GLUE_CLIENT_PROPERTY_PREFIX + "enable_metadata_table")
+  public static final ConfigProperty<Boolean> GLUE_METADATA_FILE_LISTING = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "metadata_file_listing")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.0")

@@ -72,7 +72,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
-import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_ENABLE_METADATA_TABLE;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -104,7 +104,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     this.awsGlue = AWSGlueClientBuilder.standard().build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
-    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_ENABLE_METADATA_TABLE)).toUpperCase();
+    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
   }
 
   @Override
