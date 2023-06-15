@@ -170,7 +170,7 @@ public class FileSystemViewManager {
     }
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
-          new Class<?>[]{HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetaserverConfig.class},
           metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
@@ -194,7 +194,7 @@ public class FileSystemViewManager {
     }
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
-          new Class<?>[]{HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
           metaClient, timeline, metaClient.getMetaserverConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);

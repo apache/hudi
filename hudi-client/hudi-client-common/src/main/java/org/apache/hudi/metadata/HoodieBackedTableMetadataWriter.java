@@ -195,7 +195,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (metadataConfig.isColumnStatsIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.COLUMN_STATS)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.COLUMN_STATS);
     }
-    if (dataWriteConfig.createMetadataRecordIndex() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX)) {
+    if (dataWriteConfig.isRecordIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.RECORD_INDEX);
     }
   }

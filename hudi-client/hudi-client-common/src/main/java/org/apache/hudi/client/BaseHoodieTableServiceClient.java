@@ -495,10 +495,11 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Write the HoodieCommitMetadata to metadata table if available.
    *
-   * @param table       {@link HoodieTable} of interest.
-   * @param instantTime instant time of the commit.
-   * @param actionType  action type of the commit.
-   * @param metadata    instance of {@link HoodieCommitMetadata}.
+   * @param table         {@link HoodieTable} of interest.
+   * @param instantTime   instant time of the commit.
+   * @param actionType    action type of the commit.
+   * @param metadata      instance of {@link HoodieCommitMetadata}.
+   * @param writeStatuses Write statuses of the commit
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
     checkArgument(table.isTableServiceAction(actionType, instantTime), String.format("Unsupported action: %s.%s is not table service.", actionType, instantTime));

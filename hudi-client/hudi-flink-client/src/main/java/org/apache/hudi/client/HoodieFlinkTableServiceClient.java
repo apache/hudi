@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -54,7 +53,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -99,7 +97,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, compactionCommitTime, compactionInstant.getAction(), metadata, HoodieListData.eager(Collections.EMPTY_LIST));
+      writeTableMetadata(table, compactionCommitTime, compactionInstant.getAction(), metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
@@ -169,8 +167,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, logCompactionCommitTime, HoodieTimeline.LOG_COMPACTION_ACTION, metadata,
-          HoodieListData.eager(Collections.emptyList()));
+      writeTableMetadata(table, logCompactionCommitTime, HoodieTimeline.LOG_COMPACTION_ACTION, metadata, context.emptyHoodieData());
       LOG.info("Committing Log Compaction " + logCompactionCommitTime + ". Finished with result " + metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
@@ -211,7 +208,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // commit to data table after committing to metadata table.
       // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
       // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata, HoodieListData.eager(Collections.EMPTY_LIST));
+      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata, context.emptyHoodieData());
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
