@@ -36,7 +36,7 @@ public class JavaDeletePreppedCommitActionExecutor<T>
   public JavaDeletePreppedCommitActionExecutor(HoodieJavaEngineContext context,
                                                HoodieWriteConfig config, HoodieTable table,
                                                String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    super(context, config, table, instantTime, WriteOperationType.DELETE);
+    super(context, config, table, instantTime, WriteOperationType.DELETE_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 

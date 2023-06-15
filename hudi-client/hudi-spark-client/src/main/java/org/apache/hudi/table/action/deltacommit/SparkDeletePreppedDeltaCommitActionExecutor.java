@@ -35,7 +35,7 @@ public class SparkDeletePreppedDeltaCommitActionExecutor<T>
   public SparkDeletePreppedDeltaCommitActionExecutor(HoodieSparkEngineContext context,
                                                      HoodieWriteConfig config, HoodieTable table,
                                                      String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
-    super(context, config, table, instantTime, WriteOperationType.DELETE);
+    super(context, config, table, instantTime, WriteOperationType.DELETE_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 

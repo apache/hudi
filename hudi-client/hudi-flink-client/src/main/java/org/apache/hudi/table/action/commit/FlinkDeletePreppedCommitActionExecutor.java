@@ -19,25 +19,33 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public class SparkDeletePreppedCommitActionExecutor<T>
-    extends BaseSparkCommitActionExecutor<T> {
-  private final HoodieData<HoodieRecord<T>> preppedRecords;
+import java.util.List;
 
-  public SparkDeletePreppedCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
-    super(context, config, table, instantTime, WriteOperationType.DELETE_PREPPED);
+/**
+ * Flink upsert prepped commit action executor.
+ */
+public class FlinkDeletePreppedCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
+
+  private final List<HoodieRecord<T>> preppedRecords;
+
+  public FlinkDeletePreppedCommitActionExecutor(HoodieEngineContext context,
+                                                HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                HoodieWriteConfig config, HoodieTable table,
+                                                String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    super(context, writeHandle, config, table, instantTime, WriteOperationType.DELETE_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+  public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return super.execute(preppedRecords);
   }
 }

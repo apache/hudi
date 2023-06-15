@@ -57,6 +57,7 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeletePartitionCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkDeletePreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteTableCommitActionExecutor;
@@ -151,6 +152,27 @@ public class HoodieFlinkCopyOnWriteTable<T>
       String instantTime,
       List<HoodieKey> keys) {
     return new FlinkDeleteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, keys).execute();
+  }
+
+  /**
+   * Deletes the given prepared records from the Hoodie table, at the supplied instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
+   * the underneath file.
+   *
+   * @param context        HoodieEngineContext
+   * @param instantTime    Instant Time for the action
+   * @param preppedRecords Hoodie records to delete
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    return new FlinkDeletePreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
   }
 
   /**

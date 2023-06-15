@@ -141,6 +141,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case DELETE:
+      case DELETE_PREPPED:
       case UPSERT:
         return true;
       default:

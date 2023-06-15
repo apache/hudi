@@ -253,7 +253,7 @@ public class HoodieCDCExtractor {
       String path = writeStat.getPath();
       if (FSUtils.isBaseFile(new Path(path))) {
         // this is a base file
-        if (operation == WriteOperationType.DELETE && writeStat.getNumWrites() == 0L
+        if (WriteOperationType.isDelete(operation) && writeStat.getNumWrites() == 0L
             && writeStat.getNumDeletes() != 0) {
           // This is a delete operation wherein all the records in this file group are deleted
           // and no records have been written out a new file.
