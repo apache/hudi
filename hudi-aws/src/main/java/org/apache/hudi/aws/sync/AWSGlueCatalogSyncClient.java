@@ -92,6 +92,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
+  /**
+   * athena v2/v3 table property
+   * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
+   */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private final AWSGlue awsGlue;
   private final String databaseName;
