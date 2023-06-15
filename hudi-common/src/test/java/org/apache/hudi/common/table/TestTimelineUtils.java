@@ -323,6 +323,33 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
         TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
     verify(mockMetaClient, times(1)).getArchivedTimeline(any());
+
+    // Should load both archived and active timeline
+    startTs = "005";
+    mockMetaClient = prepareMetaClient(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003", "003"),
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "007", "007"),
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "009", "009"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
+        Arrays.asList(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", "002"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "005", "005"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "006", "006"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "008", "008")),
+        startTs
+    );
+    verifyTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "006", "006"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "008", "008"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
+    verify(mockMetaClient, times(1)).getArchivedTimeline(any());
   }
 
   private HoodieTableMetaClient prepareMetaClient(
