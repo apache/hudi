@@ -894,10 +894,8 @@ object HoodieSparkSqlWriter {
     hoodieConfig.getString(META_SYNC_CLIENT_TOOL_CLASS_NAME).split(",").foreach(syncClass => syncClientToolClassSet += syncClass)
 
     // for backward compatibility
-    if (hiveSyncEnabled) {
-      metaSyncEnabled = true
-      syncClientToolClassSet += classOf[HiveSyncTool].getName
-    }
+    if (hiveSyncEnabled) metaSyncEnabled = true
+
 
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
