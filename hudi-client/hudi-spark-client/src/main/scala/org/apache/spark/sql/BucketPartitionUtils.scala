@@ -27,8 +27,8 @@ object BucketPartitionUtils {
   def createDataFrame(df: DataFrame, indexKeyFields: String, bucketNum: Int, partitionNum: Int): DataFrame = {
     def getPartitionKeyExtractor(): InternalRow => Int = row => {
       val kb = BucketIdentifier
-        .getBucketId(row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.RECORD_KEY_META_FIELD_ORD)), indexKeyFields, bucketNum)
-      val partition = row.getString(HoodieRecord.HOODIE_META_COLUMNS.indexOf(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
+        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum)
+      val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
       if (partition == null || partition.trim.isEmpty) {
         BucketIdentifier.mod(kb, partitionNum)
       } else {
