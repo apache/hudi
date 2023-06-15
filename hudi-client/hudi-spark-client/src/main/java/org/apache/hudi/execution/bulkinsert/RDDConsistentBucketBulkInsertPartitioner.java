@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -50,6 +51,8 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     super(table,
         strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
         preserveHoodieMetadata);
+    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
+        "Consistent hash bucket index doesn't support CoW table");
     this.hashingChildrenNodes = new HashMap<>();
   }
 
