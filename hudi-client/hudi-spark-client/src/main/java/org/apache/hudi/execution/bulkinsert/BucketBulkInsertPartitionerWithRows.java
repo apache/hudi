@@ -22,8 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.BucketPartitionUtils$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -44,23 +43,7 @@ public class BucketBulkInsertPartitionerWithRows implements BulkInsertPartitione
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-    Partitioner partitioner = new Partitioner() {
-      @Override
-      public int getPartition(Object key) {
-        return (Integer) key;
-      }
-
-      @Override
-      public int numPartitions() {
-        return outputPartitions;
-      }
-    };
-
-    JavaRDD<Row> rddRows = rows.toJavaRDD()
-        .mapToPair(row -> new Tuple2<>(getPartitionKey(row, this.indexKeyFields, this.bucketNum, outputPartitions), row))
-        .partitionBy(partitioner)
-        .values();
-    return rows.sparkSession().createDataFrame(rddRows, rows.schema());
+    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
   }
 
   @Override
