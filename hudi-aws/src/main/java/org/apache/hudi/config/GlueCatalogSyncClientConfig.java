@@ -45,5 +45,5 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.0")
-      .withDocumentation("Makes athena use the metadata table to list the files. Currently it won't benefit from other features such stats indexes");
+      .withDocumentation("Makes athena use the metadata table to list partitions and files. Currently it won't benefit from other features such stats indexes");
 }
