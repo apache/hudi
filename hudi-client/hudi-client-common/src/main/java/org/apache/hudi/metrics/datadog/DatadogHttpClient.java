@@ -84,8 +84,8 @@ public class DatadogHttpClient implements Closeable {
     try (CloseableHttpResponse response = client.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       ValidationUtils.checkState(statusCode == HttpStatus.SC_OK, "API key is invalid.");
-    } catch (IOException e) {
-      throw new IllegalStateException("Failed to connect to Datadog to validate API key.", e);
+    } catch (IOException | IllegalStateException e) {
+      LOG.warn(String.format("Failed to connect to Datadog to validate API key. %s", e.getMessage()));
     }
   }
 
