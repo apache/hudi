@@ -63,7 +63,8 @@ services:
       - namenode
 
   historyserver:
-    image: apachehudi/hudi-hadoop_2.8.4-history:latest
+    image: apachehudi/hudi-hadoop_2.8.4-history:linux-arm64-0.10.1
+    platform: linux/arm64
     hostname: historyserver
     container_name: historyserver
     environment:
