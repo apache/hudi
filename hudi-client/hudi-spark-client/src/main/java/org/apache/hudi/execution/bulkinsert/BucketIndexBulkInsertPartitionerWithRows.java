@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.BucketPartitionUtils$;
@@ -29,12 +27,12 @@ import org.apache.spark.sql.Row;
 /**
  * Bulk_insert partitioner of Spark row using bucket index.
  */
-public class BucketBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String indexKeyFields;
   private final int bucketNum;
 
-  public BucketBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
     this.indexKeyFields = indexKeyFields;
     this.bucketNum = bucketNum;
   }
@@ -47,16 +45,5 @@ public class BucketBulkInsertPartitionerWithRows implements BulkInsertPartitione
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
-  }
-
-  private static int getPartitionKey(Row row, String indexKeyFields, int bucketNum, int partitionNum) {
-    int bucketId = BucketIdentifier.getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum);
-    String partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
-    if (partition == null || partition.trim().isEmpty()) {
-      return bucketId;
-    } else {
-      int pw = (partition.hashCode() & Integer.MAX_VALUE) % partitionNum;
-      return BucketIdentifier.mod(bucketId + pw, partitionNum);
-    }
   }
 }
