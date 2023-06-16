@@ -20,40 +20,29 @@ package org.apache.spark.sql
 
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.index.bucket.BucketIdentifier
-import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 object BucketPartitionUtils {
   def createDataFrame(df: DataFrame, indexKeyFields: String, bucketNum: Int, partitionNum: Int): DataFrame = {
-    def getPartitionKeyExtractor(): InternalRow => Int = row => {
+    def getPartitionKeyExtractor(): InternalRow => String = row => {
       val kb = BucketIdentifier
         .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum)
       val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
-      if (partition == null || partition.trim.isEmpty) {
-        BucketIdentifier.mod(kb, partitionNum)
-      } else {
-        val pw = (partition.hashCode & Int.MaxValue) % partitionNum
-        BucketIdentifier.mod(kb + pw, partitionNum)
-      }
+      partition + "-" + kb
     }
 
+    val keyExtractor = getPartitionKeyExtractor()
+    val keyedSchema = StructType.apply(Seq(StructField("_fg", StringType), StructField("_row", df.schema)))
     // use internalRow to avoid extra convert.
-    val reRdd = df.queryExecution.toRdd.mapPartitions { iter => {
-      val getPartitionKey = getPartitionKeyExtractor()
-      iter.map { row => (getPartitionKey(row), row) }
-    }
-    }.partitionBy(new Partitioner {
-      override def numPartitions: Int = partitionNum
+    val reRdd = df.queryExecution.toRdd
+      .map(row => InternalRow.fromSeq(Seq(keyExtractor(row), row)))
 
-      override def getPartition(key: Any): Int = {
-        key.asInstanceOf[Int]
-      }
-    }).sortBy(t => {
-      val row = t._2
-      val kb = BucketIdentifier
-        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum)
-      row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD) + kb
-    }).values
-    df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
+    // transform back to dataframe first in order to use partition local sort
+    df.sparkSession.internalCreateDataFrame(reRdd, keyedSchema)
+      .repartition(partitionNum, col("_fg"))
+      .sortWithinPartitions("_fg")
+      .select(col("_row"))
   }
 }
