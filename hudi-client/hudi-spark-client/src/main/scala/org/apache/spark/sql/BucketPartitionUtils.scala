@@ -39,7 +39,7 @@ object BucketPartitionUtils {
     val reRdd = df.queryExecution.toRdd
       .map(row => InternalRow.fromSeq(Seq(keyExtractor(row), row)))
 
-    // transform back to dataframe first in order to use partition local sort
+    // transform back to dataframe first in order to use partition by local sort
     df.sparkSession.internalCreateDataFrame(reRdd, keyedSchema)
       .repartition(partitionNum, col("_fg"))
       .sortWithinPartitions("_fg")
