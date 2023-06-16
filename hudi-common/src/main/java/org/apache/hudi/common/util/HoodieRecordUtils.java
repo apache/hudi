@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A utility class for HoodieRecord.
@@ -43,6 +44,7 @@ public class HoodieRecordUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
 
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
+
   static {
     INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
   }
@@ -58,7 +60,7 @@ public class HoodieRecordUtils {
           recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
           if (null == recordMerger) {
             recordMerger = (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass,
-                new Object[]{});
+                new Object[] {});
             INSTANCE_CACHE.put(mergerClass, recordMerger);
           }
         }
@@ -73,11 +75,11 @@ public class HoodieRecordUtils {
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-      List<String> mergerClassList, String recordMergerStrategy) {
+                                                      List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
-      return mergerClassList.stream()
+      Optional<HoodieRecordMerger> hey = mergerClassList.stream()
           .map(clazz -> {
             try {
               return loadRecordMerger(clazz);
@@ -89,8 +91,12 @@ public class HoodieRecordUtils {
           .filter(Objects::nonNull)
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
-          .findFirst()
-          .orElse(HoodieAvroRecordMerger.INSTANCE);
+          .findFirst();
+      if (hey.isPresent()) {
+        return hey.get();
+      } else {
+        throw new RuntimeException(String.format("No conform merger class found within %s", mergerClassList));
+      }
     }
   }
 
@@ -98,8 +104,8 @@ public class HoodieRecordUtils {
    * Instantiate a given class with an avro record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-      Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
+                                                              Object[] payloadArgs,
+                                                              Class<?>... constructorArgTypes) {
     try {
       return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes)
           .newInstance(payloadArgs);
