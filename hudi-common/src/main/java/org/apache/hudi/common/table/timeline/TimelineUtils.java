@@ -232,11 +232,11 @@ public class TimelineUtils {
    */
   public static HoodieTimeline getCommitsTimelineAfter(
       HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
-    HoodieDefaultTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
 
-    HoodieDefaultTimeline timeline = activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
-        ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(activeTimeline)
-        : activeTimeline;
+    HoodieDefaultTimeline timeline = writeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+        ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
+        : writeTimeline;
 
     HoodieDefaultTimeline timelineSinceLastSync = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
