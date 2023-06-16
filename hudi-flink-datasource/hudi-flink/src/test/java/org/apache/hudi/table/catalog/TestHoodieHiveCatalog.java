@@ -79,15 +79,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link HoodieHiveCatalog}.
  */
 public class TestHoodieHiveCatalog {
-  TableSchema schema =
-      TableSchema.builder()
-          .field("uuid", DataTypes.INT().notNull())
-          .field("name", DataTypes.STRING())
-          .field("age", DataTypes.INT())
-          .field("par1", DataTypes.STRING())
-          .field("ts", DataTypes.BIGINT())
-          .primaryKey("uuid")
-          .build();
+  TableSchema.Builder builder = TableSchema.builder()
+      .field("uuid", DataTypes.INT().notNull())
+      .field("name", DataTypes.STRING())
+      .field("age", DataTypes.INT())
+      .field("par1", DataTypes.STRING())
+      .field("ts", DataTypes.BIGINT());
+  TableSchema schema = builder.primaryKey("uuid").build();
   List<String> partitions = Collections.singletonList("par1");
   private static HoodieHiveCatalog hoodieCatalog;
   private final ObjectPath tablePath = new ObjectPath("default", "test");
@@ -206,14 +204,17 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
-  public void testCreateNonHoodieTable() throws TableAlreadyExistException, DatabaseNotExistException {
-    CatalogTable table =
-        new CatalogTableImpl(schema, Collections.emptyMap(), "hudi table");
-    try {
-      hoodieCatalog.createTable(tablePath, table, false);
-    } catch (HoodieCatalogException e) {
-      assertEquals(String.format("The %s is not hoodie table", tablePath.getObjectName()), e.getMessage());
-    }
+  public void testCreateNonHoodieTable() {
+    CatalogTable table = new CatalogTableImpl(schema, Collections.emptyMap(), "hudi table");
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false),
+        String.format("The %s is not hoodie table", tablePath.getObjectName()));
+  }
+
+  @Test
+  public void testCreateTableWithoutPrimaryKey() {
+    CatalogTable catalogTable = new CatalogTableImpl(builder.build(), Collections.emptyMap(), "hudi table");
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, catalogTable, true),
+        "Primary key definition is missing");
   }
 
   @ParameterizedTest

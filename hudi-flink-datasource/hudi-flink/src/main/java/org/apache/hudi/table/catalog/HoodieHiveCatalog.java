@@ -493,10 +493,13 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     // because the HoodieTableMetaClient is a heavy impl, we try to avoid initializing it
     // when calling #getTable.
 
-    if (catalogTable.getUnresolvedSchema().getPrimaryKey().isPresent()
-        && !flinkConf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
-      final String pkColumns = String.join(",", catalogTable.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
-      flinkConf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
+    if (!flinkConf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
+      if (catalogTable.getUnresolvedSchema().getPrimaryKey().isPresent()) {
+        final String pkColumns = String.join(",", catalogTable.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
+        flinkConf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
+      } else {
+        throw new HoodieCatalogException("Primary key definition is missing");
+      }
     }
 
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {

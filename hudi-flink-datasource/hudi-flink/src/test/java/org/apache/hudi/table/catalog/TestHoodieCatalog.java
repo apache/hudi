@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -27,7 +26,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -250,25 +248,19 @@ public class TestHoodieCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() {
-    Map<String, String> options = getDefaultCatalogOption();
-    options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
-    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));
-    catalog.open();
+  public void testCreateTableWithoutPrimaryKey() {
     ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
-    assertThrows(HoodieValidationException.class,
-        () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true),
-        "Option 'precombine.field' is required for payload class: "
-            + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
-
-    Map<String, String> options2 = getDefaultCatalogOption();
-    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
-    catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
-    catalog.open();
-    ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
-    assertThrows(HoodieValidationException.class,
-        () -> catalog.createTable(tablePath2, EXPECTED_CATALOG_TABLE, true),
-        "Field not_exists does not exist in the table schema. Please check 'precombine.field' option.");
+    ResolvedSchema resolvedSchema = ResolvedSchema.of(EXPECTED_TABLE_COLUMNS);
+    CatalogTable catalogTable = new ResolvedCatalogTable(
+        CatalogTable.of(
+            Schema.newBuilder().fromResolvedSchema(resolvedSchema).build(),
+            "test",
+            Collections.singletonList("partition"),
+            EXPECTED_OPTIONS),
+        resolvedSchema
+    );
+    assertThrows(CatalogException.class, () -> catalog.createTable(tablePath, catalogTable, true),
+        "Primary key definition is missing");
   }
 
   @Test
