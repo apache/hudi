@@ -48,7 +48,12 @@ object BucketPartitionUtils {
       override def getPartition(key: Any): Int = {
         key.asInstanceOf[Int]
       }
-    }).sortBy(_._2.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)).values
+    }).sortBy(t => {
+      val row = t._2
+      val kb = BucketIdentifier
+        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum)
+      row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD) + kb
+    }).values
     df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
   }
 }
