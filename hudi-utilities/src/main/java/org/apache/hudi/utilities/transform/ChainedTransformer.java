@@ -18,17 +18,23 @@
 
 package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +45,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConversions;
+
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
  */
@@ -48,23 +56,31 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
+  private final Option<Schema> sourceSchemaOpt;
+  private final boolean enableSchemaValidation;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
     for (Transformer transformer : transformersList) {
       this.transformers.add(new TransformerInfo(transformer));
     }
+    this.sourceSchemaOpt = Option.empty();
+    this.enableSchemaValidation = false;
   }
 
   /**
    * Creates a chained transformer using the input transformer class names. Refer {@link HoodieDeltaStreamer.Config#transformerClassNames}
    * for more information on how the transformers can be configured.
    *
-   * @param configuredTransformers List of configured transformer class names.
-   * @param ignore Added for avoiding two methods with same erasure. Ignored.
+   * @param sourceSchemaOpt                   Schema from the dataset the transform is applied to
+   * @param configuredTransformers            List of configured transformer class names.
+   * @param enableSchemaValidation            If true, schema is validated for the transformed data against expected schema.
+   *                                          Expected schema is provided by {@link Transformer#transformedSchema}
    */
-  public ChainedTransformer(List<String> configuredTransformers, int... ignore) {
+  public ChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt, boolean enableSchemaValidation) {
     this.transformers = new ArrayList<>(configuredTransformers.size());
+    this.enableSchemaValidation = enableSchemaValidation;
+    this.sourceSchemaOpt = sourceSchemaOpt;
 
     Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
@@ -94,9 +110,18 @@ public class ChainedTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
     Dataset<Row> dataset = rowDataset;
+    Option<StructType> expectedTargetStructOpt = Option.empty();
+
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
+      if (enableSchemaValidation) {
+        expectedTargetStructOpt = Option.of(
+            getExpectedTransformedSchema(transformerInfo, jsc, sparkSession, expectedTargetStructOpt, Option.of(rowDataset), properties));
+      }
+
+      Dataset<Row> transformedDataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
+      expectedTargetStructOpt.ifPresent(expectedStruct ->  validateTransformedSchema(expectedStruct, transformedDataset.schema(), transformerInfo));
+      dataset = transformedDataset;
     }
     return dataset;
   }
@@ -110,6 +135,41 @@ public class ChainedTransformer implements Transformer {
     } else {
       identifiers.add(id);
     }
+  }
+
+  private StructType getExpectedTransformedSchema(TransformerInfo transformerInfo, JavaSparkContext jsc, SparkSession sparkSession,
+                                                  Option<StructType> incomingStructOpt, Option<Dataset<Row>> rowDatasetOpt, TypedProperties properties) {
+    if (!sourceSchemaOpt.isPresent() && !rowDatasetOpt.isPresent()) {
+      throw new HoodieTransformPlanException("Either source schema or source dataset should be available to fetch the schema");
+    }
+    StructType incomingStruct = incomingStructOpt
+        .orElse(sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
+    try {
+      return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
+    } catch (Exception e) {
+      if (e instanceof AnalysisException) {
+        String errMsg = String.format("Invalid transformer %s", transformerInfo.toString());
+        throw new HoodieTransformerSchemaException(errMsg, e);
+      }
+      throw e;
+    }
+  }
+
+  private void validateTransformedSchema(StructType expectedTargetStruct, StructType targetStruct, TransformerInfo transformerInfo) {
+    if (!expectedTargetStruct.equals(targetStruct)) {
+      throw new HoodieSchemaException(String.format("Schema of transformed data does not match expected schema for transformer %s\nexpected=%s \nactual=%s",
+          transformerInfo, expectedTargetStruct, targetStruct));
+    }
+  }
+
+  @Override
+  public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    Option<StructType> expectedTargetStructOpt = Option.of(incomingStruct);
+    for (TransformerInfo transformerInfo : transformers) {
+      expectedTargetStructOpt = Option.of(
+          getExpectedTransformedSchema(transformerInfo, jsc, sparkSession, expectedTargetStructOpt, Option.empty(), properties));
+    }
+    return expectedTargetStructOpt.get();
   }
 
   protected static class TransformerInfo {
@@ -160,6 +220,11 @@ public class ChainedTransformer implements Transformer {
       }
 
       return transformerProps;
+    }
+
+    @Override
+    public String toString() {
+      return transformer + (idOpt.isPresent() ? idOpt.get() : "");
     }
   }
 }

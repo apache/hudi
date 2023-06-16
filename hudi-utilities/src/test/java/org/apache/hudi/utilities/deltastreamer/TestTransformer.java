@@ -19,24 +19,45 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.StructUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.transform.HoodieTransformerSchemaException;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.net.URI;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
+import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.assertRecordCount;
+import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestHelpers.makeConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
@@ -58,7 +79,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testMultipleTransformersWithIdentifiers" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
 
@@ -77,8 +98,130 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("transformer.suffix", ".1,.2,.3");
     deltaStreamer.sync();
 
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
+  }
+
+  @Test
+  public void testTransformerSchemaValidationPasses() throws Exception {
+    List<String> transformerClassNames = Arrays.asList(
+        // Flattens the nested schema
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        // No change to schema
+        TimestampTransformer.class.getName(),
+        // Adds a new column named random in the schema
+        AddColumnTransformerWithTransformedSchema.class.getName());
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames);
+  }
+
+  @Test
+  public void testTransformerSchemaValidationPassesWithDefaultTransformedSchema() throws Exception {
+    List<String> transformerClassNames = Arrays.asList(
+        // Flattens the nested schema
+        FlatteningTransformer.class.getName(),
+        // No change to schema
+        TimestampTransformer.class.getName(),
+        // Adds a new column named random in the schema
+        AddColumnTransformer.class.getName());
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames);
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFailsWithNonExistentColumn() {
+    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformerOnNonExistentColumn";
+    List<String> transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        // InvalidAddColumnTransformer uses a non_existent column in the transformation
+        // The transformedSchema API adds field random1 whereas transformation adds field random
+        InvalidAddColumnTransformerOnNonExistentColumn.class.getName());
+    HoodieTransformerSchemaException e = (HoodieTransformerSchemaException) testTransformerSchemaValidationFails(transformerClassNames, Option.empty(),
+        expectedErrorMsg, HoodieTransformerSchemaException.class);
+    assertTrue(Arrays.stream(e.getCause().getStackTrace())
+        .anyMatch(ste -> ste.toString().contains("org.apache.hudi.utilities.transform.Transformer.transformedSchema")));
+    assertTrue(e.getUnresolvedExpressions().toString().matches(".*\\(5 \\* 'non_existent[#0-9]*\\) AS random.*"), e.getUnresolvedExpressions().toString());
+    assertTrue(e.getMissingInputColumns().toString().contains("'non_existent"), e.getMissingInputColumns().toString());
+    assertTrue(e.getNewColumns().toString().contains("'random"), e.getNewColumns().toString());
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFailsWithWrongDataType() {
+    String expectedErrorMsg = "Invalid transformer org.apache.hudi.utilities.deltastreamer.TestTransformer$InvalidAddColumnTransformerOnInvalidDataType";
+    List<String> transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        // InvalidAddColumnTransformer uses a non_existent column in the transformation
+        // The transformedSchema API adds field random1 whereas transformation adds field random
+        InvalidAddColumnTransformerOnInvalidDataType.class.getName());
+    HoodieTransformerSchemaException e = (HoodieTransformerSchemaException) testTransformerSchemaValidationFails(transformerClassNames, Option.empty(),
+        expectedErrorMsg, HoodieTransformerSchemaException.class);
+    assertTrue(Arrays.stream(e.getCause().getStackTrace())
+        .anyMatch(ste -> ste.toString().contains("org.apache.hudi.utilities.transform.Transformer.transformedSchema")));
+    assertTrue(e.getUnresolvedExpressions().toString().matches(".*\\(5 \\* _hoodie_is_deleted[#0-9]*\\) AS random.*"), e.getUnresolvedExpressions().toString());
+    assertTrue(e.getMissingInputColumns().get().isEmpty(), e.getMissingInputColumns().toString());
+    assertTrue(e.getNewColumns().toString().contains("'random"), e.getNewColumns().toString());
+  }
+
+  @Test
+  public void testTransformerSchemaValidationFailsWithSchemaMismatch() {
+    String expectedErrorMsg = "Schema of transformed data does not match expected schema for transformer org.apache.hudi.utilities.deltastreamer.TestTransformer"
+        + "$AddColumnTransformerWithWrongTransformedSchema";
+    List<String> transformerClassNames = Collections.singletonList(
+        AddColumnTransformerWithWrongTransformedSchema.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, "source.avsc", expectedErrorMsg);
+
+    transformerClassNames = Arrays.asList(
+        FlatteningTransformerWithTransformedSchema.class.getName(),
+        TimestampTransformer.class.getName(),
+        // AddColumnTransformerWithWrongTransformedSchema provides a wrong transformedSchema.
+        // The transformedSchema API adds field random1 whereas transformation adds field random
+        AddColumnTransformerWithWrongTransformedSchema.class.getName());
+    testTransformerSchemaValidationFails(transformerClassNames, expectedErrorMsg);
+  }
+
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, Option<String> targetSchemaFile,
+                                                    String expectedErrorMsg, Class<? extends Throwable> errorClass) {
+    Throwable t = assertThrows(errorClass, () -> runDeltaStreamerWithTransformerSchemaValidation(transformerClasses,
+        targetSchemaFile.orElse("target-flattened-addcolumn-transformer.avsc")));
+    assertTrue(t.getMessage().contains(expectedErrorMsg), "Expected error \n" + expectedErrorMsg + "\nbut got\n" + t.getMessage());
+    return t;
+  }
+
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, String expectedErrorMsg) {
+    return testTransformerSchemaValidationFails(transformerClasses, Option.empty(), expectedErrorMsg, HoodieSchemaException.class);
+  }
+
+  private Throwable testTransformerSchemaValidationFails(List<String> transformerClasses, String targetSchemaFile, String expectedErrorMsg) {
+    return testTransformerSchemaValidationFails(transformerClasses, Option.of(targetSchemaFile), expectedErrorMsg, HoodieSchemaException.class);
+  }
+
+  private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames) throws Exception {
+    runDeltaStreamerWithTransformerSchemaValidation(transformerClassNames, "target-flattened-addcolumn-transformer.avsc");
+  }
+
+  private void runDeltaStreamerWithTransformerSchemaValidation(List<String> transformerClassNames, String targetSchemaFile) throws Exception {
+    // Create source using TRIP_EXAMPLE_SCHEMA
+    boolean useSchemaProvider = true;
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs";
+    FileIOUtils.deleteDirectory(new File(new URI(PARQUET_SOURCE_ROOT).getPath()));
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, true, "source.avsc", targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
+    String tableBasePath = basePath + "testTransformerSchemaValidation";
+    FileIOUtils.deleteDirectory(new File(new URI(tableBasePath).getPath()));
+    HoodieDeltaStreamer.Config config = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+        ParquetDFSSource.class.getName(), transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false, useSchemaProvider,
+        100000, false, null, null, "timestamp", null);
+    config.enableTransformerSchemaValidation = true;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+    Properties properties = ((HoodieDeltaStreamer.DeltaSyncService) deltaStreamer.getIngestionService()).getProps();
+    properties.setProperty("timestamp.transformer.increment", "20");
+    properties.setProperty("timestamp.transformer.multiplier", "2");
+
+    deltaStreamer.sync();
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    FileIOUtils.deleteDirectory(new File(tableBasePath));
   }
 
   /**
@@ -89,7 +232,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
-      String[] suffixes = ((String) properties.get("transformer.suffix")).split(",");
+      String[] suffixes = Option.ofNullable((String) properties.get("transformer.suffix")).map(s -> s.split(",")).orElse(new String[0]);
       for (String suffix : suffixes) {
         // verify no configs with suffix are in properties
         properties.keySet().forEach(k -> assertFalse(((String) k).endsWith(suffix)));
@@ -97,6 +240,98 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
       int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
       int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
       return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));
+    }
+  }
+
+  /**
+   * Provides a transformedSchema implementation for FlatteningTransformer.
+   */
+  public static class FlatteningTransformerWithTransformedSchema extends FlatteningTransformer {
+
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      String flattenedSelect = flattenSchema(incomingStruct, null);
+      String[] cols = flattenedSelect.split(",");
+      List<Pair<String, String>> replacements = new LinkedList<>();
+      for (String col : cols) {
+        String[] names = col.split(" as ");
+        if (!names[0].equals(names[1])) {
+          replacements.add(Pair.of(names[0], names[1]));
+        }
+      }
+
+      List<StructField> incomingFields = Arrays.asList(incomingStruct.fields());
+      List<StructField> transformedFields = new LinkedList<>(incomingFields);
+      Set<StructField> fieldsToRemove = new HashSet<>();
+      for (Pair<String, String> replacement : replacements) {
+        String fieldToRemoveName = replacement.getKey().replaceAll("\\..*", "");
+        StructField fieldToAdd = StructUtils.getField(incomingStruct, replacement.getKey()).get();
+        StructField fieldToRemove = transformedFields.stream().filter(f -> f.name().equals(fieldToRemoveName)).findAny().get();
+        fieldsToRemove.add(fieldToRemove);
+        transformedFields.add(transformedFields.indexOf(fieldToRemove), new StructField(replacement.getKey().replaceAll("\\.", "_"),
+            fieldToAdd.dataType(), fieldToAdd.nullable(), fieldToAdd.metadata()));
+      }
+      transformedFields.removeAll(fieldsToRemove);
+
+      return new StructType(transformedFields.toArray(new StructField[0]));
+    }
+  }
+
+  /**
+   * Adds a new column named random in the dataset.
+   */
+  public static class AddColumnTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("timestamp")));
+    }
+  }
+
+  /**
+   * Provides a transformedSchema implementation for AddColumnTransformer.
+   */
+  public static class AddColumnTransformerWithTransformedSchema extends AddColumnTransformer {
+
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      StructField newField = new StructField("random", DataTypes.LongType, true, Metadata.empty());
+      return incomingStruct.add(newField);
+    }
+  }
+
+  /**
+   * Provides a wrong implementation for transformedSchema of AddColumnTransformer.
+   */
+  public static class AddColumnTransformerWithWrongTransformedSchema extends AddColumnTransformer {
+
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+      StructField newField = new StructField("random1", DataTypes.LongType, true, Metadata.empty());
+      return incomingStruct.add(newField);
+    }
+  }
+
+  /**
+   * Performs transformation on non-existent column
+   */
+  public static class InvalidAddColumnTransformerOnNonExistentColumn extends AddColumnTransformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("non_existent")));
+    }
+  }
+
+  /**
+   * Performs multiplication on invalid data type (boolean)
+   */
+  public static class InvalidAddColumnTransformerOnInvalidDataType extends AddColumnTransformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("random", functions.lit(5).multiply(functions.col("_hoodie_is_deleted")));
     }
   }
 }
