@@ -219,12 +219,12 @@ public class TimelineUtils {
    */
   public static HoodieTimeline getCommitsTimelineAfter(
       HoodieTableMetaClient metaClient, String exclusiveStartInstantTime) {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     HoodieDefaultTimeline timeline =
-        activeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+        writeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
             ? metaClient.getArchivedTimeline(exclusiveStartInstantTime)
-            .mergeTimeline(activeTimeline)
-            : activeTimeline;
+            .mergeTimeline(writeTimeline)
+            : writeTimeline;
     return timeline.getCommitsTimeline()
         .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
   }
