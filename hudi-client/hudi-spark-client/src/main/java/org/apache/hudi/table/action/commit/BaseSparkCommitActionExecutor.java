@@ -91,13 +91,6 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
   protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
-  static {
-    // JsonUtils for Support Spark Version >= 3.3
-    if (HoodieSparkUtils.gteqSpark3_3()) {
-      JsonUtils.registerModules();
-    }
-  }
-
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
                                        HoodieTable table,
