@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
@@ -36,7 +35,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
