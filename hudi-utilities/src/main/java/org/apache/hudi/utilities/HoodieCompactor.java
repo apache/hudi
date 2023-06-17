@@ -268,7 +268,8 @@ public class HoodieCompactor {
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
         } else {
-          throw new HoodieCompactionException("There is no scheduled compaction in the table.");
+          LOG.info("There is no scheduled compaction in the table.");
+          return 0;
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);

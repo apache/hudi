@@ -216,7 +216,8 @@ public class HoodieClusteringJob {
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
               + cfg.clusteringInstantTime);
         } else {
-          throw new HoodieClusteringException("There is no scheduled clustering in the table.");
+          LOG.info("There is no scheduled clustering in the table.");
+          return 0;
         }
       }
       Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime).getCommitMetadata();
