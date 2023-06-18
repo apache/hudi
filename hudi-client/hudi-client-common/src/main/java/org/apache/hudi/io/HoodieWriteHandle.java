@@ -294,9 +294,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     @Override
     public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-      // we use create rather than createIfNotExists because create method can trigger marker-based early conflict detection.
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+      return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
           config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
 
