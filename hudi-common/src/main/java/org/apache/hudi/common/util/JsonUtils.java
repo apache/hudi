@@ -36,6 +36,8 @@ public class JsonUtils {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   static {
+    registerModules(MAPPER);
+
     MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     // We need to exclude custom getters, setters and creators which can use member fields
     // to derive new fields, so that they are not included in the serialization
@@ -59,8 +61,8 @@ public class JsonUtils {
     }
   }
 
-  public static void registerModules() {
+  private static void registerModules(ObjectMapper mapper) {
     // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.3)
-    MAPPER.registerModules(new JavaTimeModule());
+    mapper.registerModules(new JavaTimeModule());
   }
 }

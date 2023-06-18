@@ -39,7 +39,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
-import java.io.{PrintWriter, StringWriter}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -85,10 +84,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     } catch {
       case NonFatal(e) =>
         logWarning(s"Failed to create catalog table in metastore: ${e}")
-        val sw = new StringWriter
-        val pw = new PrintWriter(sw)
-        e.printStackTrace(pw)
-        logWarning(sw.toString)
     }
     Seq.empty[Row]
   }
