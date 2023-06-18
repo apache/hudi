@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.util.Option;
@@ -44,7 +45,7 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> {
   public static String ERROR_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
   public BaseErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-                                   TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
+							  TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs) {
   }
 
   /**
