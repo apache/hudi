@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.metadata.MetadataTableUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -46,16 +45,14 @@ class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
 
     try {
-      val statuses = metaClient.getFs.listStatus(metadataPath)
-      if (statuses.nonEmpty) metaClient.getFs.delete(metadataPath, true)
+      val metadataTableBasePath = MetadataTableUtils.deleteMetadataTable(metaClient)
+      Seq(Row(s"Deleted Metadata Table at '$metadataTableBasePath'"))
     } catch {
       case e: FileNotFoundException =>
-      // Metadata directory does not exist
+        Seq(Row("File not found: " + e.getMessage))
     }
-    Seq(Row("Removed Metadata Table from " + metadataPath))
   }
 
   override def build = new DeleteMetadataTableProcedure()
