@@ -714,7 +714,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, sparkEngineContext.getJavaSparkContext()),
-		  props, sparkEngineContext.getJavaSparkContext(), cfg.transformerClassNames);
+          props, sparkEngineContext.getJavaSparkContext(), cfg.transformerClassNames);
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, sparkEngineContext, fs, conf, this::onInitializingWriteClient);
     }
