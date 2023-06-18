@@ -257,7 +257,7 @@ public class StreamWriteOperatorCoordinator
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant, checkpointId);
           // schedules the compaction or clustering if it is enabled in stream execution mode
-          scheduleCompactionOrClustering(committed);
+          scheduleTableServices(committed);
 
           if (committed) {
             // start new instant.
@@ -445,12 +445,12 @@ public class StreamWriteOperatorCoordinator
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
         // schedules the compaction or clustering if it is enabled in batch execution mode
-        scheduleCompactionOrClustering(true);
+        scheduleTableServices(true);
       }
     }
   }
 
-  private void scheduleCompactionOrClustering(Boolean committed) {
+  private void scheduleTableServices(Boolean committed) {
     // if compaction is on, schedule the compaction
     if (tableState.scheduleCompaction) {
       CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
