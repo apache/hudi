@@ -1443,7 +1443,7 @@ public class HoodieTableMetadataUtil {
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final Path metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
     FileSystem fs = FSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
-    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, MetadataPartitionType.FILES, false);
+    dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
       if (!fs.exists(metadataTablePath)) {
         return null;
