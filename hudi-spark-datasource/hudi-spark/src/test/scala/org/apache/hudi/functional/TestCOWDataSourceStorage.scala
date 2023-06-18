@@ -19,23 +19,28 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.client.validator.{SqlQueryEqualityPreCommitValidator, SqlQueryInequalityPreCommitValidator}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.TimestampBasedKeyGenerator
+import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.apache.spark.sql.types.StringType
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -282,6 +287,120 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val archivedTimeline = metaClient.getArchivedTimeline();
     assertTrue(archivedTimeline.getInstants.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getAction)
       .filter(action => action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).size > 0)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is null|true|false|false",
+    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is null|true|true|false",
+    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where rider is null|true|true|true",
+    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is null|false|true|false",
+    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where rider is null|false|true|true",
+    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is not null|true|false|false",
+    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is not null|true|true|false",
+    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where rider is not null|true|true|true",
+    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where driver is not null|false|true|false",
+    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
+      + "select count(*) from <TABLE_NAME> where rider is not null|false|true|true"
+  ), delimiter = '|')
+  def testPreCommitValidationWithSQLQueryEqualityInequality(preCommitValidatorClassName: String,
+                                                            sqlQuery: String,
+                                                            isTablePartitioned: Boolean,
+                                                            lastWriteInSamePartition: Boolean,
+                                                            shouldSucceed: Boolean): Unit = {
+    var options: Map[String, String] = commonOpts ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> WriteOperationType.INSERT.value,
+      HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key -> preCommitValidatorClassName)
+
+    if (!isTablePartitioned) {
+      options ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key
+        -> classOf[NonpartitionedKeyGenerator].getCanonicalName,
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "")
+    }
+
+    if (classOf[SqlQueryEqualityPreCommitValidator[_, _, _, _]]
+      .getCanonicalName.equals(preCommitValidatorClassName)) {
+      options += (HoodiePreCommitValidatorConfig.EQUALITY_SQL_QUERIES.key -> sqlQuery)
+    } else if (classOf[SqlQueryInequalityPreCommitValidator[_, _, _, _]]
+      .getCanonicalName.equals(preCommitValidatorClassName)) {
+      options += (HoodiePreCommitValidatorConfig.INEQUALITY_SQL_QUERIES.key -> sqlQuery)
+    }
+
+    val dataGen = new HoodieTestDataGenerator(0xDEED)
+    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+
+    // First commit, new partition, no existing table schema
+    // Validation should succeed
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    val inputDF1 = inputDF.filter(
+      col("partition") === HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+    inputDF1.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+
+    // Second commit, new partition, has existing table schema
+    // Validation should succeed
+    val inputDF2All = inputDF.filter(
+      col("partition") === HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+    val count = inputDF2All.count.toInt
+    val input2Rows = inputDF2All.take(count)
+    val firstHalfCount = count / 2
+    val inputDF2 = spark.createDataFrame(
+      spark.sparkContext.parallelize(input2Rows.slice(0, firstHalfCount)), inputDF2All.schema)
+    inputDF2.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+
+    // Third commit, new or existing partition, overwrite "driver" column to null for validation
+    // Validation should succeed or fail, based on the query
+    val inputDF3Original = if (lastWriteInSamePartition) {
+      spark.createDataFrame(
+        spark.sparkContext.parallelize(input2Rows.slice(firstHalfCount, count)), inputDF2All.schema)
+    } else {
+      inputDF.filter(
+        col("partition") === HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+    }
+    val inputDF3 = inputDF3Original.withColumn("driver", lit(null).cast(StringType))
+
+    if (shouldSucceed) {
+      inputDF3.write.format("hudi")
+        .options(options)
+        .mode(SaveMode.Append)
+        .save(basePath)
+      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    } else {
+      assertThrowsWithPreCommitValidator(new Executable() {
+        override def execute(): Unit = {
+          inputDF3.write.format("hudi")
+            .options(options)
+            .mode(SaveMode.Append)
+            .save(basePath)
+        }
+      })
+    }
+  }
+
+  def assertThrowsWithPreCommitValidator(executable: Executable): Unit = {
+    val thrown = assertThrows(
+      classOf[HoodieUpsertException],
+      executable,
+      "Commit should fail due to HoodieUpsertException with pre-commit validator.")
+    assertTrue(thrown.getCause.isInstanceOf[HoodieValidationException])
+    assertTrue(thrown.getCause.getMessage.contains("At least one pre-commit validation failed"))
   }
 
   def writeRecords(commitTime: Int, dataGen: HoodieTestDataGenerator, writeOperation: String, basePath: String): Unit = {
