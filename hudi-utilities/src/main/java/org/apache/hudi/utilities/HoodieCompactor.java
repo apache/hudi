@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
