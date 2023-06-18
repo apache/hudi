@@ -284,14 +284,14 @@ public class DeltaSync implements Serializable, Closeable {
 
   @Deprecated
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-      TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-      Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                   TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this(cfg, sparkSession, schemaProvider, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient);
   }
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-      TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs, Configuration conf,
-      Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                   TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs, Configuration conf,
+                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this.cfg = cfg;
     this.sparkEngineContext = sparkEngineContext;
     this.jssc = sparkEngineContext.getJavaSparkContext();
