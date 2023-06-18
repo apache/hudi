@@ -71,11 +71,9 @@ case class TruncateHoodieTableCommand(
       FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
-      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
-      // hoodie.properties should not contain metadata partitions as the whole data table was deleted
-      hoodieCatalogTable.tableConfig.clearMetadataPartitions(metaClient)
     } else {
       val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
         normalizePartitionSpec(

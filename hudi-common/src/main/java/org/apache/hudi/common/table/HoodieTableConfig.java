@@ -60,7 +60,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
@@ -770,17 +769,6 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
-  }
-
-  /**
-   * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
-   * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
-   */
-  public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
-    delete(metaClient.getFs(), new Path(metaClient.getMetaPath()),
-        Stream.of(TABLE_METADATA_PARTITIONS.key(), TABLE_METADATA_PARTITIONS_INFLIGHT.key())
-            .collect(Collectors.toSet()));
-    LOG.info("Metadata partitions configs were cleared.");
   }
 
   /**

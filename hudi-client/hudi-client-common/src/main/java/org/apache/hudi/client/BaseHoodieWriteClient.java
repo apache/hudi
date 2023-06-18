@@ -73,9 +73,9 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.MetadataTableUtils;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -89,6 +89,7 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import com.codahale.metrics.Timer;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,7 +107,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
-import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -680,18 +680,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (initialMetadataTableIfNecessary) {
       try {
         // Delete metadata table directly when users trigger savepoint rollback if mdt existed and beforeTimelineStarts
-        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(hadoopConf)
-            .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
+        String metadataTableBasePathStr = HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath());
+        HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePathStr).build();
         // Same as HoodieTableMetadataUtil#processRollbackMetadata
         HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
-        if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-          HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
-              .setConf(hadoopConf)
-              .setBasePath(config.getBasePath()).build();
-          MetadataTableUtils.deleteMetadataTable(dataMetaClient);
+        if (mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+          mdtClient.getFs().delete(new Path(metadataTableBasePathStr), true);
           // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
           // so that we need to disable metadata initialized here.
           initialMetadataTableIfNecessary = false;
