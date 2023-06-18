@@ -162,8 +162,7 @@ public class HoodieDeltaStreamer implements Serializable {
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
-    // {@link HoodieDeltaStreamer currently only supports the Spark engine.
-	HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
+    HoodieSparkEngineContext sparkEngineContext = new HoodieSparkEngineContext(jssc);
     this.ingestionService = Option.ofNullable(
         cfg.runBootstrap ? null : new DeltaSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties)));
   }
@@ -622,12 +621,12 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient HoodieSparkEngineContext sparkEngineContext;
 
-	/**
-	 * Spark context.
-	 */
-	private transient JavaSparkContext jssc;
+    /**
+     * Spark context.
+     */
+    private transient JavaSparkContext jssc;
 
-	private transient FileSystem fs;
+    private transient FileSystem fs;
 
     private transient Configuration hiveConf;
 

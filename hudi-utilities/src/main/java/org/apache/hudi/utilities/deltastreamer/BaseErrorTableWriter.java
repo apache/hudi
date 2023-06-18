@@ -44,7 +44,7 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> {
   public static String ERROR_TABLE_CURRUPT_RECORD_COL_NAME = "_corrupt_record";
 
   public BaseErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-                              TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs) {
+      TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs) {
   }
 
   /**

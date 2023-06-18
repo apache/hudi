@@ -179,86 +179,108 @@ public class DeltaSync implements Serializable, Closeable {
    * Delta Sync Config.
    */
   private final HoodieDeltaStreamer.Config cfg;
-  /**
-   * Bag of properties with source, hoodie client, key generator etc.
-   * <p>
-   * NOTE: These properties are already consolidated w/ CLI provided config-overrides
-   */
-  private final TypedProperties props;
-  /**
-   * Tracks whether new schema is being seen and creates client accordingly.
-   */
-  private final SchemaSet processedSchema;
-  private final boolean autoGenerateRecordKeys;
+
   /**
    * Source to pull deltas from.
    */
   private transient SourceFormatAdapter formatAdapter;
+
   /**
    * User Provided Schema Provider.
    */
   private transient SchemaProvider userProvidedSchemaProvider;
+
   /**
    * Schema provider that supplies the command for reading the input and writing out the target table.
    */
   private transient SchemaProvider schemaProvider;
+
   /**
    * Allows transforming source to target table before writing.
    */
   private transient Option<Transformer> transformer;
+
   private String keyGenClassName;
+
   /**
    * Filesystem used.
    */
   private transient FileSystem fs;
+
   /**
    * Spark context Wrapper.
    */
   private transient HoodieSparkEngineContext sparkEngineContext;
+
   /**
    * Spark context.
    */
   private transient JavaSparkContext jssc;
+
   /**
    * Spark Session.
    */
   private transient SparkSession sparkSession;
+
   /**
    * Hive Config.
    */
   private transient Configuration conf;
+
+  /**
+   * Bag of properties with source, hoodie client, key generator etc.
+   *
+   * NOTE: These properties are already consolidated w/ CLI provided config-overrides
+   */
+  private final TypedProperties props;
+
   /**
    * Callback when write client is instantiated.
    */
   private transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
+
   /**
    * Timeline with completed commits, including both .commit and .deltacommit.
    */
   private transient Option<HoodieTimeline> commitsTimelineOpt;
+
   // all commits timeline, including all (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index)
   private transient Option<HoodieTimeline> allCommitsTimelineOpt;
+
+  /**
+   * Tracks whether new schema is being seen and creates client accordingly.
+   */
+  private final SchemaSet processedSchema;
+
   /**
    * DeltaSync will explicitly manage embedded timeline server so that they can be reused across Write Client
    * instantiations.
    */
   private transient Option<EmbeddedTimelineService> embeddedTimelineService = Option.empty();
+
   /**
    * Write Client.
    */
   private transient SparkRDDWriteClient writeClient;
+
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
   private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
+
   private transient HoodieIngestionMetrics metrics;
   private transient HoodieMetrics hoodieMetrics;
+
   /**
    * Unique identifier of the deltastreamer
-   */
+   * */
   private transient Option<String> multiwriterIdentifier;
+
   /**
    * The last checkpoint that THIS deltastreamer instance wrote.
    * NOT the last checkpoint in the timeline.
    */
   private transient String latestCheckpointWritten;
+
+  private final boolean autoGenerateRecordKeys;
 
   @Deprecated
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
@@ -270,7 +292,6 @@ public class DeltaSync implements Serializable, Closeable {
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
       TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs, Configuration conf,
       Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-
     this.cfg = cfg;
     this.sparkEngineContext = sparkEngineContext;
     this.jssc = sparkEngineContext.getJavaSparkContext();
@@ -295,7 +316,7 @@ public class DeltaSync implements Serializable, Closeable {
       id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
-    if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
+    if (props.getBoolean(ERROR_TABLE_ENABLED.key(),ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, jssc, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
@@ -306,19 +327,6 @@ public class DeltaSync implements Serializable, Closeable {
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
         Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
 
-  }
-
-  public static Option<String> readCheckpointValue(String value, String id) {
-    try {
-      Map<String, String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
-      if (!checkpointMap.containsKey(id)) {
-        return Option.empty();
-      }
-      String checkpointVal = checkpointMap.get(id);
-      return Option.of(checkpointVal);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to parse checkpoint as map", e);
-    }
   }
 
   /**
@@ -485,7 +493,7 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
-   * @return Pair<SchemaProvider, Pair < String, JavaRDD < HoodieRecord>>> Input data read from upstream source, consists
+   * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
@@ -583,16 +591,16 @@ public class DeltaSync implements Serializable, Closeable {
           // Target (writer's) schema is determined based on the incoming source schema
           // and existing table's one, reconciling the two (if necessary) based on configuration
           return HoodieSparkSqlWriter.deduceWriterSchema(
-              sourceSchema,
-              HoodieConversionUtils.<Schema>toScalaOption(latestTableSchemaOpt),
-              HoodieConversionUtils.<InternalSchema>toScalaOption(Option.empty()),
-              HoodieConversionUtils.fromProperties(props));
+                  sourceSchema,
+                  HoodieConversionUtils.<Schema>toScalaOption(latestTableSchemaOpt),
+                  HoodieConversionUtils.<InternalSchema>toScalaOption(Option.empty()),
+                  HoodieConversionUtils.fromProperties(props));
         });
         // Override schema provider with the reconciled target schema
         schemaProvider = targetSchemaOpt.map(targetSchema ->
-            (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
+          (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
                 new SimpleSchemaProvider(jssc, targetSchema, props)))
-            .orElse(dataAndCheckpoint.getSchemaProvider());
+          .orElse(dataAndCheckpoint.getSchemaProvider());
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
       }
@@ -730,6 +738,19 @@ public class DeltaSync implements Serializable, Closeable {
     return resumeCheckpointStr;
   }
 
+  public static Option<String> readCheckpointValue(String value, String id) {
+    try {
+      Map<String,String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
+      if (!checkpointMap.containsKey(id)) {
+        return Option.empty();
+      }
+      String checkpointVal = checkpointMap.get(id);
+      return Option.of(checkpointVal);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
+  }
+
   protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
@@ -771,8 +792,8 @@ public class DeltaSync implements Serializable, Closeable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(String instantTime, JavaRDD<HoodieRecord> records, String checkpointStr,
-      HoodieIngestionMetrics metrics,
-      Timer.Context overallTimerContext) {
+                                                                 HoodieIngestionMetrics metrics,
+                                                                 Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
@@ -944,7 +965,7 @@ public class DeltaSync implements Serializable, Closeable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
+      Map<String,HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         try {
