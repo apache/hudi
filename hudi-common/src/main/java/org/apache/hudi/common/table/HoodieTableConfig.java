@@ -772,6 +772,14 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
+   * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
+   * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
+   */
+  public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
+    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, false);
+  }
+
+  /**
    * Returns the format to use for partition meta files.
    */
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {
