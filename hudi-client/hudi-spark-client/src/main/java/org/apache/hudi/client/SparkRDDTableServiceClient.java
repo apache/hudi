@@ -202,15 +202,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = table.cluster(context, clusteringInstant);
-    writeMetadata.getWriteStatuses().flatMap(writeStatus -> {
-      System.err.println("THOR writeMetadata " + writeStatus.getWrittenRecords().size());
-      return writeStatus.getWrittenRecords().iterator();
-    }).collectAsList();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
-    writeMetadata.getWriteStatuses().flatMap(writeStatus -> {
-      System.err.println("THOR writeMetadata " + writeStatus.getWrittenRecords().size());
-      return writeStatus.getWrittenRecords().iterator();
-    }).collectAsList();
     // Validation has to be done after cloning. if not, it could result in referencing the write status twice which means clustering could get executed twice.
     validateClusteringCommit(clusteringMetadata, clusteringInstant, table);
 

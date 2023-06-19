@@ -456,7 +456,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // MOR tables are not supported
     if (!dataMetaClient.getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
-      throw new HoodieMetadataException("Only COW tables are supported with record index");
+      //throw new HoodieMetadataException("Only COW tables are supported with record index");
     }
 
     // Collect the list of latest base files present in each partition
@@ -926,11 +926,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
               rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
-
-      for (String toRollback: rollbackMetadata.getCommitsRollback()) {
-        getWriteClient().rollback(toRollback, Option.of(instantTime));
-      }
-      //commit(instantTime, records);
+      commit(instantTime, records);
       closeInternal();
     }
   }
