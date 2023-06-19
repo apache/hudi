@@ -124,7 +124,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     // Read Incremental Query, uses hudi_table_changes() table valued function for spark sql
     // we have 2 commits, try pulling the first commit (which is not the latest)
     //HUDI-5266
-    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").get(0)
+    val firstCommit = listCommitsSince(fs, tableBasePath, "000").get(0)
     val hoodieIncViewDf1 = spark.sql(s"select * from hudi_table_changes('$tableName', 'earliest', '$firstCommit')")
 
     assertEquals(100, hoodieIncViewDf1.count()) // 100 initial inserts must be pulled
