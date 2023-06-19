@@ -184,19 +184,11 @@ object HoodieCreateRecordUtils {
   }
 
   private def validateMetaFieldsInSparkRecords(schema: StructType): Boolean = {
-    def getFieldIndex(fieldName: String): Int = {
-      if (schema.fieldNames.contains(fieldName)) {
-        HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName)
-      } else {
-        -1
-      }
-    }
-
-    if (getFieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD) == -1
-      || getFieldIndex(HoodieRecord.FILENAME_METADATA_FIELD) == -1) {
+    if (!schema.fieldNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+      || !schema.fieldNames.contains(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
+      || !schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      || !schema.fieldNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+      || !schema.fieldNames.contains(HoodieRecord.FILENAME_METADATA_FIELD)) {
       throw new HoodieException("Metadata fields missing from spark prepared record.")
     }
     true
