@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
@@ -170,7 +171,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
     long averageRecordSize = averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).filterCompletedInstants(), config);
+        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION)).filterCompletedInstants(), config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
