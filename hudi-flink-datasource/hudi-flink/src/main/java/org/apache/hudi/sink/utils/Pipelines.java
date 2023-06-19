@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -35,7 +34,7 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
-import org.apache.hudi.sink.bucket.ConsistentBucketAssignerFactory;
+import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -63,6 +62,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -351,25 +351,15 @@ public class Pipelines {
               .uid(opUID("bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
         case CONSISTENT_HASHING:
-          String writeOperation = conf.get(FlinkOptions.OPERATION);
-          switch (WriteOperationType.fromValue(writeOperation)) {
-            case INSERT:
-            case UPSERT:
-            case DELETE:
-              break;
-            case INSERT_OVERWRITE:
-            case INSERT_OVERWRITE_TABLE:
-              // TODO support insert overwrite for consistent bucket index
-              throw new HoodieException("Consistent hashing bucket index does not work with insert overwrite using FLINK engine. Use simple bucket index or Spark engine.");
-            default:
-              throw new HoodieNotSupportedException("Unsupported write operation : " + writeOperation);
+          if (OptionsResolver.isInsertOverwrite(conf)) {
+            // TODO support insert overwrite for consistent bucket index
+            throw new HoodieException("Consistent hashing bucket index does not work with insert overwrite using FLINK engine. Use simple bucket index or Spark engine.");
           }
-          ConsistentBucketAssignerFactory bucketAssignerFactory = ConsistentBucketAssignerFactory.instance(conf);
           return dataStream
               .transform(
                   opName("consistent_bucket_assigner", conf),
                   TypeInformation.of(HoodieRecord.class),
-                  bucketAssignerFactory)
+                  new ProcessOperator<>(new ConsistentBucketAssignFunction(conf)))
               .uid(opUID("consistent_bucket_assigner", conf))
               .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
               .keyBy(record -> record.getCurrentLocation().getFileId())

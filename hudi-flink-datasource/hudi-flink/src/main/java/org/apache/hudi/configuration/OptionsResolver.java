@@ -200,8 +200,8 @@ public class OptionsResolver {
    * Returns whether the operation is INSERT OVERWRITE (table or partition).
    */
   public static boolean isInsertOverwrite(Configuration conf) {
-    return conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
-        || conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE.value());
+    return conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+        || conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE.value());
   }
 
   /**
