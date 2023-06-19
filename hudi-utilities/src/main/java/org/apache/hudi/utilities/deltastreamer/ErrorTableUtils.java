@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -45,19 +46,19 @@ import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR
 
 public final class ErrorTableUtils {
   public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-                                                                 TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
+                                                                 TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
 
     Class<?>[] argClassArr = new Class[]{HoodieDeltaStreamer.Config.class,
-        SparkSession.class, TypedProperties.class, JavaSparkContext.class, FileSystem.class};
+        SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class};
     String errMsg = "Unable to instantiate ErrorTableWriter with arguments type " + Arrays.toString(argClassArr);
     ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr, false), errMsg);
 
     try {
       return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassArr)
-          .newInstance(cfg, sparkSession, props, jssc, fs));
+          .newInstance(cfg, sparkSession, props, sparkEngineContext, fs));
     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
       throw new HoodieException(errMsg, e);
     }

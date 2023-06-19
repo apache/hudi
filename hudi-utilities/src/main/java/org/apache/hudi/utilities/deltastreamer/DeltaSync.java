@@ -210,12 +210,7 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Spark context Wrapper.
    */
-  private transient HoodieSparkEngineContext sparkEngineContext;
-
-  /**
-   * Spark context.
-   */
-  private transient JavaSparkContext jssc;
+  private transient HoodieSparkEngineContext sparkContext;
 
   /**
    * Spark Session.
@@ -290,11 +285,10 @@ public class DeltaSync implements Serializable, Closeable {
   }
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-                   TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs, Configuration conf,
+                   TypedProperties props, HoodieSparkEngineContext sparkContext, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this.cfg = cfg;
-    this.sparkEngineContext = sparkEngineContext;
-    this.jssc = sparkEngineContext.getJavaSparkContext();
+    this.sparkContext = sparkContext;
     this.sparkSession = sparkSession;
     this.fs = fs;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
@@ -317,11 +311,11 @@ public class DeltaSync implements Serializable, Closeable {
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(),ERROR_TABLE_ENABLED.defaultValue())) {
-      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, jssc, fs);
+      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, sparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
+        UtilHelpers.createSource(cfg.sourceClassName, props, sparkContext.jsc(), sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
 
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
@@ -410,7 +404,7 @@ public class DeltaSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-        .initTable(new Configuration(jssc.hadoopConfiguration()),
+        .initTable(new Configuration(sparkContext.hadoopConfiguration()),
             cfg.targetBasePath);
   }
 
@@ -550,7 +544,7 @@ public class DeltaSync implements Serializable, Closeable {
           formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
       Option<Dataset<Row>> transformed =
-          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
+          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(sparkContext.jsc(), sparkSession, data, props));
 
       transformed = formatAdapter.processErrorEvents(transformed,
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
@@ -582,7 +576,7 @@ public class DeltaSync implements Serializable, Closeable {
         }
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
-        Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
+        Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(sparkContext.jsc(), fs, cfg.targetBasePath);
         // Deduce proper target (writer's) schema for the transformed dataset, reconciling its
         // schema w/ the table's one
         Option<Schema> targetSchemaOpt = transformed.map(df -> {
@@ -598,8 +592,8 @@ public class DeltaSync implements Serializable, Closeable {
         });
         // Override schema provider with the reconciled target schema
         schemaProvider = targetSchemaOpt.map(targetSchema ->
-          (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
-                new SimpleSchemaProvider(jssc, targetSchema, props)))
+          (SchemaProvider) new DelegatingSchemaProvider(props, sparkContext.jsc(), dataAndCheckpoint.getSchemaProvider(),
+                                                        new SimpleSchemaProvider(sparkContext.jsc(), targetSchema, props)))
           .orElse(dataAndCheckpoint.getSchemaProvider());
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
@@ -621,10 +615,10 @@ public class DeltaSync implements Serializable, Closeable {
       return null;
     }
 
-    jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
+    sparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, sparkContext.emptyRDD()));
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -797,7 +791,7 @@ public class DeltaSync implements Serializable, Closeable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
-      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
+      records = DataSourceUtils.dropDuplicates(sparkContext.jsc(), records, writeClient.getConfig());
     }
 
     boolean isEmpty = records.isEmpty();
@@ -955,7 +949,7 @@ public class DeltaSync implements Serializable, Closeable {
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
+      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, sparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
@@ -1004,12 +998,12 @@ public class DeltaSync implements Serializable, Closeable {
     registerAvroSchemas(sourceSchema, targetSchema);
     final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
-        .getWriteConfigWithRecordSizeEstimate(jssc, records, initialWriteConfig)
+        .getWriteConfigWithRecordSizeEstimate(sparkContext.jsc(), records, initialWriteConfig)
         .orElse(initialWriteConfig);
 
     if (writeConfig.isEmbeddedTimelineServerEnabled()) {
       if (!embeddedTimelineService.isPresent()) {
-        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(sparkEngineContext, writeConfig);
+        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(sparkContext, writeConfig);
       } else {
         EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
@@ -1019,7 +1013,7 @@ public class DeltaSync implements Serializable, Closeable {
       // Close Write client.
       writeClient.close();
     }
-    writeClient = new SparkRDDWriteClient<>(sparkEngineContext, writeConfig, embeddedTimelineService);
+    writeClient = new SparkRDDWriteClient<>(sparkContext, writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
   }
 
@@ -1157,7 +1151,7 @@ public class DeltaSync implements Serializable, Closeable {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Registering Schema: " + schemas);
       }
-      jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
+      sparkContext.getSparkConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }
 
