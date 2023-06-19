@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
@@ -36,6 +35,8 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,8 +62,16 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
 public class HoodieJavaEngineContext extends HoodieEngineContext {
   // Java properties that are added to commits. Do not include any sensitive information here.
   // https://docs.oracle.com/javase/8/docs/api/java/lang/System.html#getProperties--
-  private List<String> JAVA_PROPERTIES = Arrays.asList("java.version", "java.vm.specification.version", "java.vm.version", "java.specification.version",
-      "java.class.version", "java.compiler", "os.name", "os.arch", "os.version");
+  private static final List<String> JAVA_PROPERTIES = Arrays.asList(
+      "java.version",
+      "java.vm.specification.version",
+      "java.vm.version",
+      "java.specification.version",
+      "java.class.version",
+      "java.compiler",
+      "os.name",
+      "os.arch",
+      "os.version");
 
   public HoodieJavaEngineContext(Configuration conf) {
     this(conf, new JavaTaskContextSupplier());
