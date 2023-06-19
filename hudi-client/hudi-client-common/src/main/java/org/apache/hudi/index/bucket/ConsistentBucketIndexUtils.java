@@ -64,6 +64,10 @@ public class ConsistentBucketIndexUtils {
   /**
    * Loads hashing metadata of the given partition, if it does not exist, creates a new one (also persist it into storage).
    *
+   * <p>NOTE: When creating a new hashing metadata, the content will always be the same for the same partition.
+   * It means when multiple writer are trying to initialize metadata for the same partition,
+   * no lock or synchronization is necessary as they are creating the file with the same content.
+   *
    * @param table      Hoodie table
    * @param partition  Table partition
    * @param numBuckets Default bucket number

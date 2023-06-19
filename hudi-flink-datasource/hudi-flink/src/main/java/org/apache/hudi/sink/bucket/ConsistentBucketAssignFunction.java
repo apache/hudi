@@ -25,17 +25,15 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
-import org.apache.hudi.sink.event.CreatePartitionMetadataEvent;
-import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
@@ -56,13 +54,14 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
 
   private final Configuration config;
   private final List<String> indexKeyFields;
-  private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+  private final int bucketNum;
   private transient HoodieFlinkWriteClient writeClient;
-  private transient OperatorEventGateway eventGateway;
+  private transient Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
   public ConsistentBucketAssignFunction(Configuration conf) {
     this.config = conf;
     this.indexKeyFields = Arrays.asList(OptionsResolver.getIndexKeyField(conf).split(","));
+    this.bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
   }
 
   @Override
@@ -74,10 +73,6 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
       LOG.error("Fail to initialize consistent bucket assigner", e);
       throw new RuntimeException(e);
     }
-  }
-
-  public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    this.eventGateway = operatorEventGateway;
   }
 
   @Override
@@ -99,18 +94,12 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
-      TimeWait timeWait = TimeWait.builder().timeout(30000).action("consistent hashing initialize").build();
-      Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.writeClient.getHoodieTable(), p);
-      if (!metadataOption.isPresent()) {
-        LOG.info("The hashing metadata of the partition {} does not exist, sending the create request to coordinator.", partition);
-        this.eventGateway.sendEventToCoordinator(new CreatePartitionMetadataEvent(partition));
-      }
-      while (!metadataOption.isPresent()) {
-        LOG.info("The hashing metadata of the partition {} has not been ready yet.", partition);
-        timeWait.waitFor();
-        metadataOption = ConsistentBucketIndexUtils.loadMetadata(this.writeClient.getHoodieTable(), p);
-      }
-      return new ConsistentBucketIdentifier(metadataOption.get());
+      // NOTE: If the metadata does not exist, there maybe concurrent creation of the metadata. And we allow multiple partitioner
+      // trying to create the same metadata as the initial metadata always has the same content for the same partition.
+      HoodieConsistentHashingMetadata metadata =
+          ConsistentBucketIndexUtils.loadOrCreateMetadata(this.writeClient.getHoodieTable(), p, bucketNum);
+      ValidationUtils.checkState(metadata != null);
+      return new ConsistentBucketIdentifier(metadata);
     });
   }
 }
