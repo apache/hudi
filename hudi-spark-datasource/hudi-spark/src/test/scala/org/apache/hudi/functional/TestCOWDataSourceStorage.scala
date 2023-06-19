@@ -49,6 +49,10 @@ import scala.collection.JavaConversions._
 
 @Tag("functional")
 class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
+  private val sqlQueryEqualityPreCommitValidatorClassName =
+    classOf[SqlQueryEqualityPreCommitValidator[_, _, _, _]].getCanonicalName
+  private val sqlQueryInequalityPreCommitValidatorClassName =
+    classOf[SqlQueryInequalityPreCommitValidator[_, _, _, _]].getCanonicalName
 
   var commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -291,26 +295,26 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is null|true|false|false",
-    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is null|true|true|false",
-    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where rider is null|true|true|true",
-    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is null|false|true|false",
-    "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where rider is null|false|true|true",
-    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is not null|true|false|false",
-    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is not null|true|true|false",
-    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where rider is not null|true|true|true",
-    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where driver is not null|false|true|false",
-    "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator|"
-      + "select count(*) from <TABLE_NAME> where rider is not null|false|true|true"
+    sqlQueryEqualityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is null|true|false|false",
+    sqlQueryEqualityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is null|true|true|false",
+    sqlQueryEqualityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where rider is null|true|true|true",
+    sqlQueryEqualityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is null|false|true|false",
+    sqlQueryEqualityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where rider is null|false|true|true",
+    sqlQueryInequalityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is not null|true|false|false",
+    sqlQueryInequalityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is not null|true|true|false",
+    sqlQueryInequalityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where rider is not null|true|true|true",
+    sqlQueryInequalityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where driver is not null|false|true|false",
+    sqlQueryInequalityPreCommitValidatorClassName
+      + "|select count(*) from <TABLE_NAME> where rider is not null|false|true|true"
   ), delimiter = '|')
   def testPreCommitValidationWithSQLQueryEqualityInequality(preCommitValidatorClassName: String,
                                                             sqlQuery: String,
