@@ -25,7 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -33,11 +33,12 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, Hoodie
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource}
 
+import java.lang.Exception
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Properties}
 import scala.collection.JavaConverters._
@@ -324,6 +325,92 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
   }
 
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testEnableDisableRLI(tableType: HoodieTableType): Unit = {
+    var hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()
+    )
+
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    hudiOpts += (HoodieMetadataConfig.RECORD_INDEX_CREATE_PROP.key -> "false")
+    metaClient.getTableConfig.setMetadataPartitionState(metaClient, MetadataPartitionType.RECORD_INDEX, false)
+
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      validate = false)
+
+    try {
+      validateRecordIndices(hudiOpts)
+    } catch {
+      case e: Exception =>
+        assertTrue(e.isInstanceOf[IllegalStateException])
+        assertTrue(e.getMessage.contains("Record index is not initialized in MDT"))
+    }
+
+    hudiOpts += (HoodieMetadataConfig.RECORD_INDEX_CREATE_PROP.key -> "true")
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    validateRecordIndices(hudiOpts)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLICompaction(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1"
+    )
+
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
+      .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+    val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+    val lastCompactionInstant = compactionTimeline.filter(instant =>
+      HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+        .getOperationType == WriteOperationType.COMPACT)
+      .lastInstant()
+    val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+      .filter(f => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)).findAny()
+    assertTrue(compactionBaseFile.isPresent)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLICleaning(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
+      .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+    assertTrue(
+      metadataTableFSView.getTimeline.filter(instant => instant.getAction == ActionType.clean.name())
+        .lastInstant()
+        .isPresent)
+  }
+
   private def rollbackLastInstant(hudiOpts: Map[String, String]): Unit = {
     if (getLatestCompactionInstant() != metaClient.getCommitsAndCompactionTimeline.lastInstant()) {
       dfList = dfList.take(dfList.size - 1)
@@ -373,7 +460,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   private def doWriteAndValidateRecordIndex(hudiOpts: Map[String, String],
                                             operation: String,
-                                            saveMode: SaveMode): DataFrame = {
+                                            saveMode: SaveMode,
+                                            validate: Boolean = true): DataFrame = {
     var records1: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
@@ -390,7 +478,9 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       .mode(saveMode)
       .save(basePath)
     calculateMergedDf(inputDF1)
-    validateRecordIndices(hudiOpts)
+    if (validate) {
+      validateRecordIndices(hudiOpts)
+    }
     inputDF1
   }
 
