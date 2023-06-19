@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.catalyst.plans.logcal
 
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
@@ -26,10 +25,8 @@ object HoodieTableChangesOptionsParser {
   def parseOptions(exprs: Seq[Expression], funcName: String): (String, Map[String, String]) = {
     val args = exprs.map(_.eval().toString)
 
-    if (args.size < 3) {
-      throw new AnalysisException(s"Too few arguments for function `$funcName`")
-    } else if (args.size > 4) {
-      throw new AnalysisException(s"Too many arguments for function `$funcName`")
+    if (args.size < 3 || args.size > 4) {
+      throw new AnalysisException(s"Expect arguments (table_name or table_path, incremental_format, start_instant, [end_instant]) for function `$funcName`")
     }
 
     val identifier = args.head
@@ -81,11 +78,5 @@ case class HoodieTableChangesByPath(args: Seq[Expression]) extends LeafNode {
   override def output: Seq[Attribute] = Nil
 
   override lazy val resolved: Boolean = false
-
-}
-
-object HoodieTableChangesByPath {
-
-  val FUNC_NAME = "hudi_table_changes_by_path";
 
 }

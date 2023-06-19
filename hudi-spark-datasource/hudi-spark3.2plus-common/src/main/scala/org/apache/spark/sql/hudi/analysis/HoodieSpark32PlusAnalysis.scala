@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
@@ -113,24 +114,20 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       LogicalRelation(relation, catalogTable)
 
     case HoodieTableChanges(args) =>
-      val (tableName, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
-
-      val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
-      val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
-
+      val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
-      val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
-        catalogTable.location.toString))
-
-      LogicalRelation(relation, catalogTable)
-
-    case HoodieTableChangesByPath(args) =>
-      val (path, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChangesByPath.FUNC_NAME)
-
-      val hoodieDataSource = new DefaultSource
-      val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> path))
-
-      LogicalRelation(relation)
+      if (tablePath.contains(Path.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
   }
 }
 

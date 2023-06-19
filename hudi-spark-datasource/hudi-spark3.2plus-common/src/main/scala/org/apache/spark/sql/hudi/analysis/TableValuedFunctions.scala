@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
-import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesByPath}
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges}
 
 object TableValuedFunctions {
 
@@ -33,11 +33,6 @@ object TableValuedFunctions {
       FunctionIdentifier(HoodieTableChanges.FUNC_NAME),
       new ExpressionInfo(HoodieTableChanges.getClass.getCanonicalName, HoodieTableChanges.FUNC_NAME),
       (args: Seq[Expression]) => new HoodieTableChanges(args)
-    ),
-    (
-      FunctionIdentifier(HoodieTableChangesByPath.FUNC_NAME),
-      new ExpressionInfo(HoodieTableChangesByPath.getClass.getCanonicalName, HoodieTableChangesByPath.FUNC_NAME),
-      (args: Seq[Expression]) => new HoodieTableChangesByPath(args)
     )
   )
 }

@@ -82,24 +82,20 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
   }
 
-  test(s"Test hudi_table_changes, hudi_table_changes_by_path latest_state") {
+  test(s"Test hudi_table_changes latest_state") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
         Seq(
-          ("cow", "hudi_table_changes"),
-          ("mor", "hudi_table_changes"),
-          ("cow", "hudi_table_changes_by_path"),
-          ("mor", "hudi_table_changes_by_path")
+          ("cow", true),
+          ("mor", true),
+          ("cow", false),
+          ("mor", false)
         ).foreach { parameters =>
           val tableType = parameters._1
-          val functionName = parameters._2
+          val isTableId = parameters._2
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-          val identifier = functionName match {
-            case "hudi_table_changes" => tableName
-            case "hudi_table_changes_by_path" => tablePath
-            case _ => throw new IllegalArgumentException(s"Unknown function name $functionName")
-          }
+          val identifier = if (isTableId) tableName else tablePath
           spark.sql("set hoodie.sql.insert.mode = non-strict")
           spark.sql(
             s"""
@@ -132,7 +128,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |name,
                |price,
                |ts
-               |from $functionName('$identifier', 'latest_state', 'earliest')
+               |from hudi_table_changes('$identifier', 'latest_state', 'earliest')
                |""".stripMargin
           )(
             Seq(1, "a1", 10.0, 1000),
@@ -153,7 +149,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |name,
                |price,
                |ts
-               |from $functionName(
+               |from hudi_table_changes(
                |'$identifier',
                |'latest_state',
                |'$firstInstant')
@@ -177,7 +173,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | name,
                | price,
                | ts
-               | from $functionName(
+               | from hudi_table_changes(
                | '$identifier',
                | 'latest_state',
                | '$firstInstant',
@@ -193,24 +189,20 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
   }
 
-  test(s"Test hudi_table_changes, hudi_table_changes_by_path cdc") {
+  test(s"Test hudi_table_changes cdc") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
         Seq(
-          ("cow", "hudi_table_changes"),
-          ("mor", "hudi_table_changes"),
-          ("cow", "hudi_table_changes_by_path"),
-          ("mor", "hudi_table_changes_by_path")
+          ("cow", true),
+          ("mor", true),
+          ("cow", false),
+          ("mor", false)
         ).foreach { parameters =>
           val tableType = parameters._1
-          val functionName = parameters._2
+          val isTableId = parameters._2
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-          val identifier = functionName match {
-            case "hudi_table_changes" => tableName
-            case "hudi_table_changes_by_path" => tablePath
-            case _ => throw new IllegalArgumentException(s"Unknown function name $functionName")
-          }
+          val identifier = if (isTableId) tableName else tablePath
           spark.sql("set hoodie.sql.insert.mode = upsert")
           spark.sql(
             s"""
@@ -245,7 +237,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | op,
                | before,
                | after
-               |from $functionName('$identifier', 'cdc', 'earliest')
+               |from hudi_table_changes('$identifier', 'cdc', 'earliest')
                |""".stripMargin
           )
 
@@ -280,7 +272,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | op,
                | before,
                | after
-               |from $functionName(
+               |from hudi_table_changes(
                |'$identifier',
                |'cdc',
                |'$firstInstant')
@@ -321,7 +313,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | op,
                | before,
                | after
-               | from $functionName(
+               | from hudi_table_changes(
                | '$identifier',
                | 'cdc',
                | '$firstInstant',
@@ -353,5 +345,4 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       }
     }
   }
-
 }
