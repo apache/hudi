@@ -157,11 +157,12 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.removeMetadataPartitionsProps;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.METADATA_COMPACTION_TIME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -390,7 +391,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getFs().exists(
-        new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));
+        new Path(getMetadataTableBasePath(writeConfig2.getBasePath()))));
 
     // Enable metadata table again and initialize metadata table through
     // HoodieTable.getMetadataWriter() function
@@ -1453,7 +1454,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Metadata table should exist
-      final Path metadataTablePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()));
+      final Path metadataTablePath = new Path(getMetadataTableBasePath(writeConfig.getBasePath()));
       assertTrue(fs.exists(metadataTablePath));
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
@@ -1594,7 +1595,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initTimelineService();
     initMetaClient(tableType);
     initTestDataGenerator();
-    metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    metadataTableBasePath = getMetadataTableBasePath(basePath);
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     // disable small file handling so that every insert goes to a new file group.
@@ -2487,9 +2488,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // delete the metadata table partitions to check, whether rollback of pending commit succeeds and
     // metadata table partitions are rebootstrapped.
     metadataWriter.dropMetadataPartitions(Arrays.asList(MetadataPartitionType.RECORD_INDEX, FILES));
-    assertFalse(fs.exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + FILES.getPartitionPath())));
-    assertFalse(fs.exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
     // Insert/upsert third batch of records
@@ -2510,9 +2511,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().filterCompletedInstants().findInstantsAfterOrEquals(commitTime, 1).empty());
 
-    assertTrue(fs.exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + FILES.getPartitionPath())));
-    assertTrue(fs.exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
   }
@@ -2537,17 +2538,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
     }
 
-    // Metadata table should exist
-    final Path metadataTablePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()));
-    assertTrue(fs.exists(metadataTablePath));
+    final Path metadataTablePath = new Path(getMetadataTableBasePath(writeConfig.getBasePath()));
+    assertTrue(fs.exists(metadataTablePath), "metadata table should exist.");
 
-    // delete the metadata folder.
-    fs.delete(metadataTablePath, true);
-    assertFalse(fs.exists(metadataTablePath));
-    Set<String> removingPropKeys = removeMetadataPartitionsProps(metaClient.getTableConfig().getProps())
-        .getRight().keySet().stream().map(Object::toString).collect(Collectors.toSet());
-    Path metaPathDir = new Path(metaClient.getBasePathV2(), METAFOLDER_NAME);
-    HoodieTableConfig.delete(fs, metaPathDir, removingPropKeys);
+    deleteMetadataTable(metaClient, context, false);
+    assertFalse(fs.exists(metadataTablePath), "metadata table should not exist after being deleted.");
 
     writeConfig = getWriteConfigBuilder(true, true, false).build();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
@@ -3127,7 +3122,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath),
         false, false);
     assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
