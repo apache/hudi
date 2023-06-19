@@ -143,7 +143,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     timeline = timeline.reload();
 
     conf.set(FlinkOptions.READ_END_COMMIT, "3");
-    HoodieTimeline resTimeline = iis.filterInstantsByCondition(timeline);
+    HoodieTimeline resTimeline = iis.filterInstantsAsPerUserConfigs(timeline);
     // will not filter cluster commit by default
     assertEquals(3, resTimeline.getInstants().size());
   }

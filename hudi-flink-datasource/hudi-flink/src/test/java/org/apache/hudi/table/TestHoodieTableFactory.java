@@ -666,6 +666,9 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSink1.getConf();
     assertThat(conf1.get(FlinkOptions.PRE_COMBINE), is(true));
+    // check setup database name and table name automatically
+    assertThat(conf1.get(FlinkOptions.TABLE_NAME), is("t1"));
+    assertThat(conf1.get(FlinkOptions.DATABASE_NAME), is("db1"));
 
     // set up operation as 'insert'
     this.conf.setString(FlinkOptions.OPERATION, "insert");

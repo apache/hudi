@@ -256,16 +256,8 @@ public class StreamWriteOperatorCoordinator
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant, checkpointId);
-
-          if (tableState.scheduleCompaction) {
-            // if async compaction is on, schedule the compaction
-            CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
-          }
-
-          if (tableState.scheduleClustering) {
-            // if async clustering is on, schedule the clustering
-            ClusteringUtil.scheduleClustering(conf, writeClient, committed);
-          }
+          // schedules the compaction or clustering if it is enabled in stream execution mode
+          scheduleTableServices(committed);
 
           if (committed) {
             // start new instant.
@@ -452,12 +444,20 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
-        // schedules the compaction plan in batch execution mode
-        if (tableState.scheduleCompaction) {
-          // if async compaction is on, schedule the compaction
-          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, true);
-        }
+        // schedules the compaction or clustering if it is enabled in batch execution mode
+        scheduleTableServices(true);
       }
+    }
+  }
+
+  private void scheduleTableServices(Boolean committed) {
+    // if compaction is on, schedule the compaction
+    if (tableState.scheduleCompaction) {
+      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+    }
+    // if clustering is on, schedule the clustering
+    if (tableState.scheduleClustering) {
+      ClusteringUtil.scheduleClustering(conf, writeClient, committed);
     }
   }
 
