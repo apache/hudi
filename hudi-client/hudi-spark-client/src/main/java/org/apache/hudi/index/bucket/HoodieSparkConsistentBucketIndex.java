@@ -104,7 +104,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
           .collect(Collectors.toList());
       HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
           instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
-      ConsistentBucketIndexUtils.saveMetadata(hoodieTable.getMetaClient(), newMeta);
+      ConsistentBucketIndexUtils.saveMetadata(hoodieTable, newMeta, true);
     });
 
     return writeStatuses;

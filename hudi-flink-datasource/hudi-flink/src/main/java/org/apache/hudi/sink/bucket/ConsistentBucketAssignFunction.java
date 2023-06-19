@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -44,6 +45,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The function to tag each incoming record with a location of a file based on consistent bucket index.
@@ -57,6 +59,8 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   private final int bucketNum;
   private transient HoodieFlinkWriteClient writeClient;
   private transient Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+  private final int maxRetries = 10;
+  private final long maxWaitTimeInMs = 1000;
 
   public ConsistentBucketAssignFunction(Configuration conf) {
     this.config = conf;
@@ -94,10 +98,28 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     return partitionToIdentifier.computeIfAbsent(partition, p -> {
-      // NOTE: If the metadata does not exist, there maybe concurrent creation of the metadata. And we allow multiple partitioner
+      // NOTE: If the metadata does not exist, there maybe concurrent creation of the metadata. And we allow multiple subtask
       // trying to create the same metadata as the initial metadata always has the same content for the same partition.
-      HoodieConsistentHashingMetadata metadata =
-          ConsistentBucketIndexUtils.loadOrCreateMetadata(this.writeClient.getHoodieTable(), p, bucketNum);
+      int retryCount = 0;
+      HoodieConsistentHashingMetadata metadata = null;
+      while (retryCount <= maxRetries) {
+        try {
+          metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.writeClient.getHoodieTable(), p, bucketNum);
+          break;
+        } catch (Exception e) {
+          if (retryCount >= maxRetries) {
+            throw new HoodieLockException("Fail to load or create metadata for partition " + partition, e);
+          }
+          try {
+            TimeUnit.MILLISECONDS.sleep(maxWaitTimeInMs);
+          } catch (InterruptedException ex) {
+            // ignore InterruptedException here
+          }
+          LOG.info("Retrying to load or create metadata for partition {} for {} times", partition, retryCount + 1);
+        } finally {
+          retryCount++;
+        }
+      }
       ValidationUtils.checkState(metadata != null);
       return new ConsistentBucketIdentifier(metadata);
     });

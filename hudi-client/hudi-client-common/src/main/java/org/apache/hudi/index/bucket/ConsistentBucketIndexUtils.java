@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -33,7 +32,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -46,7 +44,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -74,7 +71,7 @@ public class ConsistentBucketIndexUtils {
    *
    * @return Consistent hashing metadata
    */
-  public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable<?, ?, ?, ?> table, String partition, int numBuckets) {
+  public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition, int numBuckets) {
     Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(table, partition);
     if (metadataOption.isPresent()) {
       return metadataOption.get();
@@ -84,7 +81,7 @@ public class ConsistentBucketIndexUtils {
 
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-    if (saveMetadata(table.getMetaClient(), metadata)) {
+    if (saveMetadata(table, metadata, false)) {
       return metadata;
     }
 
@@ -102,7 +99,7 @@ public class ConsistentBucketIndexUtils {
    * @param partition Table partition
    * @return Consistent hashing metadata or empty if it does not exist
    */
-  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable<?, ?, ?, ?> table, String partition) {
+  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     Path metadataPath = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), partition);
     Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition);
@@ -129,12 +126,12 @@ public class ConsistentBucketIndexUtils {
       FileStatus maxMetadataFile = hashingMetaFiles.length > 0 ? hashingMetaFiles[hashingMetaFiles.length - 1] : null;
       // If single file present in metadata and if its default file return it
       if (maxMetadataFile != null && HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()).equals(HoodieTimeline.INIT_INSTANT_TS)) {
-        return loadMetadataFromGivenFile(metaClient, maxMetadataFile);
+        return loadMetadataFromGivenFile(table, maxMetadataFile);
       }
       // if max updated metadata file and committed metadata file are same then return
       if (maxCommitMetaFileTs != null && maxMetadataFile != null
           && maxCommitMetaFileTs.equals(HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()))) {
-        return loadMetadataFromGivenFile(metaClient, maxMetadataFile);
+        return loadMetadataFromGivenFile(table, maxMetadataFile);
       }
       HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
 
@@ -151,18 +148,18 @@ public class ConsistentBucketIndexUtils {
         if (isRehashingCommitted) {
           if (!commitMetaTss.contains(timestamp)) {
             try {
-              createCommitMarker(metaClient, path, partitionPath);
+              createCommitMarker(table, path, partitionPath);
             } catch (IOException e) {
               throw new HoodieIOException("Exception while creating marker file " + path.getName() + " for partition " + partition, e);
             }
           }
           fixed.add(hashingMetaFile);
-        } else if (recommitMetadataFile(metaClient, table.getBaseFileOnlyView(), hashingMetaFile, partition)) {
+        } else if (recommitMetadataFile(table, hashingMetaFile, partition)) {
           fixed.add(hashingMetaFile);
         }
       });
 
-      return fixed.isEmpty() ? Option.empty() : loadMetadataFromGivenFile(metaClient, fixed.get(fixed.size() - 1));
+      return fixed.isEmpty() ? Option.empty() : loadMetadataFromGivenFile(table, fixed.get(fixed.size() - 1));
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
@@ -174,42 +171,22 @@ public class ConsistentBucketIndexUtils {
   /**
    * Saves the metadata into storage
    *
-   * @param metaClient Hoodie meta client
-   * @param metadata   Hashing metadata to be saved
+   * @param table     Hoodie table
+   * @param metadata  Hashing metadata to be saved
+   * @param overwrite Whether to overwrite existing metadata
    * @return true if the metadata is saved successfully
    */
-  public static boolean saveMetadata(HoodieTableMetaClient metaClient, HoodieConsistentHashingMetadata metadata) {
-    HoodieWrapperFileSystem fs = metaClient.getFs();
-    Path dir = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), metadata.getPartitionPath());
-    Path fullPath = new Path(dir, metadata.getFilename() + ".tmp." + Math.abs(ThreadLocalRandom.current().nextInt()));
-    try (FSDataOutputStream fsOut = fs.create(fullPath, false)) {
+  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
+    HoodieWrapperFileSystem fs = table.getMetaClient().getFs();
+    Path dir = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
+    Path fullPath = new Path(dir, metadata.getFilename());
+    try (FSDataOutputStream fsOut = fs.create(fullPath, overwrite)) {
       byte[] bytes = metadata.toBytes();
       fsOut.write(bytes);
-      fsOut.flush();
+      fsOut.close();
+      return true;
     } catch (IOException e) {
-      LOG.warn("Failed to save bucket to tmp path, metadata: " + metadata, e);
-      return false;
-    }
-
-    try {
-      // Atomic renaming to ensure only one can succeed creating the initial hashing metadata
-      boolean success = fs.rename(fullPath, new Path(dir, metadata.getFilename()));
-      if (success) {
-        return true;
-      }
-    } catch (FileAlreadyExistsException e) {
-      LOG.info("Failed to save bucket metadata: {}  as it has been created by others", metadata);
-    } catch (IOException e) {
-      LOG.warn("Failed to save bucket metadata: " + metadata, e);
-    }
-
-    // Cleanup tmp files if necessary
-    try {
-      if (fs.exists(fullPath)) {
-        fs.delete(fullPath);
-      }
-    } catch (IOException ex) {
-      LOG.warn("Error trying to clean up temporary metadata: " + metadata, ex);
+      LOG.warn("Failed to update bucket metadata: " + metadata, e);
     }
     return false;
   }
@@ -217,12 +194,13 @@ public class ConsistentBucketIndexUtils {
   /***
    * Creates commit marker corresponding to hashing metadata file after post commit clustering operation.
    *
-   * @param metaClient    Hoodie meta client
+   * @param table         Hoodie table
    * @param fileStatus    File for which commit marker should be created
    * @param partitionPath Partition path the file belongs to
+   * @throws IOException
    */
-  private static void createCommitMarker(HoodieTableMetaClient metaClient, Path fileStatus, Path partitionPath) throws IOException {
-    HoodieWrapperFileSystem fs = metaClient.getFs();
+  private static void createCommitMarker(HoodieTable table, Path fileStatus, Path partitionPath) throws IOException {
+    HoodieWrapperFileSystem fs = table.getMetaClient().getFs();
     Path fullPath = new Path(partitionPath, getTimestampFromFile(fileStatus.getName()) + HASHING_METADATA_COMMIT_FILE_SUFFIX);
     if (fs.exists(fullPath)) {
       return;
@@ -231,18 +209,18 @@ public class ConsistentBucketIndexUtils {
   }
 
   /***
-   * Loads consistent hashing metadata of table from the given meta file.
+   * Loads consistent hashing metadata of table from the given meta file
    *
-   * @param metaClient Hoodie meta client
-   * @param metaFile   Hashing metadata file
+   * @param table    Hoodie table
+   * @param metaFile Hashing metadata file
    * @return HoodieConsistentHashingMetadata object
    */
-  private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTableMetaClient metaClient, FileStatus metaFile) {
+  private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTable table, FileStatus metaFile) {
     try {
       if (metaFile == null) {
         return Option.empty();
       }
-      byte[] content = FileIOUtils.readAsByteArray(metaClient.getFs().open(metaFile.getPath()));
+      byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (FileNotFoundException e) {
       return Option.empty();
@@ -263,29 +241,28 @@ public class ConsistentBucketIndexUtils {
    * active timeline that means old file group id's before clustering operation got cleaned and only new file group id's of current clustering operation
    * are present on the disk.
    *
-   * @param metaClient       Hoodie meta client
-   * @param baseFileOnlyView Base file view
-   * @param metaFile         Metadata file on which sync check needs to be performed
-   * @param partition        Partition metadata file belongs to
-   * @return true if hashing metadata file is the latest else false
+   * @param table     Hoodie table
+   * @param metaFile  Metadata file on which sync check needs to be performed
+   * @param partition Partition metadata file belongs to
+   * @return true if hashing metadata file is latest else false
    */
-  private static boolean recommitMetadataFile(HoodieTableMetaClient metaClient, TableFileSystemView.BaseFileOnlyView baseFileOnlyView, FileStatus metaFile, String partition) {
-    Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition);
+  private static boolean recommitMetadataFile(HoodieTable table, FileStatus metaFile, String partition) {
+    Path partitionPath = FSUtils.getPartitionPath(table.getMetaClient().getBasePathV2(), partition);
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
-    if (metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().containsInstant(timestamp)) {
+    if (table.getPendingCommitTimeline().containsInstant(timestamp)) {
       return false;
     }
-    Option<HoodieConsistentHashingMetadata> hoodieConsistentHashingMetadataOption = loadMetadataFromGivenFile(metaClient, metaFile);
+    Option<HoodieConsistentHashingMetadata> hoodieConsistentHashingMetadataOption = loadMetadataFromGivenFile(table, metaFile);
     if (!hoodieConsistentHashingMetadataOption.isPresent()) {
       return false;
     }
     HoodieConsistentHashingMetadata hoodieConsistentHashingMetadata = hoodieConsistentHashingMetadataOption.get();
 
     Predicate<String> hoodieFileGroupIdPredicate = hoodieBaseFile -> hoodieConsistentHashingMetadata.getNodes().stream().anyMatch(node -> node.getFileIdPrefix().equals(hoodieBaseFile));
-    if (baseFileOnlyView.getLatestBaseFiles(partition)
+    if (table.getBaseFileOnlyView().getLatestBaseFiles(partition)
         .map(fileIdPrefix -> FSUtils.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
       try {
-        createCommitMarker(metaClient, metaFile.getPath(), partitionPath);
+        createCommitMarker(table, metaFile.getPath(), partitionPath);
         return true;
       } catch (IOException e) {
         throw new HoodieIOException("Exception while creating marker file " + metaFile.getPath().getName() + " for partition " + partition, e);
