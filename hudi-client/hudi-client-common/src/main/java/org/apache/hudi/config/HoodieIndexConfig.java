@@ -348,7 +348,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("true")
       .markAdvanced()
       .withDocumentation("Only applies if index type is RECORD_INDEX."
-          + "When true, the input RDD will cached to speed up index lookup by reducing IO "
+          + "When true, the input RDD will be cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
 
   public static final ConfigProperty<String> RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE = ConfigProperty

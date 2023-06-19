@@ -214,6 +214,6 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
-    throw new UnsupportedOperationException("Unsupported operation: getNumFileGroupsForPartition");
+    throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition");
   }
 }
