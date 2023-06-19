@@ -57,8 +57,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
 
     // Set config to show that this is a prepped write.
-    var config = buildHoodieConfig(catalogTable)
-    config = config + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
+    val config = buildHoodieConfig(catalogTable) + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
     df.write.format("hudi")
