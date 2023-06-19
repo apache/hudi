@@ -2546,11 +2546,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).build();
       final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
       assertEquals(0, fsView.getLatestFileSlices("").count());
-      TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 2);
+      TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
 
       // Since the table has been overwritten all fileIDs before should have been replaced
       Set<String> afterFileIDs = getAllFileIDsInTable(tableBasePath, Option.empty());
-      assertTrue(afterFileIDs.retainAll(beforeFileIDs));
       assertTrue(afterFileIDs.isEmpty());
     }
 
