@@ -42,17 +42,14 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
 import scala.collection.JavaConversions._
 
 
 @Tag("functional")
 class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
-  private val sqlQueryEqualityPreCommitValidatorClassName =
-    classOf[SqlQueryEqualityPreCommitValidator[_, _, _, _]].getCanonicalName
-  private val sqlQueryInequalityPreCommitValidatorClassName =
-    classOf[SqlQueryInequalityPreCommitValidator[_, _, _, _]].getCanonicalName
 
   var commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -294,33 +291,12 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array(
-    sqlQueryEqualityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is null|true|false|false",
-    sqlQueryEqualityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is null|true|true|false",
-    sqlQueryEqualityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where rider is null|true|true|true",
-    sqlQueryEqualityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is null|false|true|false",
-    sqlQueryEqualityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where rider is null|false|true|true",
-    sqlQueryInequalityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is not null|true|false|false",
-    sqlQueryInequalityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is not null|true|true|false",
-    sqlQueryInequalityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where rider is not null|true|true|true",
-    sqlQueryInequalityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where driver is not null|false|true|false",
-    sqlQueryInequalityPreCommitValidatorClassName
-      + "|select count(*) from <TABLE_NAME> where rider is not null|false|true|true"
-  ), delimiter = '|')
+  @MethodSource(Array("testSqlValidatorParams"))
   def testPreCommitValidationWithSQLQueryEqualityInequality(preCommitValidatorClassName: String,
                                                             sqlQuery: String,
-                                                            isTablePartitioned: Boolean,
-                                                            lastWriteInSamePartition: Boolean,
-                                                            shouldSucceed: Boolean): Unit = {
+                                                            isTablePartitioned: java.lang.Boolean,
+                                                            lastWriteInSamePartition: java.lang.Boolean,
+                                                            shouldSucceed: java.lang.Boolean): Unit = {
     var options: Map[String, String] = commonOpts ++ Map(
       DataSourceWriteOptions.OPERATION.key -> WriteOperationType.INSERT.value,
       HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key -> preCommitValidatorClassName)
@@ -425,5 +401,41 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val snapshotDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*/*")
     assertEquals(expectedRecordCount, snapshotDF.count())
+  }
+}
+
+object TestCOWDataSourceStorage {
+  private final val SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME =
+    classOf[SqlQueryEqualityPreCommitValidator[_, _, _, _]].getCanonicalName
+  private final val SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME =
+    classOf[SqlQueryInequalityPreCommitValidator[_, _, _, _]].getCanonicalName
+  private final val SQL_DRIVER_IS_NULL = "select count(*) from <TABLE_NAME> where driver is null"
+  private final val SQL_RIDER_IS_NULL = "select count(*) from <TABLE_NAME> where rider is null"
+  private final val SQL_DRIVER_IS_NOT_NULL = "select count(*) from <TABLE_NAME> where driver is not null"
+  private final val SQL_RIDER_IS_NOT_NULL = "select count(*) from <TABLE_NAME> where rider is not null"
+
+  def testSqlValidatorParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(false), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(true), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(true), new java.lang.Boolean(true)),
+      arguments(SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NULL,
+        new java.lang.Boolean(false), new java.lang.Boolean(true), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NULL,
+        new java.lang.Boolean(false), new java.lang.Boolean(true), new java.lang.Boolean(true)),
+      arguments(SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NOT_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(false), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NOT_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(true), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NOT_NULL,
+        new java.lang.Boolean(true), new java.lang.Boolean(true), new java.lang.Boolean(true)),
+      arguments(SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_DRIVER_IS_NOT_NULL,
+        new java.lang.Boolean(false), new java.lang.Boolean(true), new java.lang.Boolean(false)),
+      arguments(SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NOT_NULL,
+        new java.lang.Boolean(false), new java.lang.Boolean(true), new java.lang.Boolean(true))
+    )
   }
 }
