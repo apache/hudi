@@ -112,11 +112,12 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
 
-  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
+  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      testTable.updateFilesPartitionInTableConfig();
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -324,7 +325,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(policy)

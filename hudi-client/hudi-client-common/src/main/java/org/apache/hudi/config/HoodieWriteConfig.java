@@ -1961,6 +1961,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
   }
 
+  public boolean getRecordIndexUseCaching() {
+    return getBoolean(HoodieIndexConfig.RECORD_INDEX_USE_CACHING);
+  }
+
   /**
    * storage properties.
    */
@@ -2344,6 +2348,26 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isLogCompactionEnabledOnMetadata() {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
+  }
+
+  public boolean isRecordIndexEnabled() {
+    return metadataConfig.enableRecordIndex();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public int getRecordIndexMaxFileGroupSizeBytes() {
+    return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
   }
 
   /**

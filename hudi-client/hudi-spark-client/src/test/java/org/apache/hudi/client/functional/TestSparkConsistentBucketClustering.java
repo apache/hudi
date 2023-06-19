@@ -24,6 +24,7 @@ import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClus
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
@@ -294,7 +295,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
-    Assertions.assertTrue(writeClient.commitStats(writeTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    Assertions.assertTrue(writeClient.commitStats(writeTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType()));
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -330,7 +331,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      Assertions.assertTrue(writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      Assertions.assertTrue(writeClient.commitStats(commitTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType()));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -105,7 +105,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // load all partitions in advance if necessary.
-    if (shouldUseBatchLookup(config)) {
+    if (shouldUseBatchLookup(hoodieTable.getMetaClient().getTableConfig(), config)) {
       LOG.info("Load all partitions and files into file system view in advance.");
       fileSystemView.loadAllPartitions();
     }

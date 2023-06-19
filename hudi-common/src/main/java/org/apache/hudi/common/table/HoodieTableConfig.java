@@ -710,8 +710,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns true if metadata table has been created and is being used for this dataset, else returns false.
    */
-  public boolean isMetadataTableEnabled() {
-    return isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+  public boolean isMetadataTableAvailable() {
+    return isMetadataPartitionAvailable(MetadataPartitionType.FILES);
   }
 
   /**
@@ -720,7 +720,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @param partition The partition to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
     return getMetadataPartitions().contains(partition.getPartitionPath());
   }
 
