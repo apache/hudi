@@ -627,8 +627,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Tests that table services in data table won't trigger table services in metadata table.
-   *
-   * @throws Exception
    */
   @Test
   public void testMetadataTableServices() throws Exception {
@@ -747,8 +745,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Tests that virtual key configs are honored in base files after compaction in metadata table.
-   *
-   * @throws Exception
    */
   @Test
   public void testVirtualKeysInBaseFiles() throws Exception {
@@ -1068,7 +1064,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param metadataMetaClient    - Metadata meta client
    * @param latestCommitTimestamp - Latest commit timestamp
    * @param enableMetaFields      - Enable meta fields for the table records
-   * @throws IOException
    */
   private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
                                                                  String latestCommitTimestamp,
@@ -1107,7 +1102,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param table
    * @param logFiles         - Metadata table log files to be verified
    * @param enableMetaFields - Enable meta fields for records
-   * @throws IOException
    */
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
@@ -1552,8 +1546,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Tests the metadata payload spurious deletes.
    * Lets say a commit was applied to metadata table, and later was explicitly got rolled back. Due to spark task failures, there could be more files in rollback
    * metadata when compared to the original commit metadata. When payload consistency check is enabled, it will throw exception. If not, it will succeed.
-   *
-   * @throws Exception
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -1780,7 +1772,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    *
    * @param engineContext - Engine context
    * @param writeConfig   - Write config
-   * @throws IOException
    */
   private void testTableOperationsImpl(HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) throws IOException {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
@@ -1932,8 +1923,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Tests that when inline cleaning is enabled and with auto commit set to true, there is no double locking.
    * bcoz, auto clean is triggered within post commit which is already happening within a lock.
-   *
-   * @throws Exception
    */
   @Test
   public void testMultiWriterForDoubleLocking() throws Exception {
@@ -2052,8 +2041,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Validates that if an instant is completed in MDT, but crashed before commiting to DT, MDT compaction should not kick in based on the instant time
    * since its not complete in DT yet.
-   *
-   * @throws Exception
    */
   @Test
   public void testMDTCompactionWithFailedCommits() throws Exception {
@@ -2138,8 +2125,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Ensure that the reader only reads completed instants.
-   *
-   * @throws IOException
    */
   @Test
   public void testReader() throws Exception {
@@ -2348,12 +2333,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * When table needs to be upgraded and when multi writer is enabled, hudi rolls back partial commits. Upgrade itself is happening
    * within a lock and hence rollback should not lock again.
-   *
-   * @throws IOException
-   * @throws InterruptedException
    */
   @Test
-  public void testRollbackDuringUpgradeForDoubleLocking() throws IOException, InterruptedException {
+  public void testRollbackDuringUpgradeForDoubleLocking() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -2421,8 +2403,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Tests rollback of a commit which has new partitions which is not present in hudi table prior to the commit being rolled back.
-   *
-   * @throws Exception
    */
   @Test
   public void testRollbackOfPartiallyFailedCommitWithNewPartitions() throws Exception {
@@ -2539,8 +2519,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Hoodie.properties indicates metadata is enabled, however metadata folder is missing.
-   *
-   * @throws Exception
    */
   @Test
   public void testBootstrapWithTableNotFound() throws Exception {
@@ -3217,9 +3195,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Returns the list of all files in the dataset by iterating over the metadata table.
-   *
-   * @throws IOException
-   * @throws IllegalArgumentException
    */
   private List<Path> getAllFiles(HoodieTableMetadata metadata) throws Exception {
     List<Path> allfiles = new LinkedList<>();
