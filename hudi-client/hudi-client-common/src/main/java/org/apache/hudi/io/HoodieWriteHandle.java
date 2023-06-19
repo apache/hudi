@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -55,6 +54,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -105,7 +105,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // 1. When the HoodieIndex being used is not implicit with storage
     // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
     final boolean trackSuccessRecords = !hoodieTable.getIndex().isImplicitWithStorage()
-        || HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
+        || getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         trackSuccessRecords, config.getWriteStatusFailureFraction());
   }

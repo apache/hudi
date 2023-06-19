@@ -678,9 +678,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         fs.delete(partitionPath, true);
         ValidationUtils.checkState(!fs.exists(partitionPath), "Failed to delete MDT partition " + metadataPartition);
       }
-    } catch (FileNotFoundException e) {
+    } catch (FileNotFoundException ignored) {
       // If the partition did not exist yet, it will be created below
-      LOG.warn("Exception seen while removing existing file groups in partition {} ", partitionPath.getName(), e);
     }
 
     // Archival of data table has a dependency on compaction(base files) in metadata table.

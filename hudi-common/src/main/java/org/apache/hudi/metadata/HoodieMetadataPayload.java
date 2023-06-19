@@ -118,15 +118,19 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
 
-  // Type of the record. This can be an enum in the schema but Avro1.8
-  // has a bug - https://issues.apache.org/jira/browse/AVRO-1810
+  /**
+   * Type of the record. This can be an enum in the schema but Avro1.8
+   * has a bug - https://issues.apache.org/jira/browse/AVRO-1810
+   */
   protected static final int METADATA_TYPE_PARTITION_LIST = 1;
   protected static final int METADATA_TYPE_FILE_LIST = 2;
   protected static final int METADATA_TYPE_COLUMN_STATS = 3;
   protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
   private static final int METADATA_TYPE_RECORD_INDEX = 5;
 
-  // HoodieMetadata schema field ids
+  /**
+   * HoodieMetadata schema field ids
+   */
   public static final String KEY_FIELD_NAME = HoodieAvroHFileReader.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
@@ -134,14 +138,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
 
-  // HoodieMetadata bloom filter payload field ids
+  /**
+   * HoodieMetadata bloom filter payload field ids
+   */
   private static final String FIELD_IS_DELETED = "isDeleted";
   private static final String BLOOM_FILTER_FIELD_TYPE = "type";
   private static final String BLOOM_FILTER_FIELD_TIMESTAMP = "timestamp";
   private static final String BLOOM_FILTER_FIELD_BLOOM_FILTER = "bloomFilter";
   private static final String BLOOM_FILTER_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
-  // HoodieMetadata column stats payload field ids
+  /**
+   * HoodieMetadata column stats payload field ids
+   */
   public static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
   public static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
   public static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
@@ -154,29 +162,35 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
-  // HoodieMetadata record index payload field ids
+  /**
+   * HoodieMetadata record index payload field ids
+   */
   public static final String RECORD_INDEX_FIELD_PARTITION = "partition";
   public static final String RECORD_INDEX_FIELD_FILEID_HIGH_BITS = "fileIdHighBits";
   public static final String RECORD_INDEX_FIELD_FILEID_LOW_BITS = "fileIdLowBits";
   public static final String RECORD_INDEX_FIELD_FILE_INDEX = "fileIndex";
   public static final String RECORD_INDEX_FIELD_INSTANT_TIME = "instantTime";
 
-  // FileIndex value saved in record index record when the fileId has no index (old format of base filename)
-  private static final int RECORD_INDEX_MISSING_FILEINDEX = -1;
+  /**
+   * FileIndex value saved in record index record when the fileId has no index (old format of base filename)
+   */
+  private static final int RECORD_INDEX_MISSING_FILEINDEX_FALLBACK = -1;
 
-  // NOTE: PLEASE READ CAREFULLY
-  //
-  // In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
-  // does use reflection to load the code-gen'd class corresponding to the Avro record model. This has
-  // serious adverse effects in terms of performance when gets executed on the hot-path (both, in terms
-  // of runtime and efficiency).
-  //
-  // To work this around instead of using default code-gen'd builder invoking {@code SpecificData.getForSchema},
-  // we instead rely on overloaded ctor accepting another instance of the builder: {@code Builder(Builder)},
-  // which bypasses such invocation. Following corresponding builder's stubs are statically initialized
-  // to be used exactly for that purpose.
-  //
-  // You can find more details in HUDI-3834
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   * <p>
+   * In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
+   * does use reflection to load the code-gen'd class corresponding to the Avro record model. This has
+   * serious adverse effects in terms of performance when gets executed on the hot-path (both, in terms
+   * of runtime and efficiency).
+   * <p>
+   * To work this around instead of using default code-gen'd builder invoking {@code SpecificData.getForSchema},
+   * we instead rely on overloaded ctor accepting another instance of the builder: {@code Builder(Builder)},
+   * which bypasses such invocation. Following corresponding builder's stubs are statically initialized
+   * to be used exactly for that purpose.
+   * <p>
+   * You can find more details in HUDI-3834.
+   */
   private static final Lazy<HoodieMetadataColumnStats.Builder> METADATA_COLUMN_STATS_BUILDER_STUB = Lazy.lazily(HoodieMetadataColumnStats::newBuilder);
   private static final Lazy<StringWrapper.Builder> STRING_WRAPPER_BUILDER_STUB = Lazy.lazily(StringWrapper::newBuilder);
   private static final Lazy<BytesWrapper.Builder> BYTES_WRAPPER_BUILDER_STUB = Lazy.lazily(BytesWrapper::newBuilder);
@@ -195,6 +209,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
+
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
   }
@@ -702,7 +717,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param instantTime instantTime when the record was added
    */
   public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
-      String fileId, String instantTime) {
+                                                                            String fileId, String instantTime) {
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     // Data file names have a -D suffix to denote the index (D = integer) of the file written
     // In older HUID versions the file index was missing
@@ -711,7 +726,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     try {
       if (fileId.length() == 36) {
         uuid = UUID.fromString(fileId);
-        fileIndex = RECORD_INDEX_MISSING_FILEINDEX;
+        fileIndex = RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
       } else {
         final int index = fileId.lastIndexOf("-");
         uuid = UUID.fromString(fileId.substring(0, index));
@@ -722,18 +737,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileId, partition, instantTime), e);
     }
 
-    // Store instantTime as milliseconds sinch epoch. Using an int here allows dates till year 2038.
-    java.util.Date instantDate;
     try {
-      instantDate = HoodieActiveTimeline.parseDateFromInstantTime(instantTime);
+      long instantTimeMillis = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
+          new HoodieRecordIndexInfo(
+              partition,
+              uuid.getMostSignificantBits(),
+              uuid.getLeastSignificantBits(),
+              fileIndex,
+              instantTimeMillis));
+      return new HoodieAvroRecord<>(key, payload);
     } catch (Exception e) {
-      throw new HoodieMetadataException("Invalid instantTime format: " + instantTime, e);
+      throw new HoodieMetadataException("Failed to create metadata payload for record index.", e);
     }
-
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey, new HoodieRecordIndexInfo(partition,
-        uuid.getMostSignificantBits(), uuid.getLeastSignificantBits(), fileIndex,
-        instantDate.getTime()));
-    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**
@@ -753,7 +769,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     final UUID uuid = new UUID(recordIndexMetadata.getFileIdHighBits(), recordIndexMetadata.getFileIdLowBits());
     final String partition = recordIndexMetadata.getPartition();
     String fileId = uuid.toString();
-    if (recordIndexMetadata.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX) {
+    if (recordIndexMetadata.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
       fileId += "-" + recordIndexMetadata.getFileIndex();
     }
     final java.util.Date instantDate = new java.util.Date(recordIndexMetadata.getInstantTime());

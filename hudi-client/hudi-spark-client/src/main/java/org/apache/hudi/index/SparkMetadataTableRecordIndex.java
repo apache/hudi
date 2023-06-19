@@ -91,10 +91,8 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }
 
-    // final variable required for lamda functions below
     final int numFileGroups = fileGroupSize;
 
-    // cache the input records if needed
     if (config.getRecordIndexUseCaching()) {
       records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
