@@ -2755,9 +2755,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testDuplicatesDuringRecordIndexBootstrap(boolean allowDuplicates) throws Exception {
+  @Test
+  public void testDuplicatesDuringRecordIndexBootstrap() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> commitTimestamps = new ArrayList<>();
@@ -2781,7 +2780,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // bootstrap record index
     customConfig = getWriteConfigBuilder(false, true, false)
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileWriterToAllowDuplicates(allowDuplicates).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
@@ -2795,12 +2793,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> recordsSecondBatch = dataGen.generateInserts(secondCommitTime, 100);
       client.startCommitWithTime(secondCommitTime);
-      JavaRDD<WriteStatus> writeStatuses;
-      if (!allowDuplicates) {
-        assertThrows(HoodieException.class, () -> client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime));
-      } else {
-        client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime);
-      }
+      assertThrows(HoodieException.class, () -> client.insert(jsc.parallelize(recordsSecondBatch, 1), secondCommitTime));
     }
   }
 
