@@ -153,7 +153,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
-    if (dataMetaClient.getTableConfig().isMetadataTableEnabled() || writeConfig.isMetadataTableEnabled()) {
+    if (dataMetaClient.getTableConfig().isMetadataTableAvailable() || writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
 
       try {
@@ -187,16 +187,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void enablePartitions() {
     final HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
-    if (dataWriteConfig.isMetadataTableEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES)) {
+    if (dataWriteConfig.isMetadataTableEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.FILES);
     }
-    if (metadataConfig.isBloomFilterIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (metadataConfig.isBloomFilterIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.BLOOM_FILTERS)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.BLOOM_FILTERS);
     }
-    if (metadataConfig.isColumnStatsIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.COLUMN_STATS)) {
+    if (metadataConfig.isColumnStatsIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.COLUMN_STATS);
     }
-    if (dataWriteConfig.isRecordIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX)) {
+    if (dataWriteConfig.isRecordIndexEnabled() || dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
       this.enabledPartitionTypes.add(MetadataPartitionType.RECORD_INDEX);
     }
   }
@@ -270,7 +270,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   private boolean metadataTableExists(HoodieTableMetaClient dataMetaClient) throws IOException {
-    boolean exists = dataMetaClient.getTableConfig().isMetadataTableEnabled();
+    boolean exists = dataMetaClient.getTableConfig().isMetadataTableAvailable();
     boolean reInitialize = false;
 
     // If the un-synced instants have been archived, then
@@ -340,7 +340,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // FILES partition is always required and is initialized first
-    boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+    boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES);
     if (!filesPartitionAvailable) {
       partitionsToInit.remove(MetadataPartitionType.FILES);
       partitionsToInit.add(0, MetadataPartitionType.FILES);
@@ -350,7 +350,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // Already initialized partitions can be ignored
-    partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionEnabled((metadataPartition)));
+    partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable((metadataPartition)));
 
     metadataMetaClient = initializeMetaClient();
 

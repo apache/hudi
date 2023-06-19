@@ -89,7 +89,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .setBasePath(dataBasePath)
         .build();
     this.metadataConfig = metadataConfig;
-    this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableEnabled();
+    this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
@@ -160,7 +160,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName) throws HoodieMetadataException {
-    if (!dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.BLOOM_FILTERS)) {
       LOG.error("Metadata bloom filter index is disabled!");
       return Option.empty();
     }
@@ -179,7 +179,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
-    if (!dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.BLOOM_FILTERS)) {
       LOG.error("Metadata bloom filter index is disabled!");
       return Collections.emptyMap();
     }
@@ -230,7 +230,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
-    if (!dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.COLUMN_STATS)) {
+    if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS)) {
       LOG.error("Metadata column stats index is disabled!");
       return Collections.emptyMap();
     }
@@ -284,7 +284,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
     // The caller is required to check for record index existence in MDT before calling this method.
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX),
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
 
     Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());

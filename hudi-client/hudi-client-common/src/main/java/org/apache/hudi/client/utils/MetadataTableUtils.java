@@ -38,7 +38,7 @@ public class MetadataTableUtils {
   public static boolean shouldUseBatchLookup(HoodieTableConfig tableConfig, HoodieWriteConfig config) {
     FileSystemViewStorageType storageType =
         config.getClientSpecifiedViewStorageConfig().getStorageType();
-    return tableConfig.isMetadataTableEnabled()
+    return tableConfig.isMetadataTableAvailable()
         && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
         && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
   }

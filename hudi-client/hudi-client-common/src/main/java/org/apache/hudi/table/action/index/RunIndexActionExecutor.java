@@ -368,7 +368,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               case HoodieTimeline.REPLACE_COMMIT_ACTION:
                 // TODO: HUDI-6372: Record index requires WriteStatus which cannot be read from the HoodieCommitMetadata. So if the original commit has not
                 // written to the MDT then we cannot sync that commit here.
-                if (metaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX)) {
+                if (metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
                   throw new HoodieIndexException(String.format("Cannot sync completed instant %s to metadata table as record index is enabled", instant));
                 }
                 HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(

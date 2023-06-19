@@ -1457,7 +1457,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       final Path metadataTablePath = new Path(getMetadataTableBasePath(writeConfig.getBasePath()));
       assertTrue(fs.exists(metadataTablePath));
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
+      assertTrue(metaClient.getTableConfig().isMetadataTableAvailable());
 
       // File groups should be created as in the config
       HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
@@ -1474,7 +1474,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         updateProperties);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertFalse(metaClient.getTableConfig().isMetadataTableEnabled());
+    assertFalse(metaClient.getTableConfig().isMetadataTableAvailable());
 
     // Config with 3 fileGroups for record index
     writeConfig = getWriteConfigBuilder(true, true, false)
@@ -1496,7 +1496,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Metadata table is recreated, during bootstrapping of metadata table.
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
+      assertTrue(metaClient.getTableConfig().isMetadataTableAvailable());
       validateMetadata(client);
 
       // File groups should be created as in the config
