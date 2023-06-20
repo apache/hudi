@@ -369,7 +369,7 @@ public class HoodieFlinkWriteClient<T> extends
       String compactionInstantTime,
       HoodieCommitMetadata metadata,
       Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata, Option.empty());
   }
 
   @Override
@@ -377,7 +377,7 @@ public class HoodieFlinkWriteClient<T> extends
       HoodieCommitMetadata metadata,
       HoodieTable table,
       String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime, Option.empty());
   }
 
   @Override
@@ -397,7 +397,7 @@ public class HoodieFlinkWriteClient<T> extends
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
                                        String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Option.empty());
   }
 
   @Override
@@ -480,7 +480,6 @@ public class HoodieFlinkWriteClient<T> extends
    * @param table       The table
    * @param recordItr   Record iterator
    * @param overwrite   Whether this is an overwrite operation
-   *
    * @return Existing write handle or create a new one
    */
   private HoodieWriteHandle<?, ?, ?, ?> getOrCreateWriteHandle(
@@ -543,7 +542,7 @@ public class HoodieFlinkWriteClient<T> extends
         List<HoodieRecord<T>> records,
         String instantTime,
         HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
-      this (records, instantTime, table, false);
+      this(records, instantTime, table, false);
     }
 
     AutoCloseableWriteHandle(

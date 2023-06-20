@@ -278,14 +278,14 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata, Option.empty());
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata,
                                     HoodieTable table,
                                     String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime, Option.empty());
   }
 
   @Override
@@ -306,7 +306,7 @@ public class SparkRDDWriteClient<T> extends
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
                                        String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Option.empty());
   }
 
   @Override
