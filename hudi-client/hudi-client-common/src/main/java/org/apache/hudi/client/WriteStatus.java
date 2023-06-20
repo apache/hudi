@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,9 +97,9 @@ public class WriteStatus implements Serializable {
    * @param taggableHoodieKey      HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(TaggableHoodieKey taggableHoodieKey, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(Lazy<TaggableHoodieKey> taggableHoodieKey, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(taggableHoodieKey);
+      writtenRecords.add(taggableHoodieKey.get());
     }
     totalRecords++;
 
@@ -135,11 +136,12 @@ public class WriteStatus implements Serializable {
    * @param taggableKey            HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(TaggableHoodieKey taggableKey, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(Lazy<TaggableHoodieKey> taggableKey, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      failedRecords.add(Pair.of(taggableKey, t));
-      errors.put(taggableKey, t);
+      TaggableHoodieKey key = taggableKey.get();
+      failedRecords.add(Pair.of(key, t));
+      errors.put(key, t);
     }
     totalRecords++;
     totalErrorRecords++;

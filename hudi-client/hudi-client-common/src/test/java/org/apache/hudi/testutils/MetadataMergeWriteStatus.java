@@ -22,6 +22,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.util.Lazy;
 
 import java.util.HashMap;
 import java.util.List;
@@ -64,7 +65,7 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markSuccess(TaggableHoodieKey taggableHoodieKey, Option<Map<String, String>> recordMetadata) {
+  public void markSuccess(Lazy<TaggableHoodieKey> taggableHoodieKey, Option<Map<String, String>> recordMetadata) {
     super.markSuccess(taggableHoodieKey, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
@@ -72,7 +73,7 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(TaggableHoodieKey taggableKey, Throwable t, Option<Map<String, String>> recordMetadata) {
+  public void markFailure(Lazy<TaggableHoodieKey> taggableKey, Throwable t, Option<Map<String, String>> recordMetadata) {
     super.markFailure(taggableKey, t, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);

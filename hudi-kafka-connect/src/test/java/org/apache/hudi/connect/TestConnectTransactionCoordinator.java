@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.util.Lazy.eagerly;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
@@ -304,7 +305,7 @@ public class TestConnectTransactionCoordinator {
     // send WS
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
-      status.markSuccess(mock(TaggableHoodieKey.class), Option.empty());
+      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.empty());
     }
     return status;
   }
@@ -314,9 +315,9 @@ public class TestConnectTransactionCoordinator {
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
       if (i % 10 == 0) {
-        status.markFailure(mock(TaggableHoodieKey.class), new Throwable("Error writing record on disk"), Option.empty());
+        status.markFailure(eagerly(mock(TaggableHoodieKey.class)), new Throwable("Error writing record on disk"), Option.empty());
       } else {
-        status.markSuccess(mock(TaggableHoodieKey.class), Option.empty());
+        status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.empty());
       }
     }
     status.setGlobalError(new Throwable("More than one records failed to be written to storage"));

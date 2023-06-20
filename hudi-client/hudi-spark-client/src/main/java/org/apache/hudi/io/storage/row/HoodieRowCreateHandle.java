@@ -50,6 +50,8 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
+import static org.apache.hudi.util.Lazy.lazily;
+
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
  */
@@ -189,15 +191,11 @@ public class HoodieRowCreateHandle implements Serializable {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
-        writeStatus.markSuccess(
-            writeStatus.isTrackingSuccessfulWrites()
-                ? new TaggableHoodieKey(recordKey.toString(), partitionPath.toString(), null, newRecordLocation)
-                : null,
-            Option.empty());
+        writeStatus.markSuccess(lazily(()
+            -> new TaggableHoodieKey(recordKey.toString(), partitionPath.toString(), null, newRecordLocation)), Option.empty());
       } catch (Exception t) {
-        writeStatus.markFailure(
-            new TaggableHoodieKey(recordKey.toString(), partitionPath.toString(), null, newRecordLocation), t,
-            Option.empty());
+        writeStatus.markFailure(lazily(()
+            -> new TaggableHoodieKey(recordKey.toString(), partitionPath.toString(), null, newRecordLocation)), t, Option.empty());
       }
     } catch (Exception e) {
       writeStatus.setGlobalError(e);

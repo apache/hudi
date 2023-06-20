@@ -49,6 +49,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.hudi.util.Lazy.lazily;
+
 /**
  * Create handle with RowData for datasource implementation of bulk insert.
  */
@@ -135,15 +137,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
           record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       try {
         fileWriter.writeRow(recordKey, rowData);
-        writeStatus.markSuccess(
-            writeStatus.isTrackingSuccessfulWrites()
-                ? new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)
-                : null,
-            Option.empty());
+        writeStatus.markSuccess(lazily(()
+            -> new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)), Option.empty());
       } catch (Throwable t) {
-        writeStatus.markFailure(
-            new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation), t,
-            Option.empty());
+        writeStatus.markFailure(lazily(()
+            -> new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)), t, Option.empty());
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);

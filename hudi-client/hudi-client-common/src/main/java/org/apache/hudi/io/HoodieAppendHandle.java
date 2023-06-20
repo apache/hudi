@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -36,6 +35,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -77,6 +77,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
+import static org.apache.hudi.util.Lazy.lazily;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -260,7 +261,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsDeleted++;
       }
 
-      writeStatus.markSuccess(TaggableHoodieKey.fromHoodieRecord(hoodieRecord), recordMetadata);
+      writeStatus.markSuccess(lazily(() -> TaggableHoodieKey.fromHoodieRecord(hoodieRecord)), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -268,7 +269,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       return finalRecordOpt;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
-      writeStatus.markFailure(TaggableHoodieKey.fromHoodieRecord(hoodieRecord), e, recordMetadata);
+      writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(hoodieRecord)), e, recordMetadata);
     }
     return Option.empty();
   }
@@ -483,7 +484,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
-      writeStatus.markFailure(TaggableHoodieKey.fromHoodieRecord(record), t, recordMetadata);
+      writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(record)), t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
   }
@@ -552,7 +553,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(TaggableHoodieKey.fromHoodieRecord(record), failureEx, record.getMetadata());
+      writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(record)), failureEx, record.getMetadata());
       return;
     }
 
@@ -572,7 +573,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           recordList.add(indexedRecord.get());
         }
       } catch (IOException e) {
-        writeStatus.markFailure(TaggableHoodieKey.fromHoodieRecord(record), e, record.getMetadata());
+        writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(record)), e, record.getMetadata());
         LOG.error("Error writing record  " + indexedRecord.get(), e);
       }
     } else {
