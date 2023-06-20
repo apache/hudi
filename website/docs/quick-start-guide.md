@@ -902,11 +902,10 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 ```sql
 -- syntax
-hudi_table_changes(tableName, queryType, beginTime [, endTime]);  
-hudi_table_changes_by_path(path, queryType, beginTime [, endTime]);  
--- tableName: table identifier, example: db.tableName, tableName,
--- path: path for of your table, example: path/to/hudiTable  
---       in this case table does not need to exist in the metastore,
+hudi_table_changes(table or path, queryType, beginTime [, endTime]);  
+-- table or path: table identifier, example: db.tableName, tableName, 
+--                or path for of your table, example: path/to/hudiTable  
+--                in this case table does not need to exist in the metastore,
 -- queryType: incremental query mode, example: latest_state, cdc  
 --            (for cdc query, first enable cdc for your table by setting cdc.enabled=true),
 -- beginTime: instantTime to begin query from, example: earliest, 202305150000, 
@@ -924,13 +923,13 @@ select * from hudi_table_changes('table', 'latest_state', '202305150000', '20230
 
 -- incrementally query data by path
 -- start from earliest available commit, end at latest available commit.
-select * from hudi_table_changes_by_path('path/to/table', 'cdc', 'earliest');
+select * from hudi_table_changes('path/to/table', 'cdc', 'earliest');
 
 -- start from earliest, end at 202305160000.
-select * from hudi_table_changes_by_path('path/to/table', 'cdc', 'earliest', '202305160000');
+select * from hudi_table_changes('path/to/table', 'cdc', 'earliest', '202305160000');
 
 -- start from 202305150000, end at 202305160000.
-select * from hudi_table_changes_by_path('path/to/table', 'cdc', '202305150000', '202305160000');
+select * from hudi_table_changes('path/to/table', 'cdc', '202305150000', '202305160000');
 
 ```
 
