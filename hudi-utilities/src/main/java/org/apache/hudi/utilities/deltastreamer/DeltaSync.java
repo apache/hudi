@@ -210,7 +210,7 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Spark context Wrapper.
    */
-  private transient HoodieSparkEngineContext sparkContext;
+  private final transient HoodieSparkEngineContext sparkContext;
 
   /**
    * Spark Session.

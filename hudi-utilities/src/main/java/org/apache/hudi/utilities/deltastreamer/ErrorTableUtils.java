@@ -30,7 +30,6 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;

@@ -621,7 +621,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Spark context Wrapper.
      */
-    private transient HoodieSparkEngineContext sparkContext;
+    private final transient HoodieSparkEngineContext sparkContext;
 
     private transient FileSystem fs;
 
