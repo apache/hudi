@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * A utility class for HoodieRecord.
@@ -79,7 +78,7 @@ public class HoodieRecordUtils {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
-      Optional<HoodieRecordMerger> hey = mergerClassList.stream()
+      java.util.Optional<HoodieRecordMerger> mergerOpt = mergerClassList.stream()
           .map(clazz -> {
             try {
               return loadRecordMerger(clazz);
@@ -92,8 +91,8 @@ public class HoodieRecordUtils {
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
           .findFirst();
-      if (hey.isPresent()) {
-        return hey.get();
+      if (mergerOpt.isPresent()) {
+        return mergerOpt.get();
       } else {
         throw new RuntimeException(String.format("No conform merger class found within %s", mergerClassList));
       }
