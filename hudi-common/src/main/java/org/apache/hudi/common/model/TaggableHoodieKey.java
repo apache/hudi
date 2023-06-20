@@ -21,38 +21,34 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
 
+import javax.annotation.Nullable;
+
 /**
  * Lean class to hold HoodieRecord information.
  * This holds the HoodieKey along with the location information.
  */
-public class HoodieKeyWithLocation {
-
-  /**
-   * Identifies the record across the table.
-   */
-  private HoodieKey key;
+public class TaggableHoodieKey extends HoodieKey {
 
   /**
    * Current location of record on storage. Filled in by looking up index
    */
-  private HoodieRecordLocation currentLocation;
+  private final Option<HoodieRecordLocation> currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
-  private Option<HoodieRecordLocation> newLocation;
+  private final Option<HoodieRecordLocation> newLocation;
 
-  public  HoodieKeyWithLocation(HoodieKey key, HoodieRecordLocation currentLocation, Option<HoodieRecordLocation> newLocation) {
-    this.key = key;
-    this.currentLocation = currentLocation;
-    this.newLocation = newLocation;
+  public TaggableHoodieKey(String recordKey,
+                           String partitionPath,
+                           @Nullable HoodieRecordLocation currentLocation,
+                           @Nullable HoodieRecordLocation newLocation) {
+    super(recordKey, partitionPath);
+    this.currentLocation = Option.ofNullable(currentLocation);
+    this.newLocation = Option.ofNullable(newLocation);
   }
 
-  public HoodieKey getKey() {
-    return key;
-  }
-
-  public HoodieRecordLocation getCurrentLocation() {
+  public Option<HoodieRecordLocation> getCurrentLocation() {
     return currentLocation;
   }
 
@@ -60,7 +56,7 @@ public class HoodieKeyWithLocation {
     return newLocation;
   }
 
-  public static HoodieKeyWithLocation toHoodieKeyWithLocation(HoodieRecord record) {
-    return new HoodieKeyWithLocation(record.getKey(), record.getCurrentLocation(), record.getNewLocation());
+  public static TaggableHoodieKey fromHoodieRecord(HoodieRecord record) {
+    return new TaggableHoodieKey(record.getRecordKey(), record.getPartitionPath(), record.getCurrentLocation(), record.getNewLocation());
   }
 }

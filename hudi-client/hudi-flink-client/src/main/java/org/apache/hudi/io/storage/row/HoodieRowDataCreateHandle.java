@@ -22,13 +22,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieRowData;
 import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -136,11 +135,14 @@ public class HoodieRowDataCreateHandle implements Serializable {
           record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       try {
         fileWriter.writeRow(recordKey, rowData);
-        writeStatus.markSuccess(writeStatus.isTrackingSuccessfulWrites()
-                ? new HoodieKeyWithLocation(new HoodieKey(recordKey, partitionPath), null, Option.of(newRecordLocation)) : null,
+        writeStatus.markSuccess(
+            writeStatus.isTrackingSuccessfulWrites()
+                ? new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)
+                : null,
             Option.empty());
       } catch (Throwable t) {
-        writeStatus.markFailure(new HoodieKeyWithLocation(new HoodieKey(recordKey, partitionPath), null, Option.of(newRecordLocation)), t,
+        writeStatus.markFailure(
+            new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation), t,
             Option.empty());
       }
     } catch (Throwable ge) {

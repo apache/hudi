@@ -20,8 +20,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieKeyWithLocation;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.util.Option;
 
 import java.util.HashMap;
@@ -65,16 +64,16 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markSuccess(HoodieKeyWithLocation record, Option<Map<String, String>> recordMetadata) {
-    super.markSuccess(record, recordMetadata);
+  public void markSuccess(TaggableHoodieKey taggableHoodieKey, Option<Map<String, String>> recordMetadata) {
+    super.markSuccess(taggableHoodieKey, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
   }
 
   @Override
-  public void markFailure(HoodieKeyWithLocation record, Throwable t, Option<Map<String, String>> recordMetadata) {
-    super.markFailure(record, t, recordMetadata);
+  public void markFailure(TaggableHoodieKey taggableKey, Throwable t, Option<Map<String, String>> recordMetadata) {
+    super.markFailure(taggableKey, t, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }

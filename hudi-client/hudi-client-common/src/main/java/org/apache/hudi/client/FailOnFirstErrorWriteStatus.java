@@ -18,9 +18,10 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.HoodieKeyWithLocation;
+import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +39,9 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(HoodieKeyWithLocation keyWithLocation, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    LOG.error(String.format("Error writing key %s and optionalRecordMetadata %s error %s", keyWithLocation.getKey(),
+  public void markFailure(TaggableHoodieKey taggableKey, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+    LOG.error(String.format("Error writing key %s and optionalRecordMetadata %s error %s", taggableKey,
         optionalRecordMetadata.orElse(Collections.emptyMap()), t));
-    throw new HoodieException("Error writing record " + keyWithLocation + ": " + t.getMessage());
+    throw new HoodieException("Error writing record " + taggableKey + ": " + t.getMessage());
   }
 }

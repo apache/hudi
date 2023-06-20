@@ -35,13 +35,12 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieKeyWithLocation;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -1162,20 +1161,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     return writeStatuses.flatMap(writeStatus -> {
       List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieKeyWithLocation keyWithLocation : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(keyWithLocation.getKey())) {
+      for (TaggableHoodieKey taggedKey : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(taggedKey)) {
           HoodieRecord hoodieRecord;
-          HoodieKey key = keyWithLocation.getKey();
-          Option<HoodieRecordLocation> newLocation = keyWithLocation.getNewLocation();
+          Option<HoodieRecordLocation> newLocation = taggedKey.getNewLocation();
           if (newLocation.isPresent()) {
-            if (keyWithLocation.getCurrentLocation() != null) {
+            if (taggedKey.getCurrentLocation().isPresent()) {
               // This is an update, no need to update index if the location has not changed
               // newLocation should have the same fileID as currentLocation. The instantTimes differ as newLocation's
               // instantTime refers to the current commit which was completed.
-              if (!keyWithLocation.getCurrentLocation().getFileId().equals(newLocation.get().getFileId())) {
+              if (!taggedKey.getCurrentLocation().get().getFileId().equals(newLocation.get().getFileId())) {
                 final String msg = String.format("Detected update in location of record with key %s from %s "
                         + " to %s. The fileID should not change.",
-                    keyWithLocation.getKey(), keyWithLocation.getCurrentLocation(), newLocation.get());
+                    taggedKey, taggedKey.getCurrentLocation().get(), newLocation.get());
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               } else {
@@ -1184,11 +1182,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               }
             }
 
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(key.getRecordKey(), key.getPartitionPath(),
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(taggedKey.getRecordKey(), taggedKey.getPartitionPath(),
                 newLocation.get().getFileId(), newLocation.get().getInstantTime());
           } else {
             // Delete existing index for a deleted record
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(key.getRecordKey());
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(taggedKey.getRecordKey());
           }
 
           recordList.add(hoodieRecord);
