@@ -63,7 +63,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath, "/tmp")
+      config, basePath)
 
     if (!metadataReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
@@ -71,7 +71,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
 
     val fsConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      fsConfig, basePath, "/tmp")
+      fsConfig, basePath)
 
     val timer = HoodieTimer.start
     val metadataPartitions = metadataReader.getAllPartitionPaths

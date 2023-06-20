@@ -59,6 +59,9 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String STAT_COUNT_LOG_FILES = "logFileCount";
   public static final String STAT_COUNT_PARTITION = "partitionCount";
   public static final String STAT_LAST_COMPACTION_TIMESTAMP = "lastCompactionTimestamp";
+  public static final String SKIP_TABLE_SERVICES = "skip_table_services";
+  public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
+  public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
 
@@ -138,6 +141,10 @@ public class HoodieMetadataMetrics implements Serializable {
   protected void incrementMetric(String action, long value) {
     LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
     metricsRegistry.add(action, value);
+  }
+
+  protected void setMetric(String action, long value) {
+    metricsRegistry.set(action, value);
   }
 
   public Registry registry() {

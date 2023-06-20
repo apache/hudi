@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OperationModeAwareness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -39,9 +40,12 @@ import java.util.Objects;
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
 
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
+  static {
+    INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
+  }
 
   /**
    * Instantiate a given class with a record merge.
@@ -71,7 +75,7 @@ public class HoodieRecordUtils {
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
       List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName());
+      return HoodieAvroRecordMerger.INSTANCE;
     } else {
       return mergerClassList.stream()
           .map(clazz -> {
@@ -86,7 +90,7 @@ public class HoodieRecordUtils {
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
           .findFirst()
-          .orElse(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()));
+          .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
   }
 
@@ -105,10 +109,10 @@ public class HoodieRecordUtils {
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {
-    if (engineType == EngineType.SPARK && recordType == HoodieRecordType.SPARK) {
-      return true;
-    } else {
-      return false;
-    }
+    return engineType == EngineType.SPARK && recordType == HoodieRecordType.SPARK;
+  }
+
+  public static HoodieRecordMerger mergerToPreCombineMode(HoodieRecordMerger merger) {
+    return merger instanceof OperationModeAwareness ? ((OperationModeAwareness) merger).asPreCombiningMode() : merger;
   }
 }

@@ -196,13 +196,11 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
-
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
+        spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
+      }
       assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
     }
   }
@@ -226,10 +224,11 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
              | )
              | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
+          spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        }
 
         val result1 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
@@ -239,7 +238,9 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           .collect()
         assertResult(0)(result1.length)
 
-        spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
+        }
         val result2 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
              | hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,

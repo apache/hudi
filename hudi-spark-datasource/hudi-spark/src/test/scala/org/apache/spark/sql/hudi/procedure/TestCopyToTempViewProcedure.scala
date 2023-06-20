@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
@@ -98,7 +99,12 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 5, 'a5', 40, 2500")
 
       // 3: copyToTempView with replace=false
-      checkExceptionContain(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$viewName',replace=>false)""")(s"Temporary view '$viewName' already exists")
+      val viewExistsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        s"[TEMP_TABLE_OR_VIEW_ALREADY_EXISTS] Cannot create the temporary view `$viewName` because it already exists."
+      } else {
+        s"Temporary view '$viewName' already exists"
+      }
+      checkExceptionContain(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$viewName',replace=>false)""")(viewExistsErrorMsg)
       // 4: copyToTempView with replace=true
       val row2 = spark.sql(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$viewName',replace=>true)""").collectAsList()
       assert(row2.size() == 1 && row2.get(0).get(0) == 0)
@@ -146,7 +152,12 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
       // 2: query view in other session
       var newSession = spark.newSession()
       var hasException = false
-      val errorMsg = s"Table or view not found: $viewName"
+      val errorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        s"[TABLE_OR_VIEW_NOT_FOUND] The table or view `$viewName` cannot be found."
+      } else {
+        s"Table or view not found: $viewName"
+      }
+
       try {
         newSession.sql(s"""select count(1) from $viewName""")
       } catch {

@@ -54,6 +54,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -95,12 +96,18 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = HoodieTimer.start();
-    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
+
+    // We need to track written records within WriteStatus in two cases:
+    // 1. When the HoodieIndex being used is not implicit with storage
+    // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
+    final boolean trackSuccessRecords = !hoodieTable.getIndex().isImplicitWithStorage()
+        || getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
+    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
+        trackSuccessRecords, config.getWriteStatusFailureFraction());
   }
 
   /**
@@ -294,9 +301,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     @Override
     public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-      // we use create rather than createIfNotExists because create method can trigger marker-based early conflict detection.
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+      return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
           config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
 

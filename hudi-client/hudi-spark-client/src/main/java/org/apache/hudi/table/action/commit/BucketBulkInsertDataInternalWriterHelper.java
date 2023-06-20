@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
@@ -34,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Helper class for native row writer for bulk_insert with bucket index.
@@ -43,9 +43,9 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertDataInternalWriterHelper.class);
 
-  private int lastKnownBucketNum = -1;
-  // p -> (bucketNum -> handle)
-  private final Map<String, Map<Integer, HoodieRowCreateHandle>> bucketHandles;
+  private Pair<UTF8String, Integer> lastFileId; // for efficient code path
+  // p -> (fileId -> handle)
+  private final Map<String, HoodieRowCreateHandle> handles;
   private final String indexKeyFields;
   private final int bucketNum;
 
@@ -55,7 +55,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted);
     this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
-    this.bucketHandles = new HashMap<>();
+    this.handles = new HashMap<>();
   }
 
   public void write(InternalRow row) throws IOException {
@@ -63,18 +63,16 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
       int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, bucketNum);
-      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite() || bucketId != lastKnownBucketNum) {
+      Pair<UTF8String, Integer> fileId = Pair.of(partitionPath, bucketId);
+      if (lastFileId == null || !lastFileId.equals(fileId)) {
+        LOG.info("Creating new file for partition path " + partitionPath);
         handle = getBucketRowCreateHandle(String.valueOf(partitionPath), bucketId);
-        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
-        //       a mutable underlying buffer
-        lastKnownPartitionPath = partitionPath.clone();
-        lastKnownBucketNum = bucketId;
+        lastFileId = fileId;
       }
-
       handle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
-      throw t;
+      throw new IOException(t);
     }
   }
 
@@ -93,28 +91,26 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     }
   }
 
-  protected HoodieRowCreateHandle getBucketRowCreateHandle(String partitionPath, int bucketId) {
-    Map<Integer, HoodieRowCreateHandle> bucketHandleMap = bucketHandles.computeIfAbsent(partitionPath, p -> new HashMap<>());
-    if (!bucketHandleMap.isEmpty() && bucketHandleMap.containsKey(bucketId)) {
-      return bucketHandleMap.get(bucketId);
+  protected HoodieRowCreateHandle getBucketRowCreateHandle(String fileId, int bucketId) throws Exception {
+    if (!handles.containsKey(fileId)) { // if there is no handle corresponding to the fileId
+      if (this.arePartitionRecordsSorted) {
+        // if records are sorted, we can close all existing handles
+        close();
+      }
+      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, fileId, getNextBucketFileId(bucketId),
+          instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+      handles.put(fileId, rowCreateHandle);
     }
-    LOG.info("Creating new file for partition path {} and bucket {}", partitionPath, bucketId);
-    HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
-    bucketHandleMap.put(bucketId, rowCreateHandle);
-    return rowCreateHandle;
+    return handles.get(fileId);
   }
 
   @Override
   public void close() throws IOException {
-    for (Map<Integer, HoodieRowCreateHandle> entry : bucketHandles.values()) {
-      for (HoodieRowCreateHandle rowCreateHandle : entry.values()) {
-        LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
-        writeStatusList.add(rowCreateHandle.close());
-      }
-      entry.clear();
+    for (HoodieRowCreateHandle handle : handles.values()) {
+      LOG.info("Closing bulk insert file " + handle.getFileName());
+      writeStatusList.add(handle.close());
     }
-    bucketHandles.clear();
+    handles.clear();
     handle = null;
   }
 

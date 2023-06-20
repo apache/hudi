@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -109,7 +110,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-          new AvroSchemaConverter().convert(schema), schema, Option.of(filter));
+          new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
       HoodieParquetConfig<HoodieAvroWriteSupport> config = new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
