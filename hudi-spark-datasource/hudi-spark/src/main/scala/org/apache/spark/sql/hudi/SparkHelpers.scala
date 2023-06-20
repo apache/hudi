@@ -32,6 +32,7 @@ import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
+import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
 
@@ -42,8 +43,9 @@ object SparkHelpers {
     val schema: Schema = sourceRecords.get(0).getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, HoodieIndexConfig.BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
       HoodieIndexConfig.BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue.toInt, HoodieIndexConfig.BLOOM_FILTER_TYPE.defaultValue);
-    val writeSupport: HoodieAvroWriteSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter(fs.getConf).convert(schema), schema, org.apache.hudi.common.util.Option.of(filter))
-    val parquetConfig: HoodieParquetConfig[HoodieAvroWriteSupport] =
+    val writeSupport: HoodieAvroWriteSupport[_] = new HoodieAvroWriteSupport(new AvroSchemaConverter(fs.getConf).convert(schema),
+      schema, org.apache.hudi.common.util.Option.of(filter), new Properties())
+    val parquetConfig: HoodieParquetConfig[HoodieAvroWriteSupport[_]] =
       new HoodieParquetConfig(
         writeSupport,
         CompressionCodecName.GZIP,

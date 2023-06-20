@@ -29,7 +29,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
@@ -45,10 +48,13 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
@@ -376,6 +382,28 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
           dataGenerator.generateInserts("000", numRecords)), new Path(path));
     }
+  }
+
+  static List<String> getAsyncServicesConfigs(int totalRecords, String autoClean, String inlineCluster,
+                                              String inlineClusterMaxCommit, String asyncCluster, String asyncClusterMaxCommit) {
+    List<String> configs = new ArrayList<>();
+    configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
+    if (nonEmpty(autoClean)) {
+      configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), autoClean));
+    }
+    if (nonEmpty(inlineCluster)) {
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(), inlineCluster));
+    }
+    if (nonEmpty(inlineClusterMaxCommit)) {
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), inlineClusterMaxCommit));
+    }
+    if (nonEmpty(asyncCluster)) {
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), asyncCluster));
+    }
+    if (nonEmpty(asyncClusterMaxCommit)) {
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), asyncClusterMaxCommit));
+    }
+    return configs;
   }
 
   static void addCommitToTimeline(HoodieTableMetaClient metaClient) throws IOException {

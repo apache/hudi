@@ -520,20 +520,36 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
        """.stripMargin)
-      checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
+      val tooManyDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        """
+          |too many data columns:
+          |Table columns: 'id', 'name', 'price'.
+          |Data columns: '1', 'a1', '10', '2021-06-20'.
+          |""".stripMargin
+      } else {
         """
           |too many data columns:
           |Table columns: 'id', 'name', 'price'
           |Data columns: '1', 'a1', '10', '2021-06-20'
           |""".stripMargin
-      )
-      checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(
+      }
+      checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'")(
+        tooManyDataColumnsErrorMsg)
+
+      val notEnoughDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        """
+          |not enough data columns:
+          |Table columns: 'id', 'name', 'price', 'dt'.
+          |Data columns: '1', 'a1', '10'.
+          |""".stripMargin
+      } else {
         """
           |not enough data columns:
           |Table columns: 'id', 'name', 'price', 'dt'
           |Data columns: '1', 'a1', '10'
           |""".stripMargin
-      )
+      }
+      checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(notEnoughDataColumnsErrorMsg)
       withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "strict") {
         val tableName2 = generateTableName
         spark.sql(
@@ -550,7 +566,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | )
           """.stripMargin)
         checkException(s"insert into $tableName2 values(1, 'a1', 10, 1000)")(
-          "Table with primaryKey can not use bulk insert in strict mode."
+          "Table with primaryKey can only use bulk insert in non-strict mode."
         )
 
         spark.sql("set hoodie.sql.insert.mode = non-strict")
@@ -1056,6 +1072,68 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
         Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
+    }
+  }
+
+  test("Test Bulk Insert Into Bucket Index Table") {
+    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
+      Seq("mor", "cow").foreach { tableType =>
+        Seq("true", "false").foreach { bulkInsertAsRow =>
+          withTempDir { tmp =>
+            val tableName = generateTableName
+            // Create a partitioned table
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  dt string,
+                 |  name string,
+                 |  price double,
+                 |  ts long
+                 |) using hudi
+                 | tblproperties (
+                 | primaryKey = 'id,name',
+                 | type = '$tableType',
+                 | preCombineField = 'ts',
+                 | hoodie.index.type = 'BUCKET',
+                 | hoodie.bucket.index.hash.field = 'id,name',
+                 | hoodie.datasource.write.row.writer.enable = '$bulkInsertAsRow')
+                 | partitioned by (dt)
+                 | location '${tmp.getCanonicalPath}'
+                 """.stripMargin)
+
+            // Note: Do not write the field alias, the partition field must be placed last.
+            spark.sql(
+              s"""
+                 | insert into $tableName values
+                 | (1, 'a1,1', 10, 1000, "2021-01-05"),
+                 | (2, 'a2', 20, 2000, "2021-01-06"),
+                 | (3, 'a3,3', 30, 3000, "2021-01-07")
+                 """.stripMargin)
+
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
+            )
+
+            spark.sql(
+              s"""
+                 | insert into $tableName values
+                 | (1, 'a1', 10, 1000, "2021-01-05"),
+                 | (3, "a3", 30, 3000, "2021-01-07")
+               """.stripMargin)
+
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+              Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
+              Seq(3, "a3", 30.0, 3000, "2021-01-07")
+            )
+          }
+        }
+      }
     }
   }
 

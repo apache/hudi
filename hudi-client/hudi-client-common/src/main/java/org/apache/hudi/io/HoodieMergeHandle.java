@@ -407,6 +407,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
@@ -416,10 +422,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       keyToNewRecords = null;
       writtenRecordKeys = null;
 
-      if (fileWriter != null) {
-        fileWriter.close();
-        fileWriter = null;
-      }
+      fileWriter.close();
+      fileWriter = null;
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
       HoodieWriteStat stat = writeStatus.getStat();
@@ -452,7 +456,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

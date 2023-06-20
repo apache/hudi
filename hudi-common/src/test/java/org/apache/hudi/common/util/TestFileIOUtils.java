@@ -25,9 +25,11 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,5 +75,25 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     List<String> expectedLines = Arrays.stream(new String[]{"a", "b", "c"}).collect(Collectors.toList());
     ByteArrayInputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     assertEquals(expectedLines, FileIOUtils.readAsUTFStringLines(inputStream));
+  }
+  
+  @Test
+  public void testGetConfiguredLocalDirs() {
+    Map<String, String> env = System.getenv();
+    Class<?> clazz = env.getClass();
+    Map<String, String> envMaps = null;
+    try {
+      Field field = clazz.getDeclaredField("m");
+      field.setAccessible(true);
+      envMaps = (Map<String, String>) field.get(env);
+      envMaps.put("CONTAINER_ID", "xxxxx");
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException(e);
+    }
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
+            System.getProperty("java.io.tmpdir"));
+    envMaps.put("LOCAL_DIRS", "/xxx");
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
+            envMaps.get("LOCAL_DIRS"));
   }
 }

@@ -26,6 +26,7 @@ import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -67,6 +68,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -86,6 +88,8 @@ import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerWriteException;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -141,6 +145,8 @@ import scala.collection.JavaConversions;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
+import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
@@ -151,6 +157,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
+import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
@@ -289,7 +296,6 @@ public class DeltaSync implements Serializable, Closeable {
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames));
 
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
@@ -306,6 +312,10 @@ public class DeltaSync implements Serializable, Closeable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
+
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
+        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
+
   }
 
   /**
@@ -385,6 +395,10 @@ public class DeltaSync implements Serializable, Closeable {
         .setCDCSupplementalLoggingMode(props.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(),
             HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.defaultValue()))
         .setShouldDropPartitionColumns(isDropPartitionColumns())
+        .setHiveStylePartitioningEnable(props.getBoolean(HIVE_STYLE_PARTITIONING_ENABLE.key(),
+            Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
+        .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
+            Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
   }
@@ -400,7 +414,7 @@ public class DeltaSync implements Serializable, Closeable {
     refreshTimeline();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt, instantTime);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime);
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
@@ -468,34 +482,15 @@ public class DeltaSync implements Serializable, Closeable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
-   * @param commitsTimelineOpt Timeline with completed commits, including .commit and .deltacommit
    * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitsTimelineOpt, String instantTime) throws IOException {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
-    } else {
-      // initialize the table for the first time.
-      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
-      HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(cfg.tableType)
-          .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPayloadClassName(cfg.payloadClassName)
-          .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionFields(partitionColumns)
-          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(keyGenClassName)
-          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
-              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
-          .setShouldDropPartitionColumns(isDropPartitionColumns())
-          .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
     LOG.debug("Checkpoint from config: " + cfg.checkpoint);
@@ -798,6 +793,8 @@ public class DeltaSync implements Serializable, Closeable {
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
     LOG.info("Starting commit  : " + instantTime);
 
+    HoodieWriteResult writeResult;
+    Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
     JavaRDD<WriteStatus> writeStatusRDD;
     switch (cfg.operation) {
       case INSERT:
@@ -810,14 +807,20 @@ public class DeltaSync implements Serializable, Closeable {
         writeStatusRDD = writeClient.bulkInsert(records, instantTime);
         break;
       case INSERT_OVERWRITE:
-        writeStatusRDD = writeClient.insertOverwrite(records, instantTime).getWriteStatuses();
+        writeResult = writeClient.insertOverwrite(records, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       case INSERT_OVERWRITE_TABLE:
-        writeStatusRDD = writeClient.insertOverwriteTable(records, instantTime).getWriteStatuses();
+        writeResult = writeClient.insertOverwriteTable(records, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       case DELETE_PARTITION:
         List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
-        writeStatusRDD = writeClient.deletePartitions(partitions, instantTime).getWriteStatuses();
+        writeResult = writeClient.deletePartitions(partitions, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
@@ -856,16 +859,17 @@ public class DeltaSync implements Serializable, Closeable {
             case ROLLBACK_COMMIT:
               LOG.info("Commit " + instantTime + " failed!");
               writeClient.rollback(instantTime);
-              throw new HoodieException("Error Table Commit failed!");
+              throw new HoodieDeltaStreamerWriteException("Error table commit failed");
             case LOG_ERROR:
               LOG.error("Error Table write failed for instant " + instantTime);
               break;
             default:
-              throw new HoodieException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+              throw new HoodieDeltaStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
           }
         }
       }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap(), extraPreCommitFunc);
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds,
+          extraPreCommitFunc);
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         latestCheckpointWritten = checkpointStr;
@@ -880,7 +884,7 @@ public class DeltaSync implements Serializable, Closeable {
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
-        throw new HoodieException("Commit " + instantTime + " failed!");
+        throw new HoodieDeltaStreamerWriteException("Commit " + instantTime + " failed!");
       }
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
@@ -893,7 +897,7 @@ public class DeltaSync implements Serializable, Closeable {
       });
       // Rolling back instant
       writeClient.rollback(instantTime);
-      throw new HoodieException("Commit " + instantTime + " failed and rolled-back !");
+      throw new HoodieDeltaStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
     }
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
@@ -959,21 +963,20 @@ public class DeltaSync implements Serializable, Closeable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      //Collect exceptions in list because we want all sync to run. Then we can throw
-      List<HoodieException> metaSyncExceptions = new ArrayList<>();
+      Map<String,HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
+        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         try {
-          Timer.Context syncContext = metrics.getMetaSyncTimerContext();
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
-          long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-          metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
-        } catch (HoodieException e) {
-          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
-          metaSyncExceptions.add(e);
+        } catch (HoodieMetaSyncException e) {
+          LOG.warn("SyncTool class " + impl.trim() + " failed with exception", e);
+          failedMetaSyncs.put(impl, e);
         }
+        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
-      if (!metaSyncExceptions.isEmpty()) {
-        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions);
+      if (!failedMetaSyncs.isEmpty()) {
+        throw getHoodieMetaSyncException(failedMetaSyncs);
       }
     }
   }
@@ -1119,7 +1122,7 @@ public class DeltaSync implements Serializable, Closeable {
       }
       return newWriteSchema;
     } catch (Exception e) {
-      throw new HoodieException("Failed to fetch schema from table ", e);
+      throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
     }
   }
 

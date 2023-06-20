@@ -123,7 +123,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     // First remove pending compaction instants which were completed
     diffResult.getFinishedCompactionInstants().stream().forEach(instant -> {
       try {
-        removePendingCompactionInstant(timeline, instant);
+        removePendingCompactionInstant(instant);
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -132,7 +132,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     // Now remove pending log compaction instants which were completed or removed
     diffResult.getFinishedOrRemovedLogCompactionInstants().stream().forEach(instant -> {
       try {
-        removePendingLogCompactionInstant(timeline, instant);
+        removePendingLogCompactionInstant(instant);
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -170,10 +170,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   /**
    * Remove Pending compaction instant.
    *
-   * @param timeline New Hoodie Timeline
    * @param instant Compaction Instant to be removed
    */
-  private void removePendingCompactionInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+  private void removePendingCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Removing completed compaction instant (" + instant + ")");
     HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp());
     removePendingCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
@@ -185,10 +184,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit,
    * so you no longer need to track them as pending.
    *
-   * @param timeline New Hoodie Timeline
    * @param instant Log Compaction Instant to be removed
    */
-  private void removePendingLogCompactionInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+  private void removePendingLogCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Removing completed log compaction instant (" + instant + ")");
     HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
     removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)

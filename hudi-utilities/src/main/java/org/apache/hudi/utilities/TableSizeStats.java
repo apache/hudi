@@ -28,7 +28,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -273,8 +272,7 @@ public class TableSizeStats implements Serializable {
         .enable(isMetadataEnabled(basePath, jsc))
         .build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath);
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();

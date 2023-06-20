@@ -34,4 +34,8 @@ public class MapUtils {
   public static boolean nonEmpty(Map<?, ?> m) {
     return !isNullOrEmpty(m);
   }
+
+  public static boolean containsAll(Map<?, ?> m1, Map<?, ?> m2) {
+    return m1.entrySet().containsAll(m2.entrySet());
+  }
 }

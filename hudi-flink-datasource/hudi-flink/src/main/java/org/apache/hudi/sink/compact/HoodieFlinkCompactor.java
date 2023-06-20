@@ -274,10 +274,12 @@ public class HoodieFlinkCompactor {
 
       List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
 
+      int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
+
       // get compactionParallelism.
       int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
-          ? Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum())
-          : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+          ? totalOperations
+          : Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), totalOperations);
 
       LOG.info("Start to compaction for instant " + compactionInstantTimes);
 
@@ -288,7 +290,7 @@ public class HoodieFlinkCompactor {
       table.getMetaClient().reloadActiveTimeline();
 
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-      env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+      env.addSource(new CompactionPlanSourceFunction(compactionPlans, conf))
           .name("compaction_source")
           .uid("uid_compaction_source")
           .rebalance()

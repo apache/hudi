@@ -60,12 +60,12 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -87,10 +87,12 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -104,6 +106,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDel
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMarker;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
@@ -122,6 +125,7 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 
 /**
  * Test Hoodie Table for testing only.
@@ -131,7 +135,6 @@ public class HoodieTestTable {
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
 
   protected static HoodieTestTableState testTableState;
@@ -141,6 +144,7 @@ public class HoodieTestTable {
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
+  private  boolean isNonPartitioned = false;
 
   protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
@@ -154,6 +158,30 @@ public class HoodieTestTable {
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
     return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
+  }
+
+  public void updateFilesPartitionInTableConfig() throws IOException {
+    metaClient.getTableConfig().setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, true);
+    this.metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTableName("test_table" + METADATA_TABLE_NAME_SUFFIX)
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setPayloadClassName(HoodieMetadataPayload.class.getName())
+        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+        .setRecordKeyFields(HoodieMetadataPayload.KEY_FIELD_NAME)
+        .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
+        .setKeyGeneratorClassProp("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator")
+        .initTable(metaClient.getHadoopConf(), metaClient.getMetaPath() + "/metadata");
+  }
+
+  public void setNonPartitioned() {
+    this.isNonPartitioned = true;
+  }
+
+  public boolean isNonPartitioned() {
+    return this.isNonPartitioned;
   }
 
   public static String makeNewCommitTime(int sequence, String instantFormat) {
@@ -569,6 +597,11 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
+    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileId, ioType);
+    return this;
+  }
+
   /**
    * Insert one base file to each of the given distinct partitions.
    *
@@ -584,18 +617,20 @@ public class HoodieTestTable {
     return partitionFileIdMap;
   }
 
-  public HoodieTestTable withBaseFilesInPartitions(Map<String, String> partitionAndFileId) throws Exception {
+  public Pair<HoodieTestTable, List<String>> withBaseFilesInPartitions(Map<String, String> partitionAndFileId) throws Exception {
+    List<String> files = new ArrayList<>();
     for (Map.Entry<String, String> pair : partitionAndFileId.entrySet()) {
-      withBaseFilesInPartition(pair.getKey(), pair.getValue());
+      files.addAll(withBaseFilesInPartition(pair.getKey(), pair.getValue()).getValue());
     }
-    return this;
+    return Pair.of(this, files);
   }
 
-  public HoodieTestTable withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
+  public Pair<HoodieTestTable, List<String>> withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
+    List<String> files = new ArrayList<>();
     for (String f : fileIds) {
-      FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f);
+      files.add(FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f));
     }
-    return this;
+    return Pair.of(this, files);
   }
 
   public HoodieTestTable withBaseFilesInPartition(String partition, int... lengths) throws Exception {
@@ -619,15 +654,16 @@ public class HoodieTestTable {
     return fileId;
   }
 
-  public HoodieTestTable withLogFile(String partitionPath, String fileId) throws Exception {
+  public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId) throws Exception {
     return withLogFile(partitionPath, fileId, 0);
   }
 
-  public HoodieTestTable withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
+  public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
+    List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
-      FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version);
+      logFiles.add(FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version));
     }
-    return this;
+    return Pair.of(this, logFiles);
   }
 
   public HoodieTestTable withLogFilesInPartition(String partition, List<Pair<String, Integer[]>> fileInfos) throws Exception {
@@ -744,6 +780,7 @@ public class HoodieTestTable {
 
   public FileStatus[] listAllLogFiles(String fileExtension) throws IOException {
     return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
+        .filter(status -> !status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .filter(status -> status.getPath().getName().contains(fileExtension))
         .toArray(FileStatus[]::new);
   }
@@ -1170,6 +1207,14 @@ public class HoodieTestTable {
       }
     }
     return writeStats;
+  }
+
+  public HoodieTestTable addRequestedAndInflightReplaceCommit(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, HoodieReplaceCommitMetadata metadata) throws Exception {
+    createRequestedReplaceCommit(basePath, instantTime, Option.of(requestedReplaceMetadata));
+    createInflightReplaceCommit(basePath, instantTime);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
   }
 
   /**

@@ -22,8 +22,8 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
@@ -78,7 +78,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException ioe) {
-      throw new HoodieIOException(String.format("Error reading schema from file %s", schemaPath), ioe);
+      throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);
     }
     return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }

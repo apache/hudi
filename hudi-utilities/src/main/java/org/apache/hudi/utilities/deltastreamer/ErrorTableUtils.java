@@ -28,24 +28,29 @@ import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import static org.apache.spark.sql.functions.lit;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_WRITE_FAILURE_STRATEGY;
+import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 
 public final class ErrorTableUtils {
-
   public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-      TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
+                                                                 TypedProperties props, JavaSparkContext jssc, FileSystem fs) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
 
-    Class<?>[] argClassArr = new Class[] {HoodieDeltaStreamer.Config.class,
+    Class<?>[] argClassArr = new Class[]{HoodieDeltaStreamer.Config.class,
         SparkSession.class, TypedProperties.class, JavaSparkContext.class, FileSystem.class};
     String errMsg = "Unable to instantiate ErrorTableWriter with arguments type " + Arrays.toString(argClassArr);
     ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr, false), errMsg);
@@ -62,5 +67,27 @@ public final class ErrorTableUtils {
       TypedProperties props) {
     String writeFailureStrategy = props.getString(ERROR_TABLE_WRITE_FAILURE_STRATEGY.key());
     return HoodieErrorTableConfig.ErrorWriteFailureStrategy.valueOf(writeFailureStrategy);
+  }
+
+  /**
+   * validates for constraints on ErrorRecordColumn when ErrorTable enabled configs are set.
+   * @param dataset
+   */
+  public static void validate(Dataset<Row> dataset) {
+    if (!isErrorTableCorruptRecordColumnPresent(dataset)) {
+      throw new HoodieValidationException(String.format("Invalid condition, columnName=%s "
+              + "is not present in transformer " + "output schema", ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+    }
+  }
+
+  public static Dataset<Row> addNullValueErrorTableCorruptRecordColumn(Dataset<Row> dataset) {
+    if (!isErrorTableCorruptRecordColumnPresent(dataset)) {
+      dataset = dataset.withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, lit(null));
+    }
+    return dataset;
+  }
+
+  private static boolean isErrorTableCorruptRecordColumnPresent(Dataset<Row> dataset) {
+    return Arrays.stream(dataset.columns()).anyMatch(col -> col.equals(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
   }
 }

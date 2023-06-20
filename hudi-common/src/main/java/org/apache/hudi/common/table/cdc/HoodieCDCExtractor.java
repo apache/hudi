@@ -265,7 +265,7 @@ public class HoodieCDCExtractor {
               new HoodieIOException("Can not get the previous version of the base file")
           );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
-          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.empty(), Option.of(beforeFileSlice));
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.of(beforeFileSlice), Option.empty());
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
             && writeStat.getNumWrites() == writeStat.getNumInserts()) {
           // all the records in this file are new.

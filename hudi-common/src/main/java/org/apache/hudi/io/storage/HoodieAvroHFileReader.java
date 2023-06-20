@@ -545,6 +545,33 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     }
   }
 
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() {
+    final HFileScanner scanner = reader.getScanner(false, false);
+    return new ClosableIterator<String>() {
+      @Override
+      public boolean hasNext() {
+        try {
+          return scanner.next();
+        } catch (IOException e) {
+          throw new HoodieException("Error while scanning for keys", e);
+        }
+      }
+
+      @Override
+      public String next() {
+        Cell cell = scanner.getCell();
+        final byte[] keyBytes = copyKeyFromCell(cell);
+        return new String(keyBytes);
+      }
+
+      @Override
+      public void close() {
+        scanner.close();
+      }
+    };
+  }
+
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileScanner scanner;
 
