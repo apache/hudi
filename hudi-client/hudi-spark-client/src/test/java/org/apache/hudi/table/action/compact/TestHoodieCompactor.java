@@ -40,14 +40,17 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
+import com.codahale.metrics.Counter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -56,6 +59,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.SortedMap;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +93,20 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   private HoodieWriteConfig getConfig() {
     return getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withMetricsConfig(getMetricsConfig())
         .build();
+  }
+
+  private static HoodieMetricsConfig getMetricsConfig() {
+    return HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build();
+  }
+
+  private long getCompactionMetricCount(String metric) {
+    HoodieMetrics metrics = writeClient.getMetrics();
+    String metricName = metrics.getMetricsName("counter", metric);
+    SortedMap<String, Counter> counters = metrics.getMetrics().getRegistry().getCounters();
+
+    return counters.containsKey(metricName) ? counters.get(metricName).getCount() : 0;
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
@@ -106,12 +123,18 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @Test
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
-    HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
-    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    assertThrows(HoodieNotSupportedException.class, () -> {
-      table.scheduleCompaction(context, compactionInstantTime, Option.empty());
-      table.compact(context, compactionInstantTime);
-    });
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());) {
+      HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      assertThrows(HoodieNotSupportedException.class, () -> {
+        table.scheduleCompaction(context, compactionInstantTime, Option.empty());
+        table.compact(context, compactionInstantTime);
+      });
+
+      // Verify compaction.requested, compaction.completed metrics counts.
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
+    }
   }
 
   @Test
@@ -129,6 +152,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
       Option<HoodieCompactionPlan> plan = table.scheduleCompaction(context, compactionInstantTime, Option.empty());
       assertFalse(plan.isPresent(), "If there is nothing to compact, result will be empty");
+
+      // Verify compaction.requested, compaction.completed metrics counts.
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
     }
   }
 
@@ -148,7 +175,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
       metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-              HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // create one compaction instance before exist inflight instance.
       String compactionTime = "101";
@@ -161,6 +188,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     // insert 100 records
     HoodieWriteConfig config = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withMetricsConfig(getMetricsConfig())
         .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
@@ -180,6 +208,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       HoodieData<WriteStatus> result = compact(writeClient, compactionInstantTime);
 
       verifyCompaction(result);
+
+      // Verify compaction.requested, compaction.completed metrics counts.
+      assertEquals(1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
     }
   }
 
@@ -190,7 +222,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withMemoryConfig(HoodieMemoryConfig.newBuilder()
             .withMaxMemoryMaxSize(1L, 1L).build()) // force spill
+        .withMetricsConfig(getMetricsConfig())
         .build();
+
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -210,6 +244,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         HoodieData<WriteStatus> result = compact(writeClient, "10" + (i + 1));
 
         verifyCompaction(result);
+
+        // Verify compaction.requested, compaction.completed metrics counts.
+        assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+        assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
       }
     }
   }
