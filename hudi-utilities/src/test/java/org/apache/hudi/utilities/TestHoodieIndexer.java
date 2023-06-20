@@ -187,8 +187,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
@@ -233,7 +232,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithWriterFinishingLast() throws IOException {
     // Test the case where a regular write updating the metadata table is in progress,
     // i.e., a delta commit in the metadata table is inflight, and the async indexer
@@ -253,8 +251,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
         .filter(i -> i.getTimestamp().equals(commitTime))

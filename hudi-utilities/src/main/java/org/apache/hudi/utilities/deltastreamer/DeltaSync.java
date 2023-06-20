@@ -312,7 +312,8 @@ public class DeltaSync implements Serializable, Closeable {
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), this.errorTableWriter.isPresent());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
+        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
 
   }
 

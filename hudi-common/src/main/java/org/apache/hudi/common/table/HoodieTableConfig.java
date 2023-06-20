@@ -710,8 +710,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns true if metadata table has been created and is being used for this dataset, else returns false.
    */
-  public boolean isMetadataTableEnabled() {
-    return isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+  public boolean isMetadataTableAvailable() {
+    return isMetadataPartitionAvailable(MetadataPartitionType.FILES);
   }
 
   /**
@@ -720,7 +720,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @param partition The partition to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
     return getMetadataPartitions().contains(partition.getPartitionPath());
   }
 
@@ -769,6 +769,14 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
+  }
+
+  /**
+   * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
+   * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
+   */
+  public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
+    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, false);
   }
 
   /**

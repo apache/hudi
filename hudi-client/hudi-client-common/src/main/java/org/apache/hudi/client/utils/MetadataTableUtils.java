@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -34,10 +35,10 @@ public class MetadataTableUtils {
    * @param config Write configs.
    * @return {@code true} if using batch lookup; {@code false} otherwise.
    */
-  public static boolean shouldUseBatchLookup(HoodieWriteConfig config) {
+  public static boolean shouldUseBatchLookup(HoodieTableConfig tableConfig, HoodieWriteConfig config) {
     FileSystemViewStorageType storageType =
         config.getClientSpecifiedViewStorageConfig().getStorageType();
-    return config.getMetadataConfig().enabled()
+    return tableConfig.isMetadataTableAvailable()
         && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
         && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
   }

@@ -59,6 +59,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -67,6 +68,9 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
@@ -77,6 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -323,6 +328,33 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
         TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
     verify(mockMetaClient, times(1)).getArchivedTimeline(any());
+
+    // Should load both archived and active timeline
+    startTs = "005";
+    mockMetaClient = prepareMetaClient(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003", "003"),
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "007", "007"),
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "009", "009"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
+        Arrays.asList(new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", "001"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", "002"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "005", "005"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "006", "006"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "008", "008")),
+        startTs
+    );
+    verifyTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "006", "006"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "008", "008"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011"),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "012", "012")),
+        TimelineUtils.getCommitsTimelineAfter(mockMetaClient, startTs, Option.of(startTs)));
+    verify(mockMetaClient, times(1)).getArchivedTimeline(any());
   }
 
   private HoodieTableMetaClient prepareMetaClient(
@@ -337,6 +369,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(mockMetaClient);
     when(mockMetaClient.getActiveTimeline())
         .thenReturn(activeTimeline);
+    Set<String> validWriteActions = CollectionUtils.createSet(
+        COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     when(mockMetaClient.getArchivedTimeline(any()))
         .thenReturn(mockArchivedTimeline);
     HoodieDefaultTimeline mergedTimeline = new HoodieDefaultTimeline(
@@ -346,6 +380,14 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .mergeTimeline(activeTimeline);
     when(mockArchivedTimeline.mergeTimeline(eq(activeTimeline)))
         .thenReturn(mergedTimeline);
+    HoodieDefaultTimeline mergedWriteTimeline = new HoodieDefaultTimeline(
+        archivedInstants.stream()
+            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0),
+        i -> Option.empty())
+        .mergeTimeline(activeTimeline.getWriteTimeline());
+    when(mockArchivedTimeline.mergeTimeline(argThat(timeline -> timeline.filter(
+        instant -> instant.getAction().equals(ROLLBACK_ACTION)).countInstants() == 0)))
+        .thenReturn(mergedWriteTimeline);
 
     return mockMetaClient;
   }

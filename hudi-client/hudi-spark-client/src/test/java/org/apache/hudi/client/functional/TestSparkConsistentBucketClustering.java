@@ -24,6 +24,7 @@ import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClus
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
@@ -45,7 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -144,7 +145,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     Assertions.assertEquals(2000, readRecords(dataGen.getPartitionPaths()).size());
 
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
-      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
 
       // The file slice has no log files
@@ -200,7 +201,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
           throw new RuntimeException(e);
         }
       }
-      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
     });
     writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
@@ -294,7 +295,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
-    Assertions.assertTrue(writeClient.commitStats(writeTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    Assertions.assertTrue(writeClient.commitStats(writeTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType()));
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -330,7 +331,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      Assertions.assertTrue(writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      Assertions.assertTrue(writeClient.commitStats(commitTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType()));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

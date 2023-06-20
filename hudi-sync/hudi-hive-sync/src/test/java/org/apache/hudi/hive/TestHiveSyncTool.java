@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -390,6 +391,41 @@ public class TestHiveSyncTool {
     tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(Option.of("300"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
     assertEquals(7, tablePartitions.size());
+
+    // Add the following instants to the active timeline and sync: "400" (rollback), "500" (commit)
+    // Last commit time sync is "500" after Hive sync
+    HiveTestUtil.addRollbackInstantToTable("400", "350");
+    HiveTestUtil.commitToTable("500", 7, useSchemaFromCommitMetadata);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(Option.of("500"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
+    assertEquals(8, tablePartitions.size());
+
+    // Add more instants with adding a partition and simulate the case where the commit adding
+    // the new partition is archived.
+    // Before simulated archival: "300", "400" (rollback), "500", "600" (adding new partition), "700", "800"
+    // After simulated archival: "400" (rollback), "700", "800"
+    // In this case, listing all partitions should be triggered to catch up.
+    HiveTestUtil.commitToTable("600", 8, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable("700", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable("800", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.removeCommitFromActiveTimeline("300", COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline("500", COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline("600", COMMIT_ACTION);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(hiveClient.config.getHadoopConf()).setBasePath(basePath).build();
+    assertEquals(
+        Arrays.asList("400", "700", "800"),
+        metaClient.getActiveTimeline().getInstants().stream()
+            .map(HoodieInstant::getTimestamp).sorted()
+            .collect(Collectors.toList()));
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(Option.of("800"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
+    assertEquals(9, tablePartitions.size());
   }
 
   @ParameterizedTest

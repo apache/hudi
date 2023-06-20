@@ -424,7 +424,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
 
       // drop ro and rt table, and recreate them
       val roTableName1 = tableName1 + "_ro"
@@ -490,8 +492,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
-
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
       val roTableName1 = tableName1 + "_ro"
       checkExceptionContain(
         s"""
