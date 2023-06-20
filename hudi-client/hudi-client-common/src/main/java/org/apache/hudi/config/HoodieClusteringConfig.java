@@ -642,6 +642,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
               + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
           HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
 
+      if (engineType.equals(EngineType.FLINK)) {
+        // support resize for Flink to unlock the validation.
+        return;
+      }
       // Consistent hashing bucket index
       if (clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
           && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
