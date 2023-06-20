@@ -1165,8 +1165,12 @@ object HoodieSparkSqlWriter {
 
             val hoodieKey = new HoodieKey(keyGenerator.getRecordKey(avroRec), keyGenerator.getPartitionPath(avroRec))
             val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
-                false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+              val orderingVal = PartialUpdateAvroPayload.isMultipleOrderFields(config.getString(PRECOMBINE_FIELD)) match {
+                case false => HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
+                  false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+                // handle multiple order fields
+                case true => config.getString(PRECOMBINE_FIELD)
+              }
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME))
             } else {

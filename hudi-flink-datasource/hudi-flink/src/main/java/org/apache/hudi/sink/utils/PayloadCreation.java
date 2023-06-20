@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -76,8 +77,14 @@ public class PayloadCreation implements Serializable {
   public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
-      Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
-          preCombineField, false, false);
+      Comparable<?> orderingVal;
+      if (PartialUpdateAvroPayload.isMultipleOrderFields(preCombineField)) {
+        // Multi ordering field support
+        orderingVal = preCombineField;
+      } else {
+        orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
+            preCombineField, false, false);
+      }
       return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
