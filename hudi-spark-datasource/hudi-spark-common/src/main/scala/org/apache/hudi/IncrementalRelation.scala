@@ -19,11 +19,14 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT, INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME}
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
@@ -63,11 +66,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
-  private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
 
-  private val useStateTransitionTime = optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
-    .map(_.toBoolean)
-    .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+  private val hollowCommitHandling: HollowCommitHandling =
+    optParams.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
+      .map(HollowCommitHandling.valueOf)
+      .getOrElse(HollowCommitHandling.valueOf(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
+
+  private val commitTimeline = handleHollowCommitIfNeeded(
+    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants,
+    hoodieTable.getMetaClient,
+    hollowCommitHandling)
 
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
@@ -81,13 +89,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
 
-  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
-    DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
+  private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
+    INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsTimelineToReturn = {
-    if (useStateTransitionTime) {
+    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
       commitTimeline.findInstantsInRangeByStateTransitionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
@@ -217,7 +225,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
-        if (useStateTransitionTime) {
+        if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
           throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
         }
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")

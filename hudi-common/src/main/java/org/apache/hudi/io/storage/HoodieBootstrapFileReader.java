@@ -82,6 +82,29 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
     };
   }
 
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema, schema);
+    return new ClosableIterator<String>() {
+      @Override
+      public void close() {
+        skeletonIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return skeletonIterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        HoodieRecord<T> skeletonRecord = skeletonIterator.next();
+        return skeletonRecord.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      }
+    };
+  }
+
   protected abstract void setPartitionField(int position, Object fieldValue, T row);
 
   @Override

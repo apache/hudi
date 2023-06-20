@@ -92,6 +92,16 @@ class LogFileIterator(split: HoodieMergeOnReadFileSplit,
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
+  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile =>
+      sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(baseFile))
+      .getOrElse(split.logFiles.head.getPath)
+      .getParent
+  }
+
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
     logRecords.iterator
   }
@@ -261,12 +271,13 @@ object LogFileIterator {
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
-        .fromProperties(tableState.metadataConfig.getProps).enable(true).build()
+        .fromProperties(tableState.metadataConfig.getProps)
+        .withSpillableMapDir(hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .enable(true).build()
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(hadoopConf), metadataConfig,
-        dataTableBasePath,
-        hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        dataTableBasePath)
 
       // We have to force full-scan for the MT log record reader, to make sure
       // we can iterate over all of the partitions, since by default some of the partitions (Column Stats,
@@ -336,14 +347,5 @@ object LogFileIterator {
     try { f } finally {
       c.close()
     }
-  }
-
-  def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
-    // Determine partition path as an immediate parent folder of either
-    //    - The base file
-    //    - Some log file
-    split.dataFile.map(baseFile => new Path(baseFile.filePath))
-      .getOrElse(split.logFiles.head.getPath)
-      .getParent
   }
 }

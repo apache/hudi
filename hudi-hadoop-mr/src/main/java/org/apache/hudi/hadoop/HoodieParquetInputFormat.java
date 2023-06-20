@@ -59,7 +59,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
 
-  private boolean supportAvroRead = true;
+  private boolean supportAvroRead = false;
 
   public HoodieParquetInputFormat() {
     super(new HoodieCopyOnWriteTableInputFormat());

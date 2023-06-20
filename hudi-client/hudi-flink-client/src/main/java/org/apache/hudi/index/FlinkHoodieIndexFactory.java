@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
+import org.apache.hudi.index.bucket.HoodieConsistentBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -56,7 +57,14 @@ public final class FlinkHoodieIndexFactory {
       case GLOBAL_SIMPLE:
         return new HoodieGlobalSimpleIndex(config, Option.empty());
       case BUCKET:
-        return new HoodieSimpleBucketIndex(config);
+        switch (config.getBucketIndexEngineType()) {
+          case SIMPLE:
+            return new HoodieSimpleBucketIndex(config);
+          case CONSISTENT_HASHING:
+            return new HoodieConsistentBucketIndex(config);
+          default:
+            throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+        }
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }
