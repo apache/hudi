@@ -170,9 +170,9 @@ object HoodieWriterUtils {
         var datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
         var tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
         if(tableConfigKeyGen != null && (tableConfigKeyGen.equals(classOf[CustomKeyGenerator].getCanonicalName) || tableConfigKeyGen.equals(classOf[CustomAvroKeyGenerator].getCanonicalName)) ){
-          datasourcePartitionFields = datasourcePartitionFields.split(",").map(pathField => {
+          datasourcePartitionFields = if(datasourcePartitionFields != null) datasourcePartitionFields.split(",").map(pathField => {
             pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX).headOption.getOrElse(pathField)
-          }).mkString(",")
+          }).mkString(",") else null
           tableConfigPartitionFields = tableConfigPartitionFields.split(",").map(pathField => {
             pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX).headOption.getOrElse(pathField)
           }).mkString(",")

@@ -26,7 +26,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
+import org.apache.hudi.exception.{HoodieException, HoodieKeyException, HoodieUpsertException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -332,6 +332,36 @@ class TestHoodieSparkSqlWriter {
 
     //on same path try write with different partitionpath and Overwrite SaveMode should be successful.
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
+   * Test case for do not let the parttitonpath field change
+   */
+  @Test
+  def testChangePartitionPathForCustomKeyGenerator(): Unit = {
+    //create a new table
+    val tableModifier1 = Map("path" -> (tempBasePath + "_2"), HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts:timestamp",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.CustomAvroKeyGenerator",
+      "hoodie.deltastreamer.keygen.timebased.timestamp.type" -> "EPOCHMILLISECONDS",
+      "hoodie.deltastreamer.keygen.timebased.output.dateformat" -> "yyyy/MM/dd")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
+
+    val tableModifier2 = Map("path" -> (tempBasePath + "_2"), HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts:timestamp",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.CustomAvroKeyGenerator",
+      "hoodie.deltastreamer.keygen.timebased.timestamp.type" -> "EPOCHMILLISECONDS",
+      "hoodie.deltastreamer.keygen.timebased.output.dateformat" -> "yyyy/MM/dd")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2)._1)
+    val tableModifier3 = Map("path" -> (tempBasePath + "_2"), HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.CustomAvroKeyGenerator",
+      "hoodie.deltastreamer.keygen.timebased.timestamp.type" -> "EPOCHMILLISECONDS",
+      "hoodie.deltastreamer.keygen.timebased.output.dateformat" -> "yyyy/MM/dd")
+    val dataFrame3 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    intercept[HoodieUpsertException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier3, dataFrame3))
   }
 
   /**
