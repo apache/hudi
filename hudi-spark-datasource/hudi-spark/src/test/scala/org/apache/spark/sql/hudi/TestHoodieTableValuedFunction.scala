@@ -57,13 +57,14 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             Seq(3, "a3", 30.0, 1000)
           )
 
-          spark.sql(
-            s"""
-               | insert into $tableName
-               | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
-               | """.stripMargin
-          )
-
+          withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+            spark.sql(
+              s"""
+                 | insert into $tableName
+                 | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
+                 | """.stripMargin
+            )
+          }
           if (tableType == "cow") {
             checkAnswer(s"select id, name, price, ts from hudi_query('$tableName', 'read_optimized')")(
               Seq(1, "a1_1", 10.0, 1100),

@@ -450,7 +450,7 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.write.insert.drop.duplicates")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("If set to true, filters out all duplicate records from incoming dataframe, during insert operations.")
+    .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation.")
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")

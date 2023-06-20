@@ -566,7 +566,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | )
           """.stripMargin)
         checkException(s"insert into $tableName2 values(1, 'a1', 10, 1000)")(
-          "Table with primaryKey can not use bulk insert in strict mode."
+          "Table with primaryKey can only use bulk insert in non-strict mode."
         )
 
         spark.sql("set hoodie.sql.insert.mode = non-strict")

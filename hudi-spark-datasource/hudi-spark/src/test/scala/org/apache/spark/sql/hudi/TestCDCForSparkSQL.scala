@@ -132,12 +132,14 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             .build()
 
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
+
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
           val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
-
-          spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
+          withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+            spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
+          }
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
           // here we use `commitTime1` to query the change data in commit 2.
           // because `commitTime2` is maybe the ts of the compaction operation, not the write operation.
