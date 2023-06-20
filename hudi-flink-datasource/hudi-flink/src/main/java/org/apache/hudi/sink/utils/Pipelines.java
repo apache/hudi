@@ -109,7 +109,7 @@ public class Pipelines {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
     if (OptionsResolver.isBucketIndexType(conf)) {
       // TODO support bulk insert for consistent bucket index
-      if (OptionsResolver.getBucketEngineType(conf) == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING) {
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
         throw new HoodieException(
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }

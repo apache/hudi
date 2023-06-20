@@ -1953,6 +1953,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieIndexConfig.BUCKET_MERGE_THRESHOLD);
   }
 
+  public boolean isBucketClusteringMergeEnabled() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_CLUSTERING_MERGE_ENABLED);
+  }
+
+  public boolean isBucketClusteringSortEnabled() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_CLUSTERING_SORT_ENABLED);
+  }
+
   public String getBucketIndexHashField() {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
