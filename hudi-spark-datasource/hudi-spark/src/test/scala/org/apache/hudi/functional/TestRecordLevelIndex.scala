@@ -50,7 +50,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   var instantTime: AtomicInteger = _
   val metadataOpts = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
   )
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -474,9 +474,9 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
-                                            operation: String,
-                                            saveMode: SaveMode,
-                                            validate: Boolean = true): DataFrame = {
+                                                   operation: String,
+                                                   saveMode: SaveMode,
+                                                   validate: Boolean = true): DataFrame = {
     var records1: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
@@ -503,15 +503,15 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
       mergedDfList = mergedDfList :+ inputDF1
-      return
+    } else {
+      val prevDf = prevDfOpt.get
+      val prevDfOld = prevDf.join(inputDF1, prevDf("_row_key") === inputDF1("_row_key")
+        && prevDf("partition") === inputDF1("partition"), "leftanti")
+      prevDfOld.show(500, false)
+      val unionDf = prevDfOld.union(inputDF1)
+      unionDf.show(500, false)
+      mergedDfList = mergedDfList :+ unionDf
     }
-    val prevDf = prevDfOpt.get
-    val prevDfOld = prevDf.join(inputDF1, prevDf("_row_key") === inputDF1("_row_key")
-      && prevDf("partition") === inputDF1("partition"), "leftanti")
-    prevDfOld.show(500, false)
-    val unionDf = prevDfOld.union(inputDF1)
-    unionDf.show(500, false)
-    mergedDfList = mergedDfList :+ unionDf
   }
 
   private def getInstantTime(): String = {
