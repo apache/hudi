@@ -264,7 +264,14 @@ object HoodieSparkSqlWriter {
               Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
                 .asInstanceOf[BaseKeyGenerator])
             }
+
+            var validatePreppedRecord = true
             val hoodieKeysAndLocationsToDelete = genericRecords.map(gr => {
+              if (validatePreppedRecord && isPrepped) {
+                // For prepped records, check the first record to make sure it has meta fields set.
+                HoodieCreateRecordUtils.validateMetaFieldsInAvroRecords(gr)
+                validatePreppedRecord = false
+              }
               HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, gr, isPrepped)
             }).toJavaRDD()
 
