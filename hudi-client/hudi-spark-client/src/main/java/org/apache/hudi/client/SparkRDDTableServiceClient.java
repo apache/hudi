@@ -129,14 +129,14 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   }
 
   @Override
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata, Option<HoodieData<WriteStatus>> writeStatuses) {
+  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, table, compactionInstantTime, writeStatuses);
+    completeCompaction(metadata, table, compactionInstantTime);
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, Option<HoodieData<WriteStatus>> writeStatuses) {
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
@@ -144,7 +144,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      updateTableMetadata(table, metadata, compactionInstant, writeStatuses.orElse(context.emptyHoodieData()));
+      updateTableMetadata(table, metadata, compactionInstant, context.emptyHoodieData());
       LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
@@ -164,8 +164,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   @Override
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
-                                       String logCompactionCommitTime,
-                                       Option<HoodieData<WriteStatus>> writeStatuses) {
+                                       String logCompactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
@@ -174,7 +173,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      updateTableMetadata(table, metadata, logCompactionInstant, writeStatuses.orElse(context.emptyHoodieData()));
+      updateTableMetadata(table, metadata, logCompactionInstant, context.emptyHoodieData());
       LOG.info("Committing Log Compaction " + logCompactionCommitTime + ". Finished with result " + metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
@@ -236,10 +235,10 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
         completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant, writeStatuses);
         break;
       case COMPACT:
-        completeCompaction(metadata, table, commitInstant, writeStatuses);
+        completeCompaction(metadata, table, commitInstant);
         break;
       case LOG_COMPACT:
-        completeLogCompaction(metadata, table, commitInstant, writeStatuses);
+        completeLogCompaction(metadata, table, commitInstant);
         break;
       default:
         throw new IllegalArgumentException("This table service is not valid " + tableServiceType);

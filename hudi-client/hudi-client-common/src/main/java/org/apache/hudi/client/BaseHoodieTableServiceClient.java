@@ -244,14 +244,12 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param metadata              All the metadata that gets stored along with a commit
    * @param extraMetadata         Extra Metadata to be stored
    */
-  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                                        Option<Map<String, String>> extraMetadata,
-                                        Option<HoodieData<WriteStatus>> writeStatuses);
+  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata);
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, Option<HoodieData<WriteStatus>> writeStatuses);
+  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime);
 
   /**
    * Schedules a new log compaction instant.
@@ -286,7 +284,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime, Option<HoodieData<WriteStatus>> writeStatuses) {
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
     throw new UnsupportedOperationException("Log compaction is not supported yet.");
   }
 

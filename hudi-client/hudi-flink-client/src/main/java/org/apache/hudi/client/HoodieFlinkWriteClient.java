@@ -369,7 +369,7 @@ public class HoodieFlinkWriteClient<T> extends
       String compactionInstantTime,
       HoodieCommitMetadata metadata,
       Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata, Option.empty());
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
   }
 
   @Override
@@ -377,7 +377,7 @@ public class HoodieFlinkWriteClient<T> extends
       HoodieCommitMetadata metadata,
       HoodieTable table,
       String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime, Option.empty());
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
   }
 
   @Override
@@ -397,7 +397,7 @@ public class HoodieFlinkWriteClient<T> extends
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
                                        String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Option.empty());
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
   }
 
   @Override
@@ -415,8 +415,9 @@ public class HoodieFlinkWriteClient<T> extends
   private void completeClustering(
       HoodieReplaceCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      String clusteringCommitTime) {
-    ((HoodieFlinkTableServiceClient<T>) tableServiceClient).completeClustering(metadata, table, clusteringCommitTime);
+      String clusteringCommitTime,
+      Option<HoodieData<WriteStatus>> writeStatuses) {
+    ((HoodieFlinkTableServiceClient<T>) tableServiceClient).completeClustering(metadata, table, clusteringCommitTime, writeStatuses);
   }
 
   @Override
@@ -433,10 +434,11 @@ public class HoodieFlinkWriteClient<T> extends
       TableServiceType tableServiceType,
       HoodieCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      String commitInstant) {
+      String commitInstant,
+      Option<HoodieData<WriteStatus>> writeStatuses) {
     switch (tableServiceType) {
       case CLUSTER:
-        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant);
+        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant, writeStatuses);
         break;
       case COMPACT:
         completeCompaction(metadata, table, commitInstant);

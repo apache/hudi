@@ -152,7 +152,7 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context,instantTime, HoodieJavaRDD.of(preppedRecords));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -174,15 +174,15 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context,instantTime, HoodieJavaRDD.of(preppedRecords));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
 
   /**
    * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
-
-   * @param records HoodieRecords to insert
+   *
+   * @param records     HoodieRecords to insert
    * @param instantTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -197,7 +197,8 @@ public class SparkRDDWriteClient<T> extends
 
   /**
    * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
-   * @param records HoodieRecords to insert
+   *
+   * @param records     HoodieRecords to insert
    * @param instantTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -221,7 +222,7 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.BULK_INSERT, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context,instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context, instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -232,7 +233,7 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context,instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -241,7 +242,7 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context,instantTime, HoodieJavaRDD.of(keys));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context, instantTime, HoodieJavaRDD.of(keys));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -278,14 +279,14 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata, Option.empty());
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata,
                                     HoodieTable table,
                                     String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime, Option.empty());
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
   }
 
   @Override
@@ -306,7 +307,7 @@ public class SparkRDDWriteClient<T> extends
   protected void completeLogCompaction(HoodieCommitMetadata metadata,
                                        HoodieTable table,
                                        String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Option.empty());
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
   }
 
   @Override
@@ -371,10 +372,10 @@ public class SparkRDDWriteClient<T> extends
         // Create a distributed registry for HoodieWrapperFileSystem
         registry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName(),
             DistributedRegistry.class.getName());
-        ((DistributedRegistry)registry).register(jsc);
+        ((DistributedRegistry) registry).register(jsc);
         registryMeta = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder",
             DistributedRegistry.class.getName());
-        ((DistributedRegistry)registryMeta).register(jsc);
+        ((DistributedRegistry) registryMeta).register(jsc);
       } else {
         registry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName());
         registryMeta = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder");

@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
@@ -48,12 +47,12 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
   }
 
   @Override
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata, Option<HoodieData<WriteStatus>> writeStatuses) {
+  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaTableServiceClient");
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, Option<HoodieData<WriteStatus>> writeStatuses) {
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
     throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaTableServiceClient");
   }
 
