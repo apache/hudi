@@ -226,6 +226,11 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
                                                              String fileId) throws IOException {
+    if (upsertHandle.hasRecoveredWriteStatuses()) {
+      // use write status recovered from the previous write attempt.
+      return upsertHandle.getRecoveredWriteStatuses().iterator();
+    }
+
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
@@ -250,8 +255,9 @@ public class HoodieSparkCopyOnWriteTable<T>
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+  // visible for testing
+  public HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
@@ -271,6 +277,10 @@ public class HoodieSparkCopyOnWriteTable<T>
       Map<String, HoodieRecord<?>> recordMap) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
+    if (createHandle.hasRecoveredWriteStatuses()) {
+      // use write status recovered from the previous write attempt.
+      return createHandle.getRecoveredWriteStatuses().iterator();
+    }
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }

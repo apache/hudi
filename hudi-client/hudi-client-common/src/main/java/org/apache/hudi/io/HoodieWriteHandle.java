@@ -36,7 +36,10 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -51,10 +54,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.table.marker.WriteMarkers.FINALIZE_WRITE_COMPLETED;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -73,6 +81,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected HoodieRecordLocation newRecordLocation;
+  protected List<List<WriteStatus>> recoveredWriteStatuses = new ArrayList<>();
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
@@ -113,6 +122,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 
+  public boolean hasRecoveredWriteStatuses() {
+    return !recoveredWriteStatuses.isEmpty();
+  }
+
+  public List<List<WriteStatus>> getRecoveredWriteStatuses() {
+    return recoveredWriteStatuses;
+  }
+
   public Path makeNewPath(String partitionPath) {
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
@@ -140,10 +157,99 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * Creates an empty marker file corresponding to storage writer path.
    *
    * @param partitionPath Partition path
+   * @param dataFileName data file for which inprogress marker creation is requested
+   * @param markerInstantTime - instantTime associated with the request
+   * returns true - inprogress marker successfully created,
+   *         false - inprogress marker was not created.
    */
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
-        .create(partitionPath, dataFileName, getIOType(), config, fileId, hoodieTable.getMetaClient().getActiveTimeline());
+  protected void createInProgressMarkerFile(String partitionPath, String dataFileName, String markerInstantTime) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    if (!writeMarkers.doesMarkerDirExist()) {
+      throw new HoodieIOException(String.format("Marker root directory absent : %s/%s (%s)",
+          partitionPath, dataFileName, markerInstantTime));
+    }
+    writeMarkers.create(partitionPath, dataFileName, getIOType());
+  }
+
+  protected boolean recoverWriteStatusIfAvailable(String partitionPath, String dataFileName,
+                                                  String markerInstantTime) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    if (config.isFailRetriesAfterFinalizeWrite()
+        && writeMarkers.markerExists(writeMarkers.getCompletionMarkerPath(StringUtils.EMPTY_STRING,
+        FINALIZE_WRITE_COMPLETED, markerInstantTime, IOType.CREATE))) {
+      throw new HoodieCorruptedDataException(" Failing retry attempt for instant " + instantTime
+          + " as the job is trying to re-write the data files, after writes have been finalized.");
+    }
+    if (config.optimizeTaskRetriesWithMarkers()
+        && writeMarkers.markerExists(writeMarkers.getCompletionMarkerPath(partitionPath, fileId, markerInstantTime, getIOType()))) {
+      // read the writeStatuses for the previously completed successful attempt(s) from the completed marker file(s) and
+      // return false to indicate inprogress marker was not created (for the new snapshot version).
+      try {
+        if (recoverWriteStatuses(writeMarkers, dataFileName)) {
+          return true;
+        }
+      } catch (HoodieException | IOException e) {
+        // failed to read the contents of an existing completed marker. (one or more files)
+        // fall through to recreate the files.
+      }
+    }
+    return false;
+  }
+
+  /**
+   * If a single writer/executor wrote to multiple files (records split into multiple parts) then all the files would have
+   * the same write token identifying the task and fileId prefix. When recovering the writestatus for the requested file,
+   * we are trying to identify all the files created by the same executor by looking for file with the same fileId prefix
+   * and returning write statuses for all of them.
+   *
+   * @param writeMarkers -  to get marker related information
+   * @param dataFileName - first of the multiple files created by the writeHandle.
+   * @return true if one or more write statuses were recovered.  false, otherwise.
+   * @throws IOException
+   */
+  private boolean recoverWriteStatuses(WriteMarkers writeMarkers, String dataFileName) throws IOException {
+    String fileIdPrefix = fileId.substring(0, fileId.lastIndexOf('-'));
+    List<String> markersWithMatchingFileIdPrefix = writeMarkers.allMarkerFilePaths().stream()
+        .filter(p -> p.contains(partitionPath) && p.contains(instantTime) && p.contains(fileIdPrefix))
+        .collect(Collectors.toList());
+    Set<String> candidateFileIDs = markersWithMatchingFileIdPrefix.stream()
+        .map(p -> FSUtils.getFileId(new Path(p).getName())).collect(Collectors.toSet());
+    boolean recoveredWS = false;
+    for (String candidateFileID : candidateFileIDs) {
+      // read the writeStatus for the previously completed successful attempt from the completed marker file and
+      // return false to indicate in progress marker was not created (for the new snapshot version).
+      try {
+        Option<byte[]> content = writeMarkers.getContentsOfCompletionMarker(partitionPath, candidateFileID, instantTime, getIOType());
+        if (content.isPresent()) {
+          recoveredWriteStatuses.addAll(SerializationUtils.deserialize(content.get()));
+          recoveredWS = true;
+        }
+      } catch (HoodieException | IOException e) {
+        // failed to read the contents of an existing completed marker.
+        throw new HoodieIOException("Failed to read contents from marker file "
+            + writeMarkers.getCompletionMarkerPath(partitionPath, candidateFileID, instantTime, getIOType()));
+      }
+    }
+    return recoveredWS;
+  }
+
+  // visible for testing
+  public void createCompletedMarkerFileIfRequired(String partition, String markerInstantTime, List<WriteStatus> writeStatuses)
+      throws IOException {
+    if (!config.optimizeTaskRetriesWithMarkers()) {
+      return;
+    }
+    try {
+      WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
+          .createCompletionMarker(partition, fileId, markerInstantTime, getIOType(), true,
+              Option.of(SerializationUtils.serialize(writeStatuses)));
+    } catch (HoodieException e) {
+      // Clean up the data file, if the marker is already present or marker directories don't exist.
+      Path partitionPath = FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partition);
+      Path dataFilePath = new Path(partitionPath, FSUtils.makeBaseFileName(markerInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
+      FSUtils.cleanupDataFile(dataFilePath, fs);
+      throw new HoodieIOException("Cleaned up the data file " + dataFilePath + ", as marker directory is absent.");
+    }
   }
 
   public Schema getWriterSchemaWithMetaFields() {

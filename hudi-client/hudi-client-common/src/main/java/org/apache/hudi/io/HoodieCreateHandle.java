@@ -100,9 +100,17 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+      // If this is a second or subsequent attempt to create the data file, try to recover existing version.
+      if (recoverWriteStatusIfAvailable(partitionPath,FSUtils.makeBaseFileName(this.instantTime, this.writeToken,
+          this.fileId, hoodieTable.getBaseFileExtension()), this.instantTime)) {
+        this.fileWriter = null;
+        return;
+      }
+      // Create inProgress marker file
+      createInProgressMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken,
+          this.fileId, hoodieTable.getBaseFileExtension()), instantTime);
       this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
-        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
+          writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -216,6 +224,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       setupWriteStatus();
 
+      // createCompleteMarkerFile throws hoodieException, if marker directory is not present.
+      createCompletedMarkerFileIfRequired(partitionPath, this.instantTime, Collections.singletonList(writeStatus));
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));

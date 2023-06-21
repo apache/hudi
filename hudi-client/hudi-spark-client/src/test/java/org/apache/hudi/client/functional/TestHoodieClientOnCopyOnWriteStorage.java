@@ -2617,7 +2617,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     } else {
       partitionPath = Arrays
           .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", markerFolderPath)),
-              path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
+              path -> path.toString().contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN)))
           .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
     }
 

@@ -918,6 +918,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
               instantTime));
     }
+
+    // populate marker directory for the commit.
+    WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime).createMarkerDir();
   }
 
   /**

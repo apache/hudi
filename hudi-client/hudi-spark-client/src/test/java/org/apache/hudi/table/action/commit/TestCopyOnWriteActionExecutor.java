@@ -20,51 +20,71 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.spark.SparkException;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -74,17 +94,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
+import static org.apache.hadoop.fs.Path.SEPARATOR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -92,6 +118,8 @@ import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartiti
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -108,6 +136,17 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     return Stream.of(data).map(Arguments::of);
   }
 
+  public class TestHoodieSparkCopyOnWriteTable<T> extends HoodieSparkCopyOnWriteTable<T> {
+    public TestHoodieSparkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+      super(config, context, metaClient);
+    }
+
+    public HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
+                                             Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+      return super.getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, dataFileToBeMerged);
+    }
+  }
+
   @Test
   public void testMakeNewPath() {
     String fileName = UUID.randomUUID().toString();
@@ -117,6 +156,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieWriteConfig config = makeHoodieClientConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), table, instantTime).createMarkerDir();
 
     Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieRecord record = mock(HoodieRecord.class);
@@ -175,23 +216,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String partitionPath = "2016/01/31";
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
-    // Get some records belong to the same partition (2016/01/31)
-    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
-
-    List<HoodieRecord> records = new ArrayList<>();
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    List<HoodieAvroRecord> records = generateTestRecords();
 
     // Insert new records
     final HoodieSparkCopyOnWriteTable cowTable = table;
@@ -199,35 +224,30 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
+    String fileId = FSUtils.getFileId(allFiles[0].getPath().getName());
 
-    // Read out the bloom filter and make sure filter can answer record exist or not
-    Path filePath = allFiles[0].getPath();
-    BloomFilter filter = BaseFileUtils.getInstance(table.getBaseFileFormat()).readBloomFilterFromMetadata(hadoopConf, filePath);
-    for (HoodieRecord record : records) {
-      assertTrue(filter.mightContain(record.getRecordKey()));
-    }
+    File parquetFile = getParquetFileIfExists(partitionPath, fileId, firstCommitTime);
+    assertNotNull(parquetFile);
 
-    // Read the base file, check the record content
-    List<GenericRecord> fileRecords = BaseFileUtils.getInstance(table.getBaseFileFormat()).readAvroRecords(hadoopConf, filePath);
-    GenericRecord newRecord;
-    int index = 0;
-    for (GenericRecord record : fileRecords) {
-      assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
-      index++;
-    }
+    assertTrue(ensureRecordsArePresent(table, parquetFile, records));
+
+    // Read the parquet file, check the record content
+    assertTrue(checkRecordContentsAgainstParquetFile(table, parquetFile, records));
 
     // We update the 1st record & add a new record
     String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fek-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
     RawTripTestPayload updateRowChanges1 = new RawTripTestPayload(updateRecordStr1);
-    HoodieRecord updatedRecord1 = new HoodieAvroRecord(
+    HoodieAvroRecord updatedRecord1 = new HoodieAvroRecord(
         new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
 
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord insertedRecord1 =
+    HoodieAvroRecord insertedRecord1 =
         new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
+    List<HoodieAvroRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
     Thread.sleep(1000);
     String newCommitTime = makeNewCommitTime();
@@ -237,23 +257,21 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
+
+    File updatedParquetFile = getParquetFileIfExists(partitionPath,
+        FSUtils.getFileId(allFiles[0].getPath().getName()), newCommitTime);
+    assertNotNull(updatedParquetFile);
+
     // verify new incremental file group is same as the previous one
-    assertEquals(FSUtils.getFileId(filePath.getName()), FSUtils.getFileId(allFiles[0].getPath().getName()));
+    assertEquals(FSUtils.getFileId(parquetFile.getName()), FSUtils.getFileId(updatedParquetFile.getName()));
 
     // Check whether the record has been updated
-    Path updatedFilePath = allFiles[0].getPath();
-    BloomFilter updatedFilter =
-        BaseFileUtils.getInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
-    for (HoodieRecord record : records) {
-      // No change to the _row_key
-      assertTrue(updatedFilter.mightContain(record.getRecordKey()));
-    }
+    records.add(insertedRecord1);
+    assertTrue(ensureRecordsArePresent(table, updatedParquetFile, records));
 
-    assertTrue(updatedFilter.mightContain(insertedRecord1.getRecordKey()));
-    records.add(insertedRecord1);// add this so it can further check below
-
-    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedFilePath).build();
-    index = 0;
+    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), allFiles[0].getPath()).build();
+    int index = 0;
+    GenericRecord newRecord;
     while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
       assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
       if (index == 0) {
@@ -315,6 +333,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    // mimic startCommit()
+    WriteMarkersFactory.get(config.getMarkersType(), table, firstCommitTime).createMarkerDir();
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -368,6 +388,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), table, instantTime).createMarkerDir();
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -419,6 +441,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    WriteMarkersFactory.get(config.getMarkersType(), table, instantTime).createMarkerDir();
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
@@ -459,6 +482,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     String instantTime = "000";
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), table, instantTime).createMarkerDir();
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
@@ -505,6 +530,449 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   @ValueSource(strings = {"global_sort", "partition_sort", "none"})
   public void testBulkInsertRecordsWithGlobalSort(String bulkInsertMode) throws Exception {
     testBulkInsertRecords(bulkInsertMode);
+  }
+
+  @Test
+  public void testCompletedMarkerPreventsDuplicateFileCreation() throws Exception {
+    String fileId = UUID.randomUUID().toString();
+    String partitionPath = "2016/01/31";
+
+    String commitTime = makeNewCommitTime();
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withEnforceCompletionMarkerCheck(true)
+        .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), table, commitTime).createMarkerDir();
+    insertRecordsToFile(config, table, partitionPath, fileId, commitTime, generateTestRecords());
+
+    try {
+      Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
+        String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
+            TaskContext.get().taskAttemptId());
+        HoodieCreateHandle<?,?,?,?> io = new HoodieCreateHandle(config, commitTime, table, partitionPath, fileId, table.getTaskContextSupplier());
+        validateRecoveredWriteStatus(1, partitionPath, config, commitTime, table, fileId, false);
+        try {
+          io.createCompletedMarkerFileIfRequired(partitionPath, commitTime, Collections.emptyList());
+        } catch (Exception e) {
+          assertEquals(true, e.getMessage().contains("Cleaned up the data file"));
+        }
+
+        // mimic driver reconciling the markers
+        HoodieLocalEngineContext context = new HoodieLocalEngineContext(new Configuration());
+        WriteMarkersFactory.get(config.getMarkersType(), table, commitTime)
+            .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
+        // mimic writer closing the handle after reconciliation
+        try {
+          io.close();
+        } catch (Exception e) {
+          assertEquals(true, e.getMessage().contains("Cleaned up the data file"));
+        }
+        Path filePath = io.makeNewPath(partitionPath);
+        return Pair.of(filePath, filePath.toString());
+      }).collect().get(0);
+      assertTrue(!new File(newPathWithWriteToken.getRight()).exists());
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Test
+  public void testCompletedMarkerPreventsDuplicateFileUpdate() throws Exception {
+    String fileId = UUID.randomUUID().toString();
+    String partitionPath = "2016/01/31";
+
+    String firstCommitTime = makeNewCommitTime();
+    HoodieWriteConfig config = makeHoodieClientConfig();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    List<HoodieAvroRecord> records = generateTestRecords();
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), table, firstCommitTime).createMarkerDir();
+    insertRecordsToFile(config, table, partitionPath, fileId, firstCommitTime, records);
+    File parquetFile = getParquetFileIfExists(partitionPath, fileId, firstCommitTime);
+    assertNotNull(parquetFile);
+
+    String updateCommitTime = makeNewCommitTime();
+    TestHoodieSparkCopyOnWriteTable updateTable = new TestHoodieSparkCopyOnWriteTable(config, context, metaClient);
+    // mimic startCommit
+    WriteMarkersFactory.get(config.getMarkersType(), updateTable, updateCommitTime).createMarkerDir();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    try {
+      Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
+        ExternalSpillableMap<String, HoodieRecord> externalSpillableMap =
+            new ExternalSpillableMap<String, HoodieRecord>((long)1024 * 1024,
+                config.getSpillableMapBasePath(), new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(SCHEMA));
+        HoodieMergeHandle io = updateTable.getUpdateHandle(updateCommitTime, partitionPath, fileId,
+            externalSpillableMap, new HoodieBaseFile(parquetFile.toString()));
+        io.createCompletedMarkerFileIfRequired(partitionPath, updateCommitTime, Collections.emptyList());
+
+        // mimic driver reconciling the markers
+        HoodieLocalEngineContext context = new HoodieLocalEngineContext(new Configuration());
+        WriteMarkersFactory.get(config.getMarkersType(), table, updateCommitTime)
+            .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
+        // mimic writer closing the handle after reconciliation
+        io.close();
+        Path filePath = io.makeNewPath(partitionPath);
+        return Pair.of(filePath, filePath.toString());
+      }).collect().get(0);
+      // To be deleted: assertTrue(!new File(newPathWithWriteToken.getRight()).exists());
+      validateRecoveredWriteStatus(2, partitionPath, config, updateCommitTime, table, fileId, true);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  public static List<Arguments> enforceCompletionMarkerCheckArgs() {
+    return asList(
+        Arguments.of(false),
+        Arguments.of(true)
+    );
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testFinalizeWriteCheck(boolean enforceFinalizeWriteCheck) throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+        .withFailRetriesAfterFinalizeWrite(enforceFinalizeWriteCheck)
+        .withAutoCommit(false)
+        .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // Insert data without committing.
+    String commitTime = makeNewCommitTime();
+    JavaRDD<WriteStatus> result = insertBatch(config, client, commitTime, HoodieTimeline.INIT_INSTANT_TS, 100,
+        SparkRDDWriteClient::insert, false, false, 100, 100,
+        0, Option.empty());
+
+    // Call finalize write method to reconcile markers without completing the commit.
+    List<HoodieWriteStat> hoodieWriteStats = result.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    getHoodieTable(this.metaClient, config).finalizeWrite(context, commitTime, hoodieWriteStats);
+
+    // Now to rewrite the parquet files delete inflight files.
+    HoodieInstant inflightInstant = new HoodieInstant(true, HoodieActiveTimeline.COMMIT_ACTION, commitTime);
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()));
+
+    // It is hard to drop the cached rdds and recompute. So, reinserting the data with same commitTimestamp.
+    List<HoodieRecord> newRecords = dataGen.generateInserts(commitTime, 100);
+    JavaRDD<HoodieRecord> newRecordsRdd = jsc.parallelize(newRecords, 1);
+
+    try {
+      // When enforceFinalizeWriteCheck flag is enabled. It should fail with HoodieDataCorruptionException otherwise it will succeed.
+      JavaRDD<WriteStatus> secondBatchResult = client.insert(newRecordsRdd, commitTime);
+      client.commit(commitTime, secondBatchResult);
+    } catch (Exception e) {
+      Throwable exception = e;
+      assertTrue(enforceFinalizeWriteCheck, "Finalize write check must be enabled");
+      // SparkException is thrown during spark stage failures. To get the actual exception,
+      // iterate over the stack trace to find the actual exception.
+      boolean hoodieCorruptedDataExceptionSeen = false;
+      while (exception != null) {
+        if (exception instanceof HoodieCorruptedDataException) {
+          if (exception.getMessage().equals("Reconciliation for instant " + commitTime
+              + " is completed, job is trying to re-write the data files.")) {
+            hoodieCorruptedDataExceptionSeen = true;
+            break;
+          }
+        }
+        exception = exception.getCause();
+      }
+      assertTrue(hoodieCorruptedDataExceptionSeen);
+    }
+  }
+
+  @Disabled
+  @ParameterizedTest
+  @MethodSource("enforceCompletionMarkerCheckArgs")
+  public void testMarkerBasedWrites(boolean enforceCompletionMarkerCheck) throws Exception {
+    // Prepare the AvroParquetIO
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
+            .build())
+        .withEnforceCompletionMarkerCheck(enforceCompletionMarkerCheck)
+        .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String firstCommitTime = makeNewCommitTime();
+    String partitionPath = "2016/01/31";
+    String fileId = FSUtils.createNewFileIdPfx();
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    List<HoodieAvroRecord> records = generateTestRecords();
+
+    // A. Marker root folder gets created at startCommit.
+    //    Ensure inserts fail when marker folder is not present.
+    //    Mimics - driver has reconciled and cleaned up markers scenario
+    assertThrows(SparkException.class,
+        () -> insertRecordsToFile(config, table, partitionPath, fileId, firstCommitTime, records));
+
+    // mimic start commit for inserts
+    WriteMarkersFactory.get(config.getMarkersType(), table, firstCommitTime).createMarkerDir();
+
+    // Insert new records
+    insertRecordsToFile(config, table, partitionPath, fileId, firstCommitTime, records);
+
+    // We should have a parquet file generated
+    File parquetFile = getParquetFileIfExists(partitionPath, fileId, firstCommitTime);
+    assertNotNull(parquetFile);
+
+    // Check for marker files
+    assertTrue(ensureMarkerFilesExist(table, partitionPath, fileId, firstCommitTime, IOType.CREATE));
+
+    assertTrue(ensureRecordsArePresent(table, parquetFile, records));
+
+    // B. Mimic second executor trying to insert a newer version of the existing file.
+    if (enforceCompletionMarkerCheck) {
+      insertRecordsToFile(config, table, partitionPath, fileId, firstCommitTime, records);
+      validateRecoveredWriteStatus(1, partitionPath, config, firstCommitTime, table, fileId, false);
+    } else {
+      insertRecordsToFile(config, table, partitionPath, fileId, firstCommitTime, records);
+    }
+
+    // Create a commit file - to mimic commit
+    new File(this.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + FSUtils.getCommitTime(parquetFile.getName()) + ".commit").createNewFile();
+
+    // Read the parquet file and check the record content
+    assertTrue(checkRecordContentsAgainstParquetFile(table, parquetFile, records));
+
+    Thread.sleep(1000);
+    HoodieSparkCopyOnWriteTable newTable = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    String updateCommitTime = makeNewCommitTime();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    // We update the 1st record & add a new record
+    List<HoodieAvroRecord> updateRecords = generateUpateRecords(parquetFile);
+    System.out.println("UpdateRecords: " + updateRecords + " " + parquetFile);
+
+
+    // C. mimic driver has reconciled and cleaned up markers scenario for updates.
+    try {
+      updateRecordsToFile(config, newTable, updateCommitTime, partitionPath, fileId, updateRecords, parquetFile.getName());
+      assertTrue(false);  // should throw an exception
+    } catch (Exception e) {
+      // expected to fail with an exception - file already present.
+      e.printStackTrace();
+      removeLeftoverFile(partitionPath, fileId, updateCommitTime);
+    }
+
+    // mimic start commit for updates
+    WriteMarkersFactory.get(config.getMarkersType(), newTable, updateCommitTime).createMarkerDir();
+
+    // add update records to the parquet file (record 0 is an update, with location/fileId set)
+    List<WriteStatus> statuses = updateRecordsToFile(config, newTable, updateCommitTime, partitionPath,
+        fileId, updateRecords, parquetFile.getName());
+
+    // Check the updated file
+    File updatedParquetFile = getParquetFileIfExists(partitionPath, fileId, updateCommitTime);
+    assertNotNull(updatedParquetFile);
+
+    // Check for marker files
+    assertTrue(ensureMarkerFilesExist(newTable, partitionPath, fileId, updateCommitTime, IOType.MERGE));
+
+    HoodieAvroRecord insertedRecord = updateRecords.get(1);
+    records.add(insertedRecord);
+    assertTrue(ensureRecordsArePresent(newTable, updatedParquetFile, records));
+
+    // Check whether the record has been updated
+    Path updatedParquetFilePath = new Path(updatedParquetFile.getAbsolutePath());
+    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedParquetFilePath).build();
+    int index = 0;
+    GenericRecord newRecord;
+    while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
+      assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
+      if (index == 0) {
+        assertEquals("15", newRecord.get("number").toString());
+      }
+      index++;
+    }
+    updatedReader.close();
+
+    // Also check the numRecordsWritten
+    WriteStatus writeStatus = statuses.get(0);
+    assertEquals(1, statuses.size()); // should be only one file generated
+    assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
+
+    // D. mimics - second executor performs the upsert, after the upsert has completed on the first executor.
+
+    if (enforceCompletionMarkerCheck) {
+      updateRecordsToFile(config, newTable, updateCommitTime, partitionPath, fileId, updateRecords, parquetFile.getName());
+      validateRecoveredWriteStatus(2, partitionPath, config, updateCommitTime, newTable, fileId, true);
+    } else {
+      updateRecordsToFile(config, newTable, updateCommitTime, partitionPath, fileId, updateRecords, parquetFile.getName());
+    }
+  }
+
+  private void validateRecoveredWriteStatus(int numFilesExpected, String partitionPath, HoodieWriteConfig config,
+                                            String commitTime, HoodieTable table, String fileId, boolean update) {
+    List<File> files = Arrays.stream(new File(this.basePath + "/" + partitionPath).listFiles())
+        .filter(f -> f.getName().endsWith("parquet")).collect(Collectors.toList());
+    assertEquals(Long.valueOf(numFilesExpected), files.size());
+    jsc.parallelize(Arrays.asList(1)).map(x -> {
+      if (update) {
+        String parquetFile = files.get(0).getName();
+        HoodieSparkCopyOnWriteTable updateTable = (HoodieSparkCopyOnWriteTable) table;
+        ExternalSpillableMap<String, HoodieRecord> externalSpillableMap =
+            new ExternalSpillableMap<String, HoodieRecord>((long)1024 * 1024,
+                config.getSpillableMapBasePath(), new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(SCHEMA));
+        HoodieMergeHandle io = updateTable.getUpdateHandle(commitTime, partitionPath, fileId,
+            externalSpillableMap, new HoodieBaseFile(parquetFile));
+        assertEquals(true, io.hasRecoveredWriteStatuses());
+        assertEquals(1, io.getRecoveredWriteStatuses().size());
+        Path filePath = io.makeNewPath(partitionPath);
+        return Pair.of(filePath, filePath.toString());
+      } else {
+        HoodieCreateHandle<?, ?, ?, ?> io = new HoodieCreateHandle(config, commitTime, table, partitionPath, fileId,
+            table.getTaskContextSupplier());
+        assertEquals(true, io.hasRecoveredWriteStatuses());
+        assertEquals(1, io.getRecoveredWriteStatuses().size());
+        Path filePath = io.makeNewPath(partitionPath);
+        return Pair.of(filePath, filePath.toString());
+      }
+    }).collect().get(0);
+  }
+
+  private List<HoodieAvroRecord> generateTestRecords() throws IOException {
+    // Get some records belong to the same partition (2016/01/31)
+    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+
+    List<HoodieAvroRecord> records = new ArrayList<>();
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
+    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    return records;
+  }
+
+  private List<HoodieAvroRecord> generateUpateRecords(File parquetFile) throws IOException {
+    // We update the 1st record & add a new record
+    String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    RawTripTestPayload updateRowChanges1 = new RawTripTestPayload(updateRecordStr1);
+    HoodieAvroRecord updatedRecord1 = new HoodieAvroRecord(
+        new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
+    updatedRecord1.unseal();
+    updatedRecord1.setCurrentLocation(new HoodieRecordLocation(FSUtils.getCommitTime(parquetFile.getName()),
+        FSUtils.getFileId(parquetFile.getName())));
+    updatedRecord1.seal();
+
+    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fek-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
+    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
+    HoodieAvroRecord insertedRecord1 =
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+
+    return Arrays.asList(updatedRecord1, insertedRecord1);
+  }
+
+  private Map<String, HoodieAvroRecord<?>> getRecordMap(HoodieWriteConfig config, List<HoodieAvroRecord> records) throws IOException {
+    ExternalSpillableMap<String, HoodieAvroRecord<?>> recordMap =
+        new ExternalSpillableMap<String, HoodieAvroRecord<?>>((long)1024 * 1024,
+            config.getSpillableMapBasePath(), new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(SCHEMA));
+    records.stream().map(r -> recordMap.put(r.getRecordKey(), r)).count();
+    System.out.println("Record map has  " + recordMap.size() + " and records has " + records.size());
+    return recordMap;
+  }
+
+  private void insertRecordsToFile(HoodieWriteConfig config, HoodieSparkCopyOnWriteTable cowTable, String partitionPath,
+                                   String fileId, String commitTime, List<HoodieAvroRecord> records) {
+    // Insert new records into the fileId, as part of the commit with commitTime
+    jsc.parallelize(Arrays.asList(1)).map(x -> {
+      return cowTable.handleInsert(commitTime, partitionPath, fileId, getRecordMap(config, records));
+    }).collect();
+  }
+
+  private List<WriteStatus> updateRecordsToFile(HoodieWriteConfig config, HoodieSparkCopyOnWriteTable table,
+                                                String updateCommitTime, String partitionPath, String fileId,
+                                                List<HoodieAvroRecord> updateRecords, String baseFileName) {
+    List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
+      return table.handleUpdate(updateCommitTime, partitionPath, fileId,
+          getRecordMap(config, updateRecords), new HoodieBaseFile(baseFileName));
+    }).flatMap(Transformations::flattenAsIterator).collect();
+    return statuses;
+  }
+
+  private File getParquetFileIfExists(String partitionPath, String fileId, String commitTime) {
+    // We should have a parquet file generated
+    File parquetFile = null;
+    LOG.info("listing : " + this.basePath + "/" + partitionPath);
+    for (File file : new File(this.basePath + "/" + partitionPath).listFiles()) {
+      if (file.getName().endsWith(".parquet") && FSUtils.getFileId(file.getName()).contains(fileId)
+          && FSUtils.getCommitTime(file.getName()).equals(commitTime)) {
+        parquetFile = file;
+        break;
+      }
+    }
+    return parquetFile;
+  }
+
+  boolean ensureMarkerFilesExist(HoodieSparkCopyOnWriteTable table, String partitionPath, String fileId,
+                                 String commitTime, IOType type) throws IOException {
+    String inProgressMarker = null;
+    String completionMarker = null;
+    Path markerPath = new Path(metaClient.getMarkerFolderPath(commitTime) + "/" + partitionPath);
+    WriteMarkers marker = WriteMarkersFactory.get(table.getConfig().getMarkersType(), table, commitTime);
+    String completedMarkerPath = marker.getCompletionMarkerPath(partitionPath, fileId, commitTime, type).toString();
+    for (String file : marker.allMarkerFilePaths()) {
+      if (file.isEmpty()) {
+        continue;
+      }
+      if (file.contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN) && file.endsWith(type.name())) {
+        inProgressMarker = file;
+      }
+      if (getConfig().optimizeTaskRetriesWithMarkers() && completedMarkerPath.endsWith(file)) {
+        completionMarker = file;
+      }
+    }
+
+    return inProgressMarker != null && (!getConfig().optimizeTaskRetriesWithMarkers() || completionMarker != null);
+  }
+
+  boolean ensureRecordsArePresent(HoodieSparkCopyOnWriteTable table, File parquetFile, List<HoodieAvroRecord> records) {
+    // Read out the bloom filter and make sure filter can answer record exist or not
+    Path parquetFilePath = new Path(parquetFile.getAbsolutePath());
+    Set<String> fileRecords = BaseFileUtils.getInstance(table.getBaseFileFormat())
+        .readRowKeys(hadoopConf, parquetFilePath);
+    for (HoodieRecord record : records) {
+      assertTrue(fileRecords.contains(record.getRecordKey()));
+    }
+    return true;
+  }
+
+  boolean checkRecordContentsAgainstParquetFile(HoodieSparkCopyOnWriteTable table, File parquetFile,
+                                                List<HoodieAvroRecord> records) {
+    // Read the parquet file, check the record content
+    Path parquetFilePath = new Path(parquetFile.getAbsolutePath());
+    List<GenericRecord> fileRecords = BaseFileUtils.getInstance(table.getBaseFileFormat())
+        .readAvroRecords(hadoopConf, parquetFilePath);
+    int index = 0;
+    for (GenericRecord fileRecord : fileRecords) {
+      assertTrue(fileRecord.get("_row_key").toString().equals(records.get(index).getRecordKey()));
+      index++;
+    }
+    return true;
+  }
+
+  private void removeLeftoverFile(String partitionPath, String fileId, String instantTime)  throws IOException {
+    File leftoverFile = getParquetFileIfExists(partitionPath, fileId, instantTime);
+    if (leftoverFile != null) {
+      Path leftOverPath = new Path(metaClient.getBasePathV2(), partitionPath + SEPARATOR + leftoverFile.getName());
+      System.out.println(leftOverPath);
+      metaClient.getFs().delete(leftOverPath);
+    }
   }
 
   @ParameterizedTest

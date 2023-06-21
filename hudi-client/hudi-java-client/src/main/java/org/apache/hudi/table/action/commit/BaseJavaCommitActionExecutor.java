@@ -266,6 +266,11 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
       throws IOException {
+    if (upsertHandle.hasRecoveredWriteStatuses()) {
+      // use write status recovered from the previous write attempt.
+      return upsertHandle.getRecoveredWriteStatuses().iterator();
+    }
+
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);

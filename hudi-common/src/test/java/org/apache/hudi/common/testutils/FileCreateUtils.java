@@ -99,7 +99,7 @@ public class FileCreateUtils {
   }
 
   public static String markerFileName(String fileName, IOType ioType) {
-    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, ioType.name());
+    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.INPROGRESS_MARKER_EXTN, ioType.name());
   }
 
   public static String dataFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
@@ -459,7 +459,7 @@ public class FileCreateUtils {
       return 0;
     }
     return Files.list(parentPath).filter(p -> p.getFileName().toString()
-        .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
+        .endsWith(String.format("%s.%s", HoodieTableMetaClient.INPROGRESS_MARKER_EXTN, ioType))).count();
   }
 
   public static List<Path> getPartitionPaths(Path basePath) throws IOException {

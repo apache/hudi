@@ -57,7 +57,6 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -187,9 +186,12 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
                                                           Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,
         partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
+    if (appendHandle.hasRecoveredWriteStatuses()) {
+      // use write status recovered from the previous write attempt.
+      return appendHandle.getRecoveredWriteStatuses().iterator();
+    }
     appendHandle.write(recordMap);
-    List<WriteStatus> writeStatuses = appendHandle.close();
-    return Collections.singletonList(writeStatuses).iterator();
+    return appendHandle.close().iterator();
   }
 
   @Override
