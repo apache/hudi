@@ -54,6 +54,8 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
@@ -366,18 +368,20 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
-    long fileSizeUpper = hoodieWriteConfig.getParquetMaxFileSize();
     try {
       if (!commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.
         Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
         while (instants.hasNext()) {
           HoodieInstant instant = instants.next();
+          if (instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
+            continue;
+          }
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > fileSizeThreshold && totalBytesWritten <= fileSizeUpper && totalRecordsWritten > 0) {
+          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
             avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
             break;
           }
