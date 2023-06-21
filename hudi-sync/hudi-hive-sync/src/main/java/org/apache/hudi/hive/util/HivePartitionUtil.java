@@ -57,7 +57,7 @@ public class HivePartitionUtil {
         // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
         partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
-      partBuilder.add(config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i) + "=" + partitionValue);
+      partBuilder.add(config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i).toLowerCase() + "=" + partitionValue);
     }
     return String.join("/", partBuilder);
   }
