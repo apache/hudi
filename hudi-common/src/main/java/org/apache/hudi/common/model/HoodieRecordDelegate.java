@@ -25,6 +25,10 @@ import javax.annotation.Nullable;
 
 /**
  * Delegate for {@link HoodieRecord}.
+ * <p>
+ * This is used when write handles report back write operation's info and stats,
+ * instead of passing back the full {@link HoodieRecord}, this lean delegate
+ * of it will be passed instead.
  */
 public class HoodieRecordDelegate {
 
@@ -106,5 +110,14 @@ public class HoodieRecordDelegate {
 
   public Option<HoodieRecordLocation> getNewLocation() {
     return newLocation;
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieRecordDelegate{"
+        + "hoodieKey=" + hoodieKey
+        + ", currentLocation=" + currentLocation
+        + ", newLocation=" + newLocation
+        + '}';
   }
 }

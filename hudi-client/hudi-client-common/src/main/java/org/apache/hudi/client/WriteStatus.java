@@ -86,10 +86,6 @@ public class WriteStatus implements Serializable {
     this.random = null;
   }
 
-  public void markSuccess() {
-    totalRecords++;
-  }
-
   /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.

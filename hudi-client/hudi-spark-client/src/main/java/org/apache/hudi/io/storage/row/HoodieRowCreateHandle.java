@@ -23,10 +23,10 @@ import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -50,6 +50,7 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.util.Lazy.lazily;
 
 /**
@@ -125,7 +126,9 @@ public class HoodieRowCreateHandle implements Serializable {
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
 
-    this.writeStatus = new WriteStatus(!table.getIndex().isImplicitWithStorage(),
+    boolean shouldTrackSuccessRecords = writeConfig.populateMetaFields()
+        && !table.getIndex().isImplicitWithStorage();
+    this.writeStatus = new WriteStatus(shouldTrackSuccessRecords,
         writeConfig.getWriteStatusFailureFraction());
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
 
@@ -208,7 +211,10 @@ public class HoodieRowCreateHandle implements Serializable {
       // TODO make sure writing w/ and w/o meta fields is consistent (currently writing w/o
       //      meta-fields would fail if any record will, while when writing w/ meta-fields it won't)
       fileWriter.writeRow(row);
-      writeStatus.markSuccess();
+      // when metafields disabled, we do not need to track individual records, hence
+      // passing a dummy record delegate (lazy) and it won't be tracked
+      writeStatus.markSuccess(lazily(()
+          -> HoodieRecordDelegate.create(EMPTY_STRING, EMPTY_STRING)), Option.empty());
     } catch (Exception e) {
       writeStatus.setGlobalError(e);
       throw new HoodieException("Exception thrown while writing spark InternalRows to file ", e);

@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.util.Lazy.eagerly;
-import static org.apache.hudi.util.Lazy.lazily;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -40,13 +39,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class TestWriteStatus {
+
   @Test
   public void testFailureFraction() {
     WriteStatus status = new WriteStatus(true, 0.1);
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
-      status.markFailure(lazily(()
-          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1", null, null)), t, null);
+      status.markFailure(eagerly(mock(HoodieRecordDelegate.class)), t, null);
     }
     assertTrue(status.getFailedRecords().size() > 0);
     assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
@@ -58,10 +57,8 @@ public class TestWriteStatus {
     WriteStatus status = new WriteStatus(false, 1.0);
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
-      status.markSuccess(lazily(()
-          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1")), Option.empty());
-      status.markFailure(lazily(()
-          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1")), t, Option.empty());
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.empty());
+      status.markFailure(eagerly(mock(HoodieRecordDelegate.class)), t, Option.empty());
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
@@ -163,8 +160,7 @@ public class TestWriteStatus {
     status.setPartitionPath(partitionPath);
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
-      status.markFailure(lazily(()
-          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), t, Option.empty());
+      status.markFailure(eagerly(mock(HoodieRecordDelegate.class)), t, Option.empty());
     }
     // verification
     assertEquals(fileId, status.getFileId());
@@ -184,8 +180,8 @@ public class TestWriteStatus {
     status.setPartitionPath(partitionPath);
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
-      status.markSuccess(lazily(() -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), Option.empty());
-      status.markFailure(lazily(() -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), t, Option.empty());
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.empty());
+      status.markFailure(eagerly(mock(HoodieRecordDelegate.class)), t, Option.empty());
     }
     // verification
     assertEquals(fileId, status.getFileId());

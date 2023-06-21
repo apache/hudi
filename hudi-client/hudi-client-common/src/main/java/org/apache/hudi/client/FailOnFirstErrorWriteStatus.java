@@ -41,8 +41,9 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
 
   @Override
   public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    LOG.error(String.format("Error writing key %s and optionalRecordMetadata %s error %s", recordDelegateLazy,
+    HoodieRecordDelegate recordDelegate = recordDelegateLazy.get();
+    LOG.error(String.format("Error writing record %s and optionalRecordMetadata %s error %s", recordDelegate,
         optionalRecordMetadata.orElse(Collections.emptyMap()), t));
-    throw new HoodieException("Error writing record " + recordDelegateLazy + ": " + t.getMessage());
+    throw new HoodieException("Error writing record " + recordDelegate + ": " + t.getMessage());
   }
 }
