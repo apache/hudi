@@ -230,4 +230,12 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public <T> JavaRDD<T> emptyRDD() {
     return javaSparkContext.emptyRDD();
   }
+
+  public void cancelJobGroup(String groupId) {
+    javaSparkContext.cancelJobGroup(groupId);
+  }
+
+  public void cancelAllJobs() {
+    javaSparkContext.cancelAllJobs();
+  }
 }
