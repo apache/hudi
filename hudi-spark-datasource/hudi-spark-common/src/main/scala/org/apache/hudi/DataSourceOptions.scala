@@ -308,6 +308,11 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
+   * Config key with boolean value that indicates whether record being written is already prepped.
+   */
+  val DATASOURCE_WRITE_PREPPED_KEY = "_hoodie.datasource.write.prepped";
+
+  /**
     * May be derive partition path from incoming df if not explicitly set.
     *
     * @param optParams Parameters to be translated

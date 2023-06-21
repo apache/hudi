@@ -84,7 +84,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
                   Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
           try {
             return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-                props.getString("hoodie.datasource.write.payload.class"));
+                props.getString("hoodie.datasource.write.payload.class"), scala.Option.apply(null));
           } catch (IOException ioe) {
             throw new HoodieIOException(ioe.getMessage(), ioe);
           }
