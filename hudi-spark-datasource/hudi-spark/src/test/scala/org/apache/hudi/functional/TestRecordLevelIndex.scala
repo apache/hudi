@@ -26,7 +26,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieInstant}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -36,7 +36,7 @@ import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Properties}
@@ -50,7 +50,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   var instantTime: AtomicInteger = _
   val metadataOpts = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_CREATE_PROP.key -> "true"
+    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
   )
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -230,11 +230,12 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   @Test
-  def testRLIWithCompaction(): Unit = {
+  def testRLIWithDTCompaction(): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
     )
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -265,7 +266,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testRLIWithClustering(tableType: HoodieTableType): Unit = {
+  def testRLIWithDTClustering(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
@@ -363,7 +364,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testRLICompaction(tableType: HoodieTableType): Unit = {
+  def testRLIWithMDTCompaction(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1"
@@ -389,7 +390,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testRLICleaning(tableType: HoodieTableType): Unit = {
+  def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
 
@@ -439,14 +440,14 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    metaClient.getActiveTimeline.filter(
+    metaClient.reloadActiveTimeline().filter(
       s => Option(
         try {
           val commitMetadata = MetadataConversionUtils.getHoodieCommitMetadata(metaClient, s)
             .orElse(new HoodieCommitMetadata())
           commitMetadata
         } catch {
-          case _ : Exception => new HoodieCommitMetadata()
+          case _: Exception => new HoodieCommitMetadata()
         })
         .map(c => c.getOperationType == WriteOperationType.COMPACT)
         .get)
