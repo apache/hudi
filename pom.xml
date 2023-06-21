@@ -2163,7 +2163,6 @@
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <fasterxml.jackson.datatype.jsr310.module>jackson-datatype-jsr310</fasterxml.jackson.datatype.jsr310.module>
-        <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
