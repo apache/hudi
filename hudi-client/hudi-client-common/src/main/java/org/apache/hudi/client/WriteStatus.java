@@ -22,8 +22,8 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -55,9 +55,9 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<TaggableHoodieKey> writtenRecords = new ArrayList<>();
+  private final List<HoodieRecordDelegate> writtenRecords = new ArrayList<>();
 
-  private final List<Pair<TaggableHoodieKey, Throwable>> failedRecords = new ArrayList<>();
+  private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -94,12 +94,12 @@ public class WriteStatus implements Serializable {
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param taggableHoodieKey      HoodieKey with location information.
+   * @param recordDelegateLazy     HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(Lazy<TaggableHoodieKey> taggableHoodieKey, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(Lazy<HoodieRecordDelegate> recordDelegateLazy, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(taggableHoodieKey.get());
+      writtenRecords.add(recordDelegateLazy.get());
     }
     totalRecords++;
 
@@ -133,15 +133,15 @@ public class WriteStatus implements Serializable {
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param taggableKey            HoodieKey with location information.
+   * @param recordDelegateLazy     HoodieKey with location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(Lazy<TaggableHoodieKey> taggableKey, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      TaggableHoodieKey key = taggableKey.get();
-      failedRecords.add(Pair.of(key, t));
-      errors.put(key, t);
+      HoodieRecordDelegate recordDelegate = recordDelegateLazy.get();
+      failedRecords.add(Pair.of(recordDelegate, t));
+      errors.put(recordDelegate.getHoodieKey(), t);
     }
     totalRecords++;
     totalErrorRecords++;
@@ -179,11 +179,11 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<TaggableHoodieKey> getWrittenRecords() {
+  public List<HoodieRecordDelegate> getWrittenRecords() {
     return writtenRecords;
   }
 
-  public List<Pair<TaggableHoodieKey, Throwable>> getFailedRecords() {
+  public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {
     return failedRecords;
   }
 

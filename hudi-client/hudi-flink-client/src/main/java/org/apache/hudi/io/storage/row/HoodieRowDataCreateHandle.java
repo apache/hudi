@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.TaggableHoodieKey;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -138,10 +138,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
       try {
         fileWriter.writeRow(recordKey, rowData);
         writeStatus.markSuccess(lazily(()
-            -> new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)), Option.empty());
+            -> HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation)), Option.empty());
       } catch (Throwable t) {
         writeStatus.markFailure(lazily(()
-            -> new TaggableHoodieKey(recordKey, partitionPath, null, newRecordLocation)), t, Option.empty());
+            -> HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation)), t, Option.empty());
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);

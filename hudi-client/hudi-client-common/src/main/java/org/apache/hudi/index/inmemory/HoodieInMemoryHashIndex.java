@@ -24,8 +24,8 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -84,14 +84,14 @@ public class HoodieInMemoryHashIndex
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return writeStatuses.map(writeStatus -> {
-      for (TaggableHoodieKey taggedKey : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(taggedKey)) {
-          Option<HoodieRecordLocation> newLocation = taggedKey.getNewLocation();
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
+          Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
-            recordLocationMap.put(taggedKey, newLocation.get());
+            recordLocationMap.put(recordDelegate.getHoodieKey(), newLocation.get());
           } else {
             // Delete existing index for a deleted record
-            recordLocationMap.remove(taggedKey);
+            recordLocationMap.remove(recordDelegate.getHoodieKey());
           }
         }
       }

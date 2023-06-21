@@ -19,7 +19,7 @@
 package org.apache.hudi.connect;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.TaggableHoodieKey;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
@@ -305,7 +305,7 @@ public class TestConnectTransactionCoordinator {
     // send WS
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.empty());
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.empty());
     }
     return status;
   }
@@ -315,9 +315,9 @@ public class TestConnectTransactionCoordinator {
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
       if (i % 10 == 0) {
-        status.markFailure(eagerly(mock(TaggableHoodieKey.class)), new Throwable("Error writing record on disk"), Option.empty());
+        status.markFailure(eagerly(mock(HoodieRecordDelegate.class)), new Throwable("Error writing record on disk"), Option.empty());
       } else {
-        status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.empty());
+        status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.empty());
       }
     }
     status.setGlobalError(new Throwable("More than one records failed to be written to storage"));

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.TaggableHoodieKey;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.Lazy;
@@ -40,9 +40,9 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(Lazy<TaggableHoodieKey> taggableKey, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    LOG.error(String.format("Error writing key %s and optionalRecordMetadata %s error %s", taggableKey,
+  public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+    LOG.error(String.format("Error writing key %s and optionalRecordMetadata %s error %s", recordDelegateLazy,
         optionalRecordMetadata.orElse(Collections.emptyMap()), t));
-    throw new HoodieException("Error writing record " + taggableKey + ": " + t.getMessage());
+    throw new HoodieException("Error writing record " + recordDelegateLazy + ": " + t.getMessage());
   }
 }

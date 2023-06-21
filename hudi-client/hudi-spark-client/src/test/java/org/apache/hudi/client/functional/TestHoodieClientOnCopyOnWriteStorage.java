@@ -54,11 +54,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -579,9 +579,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    *
    * @param keys List of Hoodie records
    */
-  void assertNodupesInPartition(List<TaggableHoodieKey> keys) {
+  void assertNodupesInPartition(List<HoodieRecordDelegate> keys) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
-    for (TaggableHoodieKey k : keys) {
+    for (HoodieRecordDelegate k : keys) {
       String recordKey = k.getRecordKey();
       String partitionPath = k.getPartitionPath();
       if (!partitionToKeys.containsKey(partitionPath)) {

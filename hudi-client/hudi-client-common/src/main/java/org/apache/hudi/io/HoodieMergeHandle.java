@@ -32,7 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.model.TaggableHoodieKey;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -308,7 +308,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + newRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(newRecord)), failureEx, recordMetadata);
+      writeStatus.markFailure(lazily(() -> HoodieRecordDelegate.fromHoodieRecord(newRecord)), failureEx, recordMetadata);
       return false;
     }
     try {
@@ -318,7 +318,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       } else {
         recordsDeleted++;
       }
-      writeStatus.markSuccess(lazily(() -> TaggableHoodieKey.fromHoodieRecord(newRecord)), recordMetadata);
+      writeStatus.markSuccess(lazily(() -> HoodieRecordDelegate.fromHoodieRecord(newRecord)), recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -326,7 +326,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + newRecord, e);
-      writeStatus.markFailure(lazily(() -> TaggableHoodieKey.fromHoodieRecord(newRecord)), e, recordMetadata);
+      writeStatus.markFailure(lazily(() -> HoodieRecordDelegate.fromHoodieRecord(newRecord)), e, recordMetadata);
     }
     return false;
   }

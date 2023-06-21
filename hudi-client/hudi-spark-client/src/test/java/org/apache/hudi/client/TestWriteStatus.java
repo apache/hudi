@@ -19,11 +19,13 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.TaggableHoodieKey;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,7 +46,7 @@ public class TestWriteStatus {
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
       status.markFailure(lazily(()
-          -> new TaggableHoodieKey(UUID.randomUUID().toString(), "path1", null, null)), t, null);
+          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1", null, null)), t, null);
     }
     assertTrue(status.getFailedRecords().size() > 0);
     assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
@@ -57,9 +59,9 @@ public class TestWriteStatus {
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
       status.markSuccess(lazily(()
-          -> new TaggableHoodieKey(UUID.randomUUID().toString(), "path1", null, null)), Option.empty());
+          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1")), Option.empty());
       status.markFailure(lazily(()
-          -> new TaggableHoodieKey(UUID.randomUUID().toString(), "path1", null, null)), t, Option.empty());
+          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), "path1")), t, Option.empty());
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
@@ -75,7 +77,7 @@ public class TestWriteStatus {
     for (int i = 0; i < 1000; i++) {
       Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, "");
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.of(metadata));
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.of(metadata));
     }
     assertEquals(1000, status.getTotalRecords());
     assertFalse(status.hasErrors());
@@ -88,7 +90,7 @@ public class TestWriteStatus {
     for (int i = 0; i < 1000; i++) {
       Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, null);
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.of(metadata));
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.of(metadata));
     }
     assertEquals(1000, status.getTotalRecords());
     assertFalse(status.hasErrors());
@@ -109,7 +111,7 @@ public class TestWriteStatus {
         maxSeconds = eventTime;
       }
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.of(metadata));
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.of(metadata));
     }
     assertEquals(1000, status.getTotalRecords());
     assertFalse(status.hasErrors());
@@ -130,7 +132,7 @@ public class TestWriteStatus {
         maxSeconds = eventTime;
       }
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.of(metadata));
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.of(metadata));
     }
     assertEquals(1000, status.getTotalRecords());
     assertFalse(status.hasErrors());
@@ -143,7 +145,7 @@ public class TestWriteStatus {
     for (int i = 0; i < 1000; i++) {
       Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(i));
-      status.markSuccess(eagerly(mock(TaggableHoodieKey.class)), Option.of(metadata));
+      status.markSuccess(eagerly(mock(HoodieRecordDelegate.class)), Option.of(metadata));
     }
     assertEquals(1000, status.getTotalRecords());
     assertFalse(status.hasErrors());
@@ -162,7 +164,7 @@ public class TestWriteStatus {
     Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
       status.markFailure(lazily(()
-          -> new TaggableHoodieKey(UUID.randomUUID().toString(), partitionPath, null, null)), t, Option.empty());
+          -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), t, Option.empty());
     }
     // verification
     assertEquals(fileId, status.getFileId());
@@ -172,32 +174,30 @@ public class TestWriteStatus {
     assertTrue(status.hasErrors());
   }
 
-  @Test
-  public void testSuccessRecordTrackingExtended() {
-    boolean[] vals = {true, false};
-    for (boolean trackSuccess : vals) {
-      WriteStatus status = new WriteStatus(trackSuccess, 1.0);
-      String fileId = UUID.randomUUID().toString();
-      status.setFileId(fileId);
-      String partitionPath = UUID.randomUUID().toString();
-      status.setPartitionPath(partitionPath);
-      Throwable t = new Exception("some error in writing");
-      for (int i = 0; i < 1000; i++) {
-        status.markSuccess(lazily(() -> new TaggableHoodieKey(UUID.randomUUID().toString(), partitionPath, null, null)), Option.empty());
-        status.markFailure(lazily(() -> new TaggableHoodieKey(UUID.randomUUID().toString(), partitionPath, null, null)), t, Option.empty());
-      }
-      // verification
-      assertEquals(fileId, status.getFileId());
-      assertEquals(partitionPath, status.getPartitionPath());
-      assertEquals(1000, status.getFailedRecords().size());
-      assertTrue(status.hasErrors());
-      if (trackSuccess) {
-        assertEquals(1000, status.getWrittenRecords().size());
-      } else {
-        assertTrue(status.getWrittenRecords().isEmpty());
-      }
-      assertEquals(2000, status.getTotalRecords());
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testSuccessRecordTrackingExtended(boolean trackSuccess) {
+    WriteStatus status = new WriteStatus(trackSuccess, 1.0);
+    String fileId = UUID.randomUUID().toString();
+    status.setFileId(fileId);
+    String partitionPath = UUID.randomUUID().toString();
+    status.setPartitionPath(partitionPath);
+    Throwable t = new Exception("some error in writing");
+    for (int i = 0; i < 1000; i++) {
+      status.markSuccess(lazily(() -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), Option.empty());
+      status.markFailure(lazily(() -> HoodieRecordDelegate.create(UUID.randomUUID().toString(), partitionPath)), t, Option.empty());
     }
+    // verification
+    assertEquals(fileId, status.getFileId());
+    assertEquals(partitionPath, status.getPartitionPath());
+    assertEquals(1000, status.getFailedRecords().size());
+    assertTrue(status.hasErrors());
+    if (trackSuccess) {
+      assertEquals(1000, status.getWrittenRecords().size());
+    } else {
+      assertTrue(status.getWrittenRecords().isEmpty());
+    }
+    assertEquals(2000, status.getTotalRecords());
   }
 
   @Test
