@@ -155,17 +155,17 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   /**
-   * Deletes the given prepared records from the Hoodie table, at the supplied instantTime.
+   * Delete the given prepared records from the Hoodie table, at the supplied instantTime.
    *
    * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * <p>Specifies the write handle explicitly in order to have fine-grained control with
    * the underneath file.
    *
-   * @param context        HoodieEngineContext
-   * @param instantTime    Instant Time for the action
+   * @param context {@link HoodieEngineContext}
+   * @param instantTime Instant Time for the action
    * @param preppedRecords Hoodie records to delete
-   * @return HoodieWriteMetadata
+   * @return {@link HoodieWriteMetadata}
    */
   public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(
       HoodieEngineContext context,

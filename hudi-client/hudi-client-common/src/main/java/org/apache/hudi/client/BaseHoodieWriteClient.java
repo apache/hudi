@@ -489,7 +489,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O delete(K keys, final String instantTime);
 
   /**
-   * Deletes records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
    * preppedRecords.
    *
    * @param preppedRecords Empty records with key and locator set.

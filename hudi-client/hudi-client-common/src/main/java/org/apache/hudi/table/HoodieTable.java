@@ -217,7 +217,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
 
   /**
-   * Deletes records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
    * preppedRecords.
    *
    * @param context {@link HoodieEngineContext}.
