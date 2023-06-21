@@ -107,6 +107,21 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
+  def testRLIBulkInsert(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
   def testRLIUpsertAndRollback(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
