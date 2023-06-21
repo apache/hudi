@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -54,9 +53,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
@@ -165,13 +161,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   private void assignInserts(WorkloadProfile profile, HoodieEngineContext context) {
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
-    /*
-     * NOTE: we only use commit instants to calculate average record size because replacecommit can be
-     * created by clustering, which has smaller average record size, which affects assigning inserts and
-     * may result in OOM by making spark underestimate the actual input record sizes.
-     */
-    long averageRecordSize = averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION)).filterCompletedInstants(), config);
+    long averageRecordSize =
+        averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
+            config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -374,6 +366,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
     long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
+    long fileSizeUpper = hoodieWriteConfig.getParquetMaxFileSize();
     try {
       if (!commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.
@@ -384,7 +377,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
               .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
+          if (totalBytesWritten > fileSizeThreshold && totalBytesWritten <= fileSizeUpper && totalRecordsWritten > 0) {
             avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
             break;
           }
