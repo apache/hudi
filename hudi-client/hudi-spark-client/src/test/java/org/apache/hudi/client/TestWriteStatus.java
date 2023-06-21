@@ -65,7 +65,7 @@ public class TestWriteStatus {
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
-    assertTrue(status.getWrittenRecords().isEmpty());
+    assertTrue(status.getWrittenRecordDelegates().isEmpty());
     assertEquals(2000, status.getTotalRecords());
   }
 
@@ -193,9 +193,9 @@ public class TestWriteStatus {
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
     if (trackSuccess) {
-      assertEquals(1000, status.getWrittenRecords().size());
+      assertEquals(1000, status.getWrittenRecordDelegates().size());
     } else {
-      assertTrue(status.getWrittenRecords().isEmpty());
+      assertTrue(status.getWrittenRecordDelegates().isEmpty());
     }
     assertEquals(2000, status.getTotalRecords());
   }

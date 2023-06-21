@@ -357,7 +357,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             LOG.info("multiPutBatchSize for this job: " + this.multiPutBatchSize);
             // Create a rate limiter that allows `multiPutBatchSize` operations per second
             // Any calls beyond `multiPutBatchSize` within a second will be rate limited
-            for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecords()) {
+            for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
               if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
                 Option<HoodieRecordLocation> loc = recordDelegate.getNewLocation();
                 if (loc.isPresent()) {

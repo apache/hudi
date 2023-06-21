@@ -1161,7 +1161,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     return writeStatuses.flatMap(writeStatus -> {
       List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecords()) {
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
         if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
           HoodieRecord hoodieRecord;
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();

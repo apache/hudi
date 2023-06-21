@@ -55,7 +55,7 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecordDelegate> writtenRecords = new ArrayList<>();
+  private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
 
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
@@ -99,7 +99,7 @@ public class WriteStatus implements Serializable {
    */
   public void markSuccess(Lazy<HoodieRecordDelegate> recordDelegateLazy, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(recordDelegateLazy.get());
+      writtenRecordDelegates.add(recordDelegateLazy.get());
     }
     totalRecords++;
 
@@ -179,8 +179,8 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<HoodieRecordDelegate> getWrittenRecords() {
-    return writtenRecords;
+  public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
+    return writtenRecordDelegates;
   }
 
   public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {

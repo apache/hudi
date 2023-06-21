@@ -84,7 +84,7 @@ public class HoodieInMemoryHashIndex
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return writeStatuses.map(writeStatus -> {
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecords()) {
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
         if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
