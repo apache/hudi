@@ -219,6 +219,16 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     }
   }
 
+  @Override
+  public void cancelJob(String groupId) {
+    javaSparkContext.cancelJobGroup(groupId);
+  }
+
+  @Override
+  public void cancelAllJobs() {
+    javaSparkContext.cancelAllJobs();
+  }
+
   public SparkConf getConf() {
     return javaSparkContext.getConf();
   }
@@ -229,13 +239,5 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   public <T> JavaRDD<T> emptyRDD() {
     return javaSparkContext.emptyRDD();
-  }
-
-  public void cancelJobGroup(String groupId) {
-    javaSparkContext.cancelJobGroup(groupId);
-  }
-
-  public void cancelAllJobs() {
-    javaSparkContext.cancelAllJobs();
   }
 }
