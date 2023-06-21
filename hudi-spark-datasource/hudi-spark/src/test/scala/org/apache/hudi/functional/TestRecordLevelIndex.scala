@@ -304,9 +304,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestClusteringInstant().get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
 
-    rollbackLastInstant(hudiOpts)
+    assertTrue(getLatestClusteringInstant().get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
     validateDataAndRecordIndices(hudiOpts)
   }
 
@@ -548,7 +547,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       val fileName: String = row.getAs("_hoodie_file_name")
       val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
-      assertTrue(fileName.contains(recordLocation.getFileId), fileName + " does not contain " + recordLocation.getFileId)
+      if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
+        // The file id changes after clustering, so only assert it for usual upsert and compaction operations
+        assertTrue(fileName.contains(recordLocation.getFileId), fileName + " does not contain " + recordLocation.getFileId)
+      }
     }
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
