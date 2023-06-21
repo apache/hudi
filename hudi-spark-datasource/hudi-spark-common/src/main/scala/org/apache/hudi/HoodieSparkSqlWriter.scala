@@ -44,7 +44,7 @@ import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
-import org.apache.hudi.execution.bulkinsert.{BucketBulkInsertPartitionerWithRows, BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
+import org.apache.hudi.execution.bulkinsert.{BucketIndexBulkInsertPartitionerWithRows, BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
@@ -257,9 +257,13 @@ object HoodieSparkSqlWriter {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-              .asInstanceOf[BaseKeyGenerator]
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
+            val keyGenerator:Option[BaseKeyGenerator] = if (isPrepped) {
+              Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
+                .asInstanceOf[BaseKeyGenerator])
+            } else {
+              None
+            }
             val hoodieKeysAndLocationsToDelete = genericRecords.map(gr => {
               HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, gr, isPrepped)
             }).toJavaRDD()
@@ -353,9 +357,9 @@ object HoodieSparkSqlWriter {
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
             val processedDataSchema = if (isPrepped) {
-              HoodieAvroUtils.removeMetadataFields(writerSchema);
+              HoodieAvroUtils.removeMetadataFields(writerSchema)
             } else {
-              dataFileSchema;
+              dataFileSchema
             }
 
             // Create a HoodieWriteClient & issue the write.
@@ -819,7 +823,7 @@ object HoodieSparkSqlWriter {
 
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
       if (writeConfig.getIndexType == IndexType.BUCKET) {
-        new BucketBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault, writeConfig.getBucketIndexNumBuckets)
+        new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault, writeConfig.getBucketIndexNumBuckets)
       } else {
         val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
         if (userDefinedBulkInsertPartitionerOpt.isPresent) {
@@ -904,10 +908,8 @@ object HoodieSparkSqlWriter {
     hoodieConfig.getString(META_SYNC_CLIENT_TOOL_CLASS_NAME).split(",").foreach(syncClass => syncClientToolClassSet += syncClass)
 
     // for backward compatibility
-    if (hiveSyncEnabled) {
-      metaSyncEnabled = true
-      syncClientToolClassSet += classOf[HiveSyncTool].getName
-    }
+    if (hiveSyncEnabled) metaSyncEnabled = true
+
 
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
@@ -1084,17 +1086,17 @@ object HoodieSparkSqlWriter {
       // for missing write configs corresponding to table configs, fill them up.
       fetchMissingWriteConfigsFromTableConfig(tableConfig, optParams).foreach((kv) => translatedOptsWithMappedTableConfig += (kv._1 -> kv._2))
     }
+    if (null != tableConfig && mode != SaveMode.Overwrite) {
+      // over-ride only if not explicitly set by the user.
+      tableConfig.getProps.filter(kv => !optParams.contains(kv._1))
+        .foreach { case (key, value) =>
+          translatedOptsWithMappedTableConfig +=  (key -> value)
+        }
+    }
     val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap)
     if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
-    }
-    if (null != tableConfig && mode != SaveMode.Overwrite) {
-      // over-ride only if not explicitly set by the user.
-      tableConfig.getProps.filter( kv => !mergedParams.contains(kv._1))
-        .foreach { case (key, value) =>
-          mergedParams(key) = value
-      }
     }
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {

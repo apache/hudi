@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -91,16 +92,23 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
+  /**
+   * athena v2/v3 table property
+   * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
+   */
+  private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private final AWSGlue awsGlue;
   private final String databaseName;
 
   private final Boolean skipTableArchive;
+  private final String enableMetadataTable;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
     this.awsGlue = AWSGlueClientBuilder.standard().build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
+    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
   }
 
   @Override
@@ -233,6 +241,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     try {
+      tableProperties.put(ENABLE_MDT_LISTING, enableMetadataTable);
       return updateTableParameters(awsGlue, databaseName, tableName, tableProperties, skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update properties for table " + tableId(databaseName, tableName), e);
@@ -355,6 +364,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     if (!config.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
       params.put("EXTERNAL", "TRUE");
     }
+    params.put(ENABLE_MDT_LISTING, this.enableMetadataTable);
     params.putAll(tableProperties);
 
     try {

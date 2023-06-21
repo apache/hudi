@@ -426,6 +426,13 @@ public class FlinkOptions extends HoodieConfig {
           + "the dot notation eg: `a.b.c`");
 
   @AdvancedConfig
+  public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+      .stringType()
+      .defaultValue("SIMPLE")
+      .withDescription("Type of bucket index engine. Available options: [SIMPLE | CONSISTENT_HASHING]");
+
+  @AdvancedConfig
   public static final ConfigOption<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigOptions
       .key(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())
       .intType()

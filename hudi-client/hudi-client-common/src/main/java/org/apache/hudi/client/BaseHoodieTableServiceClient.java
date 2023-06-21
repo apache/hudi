@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -141,6 +142,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Any pre-commit actions like conflict resolution goes here.
+   *
    * @param metadata commit metadata for which pre commit is being invoked.
    */
   protected void preCommit(HoodieCommitMetadata metadata) {
@@ -209,6 +211,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Schedules compaction inline.
+   *
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
@@ -241,8 +244,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param metadata              All the metadata that gets stored along with a commit
    * @param extraMetadata         Extra Metadata to be stored
    */
-  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                                        Option<Map<String, String>> extraMetadata);
+  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata);
 
   /**
    * Commit Compaction and track metrics.
@@ -251,6 +253,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Schedules a new log compaction instant.
+   *
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
@@ -260,7 +263,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Schedules a new log compaction instant with passed-in instant time.
-   * @param instantTime Log Compaction Instant Time
+   *
+   * @param instantTime   Log Compaction Instant Time
    * @param extraMetadata Extra Metadata to be stored
    */
   public boolean scheduleLogCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
@@ -283,7 +287,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
     throw new UnsupportedOperationException("Log compaction is not supported yet.");
   }
-
 
   /**
    * Schedules a new compaction instant with passed-in instant time.
@@ -494,15 +497,16 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Write the HoodieCommitMetadata to metadata table if available.
    *
-   * @param table       {@link HoodieTable} of interest.
-   * @param instantTime instant time of the commit.
-   * @param actionType  action type of the commit.
-   * @param metadata    instance of {@link HoodieCommitMetadata}.
+   * @param table         {@link HoodieTable} of interest.
+   * @param instantTime   instant time of the commit.
+   * @param actionType    action type of the commit.
+   * @param metadata      instance of {@link HoodieCommitMetadata}.
+   * @param writeStatuses Write statuses of the commit
    */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
     checkArgument(table.isTableServiceAction(actionType, instantTime), String.format("Unsupported action: %s.%s is not table service.", actionType, instantTime));
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime));
+    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, writeStatuses, instantTime));
   }
 
   /**
@@ -570,6 +574,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   /**
    * Trigger archival for the table. This ensures that the number of commits do not explode
    * and keep increasing unbounded over time.
+   *
    * @param table table to commit on.
    */
   protected void archive(HoodieTable table) {
@@ -618,6 +623,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   /**
    * Fetch map of pending commits to be rolled-back to {@link HoodiePendingRollbackInfo}.
+   *
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @return map of pending commits to be rolled-back instants to Rollback Instant and Rollback plan Pair.
    */
@@ -789,7 +795,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
         .map(rollbackInstant -> {
           try {
             return Pair.of(TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-                activeTimeline.getInstantDetails(rollbackInstant).get()).getInstantsRollback().get(0).getCommitTime(),
+                    activeTimeline.getInstantDetails(rollbackInstant).get()).getInstantsRollback().get(0).getCommitTime(),
                 rollbackInstant.getTimestamp());
           } catch (IOException e) {
             LOG.error("Error reading rollback metadata for instant {}", rollbackInstant, e);
@@ -824,7 +830,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   private List<String> getInstantsToRollbackForLazyCleanPolicy(HoodieTableMetaClient metaClient,
-                                                       Stream<HoodieInstant> inflightInstantsStream) {
+                                                               Stream<HoodieInstant> inflightInstantsStream) {
     // Get expired instants, must store them into list before double-checking
     List<String> expiredInstants = inflightInstantsStream.filter(instant -> {
       try {
@@ -846,14 +852,12 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * @Deprecated
-   * Rollback the inflight record changes with the given commit time. This
-   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
-   *
-   * @param commitInstantTime Instant time of the commit
+   * @param commitInstantTime   Instant time of the commit
    * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   * @param skipLocking         if this is triggered by another parent transaction, locking can be skipped.
    * @throws HoodieRollbackException if rollback cannot be performed successfully
+   * @Deprecated Rollback the inflight record changes with the given commit time. This
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
    */
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
@@ -921,6 +925,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * Some writers use SparkAllowUpdateStrategy and treat replacecommit plan as revocable plan.
    * In those cases, their ConflictResolutionStrategy implementation should run conflict resolution
    * even for clustering operations.
+   *
    * @return boolean
    */
   protected boolean isPreCommitRequired() {

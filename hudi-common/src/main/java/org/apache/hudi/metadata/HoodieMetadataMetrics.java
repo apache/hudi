@@ -143,6 +143,10 @@ public class HoodieMetadataMetrics implements Serializable {
     metricsRegistry.add(action, value);
   }
 
+  protected void setMetric(String action, long value) {
+    metricsRegistry.set(action, value);
+  }
+
   public Registry registry() {
     return metricsRegistry;
   }
