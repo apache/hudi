@@ -621,7 +621,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Spark context Wrapper.
      */
-    private final transient HoodieSparkEngineContext sparkContext;
+    private final transient HoodieSparkEngineContext hoodieSparkContext;
 
     private transient FileSystem fs;
 
@@ -656,16 +656,16 @@ public class HoodieDeltaStreamer implements Serializable {
 
     private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
 
-    public DeltaSyncService(Config cfg, HoodieSparkEngineContext sparkContext, FileSystem fs, Configuration conf,
+    public DeltaSyncService(Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       super(HoodieIngestionConfig.newBuilder()
           .isContinuous(cfg.continuousMode)
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
-      this.sparkContext = sparkContext;
+      this.hoodieSparkContext = hoodieSparkContext;
       this.fs = fs;
       this.hiveConf = conf;
-      this.sparkSession = SparkSession.builder().config(sparkContext.getConf()).getOrCreate();
+      this.sparkSession = SparkSession.builder().config(hoodieSparkContext.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
       this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
@@ -709,15 +709,15 @@ public class HoodieDeltaStreamer implements Serializable {
       LOG.info(toSortedTruncatedString(props));
 
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-          UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, sparkContext.jsc()),
-          props, sparkContext.jsc(), cfg.transformerClassNames);
+          UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
+          props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, sparkContext, fs, conf, this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient);
     }
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, HoodieSparkEngineContext sparkContext, FileSystem fs, Configuration conf)
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf)
         throws IOException {
-      this(cfg, sparkContext, fs, conf, Option.empty());
+      this(cfg, hoodieSparkContext, fs, conf, Option.empty());
     }
 
     private void initializeTableTypeAndBaseFileFormat() {
@@ -731,7 +731,7 @@ public class HoodieDeltaStreamer implements Serializable {
       if (deltaSync != null) {
         deltaSync.close();
       }
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, sparkContext, fs, hiveConf, this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient);
     }
 
     @Override
@@ -742,7 +742,7 @@ public class HoodieDeltaStreamer implements Serializable {
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
           LOG.info("Setting Spark Pool name for delta-sync to " + DELTASYNC_POOL_NAME);
-          sparkContext.setProperty(EngineProperty.DELTASYNC_POOL_NAME, DELTASYNC_POOL_NAME);
+          hoodieSparkContext.setProperty(EngineProperty.DELTASYNC_POOL_NAME, DELTASYNC_POOL_NAME);
         }
 
         HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
@@ -870,10 +870,10 @@ public class HoodieDeltaStreamer implements Serializable {
           // Update the write client used by Async Compactor.
           asyncCompactService.get().updateWriteClient(writeClient);
         } else {
-          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(sparkContext, writeClient));
+          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(hoodieSparkContext, writeClient));
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
-              HoodieTableMetaClient.builder().setConf(new Configuration(sparkContext.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
+              HoodieTableMetaClient.builder().setConf(new Configuration(hoodieSparkContext.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
           pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
           asyncCompactService.get().start(error -> true);
@@ -892,9 +892,9 @@ public class HoodieDeltaStreamer implements Serializable {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {
-          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(sparkContext, writeClient));
+          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(hoodieSparkContext, writeClient));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-              .setConf(new Configuration(sparkContext.hadoopConfiguration()))
+              .setConf(new Configuration(hoodieSparkContext.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)
               .setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
@@ -943,6 +943,11 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public TypedProperties getProps() {
       return props;
+    }
+
+    @VisibleForTesting
+    public HoodieSparkEngineContext getHoodieSparkContext() {
+      return hoodieSparkContext;
     }
 
     @VisibleForTesting

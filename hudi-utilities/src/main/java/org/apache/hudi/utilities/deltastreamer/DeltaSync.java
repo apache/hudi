@@ -1151,7 +1151,8 @@ public class DeltaSync implements Serializable, Closeable {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Registering Schema: " + schemas);
       }
-      sparkContext.getSparkConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
+      // Use the underlying spark context in case the java context is changed during runtime
+      sparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }
 

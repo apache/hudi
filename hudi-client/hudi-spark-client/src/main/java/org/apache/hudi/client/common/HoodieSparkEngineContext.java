@@ -223,10 +223,6 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return javaSparkContext.getConf();
   }
 
-  public SparkConf getSparkConf() {
-    return javaSparkContext.sc().getConf();
-  }
-
   public Configuration hadoopConfiguration() {
     return javaSparkContext.hadoopConfiguration();
   }

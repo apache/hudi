@@ -45,7 +45,7 @@ import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR
 
 public final class ErrorTableUtils {
   public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-                                                                 TypedProperties props, HoodieSparkEngineContext sparkEngineContext, FileSystem fs) {
+                                                                 TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
@@ -57,7 +57,7 @@ public final class ErrorTableUtils {
 
     try {
       return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassArr)
-          .newInstance(cfg, sparkSession, props, sparkEngineContext, fs));
+          .newInstance(cfg, sparkSession, props, hoodieSparkContext, fs));
     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
       throw new HoodieException(errMsg, e);
     }
