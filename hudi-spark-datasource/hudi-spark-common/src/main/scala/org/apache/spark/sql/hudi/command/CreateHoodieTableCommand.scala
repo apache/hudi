@@ -21,6 +21,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
@@ -31,6 +32,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
+import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.validateMOR
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
@@ -61,6 +63,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     }
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
+
     // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
 
@@ -77,6 +80,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       }
     }
 
+    validateMOR(hoodieCatalogTable.tableConfig)
     try {
       // create catalog table for this hoodie table
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
@@ -101,6 +105,13 @@ object CreateHoodieTableCommand {
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
+    }
+  }
+
+  def validateMOR(tableConfig: HoodieTableConfig): Unit = {
+    if (tableConfig.getTableType.name.equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      && StringUtils.isNullOrEmpty(tableConfig.getPreCombineField)) {
+      throw new IllegalArgumentException("Hoodie MERGE_ON_READ table must have preCombineField defined")
     }
   }
 

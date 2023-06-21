@@ -87,7 +87,6 @@ case class CreateHoodieTableAsSelectCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, updatedTable)
     val tablePath = hoodieCatalogTable.tableLocation
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-
     try {
       // Init hoodie table
       hoodieCatalogTable.initHoodieTable()
@@ -102,6 +101,7 @@ case class CreateHoodieTableAsSelectCommand(
         DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
       )
       val partitionSpec = updatedTable.partitionColumnNames.map((_, None)).toMap
+      CreateHoodieTableCommand.validateMOR(hoodieCatalogTable.tableConfig)
       val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, query, partitionSpec,
         mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options)
       if (success) {
