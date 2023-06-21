@@ -258,11 +258,11 @@ object HoodieSparkSqlWriter {
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val keyGenerator:Option[BaseKeyGenerator] = if (isPrepped) {
+            val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
+              None
+            } else {
               Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
                 .asInstanceOf[BaseKeyGenerator])
-            } else {
-              None
             }
             val hoodieKeysAndLocationsToDelete = genericRecords.map(gr => {
               HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, gr, isPrepped)
