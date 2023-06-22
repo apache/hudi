@@ -121,7 +121,7 @@ public class HiveTestUtil {
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
-  private static HiveSyncConfig hiveSyncConfig;
+  public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
