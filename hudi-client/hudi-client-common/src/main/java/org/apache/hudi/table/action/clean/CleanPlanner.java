@@ -509,7 +509,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
     return CleanerUtils.getEarliestCommitToRetain(
-        hoodieTable.getMetaClient().getActiveTimeline().getCommitsTimeline(),
+        hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndMergesTimeline(),
         config.getCleanerPolicy(),
         config.getCleanerCommitsRetained(),
         Instant.now(),
