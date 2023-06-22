@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
@@ -106,6 +107,7 @@ public class WriteStatus implements Serializable {
    *
    * @see WriteStatus#markSuccess(HoodieRecord, Option)
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
       writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
@@ -163,6 +165,7 @@ public class WriteStatus implements Serializable {
    *
    * @see WriteStatus#markFailure(HoodieRecord, Throwable, Option)
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public void markFailure(String recordKey, String partitionPath, Throwable t) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
