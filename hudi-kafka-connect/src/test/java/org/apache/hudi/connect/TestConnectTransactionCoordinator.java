@@ -19,7 +19,7 @@
 package org.apache.hudi.connect;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieRecordDelegate;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
@@ -304,7 +304,7 @@ public class TestConnectTransactionCoordinator {
     // send WS
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
-      status.markSuccess(mock(HoodieRecordDelegate.class), Option.empty());
+      status.markSuccess(mock(HoodieRecord.class), Option.empty());
     }
     return status;
   }
@@ -314,9 +314,9 @@ public class TestConnectTransactionCoordinator {
     WriteStatus status = new WriteStatus(false, 0.0);
     for (int i = 0; i < 1000; i++) {
       if (i % 10 == 0) {
-        status.markFailure(mock(HoodieRecordDelegate.class), new Throwable("Error writing record on disk"), Option.empty());
+        status.markFailure(mock(HoodieRecord.class), new Throwable("Error writing record on disk"), Option.empty());
       } else {
-        status.markSuccess(mock(HoodieRecordDelegate.class), Option.empty());
+        status.markSuccess(mock(HoodieRecord.class), Option.empty());
       }
     }
     status.setGlobalError(new Throwable("More than one records failed to be written to storage"));

@@ -141,7 +141,7 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * @see WriteStatus#markFailure(HoodieRecordDelegate, Throwable, Option)
+   * @see WriteStatus#markFailure(String, String, Throwable, Option)
    */
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
@@ -156,12 +156,14 @@ public class WriteStatus implements Serializable {
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param recordDelegate         contains {@link HoodieKey} and location information.
+   * @param recordKey
+   * @param partitionPath
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecordDelegate recordDelegate, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(String recordKey, String partitionPath, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
+      HoodieRecordDelegate recordDelegate = HoodieRecordDelegate.create(recordKey, this.partitionPath);
       failedRecords.add(Pair.of(recordDelegate, t));
       errors.put(recordDelegate.getHoodieKey(), t);
     }

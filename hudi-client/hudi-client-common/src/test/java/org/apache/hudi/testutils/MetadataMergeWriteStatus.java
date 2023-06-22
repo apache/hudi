@@ -72,8 +72,8 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(HoodieRecordDelegate recordDelegate, Throwable t, Option<Map<String, String>> recordMetadata) {
-    super.markFailure(recordDelegate, t, recordMetadata);
+  public void markFailure(String recordKey, String partitionPath, Throwable t, Option<Map<String, String>> recordMetadata) {
+    super.markFailure(recordKey, partitionPath, t, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
