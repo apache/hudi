@@ -193,7 +193,7 @@ public class HoodieRowCreateHandle implements Serializable {
             ? HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation) : null;
         writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Exception t) {
-        writeStatus.markFailure(recordKey.toString(), partitionPath.toString(), t, Option.empty());
+        writeStatus.markFailure(recordKey.toString(), partitionPath.toString(), t);
       }
     } catch (Exception e) {
       writeStatus.setGlobalError(e);

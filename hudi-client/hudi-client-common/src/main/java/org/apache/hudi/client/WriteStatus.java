@@ -88,7 +88,8 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * @see WriteStatus#markSuccess(HoodieRecordDelegate, Option)
+   * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
+   * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
@@ -98,11 +99,9 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
-   * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
+   * Used by native write handles like HoodieRowCreateHandle and HoodieRowDataCreateHandle.
    *
-   * @param recordDelegate         contains {@link HoodieKey} and location information.
-   * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
+   * @see WriteStatus#markSuccess(HoodieRecord, Option)
    */
   public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
@@ -141,7 +140,8 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * @see WriteStatus#markFailure(String, String, Throwable, Option)
+   * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
+   * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    */
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
@@ -153,17 +153,14 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
-   * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
+   * Used by native write handles like HoodieRowCreateHandle and HoodieRowDataCreateHandle.
    *
-   * @param recordKey
-   * @param partitionPath
-   * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
+   * @see WriteStatus#markFailure(HoodieRecord, Throwable, Option)
    */
-  public void markFailure(String recordKey, String partitionPath, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(String recordKey, String partitionPath, Throwable t) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      HoodieRecordDelegate recordDelegate = HoodieRecordDelegate.create(recordKey, this.partitionPath);
+      HoodieRecordDelegate recordDelegate = HoodieRecordDelegate.create(recordKey, partitionPath);
       failedRecords.add(Pair.of(recordDelegate, t));
       errors.put(recordDelegate.getHoodieKey(), t);
     }
