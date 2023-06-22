@@ -273,6 +273,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         return Collections.emptyMap();
       }
 
+      // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
       List<String> sortedKeys = new ArrayList<>(keys);
       Collections.sort(sortedKeys);
       boolean fullKeys = true;

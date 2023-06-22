@@ -120,21 +120,20 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(reader)));
   }
 
-
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
     scanner.seekTo(); // places the cursor at the beginning of the first data block.
-    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, keys, getSchema(), schema);
+    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(keyPrefixes, schema);
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(sortedKeyPrefixes, schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
@@ -215,13 +214,13 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   @VisibleForTesting
-  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
     scanner.seekTo(); // places the cursor at the beginning of the first data block.
-    return new RecordByKeyPrefixIterator(scanner, keyPrefixes, getSchema(), readerSchema);
+    return new RecordByKeyPrefixIterator(scanner, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
   @Override
@@ -329,8 +328,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
-    int returnVal = scanner.reseekTo(kv);
-    if (returnVal != 0) {
+    if (scanner.reseekTo(kv) != 0) {
       // key is not found.
       return Option.empty();
     }
@@ -434,7 +432,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   private static class RecordByKeyPrefixIterator implements ClosableIterator<IndexedRecord> {
-    private final Iterator<String> keyPrefixesIterator;
+    private final Iterator<String> sortedKeyPrefixesIterator;
     private Iterator<IndexedRecord> recordsIterator;
 
     private final HFileScanner scanner;
@@ -444,8 +442,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyPrefixIterator(HFileScanner scanner, List<String> keyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
-      this.keyPrefixesIterator = keyPrefixes.iterator();
+    RecordByKeyPrefixIterator(HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
+      this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
 
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
@@ -464,8 +462,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
           } else if (recordsIterator != null && recordsIterator.hasNext()) {
             next = recordsIterator.next();
             return true;
-          } else if (keyPrefixesIterator.hasNext()) {
-            String currentKeyPrefix = keyPrefixesIterator.next();
+          } else if (sortedKeyPrefixesIterator.hasNext()) {
+            String currentKeyPrefix = sortedKeyPrefixesIterator.next();
             recordsIterator =
                 getRecordByKeyPrefixIteratorInternal(scanner, currentKeyPrefix, writerSchema, readerSchema);
           } else {
@@ -491,7 +489,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   private static class RecordByKeyIterator implements ClosableIterator<IndexedRecord> {
-    private final Iterator<String> keyIterator;
+    private final Iterator<String> sortedKeyIterator;
 
     private final HFileScanner scanner;
 
@@ -500,8 +498,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFileScanner scanner, List<String> keys, Schema writerSchema, Schema readerSchema) throws IOException {
-      this.keyIterator = keys.iterator();
+    RecordByKeyIterator(HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
+      this.sortedKeyIterator = sortedKeys.iterator();
 
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
@@ -518,8 +516,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
           return true;
         }
 
-        while (keyIterator.hasNext()) {
-          Option<IndexedRecord> value = fetchRecordByKeyInternal(scanner, keyIterator.next(), writerSchema, readerSchema);
+        while (sortedKeyIterator.hasNext()) {
+          Option<IndexedRecord> value = fetchRecordByKeyInternal(scanner, sortedKeyIterator.next(), writerSchema, readerSchema);
           if (value.isPresent()) {
             next = value.get();
             return true;
