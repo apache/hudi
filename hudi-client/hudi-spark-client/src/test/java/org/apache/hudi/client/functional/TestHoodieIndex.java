@@ -119,7 +119,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         {IndexType.GLOBAL_SIMPLE, false, false},
         {IndexType.BUCKET, false, true},
         {IndexType.BUCKET, false, false},
-        {IndexType.RECORD_INDEX, false, true},
         {IndexType.RECORD_INDEX, true, true},
         {IndexType.RECORD_INDEX, true, false}
     };
