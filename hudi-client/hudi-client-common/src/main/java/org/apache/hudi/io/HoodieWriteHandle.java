@@ -55,7 +55,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -103,14 +102,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
-
-    // We need to track written records within WriteStatus in two cases:
-    // 1. When the HoodieIndex being used is not implicit with storage
-    // 2. If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
-    final boolean trackSuccessRecords = !hoodieTable.getIndex().isImplicitWithStorage()
-        || getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), hoodieTable.getMetaClient());
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        trackSuccessRecords, config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
   }
 
   /**

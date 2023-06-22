@@ -50,8 +50,6 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
-
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
  */
@@ -125,10 +123,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
 
-    boolean shouldTrackSuccessRecords = writeConfig.populateMetaFields()
-        && (!table.getIndex().isImplicitWithStorage()
-        || getMetadataPartitionsNeedingWriteStatusTracking(writeConfig.getMetadataConfig(), table.getMetaClient()));
-    this.writeStatus = new WriteStatus(shouldTrackSuccessRecords,
+    this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
         writeConfig.getWriteStatusFailureFraction());
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
 

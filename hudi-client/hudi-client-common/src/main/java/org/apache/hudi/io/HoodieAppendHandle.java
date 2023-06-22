@@ -304,7 +304,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
     this.writeStatus.setFileId(fileId);
     this.writeStatus.setPartitionPath(partitionPath);
     this.writeStatus.setStat(stat);

@@ -91,7 +91,8 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.currTimer = HoodieTimer.start();
     this.fs = table.getMetaClient().getFs();
     this.path = makeNewPath(partitionPath);
-    this.writeStatus = new WriteStatus(!table.getIndex().isImplicitWithStorage(),
+
+    this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
         writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
