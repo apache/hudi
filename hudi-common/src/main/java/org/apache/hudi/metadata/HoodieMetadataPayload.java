@@ -419,16 +419,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       case METADATA_TYPE_COLUMN_STATS:
         return new HoodieMetadataPayload(key, combineColumnStatsMetadata(previousRecord));
       case METADATA_TYPE_RECORD_INDEX:
-        // TODO: does not work with updates
-        if (previousRecord.recordIndexMetadata.getInstantTime() != recordIndexMetadata.getInstantTime()) {
-          throw new HoodieMetadataException(String.format("InstantTime for %s should not change from %s to %s", previousRecord.key,
-              previousRecord, this));
-        }
-        // TODO: This does not work with clustering
-        if (!previousRecord.getRecordGlobalLocation().equals(getRecordGlobalLocation())) {
-          throw new HoodieMetadataException(String.format("Location for %s should not change from %s to %s", previousRecord.key,
-              previousRecord, this));
-        }
+        // No need to merge with previous record index, always pick the latest payload.
         return this;
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);

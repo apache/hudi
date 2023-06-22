@@ -1441,6 +1441,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withEnableRecordIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withInlineClustering(true)
+            .withInlineClusteringNumCommits(2)
+            .build())
         .build();
 
     init(COPY_ON_WRITE, writeConfig);
