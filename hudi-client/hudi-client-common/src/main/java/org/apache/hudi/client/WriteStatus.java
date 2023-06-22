@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.Lazy;
 
@@ -36,12 +35,14 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Status of a write operation.
@@ -100,29 +101,29 @@ public class WriteStatus implements Serializable {
     totalRecords++;
 
     // get the min and max event time for calculating latency and freshness
-    if (optionalRecordMetadata.isPresent()) {
-      String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
-      try {
-        if (!StringUtils.isNullOrEmpty(eventTimeVal)) {
-          int length = eventTimeVal.length();
-          long millisEventTime;
-          // eventTimeVal in seconds unit
-          if (length == 10) {
-            millisEventTime = Long.parseLong(eventTimeVal) * 1000;
-          } else if (length == 13) {
-            // eventTimeVal in millis unit
-            millisEventTime = Long.parseLong(eventTimeVal);
-          } else {
-            throw new IllegalArgumentException("not support event_time format:" + eventTimeVal);
-          }
-          long eventTime = DateTimeUtils.parseDateTime(Long.toString(millisEventTime)).toEpochMilli();
-          stat.setMinEventTime(eventTime);
-          stat.setMaxEventTime(eventTime);
-        }
-      } catch (DateTimeException | IllegalArgumentException e) {
+    String eventTimeVal = optionalRecordMetadata.orElse(Collections.emptyMap())
+        .getOrDefault(METADATA_EVENT_TIME_KEY, null);
+    if (isNullOrEmpty(eventTimeVal)) {
+      return;
+    }
+    try {
+      int length = eventTimeVal.length();
+      long millisEventTime;
+      // eventTimeVal in seconds unit
+      if (length == 10) {
+        millisEventTime = Long.parseLong(eventTimeVal) * 1000;
+      } else if (length == 13) {
+        // eventTimeVal in millis unit
+        millisEventTime = Long.parseLong(eventTimeVal);
+      } else {
+        throw new IllegalArgumentException("not support event_time format:" + eventTimeVal);
+      }
+      long eventTime = DateTimeUtils.parseDateTime(Long.toString(millisEventTime)).toEpochMilli();
+      stat.setMinEventTime(eventTime);
+      stat.setMaxEventTime(eventTime);
+    } catch (DateTimeException | IllegalArgumentException e) {
         LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
       }
-    }
   }
 
   /**
