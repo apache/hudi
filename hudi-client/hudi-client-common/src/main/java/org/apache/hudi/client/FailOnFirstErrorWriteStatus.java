@@ -18,10 +18,10 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,8 +40,12 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    HoodieRecordDelegate recordDelegate = recordDelegateLazy.get();
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+    markFailure(HoodieRecordDelegate.fromHoodieRecord(record), t, optionalRecordMetadata);
+  }
+
+  @Override
+  public void markFailure(HoodieRecordDelegate recordDelegate, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     LOG.error(String.format("Error writing record %s and optionalRecordMetadata %s error %s", recordDelegate,
         optionalRecordMetadata.orElse(Collections.emptyMap()), t));
     throw new HoodieException("Error writing record " + recordDelegate + ": " + t.getMessage());

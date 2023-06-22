@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -50,8 +49,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.hudi.util.Lazy.lazily;
 
 @NotThreadSafe
 public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
@@ -162,7 +159,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       } else {
         recordsDeleted++;
       }
-      writeStatus.markSuccess(lazily(() -> HoodieRecordDelegate.fromHoodieRecord(record)), recordMetadata);
+      writeStatus.markSuccess(record, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
@@ -170,7 +167,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
-      writeStatus.markFailure(lazily(() -> HoodieRecordDelegate.fromHoodieRecord(record)), t, recordMetadata);
+      writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
   }

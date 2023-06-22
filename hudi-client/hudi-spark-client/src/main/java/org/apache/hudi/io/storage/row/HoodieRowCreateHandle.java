@@ -50,9 +50,7 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
-import static org.apache.hudi.util.Lazy.lazily;
 
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
@@ -196,11 +194,13 @@ public class HoodieRowCreateHandle implements Serializable {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
-        writeStatus.markSuccess(lazily(()
-            -> HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation)), Option.empty());
+        HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
+            ? HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation) : null;
+        writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Exception t) {
-        writeStatus.markFailure(lazily(()
-            -> HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation)), t, Option.empty());
+        HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
+            ? HoodieRecordDelegate.create(recordKey.toString(), partitionPath.toString(), null, newRecordLocation) : null;
+        writeStatus.markFailure(recordDelegate, t, Option.empty());
       }
     } catch (Exception e) {
       writeStatus.setGlobalError(e);
@@ -213,10 +213,8 @@ public class HoodieRowCreateHandle implements Serializable {
       // TODO make sure writing w/ and w/o meta fields is consistent (currently writing w/o
       //      meta-fields would fail if any record will, while when writing w/ meta-fields it won't)
       fileWriter.writeRow(row);
-      // when metafields disabled, we do not need to track individual records, hence
-      // passing a dummy record delegate (lazy) and it won't be tracked
-      writeStatus.markSuccess(lazily(()
-          -> HoodieRecordDelegate.create(EMPTY_STRING, EMPTY_STRING)), Option.empty());
+      // when metafields disabled, we do not need to track individual records
+      writeStatus.markSuccess((HoodieRecordDelegate) null, Option.empty());
     } catch (Exception e) {
       writeStatus.setGlobalError(e);
       throw new HoodieException("Exception thrown while writing spark InternalRows to file ", e);

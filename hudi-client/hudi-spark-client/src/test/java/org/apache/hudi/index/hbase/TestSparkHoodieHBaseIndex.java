@@ -85,7 +85,6 @@ import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.apache.hudi.util.Lazy.lazily;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -802,8 +801,8 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // is not implemented via HoodieWriteClient
       JavaRDD<WriteStatus> deleteWriteStatues = writeStatues.map(w -> {
         WriteStatus newWriteStatus = new WriteStatus(true, 1.0);
-        w.getWrittenRecordDelegates().forEach(r -> newWriteStatus.markSuccess(lazily(()
-            -> HoodieRecordDelegate.create(r.getHoodieKey())), Option.empty()));
+        w.getWrittenRecordDelegates().forEach(r -> newWriteStatus
+            .markSuccess(HoodieRecordDelegate.create(r.getHoodieKey()), Option.empty()));
         assertEquals(w.getTotalRecords(), newWriteStatus.getTotalRecords());
         newWriteStatus.setStat(new HoodieWriteStat());
         return newWriteStatus;

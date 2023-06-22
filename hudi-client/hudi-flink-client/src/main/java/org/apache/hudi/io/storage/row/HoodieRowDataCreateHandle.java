@@ -24,10 +24,10 @@ import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -48,8 +48,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.apache.hudi.util.Lazy.lazily;
 
 /**
  * Create handle with RowData for datasource implementation of bulk insert.
@@ -137,11 +135,13 @@ public class HoodieRowDataCreateHandle implements Serializable {
           record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       try {
         fileWriter.writeRow(recordKey, rowData);
-        writeStatus.markSuccess(lazily(()
-            -> HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation)), Option.empty());
+        HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
+            ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
+        writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Throwable t) {
-        writeStatus.markFailure(lazily(()
-            -> HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation)), t, Option.empty());
+        HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
+            ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
+        writeStatus.markFailure(recordDelegate, t, Option.empty());
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);

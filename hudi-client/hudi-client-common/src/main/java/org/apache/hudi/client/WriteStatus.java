@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +38,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
@@ -88,16 +88,30 @@ public class WriteStatus implements Serializable {
   }
 
   /**
+   * @see WriteStatus#markSuccess(HoodieRecordDelegate, Option)
+   */
+  public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
+    if (trackSuccessRecords) {
+      writtenRecordDelegates.add(HoodieRecordDelegate.fromHoodieRecord(record));
+    }
+    updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param recordDelegateLazy     HoodieKey with location information.
+   * @param recordDelegate         contains {@link HoodieKey} and location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(Lazy<HoodieRecordDelegate> recordDelegateLazy, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecordDelegates.add(recordDelegateLazy.get());
+      writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
     }
+    updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  private void updateStatsForSuccess(Option<Map<String, String>> optionalRecordMetadata) {
     totalRecords++;
 
     // get the min and max event time for calculating latency and freshness
@@ -122,24 +136,39 @@ public class WriteStatus implements Serializable {
       stat.setMinEventTime(eventTime);
       stat.setMaxEventTime(eventTime);
     } catch (DateTimeException | IllegalArgumentException e) {
-        LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
-      }
+      LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+    }
+  }
+
+  /**
+   * @see WriteStatus#markFailure(HoodieRecordDelegate, Throwable, Option)
+   */
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+    if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
+      // Guaranteed to have at-least one error
+      failedRecords.add(Pair.of(HoodieRecordDelegate.fromHoodieRecord(record), t));
+      errors.put(record.getKey(), t);
+    }
+    updateStatsForFailure();
   }
 
   /**
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param recordDelegateLazy     HoodieKey with location information.
+   * @param recordDelegate         contains {@link HoodieKey} and location information.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieRecordDelegate recordDelegate, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      HoodieRecordDelegate recordDelegate = recordDelegateLazy.get();
       failedRecords.add(Pair.of(recordDelegate, t));
       errors.put(recordDelegate.getHoodieKey(), t);
     }
+    updateStatsForFailure();
+  }
+
+  private void updateStatsForFailure() {
     totalRecords++;
     totalErrorRecords++;
   }

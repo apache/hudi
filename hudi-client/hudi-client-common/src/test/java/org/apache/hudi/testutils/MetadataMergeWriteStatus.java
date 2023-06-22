@@ -22,7 +22,6 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.util.Lazy;
 
 import java.util.HashMap;
 import java.util.List;
@@ -65,16 +64,16 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markSuccess(Lazy<HoodieRecordDelegate> recordDelegateLazy, Option<Map<String, String>> recordMetadata) {
-    super.markSuccess(recordDelegateLazy, recordMetadata);
+  public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> recordMetadata) {
+    super.markSuccess(recordDelegate, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
   }
 
   @Override
-  public void markFailure(Lazy<HoodieRecordDelegate> recordDelegateLazy, Throwable t, Option<Map<String, String>> recordMetadata) {
-    super.markFailure(recordDelegateLazy, t, recordMetadata);
+  public void markFailure(HoodieRecordDelegate recordDelegate, Throwable t, Option<Map<String, String>> recordMetadata) {
+    super.markFailure(recordDelegate, t, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
