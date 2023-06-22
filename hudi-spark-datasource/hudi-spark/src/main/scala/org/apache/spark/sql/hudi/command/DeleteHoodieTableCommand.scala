@@ -45,8 +45,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
       dft.table
     }
 
-    var config = buildHoodieDeleteTableConfig(catalogTable, sparkSession)
-    config = config + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
+    val config = buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
     df.write.format("hudi")

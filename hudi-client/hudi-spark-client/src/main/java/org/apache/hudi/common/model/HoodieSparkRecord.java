@@ -83,6 +83,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
+  /**
+   * Record is considered deleted if data is null.
+   */
   private boolean isDeleted;
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
