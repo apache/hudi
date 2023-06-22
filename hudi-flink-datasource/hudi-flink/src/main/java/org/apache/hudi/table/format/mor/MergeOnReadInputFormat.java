@@ -43,7 +43,6 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -316,26 +315,14 @@ public class MergeOnReadInputFormat
   }
 
   private ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
-    // generate partition specs.
-    LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
-        new org.apache.hadoop.fs.Path(path).getParent(),
-        this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
-        FilePathUtils.extractPartitionKeys(this.conf));
-    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> {
-      final int idx = fieldNames.indexOf(k);
-      if (idx == -1) {
-        // for any rare cases that the partition field does not exist in schema,
-        // fallback to file read
-        return;
-      }
-      DataType fieldType = fieldTypes.get(idx);
-      if (!DataTypeUtils.isDatetimeType(fieldType)) {
-        // date time type partition field is formatted specifically,
-        // read directly from the data file to avoid format mismatch or precision loss
-        partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
-      }
-    });
+    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+        path,
+        fieldNames,
+        fieldTypes,
+        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
+    );
 
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
