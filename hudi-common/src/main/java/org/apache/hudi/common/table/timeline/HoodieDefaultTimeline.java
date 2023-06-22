@@ -268,6 +268,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
+   * Get all instants (commits, delta commits, replace, compaction) that produce new data or merge file, in the active timeline.
+   */
+  public HoodieTimeline getCommitsAndMergesTimeline() {
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION));
+  }
+
+  /**
+   * Get all instants (commits, compaction) that produce new data or merge file, in the active timeline.
+   */
+  public HoodieTimeline getCommitAndCompactionTimeline() {
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, COMPACTION_ACTION));
+  }
+
+  /**
    * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index) that result in actions,
    * in the active timeline.
    */

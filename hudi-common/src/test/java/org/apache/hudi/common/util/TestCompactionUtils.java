@@ -18,11 +18,15 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -30,7 +34,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,6 +51,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +62,9 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.CompactionTestUtils.createCompactionPlan;
+import static org.apache.hudi.common.testutils.CompactionTestUtils.createDeltaCommit;
 import static org.apache.hudi.common.testutils.CompactionTestUtils.scheduleCompaction;
+import static org.apache.hudi.common.testutils.CompactionTestUtils.scheduleInflightCompaction;
 import static org.apache.hudi.common.testutils.CompactionTestUtils.setupAndValidateCompactionOperations;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
@@ -244,35 +254,24 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
     Pair<HoodieTimeline, HoodieInstant> actual =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
+
+    assertEquals(
+        Stream.of(
+            new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
+            new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
+            new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+            .collect(Collectors.toList()),
+        actual.getLeft().getInstants());
     if (hasCompletedCompaction) {
-      Stream<HoodieInstant> instants = actual.getLeft().getInstantsAsStream();
       assertEquals(
-          Stream.of(
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
-              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
-              .collect(Collectors.toList()),
-          actual.getLeft().getInstants());
-      assertEquals(
-          new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"),
-          actual.getRight());
+              new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"),
+              actual.getRight());
     } else {
       assertEquals(
-          Stream.of(
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "02"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "03"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "04"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
-              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
-              .collect(Collectors.toList()),
-          actual.getLeft().getInstants());
-      assertEquals(
-          new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
-          actual.getRight());
+              new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "06"),
+              actual.getRight());
     }
+
   }
 
   @Test
@@ -281,29 +280,66 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     assertEquals(Option.empty(), CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline));
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testGetOldestInstantToKeepForCompaction(boolean hasCompletedCompaction) {
-    HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
-    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20);
+  @Test
+  public void testGetOldestInstantToKeepForCompaction() throws IOException {
+    String deltaCommitTime1 = "001";
+    String compactorTime2 = "002";
+    String deltaCommitTime3 = "003";
+    String compactorTime4 = "004";
+    String cleanTime5 = "005";
+    createDeltaCommit(metaClient, deltaCommitTime1);
+    metaClient.reloadActiveTimeline();
+    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 10);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, deltaCommitTime1), actual.get());
 
-    if (hasCompletedCompaction) {
-      assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"), actual.get());
-    } else {
-      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"), actual.get());
-    }
+    HoodieCompactionPlan compactionPlan2 =
+            CompactionTestUtils.createCompactionPlan(metaClient, deltaCommitTime1, compactorTime2, 2,true,false);
+    scheduleInflightCompaction(metaClient, compactorTime2, compactionPlan2);
+    metaClient.getActiveTimeline()
+            .transitionCompactionInflightToComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactorTime2),Option.empty());
+    createDeltaCommit(metaClient, deltaCommitTime3);
+    metaClient.reloadActiveTimeline();
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 10);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, compactorTime2), actual.get());
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 1);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, compactorTime2), actual.get());
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
+    HoodieCompactionPlan compactionPlan4 =
+            CompactionTestUtils.createCompactionPlan(metaClient, deltaCommitTime3, compactorTime4, 2,true,false);
+    scheduleInflightCompaction(metaClient, deltaCommitTime3, compactionPlan4);
+    metaClient.reloadActiveTimeline();
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 10);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, compactorTime2), actual.get());
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 1);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, compactorTime2), actual.get());
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
+
+    HoodieInstant requestedInstant5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime5);
+    HoodieCleanerPlan cleanerPlan5 = HoodieCleanerPlan.newBuilder()
+            .setEarliestInstantToRetainBuilder(HoodieActionInstant.newBuilder()
+                    .setAction(HoodieTimeline.DELTA_COMMIT_ACTION)
+                    .setTimestamp(deltaCommitTime1)
+                    .setState(HoodieInstant.State.COMPLETED.name()))
+            .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+            .setFilesToBeDeletedPerPartition(new HashMap<>())
+            .setVersion(CleanPlanV2MigrationHandler.VERSION)
+            .build();
+
+    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant5, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan5));
+    HoodieInstant inflightInstant5 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant5, Option.empty());
+    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime5, 1L, 1,
+            compactorTime2, "", Collections.emptyMap(), 0, Collections.emptyMap());
+    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant5,
+            TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+    metaClient.reloadActiveTimeline();
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient,1);
+    assertEquals(compactorTime2, actual.get().getTimestamp());
   }
 
   @Test
-  public void testGetOldestInstantToKeepForCompactionWithEmptyDeltaCommits() {
-    HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
-    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20));
+  public void testGetOldestInstantToKeepForCompactionWithEmptyDeltaCommits() throws IOException {
+    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToRetainForCompaction(metaClient.getActiveTimeline(), metaClient, 20));
   }
 
   private HoodieActiveTimeline prepareTimeline(boolean hasCompletedCompaction) {

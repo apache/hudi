@@ -129,7 +129,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     try {
       earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
-          metaClient.getActiveTimeline().getCommitsTimeline(),
+          metaClient.getActiveTimeline().getCommitsAndMergesTimeline(),
           cleanerPolicy,
           cleanerCommitsRetained,
           latestCommit.isPresent()
@@ -519,7 +519,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
               || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
               ? CompactionUtils.getOldestInstantToRetainForCompaction(
-              table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
+              table.getActiveTimeline(), table.getMetaClient(), config.getInlineCompactDeltaCommitMax())
               : Option.empty();
 
       // The clustering commit instant can not be archived unless we ensure that the replaced files have been cleaned,

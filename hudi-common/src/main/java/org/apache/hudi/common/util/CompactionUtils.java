@@ -279,8 +279,8 @@ public class CompactionUtils {
    */
   public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompaction(
       HoodieActiveTimeline activeTimeline) {
-    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
-        .filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitAndCompactionTimeline()
+        .lastInstant();
     HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
 
     HoodieInstant latestInstant;
@@ -345,7 +345,8 @@ public class CompactionUtils {
    * @return the oldest instant to keep for MOR compaction.
    */
   public static Option<HoodieInstant> getOldestInstantToRetainForCompaction(
-      HoodieActiveTimeline activeTimeline, int maxDeltaCommits) {
+      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, int maxDeltaCommits) throws IOException {
+    Option<HoodieInstant> oldestDeltaCommitToRetain = Option.empty();
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfoOption =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(activeTimeline);
     if (deltaCommitsInfoOption.isPresent()) {
@@ -353,14 +354,25 @@ public class CompactionUtils {
       HoodieTimeline deltaCommitTimeline = deltaCommitsInfo.getLeft();
       int numDeltaCommits = deltaCommitTimeline.countInstants();
       if (numDeltaCommits < maxDeltaCommits) {
-        return Option.of(deltaCommitsInfo.getRight());
+        oldestDeltaCommitToRetain = Option.of(deltaCommitsInfo.getRight());
       } else {
         // delta commits with the last one to keep
         List<HoodieInstant> instants = deltaCommitTimeline.getInstantsAsStream()
             .limit(numDeltaCommits - maxDeltaCommits + 1).collect(Collectors.toList());
-        return Option.of(instants.get(instants.size() - 1));
+        oldestDeltaCommitToRetain = Option.of(instants.get(instants.size() - 1));
       }
     }
-    return Option.empty();
+
+    HoodieTimeline completedCompactionTimeLine = activeTimeline.getCommitTimeline()
+            .filterCompletedInstants();
+    Option<HoodieInstant> oldestInstantToRetain = CleanerUtils.getOldestInstantToRetainFromTimeline(activeTimeline, metaClient, completedCompactionTimeLine);
+
+    Option<HoodieInstant> finalOldestDeltaCommitToRetain = oldestDeltaCommitToRetain;
+    if (oldestDeltaCommitToRetain.isPresent()
+            && oldestInstantToRetain.map(instant -> instant.compareTo(finalOldestDeltaCommitToRetain.get()) > 0).orElse(true)) {
+      oldestInstantToRetain = oldestDeltaCommitToRetain;
+    }
+
+    return oldestInstantToRetain;
   }
 }

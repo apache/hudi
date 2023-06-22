@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
@@ -201,4 +202,43 @@ public class CleanerUtils {
         throw new IllegalArgumentException("Unsupported action type " + actionType);
     }
   }
+
+  public static Option<HoodieInstant> getOldestInstantToRetainFromTimeline(
+          HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieTimeline timeline) throws IOException {
+    Option<HoodieInstant> oldestInstantToRetain = Option.empty();
+    Option<HoodieInstant> cleanInstantOpt =
+            activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+    if (cleanInstantOpt.isPresent()) {
+      // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
+      // the clean metadata.
+      HoodieInstant cleanInstant = cleanInstantOpt.get();
+      HoodieActionInstant earliestInstantToRetain = getCleanerPlan(metaClient, cleanInstant.isRequested()
+              ? cleanInstant
+              : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+              .getEarliestInstantToRetain();
+      String retainLowerBound;
+      if (earliestInstantToRetain != null && !StringUtils.isNullOrEmpty(earliestInstantToRetain.getTimestamp())) {
+        retainLowerBound = earliestInstantToRetain.getTimestamp();
+      } else {
+        // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
+        // retain first instant after clean instant.
+        // For KEEP_LATEST_FILE_VERSIONS cleaner policy, file versions are only maintained for active file groups
+        // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
+        // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
+        // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
+        // TODO: This case has to be handled. HUDI-6352
+        retainLowerBound = cleanInstant.getTimestamp();
+      }
+      oldestInstantToRetain = timeline.filter(instant ->
+                      HoodieTimeline.compareTimestamps(
+                              instant.getTimestamp(),
+                              HoodieTimeline.GREATER_THAN_OR_EQUALS,
+                              retainLowerBound))
+              .firstInstant();
+    } else {
+      oldestInstantToRetain = timeline.firstInstant();
+    }
+    return oldestInstantToRetain;
+  }
+
 }
