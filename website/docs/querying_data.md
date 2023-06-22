@@ -28,7 +28,7 @@ Retrieve the data table at the present point in time.
 
 ```scala
 val hudiIncQueryDF = spark
-     .read()
+     .read
      .format("hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
      .load(tablePath) 
@@ -41,7 +41,7 @@ Thanks to Hudi's support for record level change streams, these incremental pipe
 The following snippet shows how to obtain all records changed after `beginInstantTime` and run some SQL on them.
 
 ```java
- Dataset<Row> hudiIncQueryDF = spark.read()
+Dataset<Row> hudiIncQueryDF = spark.read()
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
