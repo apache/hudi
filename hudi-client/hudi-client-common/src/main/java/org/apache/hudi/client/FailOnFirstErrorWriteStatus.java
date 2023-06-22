@@ -40,14 +40,14 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
 
   @Override
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
-    LOG.error(String.format("Error writing record %s and optionalRecordMetadata %s error %s", record,
-        optionalRecordMetadata.orElse(Collections.emptyMap()), t));
-    throw new HoodieException("Error writing record " + record + ": " + t.getMessage());
+    LOG.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),
+        optionalRecordMetadata.orElse(Collections.emptyMap())), t);
+    throw new HoodieException("Error writing record " + record, t);
   }
 
   @Override
   public void markFailure(String recordKey, String partitionPath, Throwable t) {
-    LOG.error(String.format("Error writing record %s and error %s", recordKey, t));
-    throw new HoodieException("Error writing record " + recordKey + " partitionPath " + partitionPath + ": " + t.getMessage());
+    LOG.error(String.format("Error writing record %s and partition %s", recordKey, partitionPath), t);
+    throw new HoodieException("Error writing record `" + recordKey + "` partitionPath `" + partitionPath + "`", t);
   }
 }
