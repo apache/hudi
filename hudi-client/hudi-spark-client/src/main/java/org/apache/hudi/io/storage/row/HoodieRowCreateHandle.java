@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
 import static org.apache.hudi.util.Lazy.lazily;
 
 /**
@@ -127,7 +128,8 @@ public class HoodieRowCreateHandle implements Serializable {
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
 
     boolean shouldTrackSuccessRecords = writeConfig.populateMetaFields()
-        && !table.getIndex().isImplicitWithStorage();
+        && (!table.getIndex().isImplicitWithStorage()
+        || getMetadataPartitionsNeedingWriteStatusTracking(writeConfig.getMetadataConfig(), table.getMetaClient()));
     this.writeStatus = new WriteStatus(shouldTrackSuccessRecords,
         writeConfig.getWriteStatusFailureFraction());
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
