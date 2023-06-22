@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -100,15 +99,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       // get last completed instant
       Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
       if (indexUptoInstant.isPresent()) {
-        // start initializing file groups
-        // in case FILES partition itself was not initialized before (i.e. metadata was never enabled), this will initialize synchronously
-        HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
-            .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
-        if (!finalPartitionsToIndex.get(0).getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
-          // initialize metadata partition only if not for FILES partition.
-          metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexUptoInstant.get().getTimestamp());
-        }
-
         // for each partitionToIndex add that time to the plan
         List<HoodieIndexPartitionInfo> indexPartitionInfos = finalPartitionsToIndex.stream()
             .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p.getPartitionPath(), indexUptoInstant.get().getTimestamp()))

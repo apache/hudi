@@ -595,6 +595,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testParseDateFromInstantTime() throws ParseException {
+    // default second granularity instant ID
+    String secondGranularityInstant = "20210101120101123";
+    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    System.out.println(defaultSecsGranularityDate.getTime());
+  }
+
+  @Test
   public void testMetadataCompactionInstantDateParsing() throws ParseException {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";

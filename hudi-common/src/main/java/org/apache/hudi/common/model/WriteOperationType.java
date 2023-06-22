@@ -126,6 +126,7 @@ public enum WriteOperationType {
   public static boolean isDataChange(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED
         || operation == WriteOperationType.DELETE
         || operation == WriteOperationType.BULK_INSERT
         || operation == WriteOperationType.DELETE_PARTITION

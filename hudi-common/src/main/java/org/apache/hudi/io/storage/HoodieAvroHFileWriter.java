@@ -18,6 +18,16 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieDuplicateKeyException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -30,14 +40,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -54,8 +58,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private static AtomicLong recordIndex = new AtomicLong(1);
-
   private final Path file;
   private HoodieHFileConfig hfileConfig;
   private final HoodieWrapperFileSystem fs;
@@ -68,6 +72,7 @@ public class HoodieAvroHFileWriter
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
+  private String prevRecordKey;
 
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
@@ -106,6 +111,7 @@ public class HoodieAvroHFileWriter
         .create();
 
     writer.appendFileInfo(HoodieAvroHFileReader.SCHEMA_KEY.getBytes(), schema.toString().getBytes());
+    this.prevRecordKey = "";
   }
 
   @Override
@@ -126,6 +132,10 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+    if (prevRecordKey.equals(recordKey)) {
+      throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
+          + "Record payload: " + record);
+    }
     byte[] value = null;
     boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
@@ -154,6 +164,7 @@ public class HoodieAvroHFileWriter
       }
       maxRecordKey = recordKey;
     }
+    prevRecordKey = recordKey;
   }
 
   @Override

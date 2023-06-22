@@ -117,6 +117,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
       HoodiePairData<String, HoodieRecord<R>> incomingRecords,
       HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords,
       HoodieTable hoodieTable) {
+    final boolean shouldUpdatePartitionPath = config.getGlobalSimpleIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
+
     HoodiePairData<String, Pair<String, HoodieRecordLocation>> existingRecordByRecordKey =
         existingRecords.mapToPair(
             entry -> new ImmutablePair<>(entry.getLeft().getRecordKey(),
@@ -130,7 +132,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           if (partitionPathLocationPair.isPresent()) {
             String partitionPath = partitionPathLocationPair.get().getKey();
             HoodieRecordLocation location = partitionPathLocationPair.get().getRight();
-            if (config.getGlobalSimpleIndexUpdatePartitionPath()) {
+            if (shouldUpdatePartitionPath) {
               // The incoming record may need to be inserted to a new partition; keep the location info for merging later.
               return Pair.of(inputRecord, partitionPathLocationPair);
             } else {
@@ -144,7 +146,7 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
           }
         });
 
-    return config.getGlobalSimpleIndexUpdatePartitionPath()
+    return shouldUpdatePartitionPath
         ? mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable)
         : taggedRecordsAndLocationInfo.map(Pair::getLeft);
   }

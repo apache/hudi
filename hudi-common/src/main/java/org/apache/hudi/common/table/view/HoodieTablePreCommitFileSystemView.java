@@ -39,7 +39,7 @@ import java.util.stream.Stream;
  *
  */
 public class HoodieTablePreCommitFileSystemView {
-  
+
   private Map<String, List<String>> partitionToReplaceFileIds;
   private List<HoodieWriteStat> filesWritten;
   private String preCommitInstantTime;

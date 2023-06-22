@@ -43,6 +43,7 @@ import java.util.stream.Stream;
 public class ManifestFileWriter {
 
   public static final String MANIFEST_FOLDER_NAME = "manifest";
+  public static final String ABSOLUTE_PATH_MANIFEST_FOLDER_NAME = "absolute-path-manifest";
   public static final String MANIFEST_FILE_NAME = "latest-snapshot.csv";
   private static final Logger LOG = LoggerFactory.getLogger(ManifestFileWriter.class);
 
@@ -69,7 +70,7 @@ public class ManifestFileWriter {
       } else {
         LOG.info("Writing base file names to manifest file: " + baseFiles.size());
       }
-      final Path manifestFilePath = getManifestFilePath();
+      final Path manifestFilePath = getManifestFilePath(useAbsolutePath);
       try (FSDataOutputStream outputStream = metaClient.getFs().create(manifestFilePath, true);
            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
         for (String f : baseFiles) {
@@ -101,16 +102,16 @@ public class ManifestFileWriter {
     }
   }
 
-  public Path getManifestFolder() {
-    return new Path(metaClient.getMetaPath(), MANIFEST_FOLDER_NAME);
+  public Path getManifestFolder(boolean useAbsolutePath) {
+    return new Path(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
   }
 
-  public Path getManifestFilePath() {
-    return new Path(getManifestFolder(), MANIFEST_FILE_NAME);
+  public Path getManifestFilePath(boolean useAbsolutePath) {
+    return new Path(getManifestFolder(useAbsolutePath), MANIFEST_FILE_NAME);
   }
 
-  public String getManifestSourceUri() {
-    return new Path(getManifestFolder(), "*").toUri().toString();
+  public String getManifestSourceUri(boolean useAbsolutePath) {
+    return new Path(getManifestFolder(useAbsolutePath), "*").toUri().toString();
   }
 
   public static Builder builder() {
