@@ -120,13 +120,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(reader)));
   }
 
-  @Override
-  public Option<HoodieRecord<IndexedRecord>> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    synchronized (sharedScannerLock) {
-      return fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema)
-          .map(data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
-    }
-  }
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
@@ -134,6 +127,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
+    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, keys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -216,6 +210,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
+    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     return new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
   }
 
@@ -225,6 +220,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
+    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     return new RecordByKeyPrefixIterator(scanner, keyPrefixes, getSchema(), readerSchema);
   }
 
@@ -267,14 +263,14 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     //
     // Consider entries w/ the following keys in HFile: [key01, key02, key03, key04,..., key20];
     // In case looked up key-prefix is
-    //    - "key", `seekTo()` will return -1 and place the cursor just before "key01",
+    //    - "key", `reseekTo()` will return -1 and place the cursor just before "key01",
     //    `getCell()` will return "key01" entry
-    //    - "key03", `seekTo()` will return 0 (exact match) and place the cursor just before "key03",
+    //    - "key03", `reseekTo()` will return 0 (exact match) and place the cursor just before "key03",
     //    `getCell()` will return "key03" entry
-    //    - "key1", `seekTo()` will return 1 (first not lower than) and place the cursor just before
-    //    "key10" (i.e. on "key09");
+    //    - "key1", `reseekTo()` will return 1 (first not lower than) and leave the cursor wherever it was just before calling
+    //    reseekTo();
     //
-    int val = scanner.seekTo(kv);
+    int val = scanner.reseekTo(kv);
     if (val == 1) {
       // Try moving to next entry, matching the prefix key; if we're at the EOF,
       // `next()` will return false
@@ -333,10 +329,13 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
-    if (scanner.seekTo(kv) != 0) {
+    int returnVal = scanner.reseekTo(kv);
+    if (returnVal != 0) {
+      // key is not found.
       return Option.empty();
     }
 
+    // key is found and the cursor is left where the key is found
     Cell c = scanner.getCell();
     byte[] valueBytes = copyValueFromCell(c);
     GenericRecord record = deserialize(key.getBytes(), valueBytes, writerSchema, readerSchema);

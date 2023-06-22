@@ -29,14 +29,6 @@ import java.util.List;
 
 public interface HoodieSeekingFileReader<T> extends HoodieFileReader<T> {
 
-  default Option<HoodieRecord<T>> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default Option<HoodieRecord<T>> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
-  }
-
   default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
