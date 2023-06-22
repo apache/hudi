@@ -84,13 +84,17 @@ class TestHoodieParquetBloomFilter {
     val accu = new NumRowGroupsAcc
     spark.sparkContext.register(accu)
 
-    // this one shall skip partition scanning thanks to bloom
+    // this one shall skip partition scanning thanks to bloom when spark >=3
     spark.read.format("hudi").load(basePath).filter("bloom_col = '3'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
-    assertEquals(0, accu.value)
+    assertEquals(if (currentSparkSupportParquetBloom()) 0 else 1, accu.value)
 
     // this one will trigger one partition scan
     spark.read.format("hudi").load(basePath).filter("bloom_col = '2'").foreachPartition((it: Iterator[Row]) => it.foreach(_ => accu.add(0)))
     assertEquals(1, accu.value)
+  }
+
+  def currentSparkSupportParquetBloom(): Boolean = {
+    Integer.valueOf(spark.version.charAt(0)) >= 3
   }
 }
 
