@@ -20,7 +20,7 @@ Today you can use any of these validators and even have the flexibility to exten
 ## SQL Query Single Result
 [org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java)
 
-The SQL Query Single Result validator can be used to validate that a query on the table results in a specific value. This validator allows you to run a SQL command and abort the commit if it does not match the expected output.
+The SQL Query Single Result validator can be used to validate that a query on the table results in a specific value. This validator allows you to run a SQL query and abort the commit if it does not match the expected output.
 
 Multiple queries can be separated by `;` delimiter. Include the expected result as part of the query separated by `#`.
 
