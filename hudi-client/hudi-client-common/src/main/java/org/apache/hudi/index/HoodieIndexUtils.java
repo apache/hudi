@@ -23,11 +23,15 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -213,19 +217,16 @@ public class HoodieIndexUtils {
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
-    return partitionLocations.flatMap(p -> {
-      String partitionPath = p.getLeft();
-      String fileId = p.getRight().getFileId();
-      return new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(partitionPath, fileId))
-          .getMergedRecords().iterator();
-    });
+    return partitionLocations.flatMap(p
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()))
+        .getMergedRecords().iterator());
   }
 
   /**
@@ -262,19 +263,19 @@ public class HoodieIndexUtils {
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdates(
-      HoodieData<Pair<HoodieRecord<R>, Option<Pair<String, HoodieRecordLocation>>>> taggedHoodieRecords, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> taggedHoodieRecords, HoodieWriteConfig config, HoodieTable hoodieTable) {
     // completely new records
     HoodieData<HoodieRecord<R>> newRecords = taggedHoodieRecords.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records tagged to existing base files
     HoodieData<HoodieRecord<R>> updatingRecords = taggedHoodieRecords.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
-    HoodieData<Pair<String, HoodieRecordLocation>> partitionLocations = taggedHoodieRecords
+    HoodieData<HoodieRecordGlobalLocation> globalLocations = taggedHoodieRecords
         .filter(p -> p.getRight().isPresent())
         .map(p -> p.getRight().get())
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
-    HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(partitionLocations, config, hoodieTable);
+    HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
 
     final HoodieRecordMerger recordMerger = config.getRecordMerger();
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
@@ -311,5 +312,12 @@ public class HoodieIndexUtils {
           }
         });
     return taggedUpdatingRecords.union(newRecords);
+  }
+
+  public static HoodieRecord createNewHoodieRecord(HoodieRecord oldRecord, HoodieRecordGlobalLocation location, HoodieRecordMerger merger) {
+    HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
+    return merger.getRecordType() == HoodieRecordType.AVRO
+        ? new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData())
+        : oldRecord.newInstance();
   }
 }

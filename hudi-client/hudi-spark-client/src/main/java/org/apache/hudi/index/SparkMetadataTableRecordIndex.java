@@ -23,15 +23,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -54,6 +51,9 @@ import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.index.HoodieIndexUtils.getTaggedRecord;
+import static org.apache.hudi.index.HoodieIndexUtils.mergeForPartitionUpdates;
 
 /**
  * Hoodie Index implementation backed by the record index present in the Metadata Table.
@@ -110,7 +110,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
         HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
 
     // Tag the incoming records, as inserts or updates, by joining with existing record keys
-    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBackToRecords(keyToLocationPairRDD, records);
+    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBackToRecords(keyToLocationPairRDD, records, hoodieTable);
 
     // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
     // keyToLocationPairRDD and records RDD.
@@ -154,38 +154,39 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   }
 
   private <R> HoodieData<HoodieRecord<R>> tagLocationBackToRecords(
-      HoodiePairData<String, HoodieRecordGlobalLocation> keyFilenamePair,
-      HoodieData<HoodieRecord<R>> records) {
-    HoodiePairData<String, HoodieRecord<R>> keyRecordPairs =
-        records.mapToPair(record -> ImmutablePair.of(record.getRecordKey(), record));
-    // Here as the records might have more data than keyFilenamePairs (some row keys' not found in record index),
-    // we will do left outer join.
-    return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()
+      HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
+      HoodieData<HoodieRecord<R>> incomingRecords,
+      HoodieTable hoodieTable) {
+    final boolean shouldUpdatePartitionPath = config.getBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
+    final HoodieRecordMerger merger = config.getRecordMerger();
+
+    HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords = incomingRecords
+        .mapToPair(record -> Pair.of(record.getRecordKey(), record));
+
+    // Pair of a tagged record and the global location if meant for merged-read lookup in later stage
+    HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> taggedRecordsAndLocations
+        = keyAndIncomingRecords.leftOuterJoin(keyAndExistingLocations).values()
         .map(v -> {
-          HoodieRecord<R> record = v.getLeft();
-          Option<HoodieRecordGlobalLocation> location = Option.ofNullable(v.getRight().orElse(null));
-          if (!location.isPresent()) {
-            // No location found.
-            return record;
+          HoodieRecord<R> incomingRecord = v.getLeft();
+          Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
+          if (currentLocOpt.isPresent()) {
+            if (shouldUpdatePartitionPath) {
+              return Pair.of(incomingRecord, currentLocOpt);
+            } else {
+              HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
+              // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
+              // When it differs, the record will still be updated at its old partition.
+              return Pair.of((HoodieRecord<R>) getTaggedRecord(
+                      HoodieIndexUtils.createNewHoodieRecord(incomingRecord, currentLoc, merger), Option.of(currentLoc)),
+                  Option.empty());
+            }
+          } else {
+            return Pair.of(getTaggedRecord(incomingRecord, Option.empty()), Option.empty());
           }
-          // Ensure the partitionPath is also set correctly in the key
-          if (!record.getPartitionPath().equals(location.get().getPartitionPath())) {
-            record = createNewHoodieRecord(record, location.get());
-          }
-
-          // Perform the tagging. Not using HoodieIndexUtils.getTaggedRecord to prevent an additional copy which is not necessary for this index.
-          record.unseal();
-          record.setCurrentLocation(location.get());
-          record.seal();
-          return record;
         });
-  }
-
-  private HoodieRecord createNewHoodieRecord(HoodieRecord oldRecord, HoodieRecordGlobalLocation location) {
-    HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
-    return config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
-        ? new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData())
-        : ((HoodieSparkRecord) oldRecord).newInstance();
+    return shouldUpdatePartitionPath
+        ? mergeForPartitionUpdates(taggedRecordsAndLocations, config, hoodieTable)
+        : taggedRecordsAndLocations.map(Pair::getLeft);
   }
 
   /**
