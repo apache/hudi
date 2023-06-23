@@ -205,7 +205,7 @@ public class CleanerUtils {
 
   public static Option<HoodieInstant> getOldestInstantToRetainFromTimeline(
           HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieTimeline timeline) throws IOException {
-    Option<HoodieInstant> oldestInstantToRetain = Option.empty();
+    final Option<HoodieInstant> oldestInstantToRetain;
     Option<HoodieInstant> cleanInstantOpt =
             activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
     if (cleanInstantOpt.isPresent()) {
