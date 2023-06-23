@@ -126,11 +126,27 @@ public enum WriteOperationType {
   public static boolean isDataChange(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED
         || operation == WriteOperationType.DELETE
         || operation == WriteOperationType.BULK_INSERT
         || operation == WriteOperationType.DELETE_PARTITION
         || operation == WriteOperationType.INSERT_OVERWRITE
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
         || operation == WriteOperationType.BOOTSTRAP;
+  }
+
+  public static boolean isInsert(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.INSERT_PREPPED
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.BULK_INSERT_PREPPED
+        || operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
+
+  }
+
+  public static boolean isUpsert(WriteOperationType operation) {
+    return operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED;
   }
 }

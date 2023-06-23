@@ -50,9 +50,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -81,6 +81,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
  * <p>
@@ -92,7 +94,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
   // with default bloom filter with 60,000 entries and 0.000000001 FPRate
   public static final int BLOOM_FILTER_BYTES = 323495;
-  private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
+  private static Logger logger = LoggerFactory.getLogger(HoodieTestDataGenerator.class);
   public static final String NO_PARTITION_PATH = "";
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
@@ -297,9 +299,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened, int ts) throws IOException {
+      HoodieKey key, String instantTime, boolean isFlattened, long timestamp) throws IOException {
     GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
+        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
@@ -491,6 +493,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
+  public static void createRequestedCommitFile(String basePath, String instantTime, Configuration configuration) throws IOException {
+    Path pendingRequestedFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedCommitFileName(instantTime));
+    createEmptyFile(basePath, pendingRequestedFile, configuration);
+  }
+
+  public static void createPendingCommitFile(String basePath, String instantTime, Configuration configuration) throws IOException {
+    Path pendingCommitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeInflightCommitFileName(instantTime));
+    createEmptyFile(basePath, pendingCommitFile, configuration);
+  }
+
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createCommitFile(basePath, instantTime, configuration, commitMetadata);
@@ -532,6 +546,20 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
+  public static void createReplaceCommitRequestedFile(String basePath, String instantTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedReplaceFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
+  public static void createReplaceCommitInflightFile(String basePath, String instantTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeInflightReplaceFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
   private static void createPendingReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeInflightReplaceFileName(instantTime),
         HoodieTimeline.makeRequestedReplaceFileName(instantTime))
@@ -554,6 +582,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(filePath, true);
     os.close();
+  }
+
+  public static void createCompactionRequestedFile(String basePath, String instantTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
   }
 
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
@@ -750,6 +785,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
   }
 
+  public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
+    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
+  }
+
   public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
@@ -759,29 +798,22 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithTS(String instantTime, List<HoodieRecord> baseRecords, int ts) throws IOException {
+  public List<HoodieRecord> generateUpdatesWithTimestamp(String instantTime, List<HoodieRecord> baseRecords, long timestamp) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = new HoodieAvroRecord(baseRecord.getKey(),
-          generateRandomValue(baseRecord.getKey(), instantTime, false, ts));
-      updates.add(record);
+      updates.add(generateUpdateRecordWithTimestamp(baseRecord.getKey(), instantTime, timestamp));
     }
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithDiffPartition(String instantTime, List<HoodieRecord> baseRecords)
+  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition)
       throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
-      String newPartition = "";
-      if (partitionPaths[0].equalsIgnoreCase(partition)) {
-        newPartition = partitionPaths[1];
-      } else {
-        newPartition = partitionPaths[0];
-      }
+      checkState(!partition.equals(newPartition), "newPartition should be different from any given record's current partition.");
       HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
-      HoodieRecord record = generateUpdateRecord(key, instantTime);
+      HoodieRecord record = generateUpdateRecordWithTimestamp(key, instantTime, timestamp);
       updates.add(record);
     }
     return updates;

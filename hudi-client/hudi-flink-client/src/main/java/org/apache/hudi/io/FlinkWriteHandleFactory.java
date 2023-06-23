@@ -41,7 +41,11 @@ public class FlinkWriteHandleFactory {
    */
   public static <T, I, K, O> Factory<T, I, K, O> getFactory(
       HoodieTableConfig tableConfig,
-      HoodieWriteConfig writeConfig) {
+      HoodieWriteConfig writeConfig,
+      boolean overwrite) {
+    if (overwrite) {
+      return CommitWriteHandleFactory.getInstance();
+    }
     if (writeConfig.allowDuplicateInserts()) {
       return ClusterWriteHandleFactory.getInstance();
     }

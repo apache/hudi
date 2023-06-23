@@ -35,8 +35,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -46,6 +44,8 @@ import org.apache.spark.sql.streaming.DataStreamWriter;
 import org.apache.spark.sql.streaming.OutputMode;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.Trigger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -111,7 +111,7 @@ public class HoodieJavaStreamingApp {
   public Boolean help = false;
 
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaStreamingApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaStreamingApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
@@ -302,7 +302,7 @@ public class HoodieJavaStreamingApp {
       // wait for spark streaming to process one microbatch
       Thread.sleep(3000);
       waitTillNCommits(fs, numExpCommits, 180, 3);
-      commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+      commitInstantTime2 = HoodieDataSourceHelpers.listCommitsSince(fs, tablePath, commitInstantTime1).stream().sorted().findFirst().get();
       LOG.info("Second commit at instant time :" + commitInstantTime2);
     }
 
@@ -312,8 +312,7 @@ public class HoodieJavaStreamingApp {
       }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
-      commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-      LOG.info("Compaction commit at instant time :" + commitInstantTime2);
+      LOG.info("Compaction commit at instant time :" + HoodieDataSourceHelpers.latestCommit(fs, tablePath));
     }
 
     /**
@@ -377,7 +376,6 @@ public class HoodieJavaStreamingApp {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key(), "false")
         .option(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH().key(),"true")
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());

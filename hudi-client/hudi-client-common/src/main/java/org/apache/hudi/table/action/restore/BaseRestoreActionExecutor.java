@@ -37,8 +37,8 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 
 public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRestoreMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRestoreActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRestoreActionExecutor.class);
 
   private final String savepointToRestoreTimestamp;
   private final TransactionManager txnManager;
@@ -103,7 +103,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     List<HoodieInstant> instantsToRollback = new ArrayList<>();
     HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(), restoreInstant);
     for (HoodieInstantInfo instantInfo : restorePlan.getInstantsToRollback()) {
-      // If restore crashed mid-way, there are chances that some commits are already rolled back,
+      // If restore crashed midway, there are chances that some commits are already rolled back,
       // but some are not. so, we can ignore those commits which are fully rolledback in previous attempt if any.
       Option<HoodieInstant> rollbackInstantOpt = table.getActiveTimeline().getWriteTimeline()
           .filter(instant -> instant.getTimestamp().equals(instantInfo.getCommitTime()) && instant.getAction().equals(instantInfo.getAction())).firstInstant();

@@ -36,18 +36,21 @@ public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
   public static final ConfigProperty<String> BOOTSTRAP_SERVERS = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.bootstrap.servers")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Bootstrap servers of kafka cluster, to be used for publishing commit metadata.");
 
   public static final ConfigProperty<String> TOPIC = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.topic")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Kafka topic name to publish timeline activity into.");
 
   public static final ConfigProperty<String> PARTITION = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.partition")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("It may be desirable to serialize all changes into a single Kafka partition "
           + " for providing strict ordering. By default, Kafka messages are keyed by table name, which "
@@ -56,12 +59,14 @@ public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
   public static final ConfigProperty<String> ACKS = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.acks")
       .defaultValue("all")
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("kafka acks level, all by default to ensure strong durability.");
 
   public static final ConfigProperty<Integer> RETRIES = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.retries")
       .defaultValue(3)
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Times to retry the produce. 3 by default");
 

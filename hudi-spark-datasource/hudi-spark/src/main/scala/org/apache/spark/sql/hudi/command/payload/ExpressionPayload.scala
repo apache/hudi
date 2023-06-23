@@ -26,7 +26,6 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.BaseAvroPayload
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{BinaryUtil, ValidationUtils, Option => HOption}
@@ -237,7 +236,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
 
-    if (BaseAvroPayload.isDeleteRecord(incomingRecord.asAvro)) {
+    if (super.isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
@@ -299,12 +298,12 @@ object ExpressionPayload {
   val PAYLOAD_DELETE_CONDITION = "hoodie.payload.delete.condition"
 
   /**
-   * Property for pass the merge-into update clauses's condition and assignments.
+   * Property for pass the merge-into update clauses' condition and assignments.
    */
   val PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS = "hoodie.payload.update.condition.assignments"
 
   /**
-   * Property for pass the merge-into insert clauses's condition and assignments.
+   * Property for pass the merge-into insert clauses' condition and assignments.
    */
   val PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS = "hoodie.payload.insert.condition.assignments"
 

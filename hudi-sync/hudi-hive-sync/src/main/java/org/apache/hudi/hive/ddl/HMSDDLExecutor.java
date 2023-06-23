@@ -30,7 +30,6 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.StatsSetupConst;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -44,12 +43,11 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -70,24 +68,17 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public class HMSDDLExecutor implements DDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(HMSDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HMSDDLExecutor.class);
 
   private final HiveSyncConfig syncConfig;
   private final String databaseName;
   private final IMetaStoreClient client;
   private final PartitionValueExtractor partitionValueExtractor;
 
-  public HMSDDLExecutor(HiveSyncConfig syncConfig) throws HiveException, MetaException {
+  public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    HiveConf hiveConf = syncConfig.getHiveConf();
-    IMetaStoreClient tempMetaStoreClient;
-    try {
-      tempMetaStoreClient = ((Hive) Hive.class.getMethod("getWithoutRegisterFns", HiveConf.class).invoke(null, hiveConf)).getMSC();
-    } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
-      tempMetaStoreClient = Hive.get(hiveConf).getMSC();
-    }
-    this.client = tempMetaStoreClient;
+    this.client = metaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();

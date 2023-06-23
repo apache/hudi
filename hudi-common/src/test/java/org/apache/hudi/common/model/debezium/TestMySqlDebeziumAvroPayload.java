@@ -33,10 +33,12 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link MySqlDebeziumAvroPayload}.
@@ -100,6 +102,7 @@ public class TestMySqlDebeziumAvroPayload {
   public void testMergeWithDelete() throws IOException {
     GenericRecord deleteRecord = createRecord(2, Operation.DELETE, "00002.11");
     MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11");
+    assertTrue(payload.isDeleted(avroSchema, new Properties()));
 
     GenericRecord existingRecord = createRecord(2, Operation.UPDATE, "00001.111");
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);

@@ -25,12 +25,12 @@ import javax.annotation.concurrent.Immutable;
 import java.util.Properties;
 
 /**
- * Configurations used by the HUDI Metastore.
+ * Configurations used by the HUDI Metaserver.
  */
 @Immutable
-@ConfigClassProperty(name = "Metastore Configs",
+@ConfigClassProperty(name = "Metaserver Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations used by the Hudi Metastore.")
+    description = "Configurations used by the Hudi Metaserver.")
 public class HoodieMetaserverConfig extends HoodieConfig {
 
   public static final String METASERVER_PREFIX = "hoodie.metaserver";
@@ -38,30 +38,36 @@ public class HoodieMetaserverConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> METASERVER_ENABLE = ConfigProperty
       .key(METASERVER_PREFIX + ".enabled")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Enable Hudi metaserver for storing Hudi tables' metadata.");
 
   public static final ConfigProperty<String> DATABASE_NAME = HoodieTableConfig.DATABASE_NAME
+      .markAdvanced()
       .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> TABLE_NAME = HoodieTableConfig.NAME
+      .markAdvanced()
       .sinceVersion("0.13.0");
 
   public static final ConfigProperty<String> METASERVER_URLS = ConfigProperty
       .key(METASERVER_PREFIX + ".uris")
       .defaultValue("thrift://localhost:9090")
+      .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Metastore server uris");
+      .withDocumentation("Metaserver server uris");
 
   public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRIES = ConfigProperty
       .key(METASERVER_PREFIX + ".connect.retries")
       .defaultValue(3)
+      .markAdvanced()
       .sinceVersion("0.13.0")
-      .withDocumentation("Number of retries while opening a connection to metastore");
+      .withDocumentation("Number of retries while opening a connection to metaserver");
 
   public static final ConfigProperty<Integer> METASERVER_CONNECTION_RETRY_DELAY = ConfigProperty
       .key(METASERVER_PREFIX + ".connect.retry.delay")
       .defaultValue(1)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Number of seconds for the client to wait between consecutive connection attempts");
 

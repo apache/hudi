@@ -70,11 +70,11 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -95,7 +95,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
- * table. This can be overriden to force sync from a timestamp.
+ * table. This can be overridden to force sync from a timestamp.
  * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
@@ -104,13 +104,23 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieDeltaStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeltaStreamer.class);
   private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
       HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
+
+  /**
+   * Config prop to force to skip saving checkpoint in the commit metadata.
+   *
+   * Typically used in one-time backfill scenarios, where checkpoints are not to be persisted.
+   *
+   * TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
+   */
+  public static final String CHECKPOINT_FORCE_SKIP_PROP = "hoodie.deltastreamer.checkpoint.force.skip";
+  public static final Boolean DEFAULT_CHECKPOINT_FORCE_SKIP_PROP = false;
 
   protected final transient Config cfg;
 
@@ -183,7 +193,12 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
-    ingestionService.ifPresent(ds -> ds.shutdown(false));
+    ingestionService.ifPresent(ds -> {
+      LOG.info("Shutting down DeltaStreamer");
+      ds.shutdown(false);
+      LOG.info("Async service shutdown complete. Closing DeltaSync ");
+      ds.close();
+    });
   }
 
   /**
@@ -261,7 +276,17 @@ public class HoodieDeltaStreamer implements Serializable {
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function). "
-            + "Pass a comma-separated list of subclass names to chain the transformations.")
+            + "Pass a comma-separated list of subclass names to chain the transformations. If there are two or more "
+            + "transformers using the same config keys and expect different values for those keys, then transformer can include "
+            + "an identifier. E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer. Here the identifier tr1 "
+            + "can be used along with property key like `hoodie.deltastreamer.transformer.sql.tr1` to identify properties related "
+            + "to the transformer. So effective value for `hoodie.deltastreamer.transformer.sql` is determined by key "
+            + "`hoodie.deltastreamer.transformer.sql.tr1` for this transformer. If identifier is used, it should "
+            + "be specified for all the transformers. Further the order in which transformer is applied is determined by the occurrence "
+            + "of transformer irrespective of the identifier used for the transformer. For example: In the configured value below "
+            + "tr2:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer,tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer "
+            + ", tr2 is applied before tr1 based on order of occurrence."
+    )
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
@@ -371,7 +396,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public Integer maxRetryCount = 3;
 
     @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
-        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+        + "from source. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
     public Boolean allowCommitOnNoCheckpointChange = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -379,6 +404,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
     public Boolean retryLastPendingInlineClusteringJob = false;
+
+    @Parameter(names = {"--retry-last-pending-inline-compaction"}, description = "Retry last pending inline compaction plan before writing to sink.")
+    public Boolean retryLastPendingInlineCompactionJob = false;
 
     @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
@@ -393,6 +421,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--ingestion-metrics-class"}, description = "Ingestion metrics class for reporting metrics during ingestion lifecycles.")
     public String ingestionMetricsClass = HoodieDeltaStreamerMetrics.class.getCanonicalName();
+
+    @Parameter(names = {"--config-hot-update-strategy-class"}, description = "Configuration hot update in continuous mode")
+    public String configHotUpdateStrategyClass = "";
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
@@ -589,6 +620,10 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient JavaSparkContext jssc;
 
+    private transient FileSystem fs;
+
+    private transient Configuration hiveConf;
+
     /**
      * Bag of properties with source, hoodie client, key generator etc.
      */
@@ -616,6 +651,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
     private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
 
+    private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       super(HoodieIngestionConfig.newBuilder()
@@ -623,11 +660,15 @@ public class HoodieDeltaStreamer implements Serializable {
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
       this.jssc = jssc;
+      this.fs = fs;
+      this.hiveConf = conf;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
       this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
           TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
+      this.configurationHotUpdateStrategyOpt = StringUtils.isNullOrEmpty(cfg.configHotUpdateStrategyClass) ? Option.empty() :
+          ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, cfg, properties.get());
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         try {
@@ -683,6 +724,13 @@ public class HoodieDeltaStreamer implements Serializable {
       }
     }
 
+    private void reInitDeltaSync() throws IOException {
+      if (deltaSync != null) {
+        deltaSync.close();
+      }
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf, this::onInitializingWriteClient);
+    }
+
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(1);
@@ -699,6 +747,17 @@ public class HoodieDeltaStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
+              // check if deltastreamer need to update the configuration before the sync
+              if (configurationHotUpdateStrategyOpt.isPresent()) {
+                Option<TypedProperties> newProps = configurationHotUpdateStrategyOpt.get().updateProperties(props);
+                if (newProps.isPresent()) {
+                  this.props = newProps.get();
+                  // reinit the DeltaSync only when the props updated
+                  LOG.info("Re-init delta sync with new config properties:");
+                  LOG.info(toSortedTruncatedString(props));
+                  reInitDeltaSync();
+                }
+              }
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(deltaSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
                 LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");
@@ -726,10 +785,13 @@ public class HoodieDeltaStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
+                LOG.warn("Closing and shutting down ingestion service");
                 error = true;
-                shutdown(false);
+                onIngestionCompletes(false);
+                shutdown(true);
+              } else {
+                sleepBeforeNextIngestion(start);
               }
-              sleepBeforeNextIngestion(start);
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {

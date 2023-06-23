@@ -24,8 +24,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +35,7 @@ import java.util.List;
  */
 public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
 
-  private static final Logger LOG = LogManager.getLogger(SparkInsertOverwritePartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkInsertOverwritePartitioner.class);
 
   public SparkInsertOverwritePartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                                          HoodieWriteConfig config) {

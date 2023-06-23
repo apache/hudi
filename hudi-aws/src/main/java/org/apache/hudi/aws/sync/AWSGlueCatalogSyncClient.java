@@ -20,12 +20,14 @@ package org.apache.hudi.aws.sync;
 
 import com.amazonaws.ClientConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.GlueSyncConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import com.amazonaws.services.glue.AWSGlue;
@@ -56,9 +58,9 @@ import com.amazonaws.services.glue.model.StorageDescriptor;
 import com.amazonaws.services.glue.model.Table;
 import com.amazonaws.services.glue.model.TableInput;
 import com.amazonaws.services.glue.model.UpdateTableRequest;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,9 +72,11 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.util.MapUtils.containsAll;
+import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
+import static org.apache.hudi.config.GlueSyncConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
-import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -87,11 +91,19 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogSyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
+  /**
+   * athena v2/v3 table property
+   * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
+   */
+  private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private final AWSGlue awsGlue;
   private final String databaseName;
+
+  private final Boolean skipTableArchive;
+  private final String enableMetadataTable;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
@@ -103,6 +115,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
     this.awsGlue = builder.build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.skipTableArchive = config.getBooleanOrDefault(GlueSyncConfig.GLUE_SKIP_TABLE_ARCHIVE);
+    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
   }
 
   @Override
@@ -154,7 +168,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             LOG.warn("Partitions already exist in glue: " + result.getErrors());
           } else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + result.getErrors());
+                + " with error(s): " + result.getErrors());
           }
         }
         Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
@@ -232,18 +246,81 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  /**
-   * Update the table properties to the table.
-   */
   @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    if (isNullOrEmpty(tableProperties)) {
-      return;
-    }
+  public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     try {
-      updateTableParameters(awsGlue, databaseName, tableName, tableProperties, false);
+      tableProperties.put(ENABLE_MDT_LISTING, enableMetadataTable);
+      return updateTableParameters(awsGlue, databaseName, tableName, tableProperties, skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update properties for table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    columns.forEach(column -> {
+      String comment = commentsMap.getOrDefault(column.getName(), Option.empty()).orElse(null);
+      column.setComment(comment);
+    });
+  }
+
+  private String getTableDoc() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true).getDoc();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get schema's doc from storage : ", e);
+    }
+  }
+
+  @Override
+  public List<FieldSchema> getStorageFieldSchemas() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true)
+          .getFields()
+          .stream()
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get field schemas from storage : ", e);
+    }
+  }
+
+  @Override
+  public boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    Table table = getTable(awsGlue, databaseName, tableName);
+
+    Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
+
+    StorageDescriptor storageDescriptor = table.getStorageDescriptor();
+    List<Column> columns = storageDescriptor.getColumns();
+    setComments(columns, commentsMap);
+
+    List<Column> partitionKeys = table.getPartitionKeys();
+    setComments(partitionKeys, commentsMap);
+
+    String tableDescription = getTableDoc();
+
+    if (getTable(awsGlue, databaseName, tableName).getStorageDescriptor().equals(storageDescriptor)
+        && getTable(awsGlue, databaseName, tableName).getPartitionKeys().equals(partitionKeys)) {
+      // no comments have been modified / added
+      return false;
+    } else {
+      final Date now = new Date();
+      TableInput updatedTableInput = new TableInput()
+          .withName(tableName)
+          .withDescription(tableDescription)
+          .withTableType(table.getTableType())
+          .withParameters(table.getParameters())
+          .withPartitionKeys(partitionKeys)
+          .withStorageDescriptor(storageDescriptor)
+          .withLastAccessTime(now)
+          .withLastAnalyzedTime(now);
+
+      UpdateTableRequest request = new UpdateTableRequest()
+          .withDatabaseName(databaseName)
+          .withTableInput(updatedTableInput);
+
+      awsGlue.updateTable(request);
+      return true;
     }
   }
 
@@ -270,6 +347,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request = new UpdateTableRequest()
           .withDatabaseName(databaseName)
+          .withSkipArchive(skipTableArchive)
           .withTableInput(updatedTableInput);
 
       awsGlue.updateTable(request);
@@ -280,12 +358,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName,
-      MessageType storageSchema,
-      String inputFormatClass,
-      String outputFormatClass,
-      String serdeClass,
-      Map<String, String> serdeProperties,
-      Map<String, String> tableProperties) {
+                          MessageType storageSchema,
+                          String inputFormatClass,
+                          String outputFormatClass,
+                          String serdeClass,
+                          Map<String, String> serdeProperties,
+                          Map<String, String> tableProperties) {
     if (tableExists(tableName)) {
       return;
     }
@@ -294,6 +372,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     if (!config.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
       params.put("EXTERNAL", "TRUE");
     }
+    params.put(ENABLE_MDT_LISTING, this.enableMetadataTable);
     params.putAll(tableProperties);
 
     try {
@@ -431,7 +510,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
     final String lastCommitTimestamp = getActiveTimeline().lastInstant().get().getTimestamp();
     try {
-      updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), false);
+      updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), skipTableArchive);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
     }
@@ -486,13 +565,19 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private static void updateTableParameters(AWSGlue awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean shouldReplace) {
-    final Map<String, String> newParams = new HashMap<>();
+  private static boolean updateTableParameters(AWSGlue awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean skipTableArchive) {
+    if (isNullOrEmpty(updatingParams)) {
+      return false;
+    }
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      if (!shouldReplace) {
-        newParams.putAll(table.getParameters());
+      Map<String, String> remoteParams = table.getParameters();
+      if (containsAll(remoteParams, updatingParams)) {
+        return false;
       }
+
+      final Map<String, String> newParams = new HashMap<>();
+      newParams.putAll(table.getParameters());
       newParams.putAll(updatingParams);
 
       final Date now = new Date();
@@ -507,10 +592,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request = new UpdateTableRequest();
       request.withDatabaseName(databaseName)
+          .withSkipArchive(skipTableArchive)
           .withTableInput(updatedTableInput);
       awsGlue.updateTable(request);
+      return true;
     } catch (Exception e) {
-      throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + newParams, e);
+      throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + updatingParams, e);
     }
   }
 }

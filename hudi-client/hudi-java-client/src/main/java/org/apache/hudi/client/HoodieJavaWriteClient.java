@@ -53,7 +53,7 @@ public class HoodieJavaWriteClient<T> extends
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
@@ -61,7 +61,7 @@ public class HoodieJavaWriteClient<T> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig);
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
   }
 
   @Override
@@ -87,7 +87,7 @@ public class HoodieJavaWriteClient<T> extends
                         Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
+    return commitStats(instantTime, HoodieListData.eager(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc);
   }
 

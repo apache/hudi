@@ -204,7 +204,7 @@ public class TestClientRollback extends HoodieClientTestBase {
           //restore again
           newClient.restoreToSavepoint(savepoint.getTimestamp());
 
-          //verify that we resuse the existing restore commit
+          //verify that we reuse the existing restore commit
           metaClient = HoodieTableMetaClient.reload(metaClient);
           table = HoodieSparkTable.create(getConfig(), context, metaClient);
           List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
@@ -469,7 +469,7 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   /**
-   * Test Cases for effects of rollbacking completed/inflight commits.
+   * Test Cases for effects of rolling back completed/inflight commits.
    */
   @ParameterizedTest
   @MethodSource("testFailedRollbackCommitParams")
@@ -525,9 +525,9 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     testTable.withPartitionMetaFiles(p1, p2, p3)
         .addCommit(commitTime1)
-        .withBaseFilesInPartitions(partitionAndFileId1)
+        .withBaseFilesInPartitions(partitionAndFileId1).getLeft()
         .addCommit(commitTime2)
-        .withBaseFilesInPartitions(partitionAndFileId2)
+        .withBaseFilesInPartitions(partitionAndFileId2).getLeft()
         .addInflightCommit(commitTime3)
         .withBaseFilesInPartitions(partitionAndFileId3);
 
@@ -726,9 +726,9 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     testTable.withPartitionMetaFiles(p1, p2)
         .addCommit(commitTime1)
-        .withBaseFilesInPartitions(partitionAndFileId1)
+        .withBaseFilesInPartitions(partitionAndFileId1).getLeft()
         .addCommit(commitTime2)
-        .withBaseFilesInPartitions(partitionAndFileId2)
+        .withBaseFilesInPartitions(partitionAndFileId2).getLeft()
         .addInflightCommit(commitTime3)
         .withBaseFilesInPartitions(partitionAndFileId3);
 
@@ -814,9 +814,9 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context));
     testTable.withPartitionMetaFiles(p1, p2, p3)
         .addCommit(commitTime1)
-        .withBaseFilesInPartitions(partitionAndFileId1)
+        .withBaseFilesInPartitions(partitionAndFileId1).getLeft()
         .addCommit(commitTime2)
-        .withBaseFilesInPartitions(partitionAndFileId2)
+        .withBaseFilesInPartitions(partitionAndFileId2).getLeft()
         .addCommit(commitTime3)
         .withBaseFilesInPartitions(partitionAndFileId3);
 

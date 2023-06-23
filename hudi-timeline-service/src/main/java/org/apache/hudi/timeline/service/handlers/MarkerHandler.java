@@ -39,8 +39,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -80,7 +80,7 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
  * Worker Thread 3               |-------------------------->| writing to MARKERS2
  */
 public class MarkerHandler extends Handler {
-  private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerHandler.class);
 
   private final Registry metricsRegistry;
   // a scheduled executor service to schedule dispatching of marker creation requests

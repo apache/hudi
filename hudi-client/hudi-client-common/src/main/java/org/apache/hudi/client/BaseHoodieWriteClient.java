@@ -33,6 +33,7 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -73,7 +74,6 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -89,9 +89,8 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import com.codahale.metrics.Timer;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -107,10 +106,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
+import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
- * Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
+ * Reused for regular write operations like upsert/insert/bulk-insert as well as bootstrap
  *
  * @param <T> Type of data
  * @param <I> Type of inputs
@@ -121,7 +122,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
 
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
@@ -206,12 +207,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                  String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                                  Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc);
 
-  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+  public boolean commitStats(String instantTime, HoodieData<WriteStatus> writeStatuses, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType) {
-    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty());
+    return commitStats(instantTime, writeStatuses, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty());
   }
 
-  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+  public boolean commitStats(String instantTime, HoodieData<WriteStatus> writeStatuses, List<HoodieWriteStat> stats,
+                             Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     // Skip the empty commit if not allowed
@@ -223,7 +225,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config, hadoopConf);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
-    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime);
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
@@ -232,7 +234,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
-      commit(table, commitActionType, instantTime, metadata, stats);
+      commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
       releaseResources(instantTime);
@@ -270,7 +272,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                      List<HoodieWriteStat> stats) throws IOException {
+                        List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -281,7 +283,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       saveInternalSchema(table, instantTime, metadata);
     }
     // update Metadata table
-    writeTableMetadata(table, instantTime, commitActionType, metadata);
+    writeTableMetadata(table, instantTime, commitActionType, metadata, writeStatuses);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
@@ -344,17 +346,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Write the HoodieCommitMetadata to metadata table if available.
-   * @param table {@link HoodieTable} of interest.
-   * @param instantTime instant time of the commit.
-   * @param actionType action type of the commit.
-   * @param metadata instance of {@link HoodieCommitMetadata}.
+   *
+   * @param table         {@link HoodieTable} of interest.
+   * @param instantTime   instant time of the commit.
+   * @param actionType    action type of the commit.
+   * @param metadata      instance of {@link HoodieCommitMetadata}.
+   * @param writeStatuses WriteStatuses for the completed action.
    */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
     if (table.isTableServiceAction(actionType, instantTime)) {
-      tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata);
+      tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata, writeStatuses);
     } else {
       context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-      table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime, false));
+      table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, writeStatuses, instantTime));
     }
   }
 
@@ -476,9 +480,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
-   * de-duped and non existent keys will be removed before deleting.
+   * de-duped and non-existent keys will be removed before deleting.
    *
-   * @param keys {@link List} of {@link HoodieKey}s to be deleted
+   * @param keys        {@link List} of {@link HoodieKey}s to be deleted
    * @param instantTime Commit time handle
    * @return Collection of WriteStatus to inspect errors and counts
    */
@@ -493,7 +497,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = txnManager.isNeedsLockGuard()
+    this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
@@ -537,7 +541,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoCleanOnCommit();
-    autoArchiveOnCommit(table);
+    // reload table to that timeline reflects the clean commit
+    autoArchiveOnCommit(createTable(config, hadoopConf));
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -583,10 +588,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Run any pending log compactions.
+   */
+  public void runAnyPendingLogCompactions() {
+    tableServiceClient.runAnyPendingLogCompactions(createTable(config, hadoopConf));
+  }
+
+  /**
    * Create a savepoint based on the latest commit action on the timeline.
    *
-   * @param user - User creating the savepoint
-   * @param comment - Comment for the savepoint
+   * @param user    User creating the savepoint
+   * @param comment Comment for the savepoint
    */
   public void savepoint(String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
@@ -608,9 +620,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * <p>
    * Savepoint should be on a commit that could not have been cleaned.
    *
-   * @param instantTime - commit that should be savepointed
-   * @param user - User creating the savepoint
-   * @param comment - Comment for the savepoint
+   * @param instantTime Commit that should be savepointed
+   * @param user        User creating the savepoint
+   * @param comment     Comment for the savepoint
    */
   public void savepoint(String instantTime, String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
@@ -618,15 +630,44 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Delete a savepoint based on the latest commit action on the savepoint timeline.
+   */
+  public void deleteSavepoint() {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+    if (savePointTimeline.empty()) {
+      throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
+    }
+
+    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+    LOG.info("Deleting latest savepoint time " + savepointTime);
+    deleteSavepoint(savepointTime);
+  }
+
+  /**
    * Delete a savepoint that was created. Once the savepoint is deleted, the commit can be rolledback and cleaner may
    * clean up data files.
    *
-   * @param savepointTime - delete the savepoint
-   * @return true if the savepoint was deleted successfully
+   * @param savepointTime Savepoint time to delete
    */
   public void deleteSavepoint(String savepointTime) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     SavepointHelpers.deleteSavepoint(table, savepointTime);
+  }
+
+  /**
+   * Restore the data to a savepoint based on the latest commit action on the savepoint timeline.
+   */
+  public void restoreToSavepoint() {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+    if (savePointTimeline.empty()) {
+      throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
+    }
+
+    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+    LOG.info("Restoring to latest savepoint time " + savepointTime);
+    restoreToSavepoint(savepointTime);
   }
 
   /**
@@ -636,22 +677,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Queries accessing the files will mostly fail. This is expected to be a manual operation and no concurrent write or
    * compaction is expected to be running
    *
-   * @param savepointTime - savepoint time to rollback to
-   * @return true if the savepoint was restored to successfully
+   * @param savepointTime Savepoint time to rollback to
    */
   public void restoreToSavepoint(String savepointTime) {
     boolean initialMetadataTableIfNecessary = config.isMetadataTableEnabled();
     if (initialMetadataTableIfNecessary) {
       try {
         // Delete metadata table directly when users trigger savepoint rollback if mdt existed and beforeTimelineStarts
-        String metadataTableBasePathStr = HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath());
-        HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePathStr).build();
+        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+            .setConf(hadoopConf)
+            .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
         // Same as HoodieTableMetadataUtil#processRollbackMetadata
         HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
-        if (mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-          mdtClient.getFs().delete(new Path(metadataTableBasePathStr), true);
+        if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+          HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+              .setConf(hadoopConf)
+              .setBasePath(config.getBasePath()).build();
+          deleteMetadataTable(dataMetaClient, getEngineContext(), false);
           // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
           // so that we need to disable metadata initialized here.
           initialMetadataTableIfNecessary = false;
@@ -680,7 +724,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided instant time.
    *
-   * @param savepointToRestoreTimestamp savepoint intstant time to which restoration is requested
+   * @param savepointToRestoreTimestamp savepoint instant time to which restoration is requested
    */
   public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
@@ -744,7 +788,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean skipLocking) throws HoodieIOException {
     return clean(cleanInstantTime, true, false);
   }
-
 
   /**
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
@@ -1028,9 +1071,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
-  /***
+  /**
    * Schedules compaction inline.
-   * @param extraMetadata extrametada to be used.
+   * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
   protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
@@ -1123,7 +1166,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
    */
-  protected void doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
@@ -1131,9 +1174,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
-      if (initialMetadataTableIfNecessary) {
-        initMetadataTable(instantTime);
-      }
+      initMetadataTable(instantTime);
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
@@ -1148,12 +1189,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // by default do nothing.
   }
 
+  // TODO: this method will be removed with restore/rollback changes  in MDT
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initMetadataTable) {
+    return initTable(operationType, instantTime);
+  }
+
   /**
    * Instantiates and initializes instance of {@link HoodieTable}, performing crucial bootstrapping
    * operations such as:
    *
    * NOTE: This method is engine-agnostic and SHOULD NOT be overloaded, please check on
-   * {@link #doInitTable(HoodieTableMetaClient, Option, boolean)} instead
+   * {@link #doInitTable(WriteOperationType, HoodieTableMetaClient, Option)} instead
    *
    * <ul>
    *   <li>Checking whether upgrade/downgrade is required</li>
@@ -1161,14 +1207,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *   <li>Initializing metrics contexts</li>
    * </ul>
    */
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+  public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }
 
-    doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
+    doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, hadoopConf, metaClient);
 
     // Validate table properties
@@ -1194,10 +1240,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     return table;
-  }
-
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
-    return initTable(operationType, instantTime, config.isMetadataTableEnabled());
   }
 
   /**
@@ -1305,10 +1347,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * add columns to table.
    *
-   * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
-   * @param schema col type to be added.
-   * @param doc col doc to be added.
-   * @param position col position to be added
+   * @param colName      col name to be added. if we want to add col to a nested filed, the fullName should be specified
+   * @param schema       col type to be added.
+   * @param doc          col doc to be added.
+   * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
   public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
@@ -1325,7 +1367,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * delete columns to table.
    *
-   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
+   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specified
    */
   public void deleteColumns(String... colNames) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1336,7 +1378,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * rename col name for hudi table.
    *
-   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
+   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specified
    * @param newName new name for current col. no need to specify fullName.
    */
   public void renameColumn(String colName, String newName) {
@@ -1348,7 +1390,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col nullable attribute for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName  col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param nullable .
    */
   public void updateColumnNullability(String colName, boolean nullable) {
@@ -1362,7 +1404,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * only support update primitive type to primitive type.
    * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
    * @param newType .
    */
   public void updateColumnType(String colName, Type newType) {
@@ -1374,8 +1416,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * update col comment for hudi table.
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
-   * @param doc .
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
+   * @param doc     .
    */
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
@@ -1386,7 +1428,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * reorder the position of col.
    *
-   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
+   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specified.
    * @param referColName reference position.
    * @param orderType col position change type. now support three change types: first/after/before
    */
@@ -1430,7 +1472,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // try to save history schemas
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
-    commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
+    commitStats(instantTime, context.emptyHoodieData(), Collections.emptyList(), Option.of(extraMeta), commitActionType);
   }
 
   private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {

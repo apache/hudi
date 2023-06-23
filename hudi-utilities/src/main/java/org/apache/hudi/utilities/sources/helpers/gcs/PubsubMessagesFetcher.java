@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings;
@@ -26,14 +28,14 @@ import com.google.pubsub.v1.ProjectSubscriptionName;
 import com.google.pubsub.v1.PullRequest;
 import com.google.pubsub.v1.PullResponse;
 import com.google.pubsub.v1.ReceivedMessage;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import static com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub.create;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.DEFAULT_MAX_INBOUND_MESSAGE_SIZE;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+
+import static com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub.create;
+import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.DEFAULT_MAX_INBOUND_MESSAGE_SIZE;
 
 /**
  * Fetch messages from a specified Google Cloud Pubsub subscription.
@@ -46,7 +48,7 @@ public class PubsubMessagesFetcher {
   private final int batchSize;
   private final SubscriberStubSettings subscriberStubSettings;
 
-  private static final Logger LOG = LogManager.getLogger(PubsubMessagesFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PubsubMessagesFetcher.class);
 
   public PubsubMessagesFetcher(String googleProjectId, String pubsubSubscriptionId, int batchSize) {
     this.googleProjectId = googleProjectId;

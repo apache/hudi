@@ -40,7 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.source.DataPruner.convertColumnStats;
+import static org.apache.hudi.source.prune.DataPruner.convertColumnStats;
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,7 +146,11 @@ public class TestExpressionEvaluators {
 
     RowData indexRow6 = intIndexRow(null, null);
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
-    assertTrue(notEqualTo.eval(stats6), "12 <> null");
+    assertFalse(notEqualTo.eval(stats6), "12 <> null");
+
+    RowData indexRow7 = intIndexRow(12, 12);
+    Map<String, ColumnStats> stats7 = convertColumnStats(indexRow7, queryFields(2));
+    assertFalse(notEqualTo.eval(stats7), "12 == 12 == 12");
 
     notEqualTo.bindVal(new ValueLiteralExpression(null, DataTypes.INT()));
     assertFalse(notEqualTo.eval(stats1), "It is not possible to test for NULL values with '<>' operator");

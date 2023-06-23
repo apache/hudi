@@ -26,14 +26,14 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.SqlQueryBuilder;
+import org.apache.hudi.utilities.config.JdbcSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameReader;
@@ -43,6 +43,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.storage.StorageLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.Arrays;
@@ -56,7 +58,7 @@ import java.util.Set;
 
 public class JdbcSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(JdbcSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JdbcSource.class);
   private static final List<String> DB_LIMIT_CLAUSE = Arrays.asList("mysql", "postgresql", "h2");
   private static final String URI_JDBC_PREFIX = "jdbc:";
 
@@ -80,32 +82,32 @@ public class JdbcSource extends RowSource {
     FSDataInputStream passwordFileStream = null;
     try {
       dataFrameReader = session.read().format("jdbc");
-      dataFrameReader = dataFrameReader.option(Config.URL_PROP, properties.getString(Config.URL));
-      dataFrameReader = dataFrameReader.option(Config.USER_PROP, properties.getString(Config.USER));
-      dataFrameReader = dataFrameReader.option(Config.DRIVER_PROP, properties.getString(Config.DRIVER_CLASS));
+      dataFrameReader = dataFrameReader.option(Config.URL_PROP, properties.getString(JdbcSourceConfig.URL.key()));
+      dataFrameReader = dataFrameReader.option(Config.USER_PROP, properties.getString(JdbcSourceConfig.USER.key()));
+      dataFrameReader = dataFrameReader.option(Config.DRIVER_PROP, properties.getString(JdbcSourceConfig.DRIVER_CLASS.key()));
       dataFrameReader = dataFrameReader
-          .option(Config.RDBMS_TABLE_PROP, properties.getString(Config.RDBMS_TABLE_NAME));
+          .option(Config.RDBMS_TABLE_PROP, properties.getString(JdbcSourceConfig.RDBMS_TABLE_NAME.key()));
 
-      if (properties.containsKey(Config.PASSWORD)) {
+      if (properties.containsKey(JdbcSourceConfig.PASSWORD.key())) {
         LOG.info("Reading JDBC password from properties file....");
-        dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, properties.getString(Config.PASSWORD));
-      } else if (properties.containsKey(Config.PASSWORD_FILE)
-          && !StringUtils.isNullOrEmpty(properties.getString(Config.PASSWORD_FILE))) {
-        LOG.info(String.format("Reading JDBC password from password file %s", properties.getString(Config.PASSWORD_FILE)));
+        dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, properties.getString(JdbcSourceConfig.PASSWORD.key()));
+      } else if (properties.containsKey(JdbcSourceConfig.PASSWORD_FILE.key())
+          && !StringUtils.isNullOrEmpty(properties.getString(JdbcSourceConfig.PASSWORD_FILE.key()))) {
+        LOG.info(String.format("Reading JDBC password from password file %s", properties.getString(JdbcSourceConfig.PASSWORD_FILE.key())));
         FileSystem fileSystem = FileSystem.get(session.sparkContext().hadoopConfiguration());
-        passwordFileStream = fileSystem.open(new Path(properties.getString(Config.PASSWORD_FILE)));
+        passwordFileStream = fileSystem.open(new Path(properties.getString(JdbcSourceConfig.PASSWORD_FILE.key())));
         byte[] bytes = new byte[passwordFileStream.available()];
         passwordFileStream.read(bytes);
         dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, new String(bytes));
       } else {
         throw new IllegalArgumentException(String.format("JDBCSource needs either a %s or %s to connect to RDBMS "
-            + "datasource", Config.PASSWORD_FILE, Config.PASSWORD));
+            + "datasource", JdbcSourceConfig.PASSWORD_FILE.key(), JdbcSourceConfig.PASSWORD.key()));
       }
 
       addExtraJdbcOptions(properties, dataFrameReader);
 
-      if (properties.getBoolean(Config.IS_INCREMENTAL)) {
-        DataSourceUtils.checkRequiredProperties(properties, Collections.singletonList(Config.INCREMENTAL_COLUMN));
+      if (properties.getBoolean(JdbcSourceConfig.IS_INCREMENTAL.key())) {
+        DataSourceUtils.checkRequiredProperties(properties, Collections.singletonList(JdbcSourceConfig.INCREMENTAL_COLUMN.key()));
       }
       return dataFrameReader;
     } catch (Exception e) {
@@ -134,8 +136,8 @@ public class JdbcSource extends RowSource {
     Set<Object> objects = properties.keySet();
     for (Object property : objects) {
       String prop = property.toString();
-      if (prop.startsWith(Config.EXTRA_OPTIONS)) {
-        String key = String.join("", prop.split(Config.EXTRA_OPTIONS));
+      if (prop.startsWith(JdbcSourceConfig.EXTRA_OPTIONS.key())) {
+        String key = String.join("", prop.split(JdbcSourceConfig.EXTRA_OPTIONS.key()));
         String value = properties.getString(prop);
         if (!StringUtils.isNullOrEmpty(value)) {
           LOG.info(String.format("Adding %s -> %s to jdbc options", key, value));
@@ -148,7 +150,8 @@ public class JdbcSource extends RowSource {
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) throws HoodieException {
     try {
-      DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.URL, Config.DRIVER_CLASS, Config.USER, Config.RDBMS_TABLE_NAME, Config.IS_INCREMENTAL));
+      DataSourceUtils.checkRequiredProperties(props, Arrays.asList(JdbcSourceConfig.URL.key(), JdbcSourceConfig.DRIVER_CLASS.key(),
+          JdbcSourceConfig.USER.key(), JdbcSourceConfig.RDBMS_TABLE_NAME.key(), JdbcSourceConfig.IS_INCREMENTAL.key()));
       return fetch(lastCkptStr, sourceLimit);
     } catch (HoodieException e) {
       LOG.error("Exception while running JDBCSource ", e);
@@ -175,8 +178,8 @@ public class JdbcSource extends RowSource {
       LOG.info("No checkpoint references found. Doing a full rdbms table fetch");
       dataset = fullFetch(sourceLimit);
     }
-    dataset.persist(StorageLevel.fromString(props.getString(Config.STORAGE_LEVEL, "MEMORY_AND_DISK_SER")));
-    boolean isIncremental = props.getBoolean(Config.IS_INCREMENTAL);
+    dataset.persist(StorageLevel.fromString(props.getString(JdbcSourceConfig.STORAGE_LEVEL.key(), "MEMORY_AND_DISK_SER")));
+    boolean isIncremental = props.getBoolean(JdbcSourceConfig.IS_INCREMENTAL.key());
     Pair<Option<Dataset<Row>>, String> pair = Pair.of(Option.of(dataset), checkpoint(dataset, isIncremental, lastCkptStr));
     dataset.unpersist();
     return pair;
@@ -193,13 +196,13 @@ public class JdbcSource extends RowSource {
     try {
       final String ppdQuery = "(%s) rdbms_table";
       final SqlQueryBuilder queryBuilder = SqlQueryBuilder.select("*")
-          .from(props.getString(Config.RDBMS_TABLE_NAME))
-          .where(String.format(" %s > '%s'", props.getString(Config.INCREMENTAL_COLUMN), lastCheckpoint.get()));
+          .from(props.getString(JdbcSourceConfig.RDBMS_TABLE_NAME.key()))
+          .where(String.format(" %s > '%s'", props.getString(JdbcSourceConfig.INCREMENTAL_COLUMN.key()), lastCheckpoint.get()));
 
       if (sourceLimit > 0) {
-        URI jdbcURI = URI.create(props.getString(Config.URL).substring(URI_JDBC_PREFIX.length()));
+        URI jdbcURI = URI.create(props.getString(JdbcSourceConfig.URL.key()).substring(URI_JDBC_PREFIX.length()));
         if (DB_LIMIT_CLAUSE.contains(jdbcURI.getScheme())) {
-          queryBuilder.orderBy(props.getString(Config.INCREMENTAL_COLUMN)).limit(sourceLimit);
+          queryBuilder.orderBy(props.getString(JdbcSourceConfig.INCREMENTAL_COLUMN.key())).limit(sourceLimit);
         }
       }
       String query = String.format(ppdQuery, queryBuilder.toString());
@@ -208,7 +211,7 @@ public class JdbcSource extends RowSource {
       return validatePropsAndGetDataFrameReader(sparkSession, props).option(Config.RDBMS_TABLE_PROP, query).load();
     } catch (Exception e) {
       LOG.error("Error while performing an incremental fetch. Not all database support the PPD query we generate to do an incremental scan", e);
-      if (props.containsKey(Config.FALLBACK_TO_FULL_FETCH) && props.getBoolean(Config.FALLBACK_TO_FULL_FETCH)) {
+      if (props.containsKey(JdbcSourceConfig.FALLBACK_TO_FULL_FETCH.key()) && props.getBoolean(JdbcSourceConfig.FALLBACK_TO_FULL_FETCH.key())) {
         LOG.warn("Falling back to full scan.");
         return fullFetch(sourceLimit);
       }
@@ -224,12 +227,12 @@ public class JdbcSource extends RowSource {
   private Dataset<Row> fullFetch(long sourceLimit) {
     final String ppdQuery = "(%s) rdbms_table";
     final SqlQueryBuilder queryBuilder = SqlQueryBuilder.select("*")
-        .from(props.getString(Config.RDBMS_TABLE_NAME));
+        .from(props.getString(JdbcSourceConfig.RDBMS_TABLE_NAME.key()));
     if (sourceLimit > 0) {
-      URI jdbcURI = URI.create(props.getString(Config.URL).substring(URI_JDBC_PREFIX.length()));
+      URI jdbcURI = URI.create(props.getString(JdbcSourceConfig.URL.key()).substring(URI_JDBC_PREFIX.length()));
       if (DB_LIMIT_CLAUSE.contains(jdbcURI.getScheme())) {
-        if (props.containsKey(Config.INCREMENTAL_COLUMN)) {
-          queryBuilder.orderBy(props.getString(Config.INCREMENTAL_COLUMN)).limit(sourceLimit);
+        if (props.containsKey(JdbcSourceConfig.INCREMENTAL_COLUMN.key())) {
+          queryBuilder.orderBy(props.getString(JdbcSourceConfig.INCREMENTAL_COLUMN.key())).limit(sourceLimit);
         } else {
           queryBuilder.limit(sourceLimit);
         }
@@ -242,7 +245,7 @@ public class JdbcSource extends RowSource {
   private String checkpoint(Dataset<Row> rowDataset, boolean isIncremental, Option<String> lastCkptStr) {
     try {
       if (isIncremental) {
-        Column incrementalColumn = rowDataset.col(props.getString(Config.INCREMENTAL_COLUMN));
+        Column incrementalColumn = rowDataset.col(props.getString(JdbcSourceConfig.INCREMENTAL_COLUMN.key()));
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
         LOG.info(String.format("Checkpointing column %s with value: %s ", incrementalColumn, max));
         if (max != null) {
@@ -254,7 +257,7 @@ public class JdbcSource extends RowSource {
       }
     } catch (Exception e) {
       LOG.error("Failed to checkpoint");
-      throw new HoodieException("Failed to checkpoint. Last checkpoint: " + lastCkptStr.orElse(null), e);
+      throw new HoodieReadFromSourceException("Failed to checkpoint. Last checkpoint: " + lastCkptStr.orElse(null), e);
     }
   }
 
@@ -262,82 +265,22 @@ public class JdbcSource extends RowSource {
    * Inner class with config keys.
    */
   protected static class Config {
-
-    /**
-     * {@value #URL} is the jdbc url for the Hoodie datasource.
-     */
-    private static final String URL = "hoodie.deltastreamer.jdbc.url";
-
     private static final String URL_PROP = "url";
-
-    /**
-     * {@value #USER} is the username used for JDBC connection.
-     */
-    private static final String USER = "hoodie.deltastreamer.jdbc.user";
-
     /**
      * {@value #USER_PROP} used internally to build jdbc params.
      */
     private static final String USER_PROP = "user";
-
-    /**
-     * {@value #PASSWORD} is the password used for JDBC connection.
-     */
-    private static final String PASSWORD = "hoodie.deltastreamer.jdbc.password";
-
-    /**
-     * {@value #PASSWORD_FILE} is the base-path for the JDBC password file.
-     */
-    private static final String PASSWORD_FILE = "hoodie.deltastreamer.jdbc.password.file";
-
     /**
      * {@value #PASSWORD_PROP} used internally to build jdbc params.
      */
     private static final String PASSWORD_PROP = "password";
-
-    /**
-     * {@value #DRIVER_CLASS} used for JDBC connection.
-     */
-    private static final String DRIVER_CLASS = "hoodie.deltastreamer.jdbc.driver.class";
-
     /**
      * {@value #DRIVER_PROP} used internally to build jdbc params.
      */
     private static final String DRIVER_PROP = "driver";
-
-    /**
-     * {@value #RDBMS_TABLE_NAME} RDBMS table to pull.
-     */
-    private static final String RDBMS_TABLE_NAME = "hoodie.deltastreamer.jdbc.table.name";
-
     /**
      * {@value #RDBMS_TABLE_PROP} used internally for jdbc.
      */
     private static final String RDBMS_TABLE_PROP = "dbtable";
-
-    /**
-     * {@value #INCREMENTAL_COLUMN} if ran in incremental mode, this field will be used to pull new data incrementally.
-     */
-    private static final String INCREMENTAL_COLUMN = "hoodie.deltastreamer.jdbc.table.incr.column.name";
-
-    /**
-     * {@value #IS_INCREMENTAL} will the JDBC source do an incremental pull?
-     */
-    private static final String IS_INCREMENTAL = "hoodie.deltastreamer.jdbc.incr.pull";
-
-    /**
-     * {@value #EXTRA_OPTIONS} used to set any extra options the user specifies for jdbc.
-     */
-    private static final String EXTRA_OPTIONS = "hoodie.deltastreamer.jdbc.extra.options.";
-
-    /**
-     * {@value #STORAGE_LEVEL} is used to control the persistence level. Default value: MEMORY_AND_DISK_SER.
-     */
-    private static final String STORAGE_LEVEL = "hoodie.deltastreamer.jdbc.storage.level";
-
-    /**
-     * {@value #FALLBACK_TO_FULL_FETCH} is a boolean, which if set true, makes incremental fetch to fallback to full fetch in case of any error.
-     */
-    private static final String FALLBACK_TO_FULL_FETCH = "hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch";
   }
 }

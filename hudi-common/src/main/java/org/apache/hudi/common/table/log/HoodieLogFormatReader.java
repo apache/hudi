@@ -25,8 +25,8 @@ import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final boolean enableInlineReading;
   private int bufferSize;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,

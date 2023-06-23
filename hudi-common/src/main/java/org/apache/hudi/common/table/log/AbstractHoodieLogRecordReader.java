@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,9 +32,9 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -47,8 +46,8 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -60,7 +59,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -88,7 +86,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public abstract class AbstractHoodieLogRecordReader {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieLogRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordReader.class);
 
   // Reader schema for the records
   protected final Schema readerSchema;
@@ -167,7 +165,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
-    TypedProperties props = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(new Properties());
+    TypedProperties props = new TypedProperties();
     if (this.preCombineField != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
@@ -306,45 +304,43 @@ public abstract class AbstractHoodieLogRecordReader {
             // written per ingestion batch for a file but in reality we need to rollback (B1 & B2)
             // The following code ensures the same rollback block (R1) is used to rollback
             // both B1 & B2
-            LOG.info("Reading a command block from file " + logFile.getPath());
             // This is a command block - take appropriate action based on the command
             HoodieCommandBlock commandBlock = (HoodieCommandBlock) logBlock;
             String targetInstantForCommandBlock =
                 logBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME);
+            LOG.info(String.format("Reading a command block %s with targetInstantTime %s from file %s", commandBlock.getType(), targetInstantForCommandBlock,
+                logFile.getPath()));
             switch (commandBlock.getType()) { // there can be different types of command blocks
               case ROLLBACK_BLOCK:
-                // Rollback the last read log block
-                // Get commit time from last record block, compare with targetCommitTime,
+                // Rollback older read log block(s)
+                // Get commit time from older record blocks, compare with targetCommitTime,
                 // rollback only if equal, this is required in scenarios of invalid/extra
                 // rollback blocks written due to failures during the rollback operation itself
                 // and ensures the same rollback block (R1) is used to rollback both B1 & B2 with
-                // same instant_time
-                int numBlocksRolledBack = 0;
-                totalRollbacks.incrementAndGet();
-                while (!currentInstantLogBlocks.isEmpty()) {
-                  HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
+                // same instant_time.
+                final int instantLogBlockSizeBeforeRollback = currentInstantLogBlocks.size();
+                currentInstantLogBlocks.removeIf(block -> {
                   // handle corrupt blocks separately since they may not have metadata
-                  if (lastBlock.getBlockType() == CORRUPT_BLOCK) {
+                  if (block.getBlockType() == CORRUPT_BLOCK) {
                     LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
-                    numBlocksRolledBack++;
-                  } else if (targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
-                    // rollback last data block or delete block
-                    LOG.info("Rolling back the last log block read in " + logFile.getPath());
-                    currentInstantLogBlocks.pop();
-                    numBlocksRolledBack++;
-                  } else if (!targetInstantForCommandBlock
-                      .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
-                    // invalid or extra rollback block
-                    LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
-                        + " invalid or extra rollback command block in " + logFile.getPath());
-                    break;
-                  } else {
-                    // this should not happen ideally
-                    LOG.warn("Unable to apply rollback command block in " + logFile.getPath());
+                    return true;
                   }
-                }
+                  if (targetInstantForCommandBlock.contentEquals(block.getLogBlockHeader().get(INSTANT_TIME))) {
+                    // rollback older data block or delete block
+                    LOG.info(String.format("Rolling back an older log block read from %s with instantTime %s",
+                        logFile.getPath(), targetInstantForCommandBlock));
+                    return true;
+                  }
+                  return false;
+                });
+
+                final int numBlocksRolledBack = instantLogBlockSizeBeforeRollback - currentInstantLogBlocks.size();
+                totalRollbacks.addAndGet(numBlocksRolledBack);
                 LOG.info("Number of applied rollback blocks " + numBlocksRolledBack);
+                if (numBlocksRolledBack == 0) {
+                  LOG.warn(String.format("TargetInstantTime %s invalid or extra rollback command block in %s",
+                      targetInstantForCommandBlock, logFile.getPath()));
+                }
                 break;
               default:
                 throw new UnsupportedOperationException("Command type not yet supported.");
@@ -408,7 +404,7 @@ public abstract class AbstractHoodieLogRecordReader {
        * First traversal to identify the rollback blocks and valid data and compacted blocks.
        *
        * Scanning blocks is easy to do in single writer mode, where the rollback block is right after the effected data blocks.
-       * With multiwriter mode the blocks can be out of sync. An example scenario.
+       * With multi-writer mode the blocks can be out of sync. An example scenario.
        * B1, B2, B3, B4, R1(B3), B5
        * In this case, rollback block R1 is invalidating the B3 which is not the previous block.
        * This becomes more complicated if we have compacted blocks, which are data blocks created using log compaction.
@@ -501,6 +497,8 @@ public abstract class AbstractHoodieLogRecordReader {
               String targetInstantForCommandBlock =
                   logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
               targetRollbackInstants.add(targetInstantForCommandBlock);
+              orderedInstantsList.remove(targetInstantForCommandBlock);
+              instantToBlocksMap.remove(targetInstantForCommandBlock);
             } else {
               throw new UnsupportedOperationException("Command type not yet supported.");
             }
@@ -529,13 +527,6 @@ public abstract class AbstractHoodieLogRecordReader {
        */
       for (int i = orderedInstantsList.size() - 1; i >= 0; i--) {
         String instantTime = orderedInstantsList.get(i);
-
-        // Exclude the blocks which are included in targetRollbackInstants set.
-        // Here, rollback can include instants affiliated to deltacommits or log compaction commits.
-        if (targetRollbackInstants.contains(instantTime)) {
-          numBlocksRolledBack += instantToBlocksMap.get(instantTime).size();
-          continue;
-        }
         List<HoodieLogBlock> instantsBlocks = instantToBlocksMap.get(instantTime);
         if (instantsBlocks.size() == 0) {
           throw new HoodieException("Data corrupted while writing. Found zero blocks for an instant " + instantTime);
@@ -637,7 +628,8 @@ public abstract class AbstractHoodieLogRecordReader {
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
                 this.partitionNameOverrideOpt,
-                populateMetaFields);
+                populateMetaFields,
+                Option.empty());
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
       }

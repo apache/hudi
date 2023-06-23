@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -44,7 +45,6 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -92,11 +92,11 @@ public class StreamReadMonitoringFunction
 
   private String issuedInstant;
 
+  private String issuedOffset;
+
   private transient ListState<String> instantState;
 
   private final Configuration conf;
-
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   private HoodieTableMetaClient metaClient;
 
@@ -107,7 +107,7 @@ public class StreamReadMonitoringFunction
       Path path,
       RowType rowType,
       long maxCompactionMemoryInBytes,
-      @Nullable Set<String> requiredPartitionPaths) {
+      @Nullable PartitionPruners.PartitionPruner partitionPruner) {
     this.conf = conf;
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
@@ -117,7 +117,7 @@ public class StreamReadMonitoringFunction
         .path(path)
         .rowType(rowType)
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
-        .requiredPartitions(requiredPartitionPaths)
+        .partitionPruner(partitionPruner)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .build();
@@ -145,7 +145,7 @@ public class StreamReadMonitoringFunction
         retrievedStates.add(entry);
       }
 
-      ValidationUtils.checkArgument(retrievedStates.size() <= 1,
+      ValidationUtils.checkArgument(retrievedStates.size() <= 2,
           getClass().getSimpleName() + " retrieved invalid state.");
 
       if (retrievedStates.size() == 1 && issuedInstant != null) {
@@ -156,19 +156,21 @@ public class StreamReadMonitoringFunction
             "The " + getClass().getSimpleName() + " has already restored from a previous Flink version.");
 
       } else if (retrievedStates.size() == 1) {
+        // for forward compatibility
         this.issuedInstant = retrievedStates.get(0);
         if (LOG.isDebugEnabled()) {
-          LOG.debug("{} retrieved a issued instant of time {} for table {} with path {}.",
+          LOG.debug("{} retrieved an issued instant of time {} for table {} with path {}.",
               getClass().getSimpleName(), issuedInstant, conf.get(FlinkOptions.TABLE_NAME), path);
+        }
+      } else if (retrievedStates.size() == 2) {
+        this.issuedInstant = retrievedStates.get(0);
+        this.issuedOffset = retrievedStates.get(1);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("{} retrieved an issued instant of time [{}, {}] for table {} with path {}.",
+              getClass().getSimpleName(), issuedInstant, issuedOffset, conf.get(FlinkOptions.TABLE_NAME), path);
         }
       }
     }
-  }
-
-  @Override
-  public void open(Configuration parameters) throws Exception {
-    super.open(parameters);
-    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
   }
 
   @Override
@@ -187,6 +189,7 @@ public class StreamReadMonitoringFunction
     if (this.metaClient != null) {
       return this.metaClient;
     }
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     if (StreamerUtil.tableExists(this.path.toString(), hadoopConf)) {
       this.metaClient = StreamerUtil.createMetaClient(this.path.toString(), hadoopConf);
       return this.metaClient;
@@ -203,7 +206,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.hadoopConf, this.issuedInstant, this.cdcEnabled);
+        incrementalInputSplits.inputSplits(metaClient, this.issuedInstant, this.issuedOffset, this.cdcEnabled);
     if (result.isEmpty()) {
       // no new instants, returns early
       return;
@@ -214,6 +217,7 @@ public class StreamReadMonitoringFunction
     }
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
+    this.issuedOffset = result.getOffset();
     LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- consumed to instant: {}\n"
@@ -242,11 +246,9 @@ public class StreamReadMonitoringFunction
     if (checkpointLock != null) {
       // this is to cover the case where cancel() is called before the run()
       synchronized (checkpointLock) {
-        issuedInstant = null;
         isRunning = false;
       }
     } else {
-      issuedInstant = null;
       isRunning = false;
     }
   }
@@ -260,6 +262,9 @@ public class StreamReadMonitoringFunction
     this.instantState.clear();
     if (this.issuedInstant != null) {
       this.instantState.add(this.issuedInstant);
+    }
+    if (this.issuedOffset != null) {
+      this.instantState.add(this.issuedOffset);
     }
   }
 }

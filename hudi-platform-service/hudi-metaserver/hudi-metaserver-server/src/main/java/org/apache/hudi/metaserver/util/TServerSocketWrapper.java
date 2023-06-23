@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metaserver.util;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransportException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.ServerSocket;
 
@@ -31,7 +31,7 @@ import java.net.ServerSocket;
  */
 public class TServerSocketWrapper extends TServerSocket {
 
-  private static final Logger LOG = LogManager.getLogger(TServerSocketWrapper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TServerSocketWrapper.class);
 
   public TServerSocketWrapper(ServerSocket serverSocket) throws TTransportException {
     super(serverSocket);

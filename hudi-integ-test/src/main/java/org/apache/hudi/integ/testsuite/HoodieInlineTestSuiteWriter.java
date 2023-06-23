@@ -35,6 +35,7 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
@@ -65,7 +66,14 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   public void shutdownResources() {
-    // no-op for non continuous mode test suite writer.
+    if (this.deltaStreamerWrapper != null) {
+      log.info("Shutting down DS wrapper gracefully ");
+      this.deltaStreamerWrapper.shutdownGracefully();
+    }
+    if (this.writeClient != null) {
+      log.info("Closing local write client");
+      this.writeClient.close();
+    }
   }
 
   public RDD<GenericRecord> getNextBatch() throws Exception {
@@ -189,7 +197,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
@@ -204,7 +212,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));

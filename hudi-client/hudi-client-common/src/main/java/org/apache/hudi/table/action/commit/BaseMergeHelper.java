@@ -56,6 +56,7 @@ public abstract class BaseMergeHelper {
 
     @Override
     public Void finish() {
+      upsertHandle.close();
       return null;
     }
   }

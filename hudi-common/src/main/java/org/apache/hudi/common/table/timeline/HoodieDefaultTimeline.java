@@ -198,6 +198,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs) {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> HoodieTimeline.isInRange(s.getStateTransitionTime(), startTs, endTs)),
+        details);
+  }
+
+  @Override
+  public HoodieDefaultTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime) {
+    return new HoodieDefaultTimeline(instants.stream()
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(),
+            GREATER_THAN, instantTime) && !s.getTimestamp().equals(instantTime)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
@@ -334,12 +348,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean empty() {
-    return getInstants().isEmpty();
+    return instants.isEmpty();
   }
 
   @Override
   public int countInstants() {
-    return getInstants().size();
+    return instants.size();
   }
 
   @Override
@@ -381,12 +395,23 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsInstant(String ts) {
-    return getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts));
+    // Check for 0.10.0+ timestamps which have msec granularity
+    if (getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts))) {
+      return true;
+    }
+
+    // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
+    if (ts.length() == HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH && ts.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
+      final String actualOlderFormatTs = ts.substring(0, ts.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+      return containsOrBeforeTimelineStarts(actualOlderFormatTs);
+    }
+
+    return false;
   }
 
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
-    return getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(instant)) || isBeforeTimelineStarts(instant);
+    return containsInstant(instant) || isBeforeTimelineStarts(instant);
   }
 
   @Override
@@ -407,6 +432,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
     return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
+  }
+
+  @Override
+  public Stream<HoodieInstant> getInstantsOrderedByStateTransitionTime() {
+    return getInstantsAsStream().sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
   }
 
   @Override

@@ -20,7 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -29,10 +29,13 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Arrays;
 
+import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
+
 /**
- * A partitioner that does sorting based on specified column values for each RDD partition.
+ * A partitioner that globally sorts a {@link JavaRDD<HoodieRecord>} based on partition path column and custom columns.
  *
- * @param <T> HoodieRecordPayload type
+ * @see GlobalSortPartitioner
+ * @see BulkInsertSortMode#GLOBAL_SORT
  */
 public class RDDCustomColumnsSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
@@ -43,14 +46,14 @@ public class RDDCustomColumnsSortPartitioner<T>
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.sortColumnNames = getSortColumnName(config);
+    this.sortColumnNames = tryPrependPartitionPathColumns(getSortColumnName(config), config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
-    this.sortColumnNames = columnNames;
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
+    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
     this.serializableSchema = new SerializableSchema(schema);
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
   @Override
@@ -61,13 +64,8 @@ public class RDDCustomColumnsSortPartitioner<T>
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
         record -> {
-          Object recordValue = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          // null values are replaced with empty string for null_first order
-          if (recordValue == null) {
-            return StringUtils.EMPTY_STRING;
-          } else {
-            return StringUtils.objToString(recordValue);
-          }
+          Object[] columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
+          return FlatLists.ofComparableArray(columnValues);
         },
         true, outputSparkPartitions);
   }

@@ -48,8 +48,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileInfo;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.nio.ByteBuff;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -81,7 +81,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   public static final String KEY_MIN_RECORD = "minRecordKey";
   public static final String KEY_MAX_RECORD = "maxRecordKey";
 
-  private static final Logger LOG = LogManager.getLogger(HoodieAvroHFileReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
 
   private final Path path;
 
@@ -102,8 +102,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         Option.empty());
   }
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
-    this(path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), Option.empty());
+  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, Option<Schema> schemaOpt) throws IOException {
+    this(path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), schemaOpt);
   }
 
   public HoodieAvroHFileReader(FileSystem fs, Path dummyPath, byte[] content, Option<Schema> schemaOpt) throws IOException {
@@ -543,6 +543,33 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     public void close() {
       scanner.close();
     }
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() {
+    final HFileScanner scanner = reader.getScanner(false, false);
+    return new ClosableIterator<String>() {
+      @Override
+      public boolean hasNext() {
+        try {
+          return scanner.next();
+        } catch (IOException e) {
+          throw new HoodieException("Error while scanning for keys", e);
+        }
+      }
+
+      @Override
+      public String next() {
+        Cell cell = scanner.getCell();
+        final byte[] keyBytes = copyKeyFromCell(cell);
+        return new String(keyBytes);
+      }
+
+      @Override
+      public void close() {
+        scanner.close();
+      }
+    };
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {

@@ -30,8 +30,8 @@ import scala.collection.JavaConverters._
 
 class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

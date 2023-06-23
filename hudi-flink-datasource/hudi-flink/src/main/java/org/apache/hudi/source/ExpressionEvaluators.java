@@ -30,6 +30,8 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.NotNull;
 
@@ -156,10 +158,10 @@ public class ExpressionEvaluators {
   public interface Evaluator extends Serializable {
 
     /**
-     * Decides whether it's possible to match based on the column stats.
+     * Evaluates whether it's possible to match based on the column stats.
      *
      * @param columnStatsMap column statistics
-     * @return
+     * @return false if there is no any possible to match, true otherwise.
      */
     boolean eval(Map<String, ColumnStats> columnStatsMap);
   }
@@ -255,9 +257,15 @@ public class ExpressionEvaluators {
 
     @Override
     protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+      Object minVal = columnStats.getMinVal();
+      Object maxVal = columnStats.getMaxVal();
+      if (minVal == null || maxVal == null) {
+        return false;
+      }
+      // return false if min == max == val, otherwise return true.
       // because the bounds are not necessarily a min or max value, this cannot be answered using them.
       // notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
-      return true;
+      return compare(minVal, val, type) != 0 || compare(maxVal, val, type) != 0;
     }
   }
 
@@ -381,6 +389,7 @@ public class ExpressionEvaluators {
    */
   public static class In extends LeafEvaluator {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOGGER = LoggerFactory.getLogger(In.class);
 
     private static final int IN_PREDICATE_LIMIT = 200;
 
@@ -404,6 +413,7 @@ public class ExpressionEvaluators {
 
       if (vals.length > IN_PREDICATE_LIMIT) {
         // skip evaluating the predicate if the number of values is too big
+        LOGGER.warn("Skip evaluating in predicate because the number of values is too big!");
         return true;
       }
 

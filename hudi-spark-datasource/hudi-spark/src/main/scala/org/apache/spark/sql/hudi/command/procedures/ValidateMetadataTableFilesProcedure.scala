@@ -36,7 +36,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "verbose", DataTypes.BooleanType, false)
   )
 
@@ -44,7 +44,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_name", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("is_present_in_fs", DataTypes.BooleanType, nullable = true, Metadata.empty),
-    StructField("is_resent_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
+    StructField("is_present_in_metadata", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("fs_size", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("metadata_size", DataTypes.LongType, nullable = true, Metadata.empty)
   ))
@@ -63,7 +63,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath, "/tmp")
+      config, basePath)
 
     if (!metadataReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
@@ -71,7 +71,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
 
     val fsConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      fsConfig, basePath, "/tmp")
+      fsConfig, basePath)
 
     val timer = HoodieTimer.start
     val metadataPartitions = metadataReader.getAllPartitionPaths

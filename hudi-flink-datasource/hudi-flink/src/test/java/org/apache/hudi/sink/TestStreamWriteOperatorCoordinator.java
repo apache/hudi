@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -59,6 +60,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -228,7 +230,7 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // test metadata table compaction
     // write another 4 commits
@@ -242,7 +244,7 @@ public class TestStreamWriteOperatorCoordinator {
     // the 5th commit triggers the compaction
     mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
-    completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    completedTimeline = metadataTableMetaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(7));
     assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant + "001"));
     assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
@@ -277,7 +279,53 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  void testSyncMetadataTableWithReusedInstant() throws Exception {
+  void testSyncMetadataTableWithLogCompaction() throws Exception {
+    // reset
+    reset();
+    // override the default configuration
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
+    conf.setString("hoodie.metadata.log.compaction.enable", "true");
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+
+    final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
+
+    coordinator.handleEventFromOperator(0, event0);
+
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
+    HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+
+    // test metadata table log compaction
+    // write another 5 commits
+    for (int i = 1; i < 6; i++) {
+      instant = mockWriteWithMetadata();
+      metadataTableMetaClient.reloadActiveTimeline();
+      completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
+      assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(i + 1));
+      assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+    }
+    // the 6th commit triggers the log compaction
+    mockWriteWithMetadata();
+    metadataTableMetaClient.reloadActiveTimeline();
+    completedTimeline = metadataTableMetaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(8));
+    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant + "005"));
+    // log compaction is another delta commit
+    assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
+  }
+
+  @Test
+  void testSyncMetadataTableWithRollback() throws Exception {
     // reset
     reset();
     // override the default configuration
@@ -299,7 +347,7 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // writes a normal commit
     mockWriteWithMetadata();
@@ -311,12 +359,14 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
 
     // write another commit with existing instant on the metadata timeline
-    instant = mockWriteWithMetadata();
+    mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(3));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(4));
+    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant));
+    assertThat("The pending instant should be rolled back first",
+        completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
   }
 
   @Test
@@ -361,7 +411,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
 
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), "optimistic_concurrency_control");
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
@@ -380,13 +430,51 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath, HadoopConfigurations.getHadoopConf(conf));
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(1));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), startsWith(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     instant = mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(2));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+  }
+
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
+    NonThrownExecutor executor = new MockCoordinatorExecutor(context);
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
+      coordinator.start();
+      coordinator.setExecutor(executor);
+      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+
+      // Coordinator start the instant
+      String instant = coordinator.getInstant();
+
+      OperatorEvent event1 = WriteMetadataEvent.builder()
+          .taskID(0)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .lastBatch(true)
+          .build();
+      OperatorEvent event2 = WriteMetadataEvent.builder()
+          .taskID(1)
+          .instantTime(instant)
+          .writeStatus(Collections.emptyList())
+          .lastBatch(true)
+          .build();
+      coordinator.handleEventFromOperator(0, event1);
+      coordinator.handleEventFromOperator(1, event2);
+
+      assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
+          "Commit the instant");
+      String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+      assertThat("Commits the instant with empty batch anyway", lastCompleted, is(instant));
+      assertNull(coordinator.getEventBuffer()[0]);
+    }
   }
 
   // -------------------------------------------------------------------------

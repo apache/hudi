@@ -25,6 +25,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.fs.FSUtils
@@ -38,12 +39,9 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
@@ -125,9 +123,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val writer: DataFrameWriter[Row] = inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, TimestampType.DATE_STRING.name())
-      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
-      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
+      .option(TIMESTAMP_TYPE_FIELD.key, TimestampType.DATE_STRING.name())
+      .option(TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd")
       .mode(SaveMode.Overwrite)
 
     if (isNullOrEmpty(keyGenerator)) {
@@ -259,7 +257,6 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName,
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
 
@@ -396,8 +393,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
-      PARTITIONPATH_FIELD.key -> "dt,hh",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+      PARTITIONPATH_FIELD.key -> "dt,hh"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -456,8 +452,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
-      PARTITIONPATH_FIELD.key -> "region_code,dt",
-      KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+      PARTITIONPATH_FIELD.key -> "region_code,dt"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -488,8 +483,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     // Test getting partition paths in a subset of directories
     val metadata = HoodieTableMetadata.create(context,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
-      metaClient.getBasePathV2.toString,
-      metaClient.getBasePathV2.getParent.toString)
+      metaClient.getBasePathV2.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
       metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)
@@ -524,7 +518,12 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         EqualTo(attribute("region_code"), literal("1"))),
         "dt = '2023/01/01' and region_code = '1'",
         enablePartitionPathPrefixAnalysis,
-        Seq(("1", "2023/01/01")))
+        Seq(("1", "2023/01/01"))),
+      // no partition matched
+      (Seq(EqualTo(attribute("region_code"), literal("0"))),
+        "region_code = '0'",
+        enablePartitionPathPrefixAnalysis,
+        Seq())
     )
 
     testCases.foreach(testCase => {

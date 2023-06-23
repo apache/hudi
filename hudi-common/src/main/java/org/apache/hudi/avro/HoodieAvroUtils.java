@@ -62,6 +62,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
@@ -79,8 +80,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -741,29 +742,24 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Gets record column values into one object.
+   * Gets record column values into object array.
    *
    * @param record  Hoodie record.
    * @param columns Names of the columns to get values.
    * @param schema  {@link Schema} instance.
-   * @return Column value if a single column, or concatenated String values by comma.
+   * @return Column value.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
-                                             String[] columns,
-                                             Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public static Object[] getRecordColumnValues(HoodieAvroRecord record,
+                                               String[] columns,
+                                               Schema schema,
+                                               boolean consistentLogicalTimestampEnabled) {
     try {
       GenericRecord genericRecord = (GenericRecord) ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData();
-      if (columns.length == 1) {
-        return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
-      } else {
-        // TODO this is inefficient, instead we can simply return array of Comparable
-        StringBuilder sb = new StringBuilder();
-        for (String col : columns) {
-          sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true, consistentLogicalTimestampEnabled));
-        }
-
-        return sb.toString();
+      List<Object> list = new ArrayList<>();
+      for (String col : columns) {
+        list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
       }
+      return list.toArray();
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
@@ -992,6 +988,9 @@ public class HoodieAvroUtils {
         }
         break;
       case STRING:
+        if (oldSchema.getType() == Schema.Type.ENUM) {
+          return String.valueOf(oldValue);
+        }
         if (oldSchema.getType() == Schema.Type.BYTES) {
           return String.valueOf(((byte[]) oldValue));
         }
@@ -1022,15 +1021,8 @@ public class HoodieAvroUtils {
                   || oldSchema.getType() == Schema.Type.LONG
                   || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
-            BigDecimal bigDecimal = null;
-            if (oldSchema.getType() == Schema.Type.STRING) {
-              bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
-            } else {
-              // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
-              bigDecimal = new java.math.BigDecimal(oldValue.toString())
-                      .setScale(decimal.getScale());
-            }
+            // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
+            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
         }
@@ -1082,7 +1074,7 @@ public class HoodieAvroUtils {
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);
     } else {
-      // deal complex union. this should not happened in hoodie,
+      // deal complex union. this should not happen in hoodie,
       // since flink/spark do not write this type.
       int i = GenericData.get().resolveUnion(schema, data);
       actualSchema = schema.getTypes().get(i);
@@ -1097,7 +1089,8 @@ public class HoodieAvroUtils {
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields) {
+      Boolean populateMetaFields,
+      Option<Schema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineField, withOperation);
@@ -1105,20 +1098,20 @@ public class HoodieAvroUtils {
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
       // TODO in HoodieFileSliceReader may partitionName=option#empty
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp);
+          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation, partitionNameOp);
+          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
   }
 
   /**
    * Given avro records, rewrites them with new schema.
    *
-   * @param oldRecords oldRecords to be rewrite
+   * @param oldRecords oldRecords to be rewritten
    * @param newSchema newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
-   * @return a iterator of rewrote GeneriRcords
+   * @return a iterator of rewritten GenericRecords
    */
   public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols, boolean validate) {
     if (oldRecords == null || newSchema == null) {

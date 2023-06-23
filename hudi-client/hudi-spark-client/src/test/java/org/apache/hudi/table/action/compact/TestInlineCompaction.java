@@ -135,12 +135,12 @@ public class TestInlineCompaction extends CompactionTestBase {
       requestInstant = HoodieActiveTimeline.createNewInstantTime();
       try {
         scheduleCompaction(requestInstant, writeClient, cfg);
-        Assertions.fail();
+        Object fail = Assertions.fail();
       } catch (AssertionError error) {
         //should be here
       }
 
-      // step 3: compelete another 4 delta commit should be 2 compaction request after this
+      // step 3: complete another 4 delta commit should be 2 compaction request after this
       instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
       records = dataGen.generateInsertsForPartition(instants.get(0), 100, "2022/03/15");
       for (String instant : instants) {
@@ -295,7 +295,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     }
 
     // When: commit happens after 1000s. assumption is that, there won't be any new compaction getting scheduled within 100s, but the previous failed one will be
-    // rolledback and retried to move it to completion.
+    // rolled back and retried to move it to completion.
     HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(5, 1000, CompactionTriggerStrategy.TIME_ELAPSED);
     String instantTime2;
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(inlineCfg)) {

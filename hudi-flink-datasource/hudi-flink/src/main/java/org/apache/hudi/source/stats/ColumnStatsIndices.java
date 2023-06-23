@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
@@ -286,8 +285,7 @@ public class ColumnStatsIndices {
     //    - Deserializing fetched records into [[RowData]]s
     HoodieTableMetadata metadataTable = HoodieTableMetadata.create(
         HoodieFlinkEngineContext.DEFAULT,
-        metadataConfig, basePath,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+        metadataConfig, basePath);
 
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata
     List<String> encodedTargetColumnNames = Arrays.stream(targetColumns)

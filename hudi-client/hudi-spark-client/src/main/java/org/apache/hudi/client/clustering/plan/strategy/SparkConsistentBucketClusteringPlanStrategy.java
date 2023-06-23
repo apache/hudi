@@ -39,13 +39,14 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,7 +65,7 @@ import java.util.stream.Stream;
 public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordPayload<T>>
     extends PartitionAwareClusteringPlanStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkConsistentBucketClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkConsistentBucketClusteringPlanStrategy.class);
 
   public static final String METADATA_PARTITION_KEY = "clustering.group.partition";
   public static final String METADATA_CHILD_NODE_KEY = "clustering.group.child.node";
@@ -125,9 +126,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
    */
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
-    ValidationUtils.checkArgument(getHoodieTable().getIndex() instanceof HoodieSparkConsistentBucketIndex,
-        "Mismatch of index type and the clustering strategy, index: " + getHoodieTable().getIndex().getClass().getSimpleName());
-    Option<HoodieConsistentHashingMetadata> metadata = HoodieSparkConsistentBucketIndex.loadMetadata(getHoodieTable(), partitionPath);
+    Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(getHoodieTable(), partitionPath);
     ValidationUtils.checkArgument(metadata.isPresent(), "Metadata is empty for partition: " + partitionPath);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
 

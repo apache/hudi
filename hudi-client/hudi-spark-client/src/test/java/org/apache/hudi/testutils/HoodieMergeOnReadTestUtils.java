@@ -40,8 +40,8 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieMergeOnReadTestUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTestUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeOnReadTestUtils.class);
 
   public static List<RecordReader> getRecordReadersUsingInputFormat(Configuration conf, List<String> inputPaths,
                                                                     String basePath, JobConf jobConf, boolean realtime, boolean populateMetaField) {
@@ -168,7 +168,7 @@ public class HoodieMergeOnReadTestUtils {
         }
       }
     } catch (IOException ie) {
-      LOG.error(ie);
+      LOG.error("Read records error", ie);
     }
     return records;
   }
@@ -211,7 +211,7 @@ public class HoodieMergeOnReadTestUtils {
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypesWithDatestr);
     conf.set(IOConstants.COLUMNS, hiveColumnNames);
-    conf.get(IOConstants.COLUMNS_TYPES, hiveColumnTypesWithDatestr);
+    conf.set(IOConstants.COLUMNS_TYPES, hiveColumnTypesWithDatestr);
 
     // Hoodie Input formats are also configurable
     Configurable configurable = (Configurable)inputFormat;

@@ -19,17 +19,16 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
-import org.apache.hudi.HoodieBootstrapRelation.validate
-import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
+import org.apache.hudi.HoodieBootstrapRelation.{createPartitionedFile, validate}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -37,21 +36,21 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[
 
 /**
   * This is Spark relation that can be used for querying metadata/fully bootstrapped query hoodie tables, as well as
-  * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
-  * push-down. For metadata bootstrapped files, if we query columns from both metadata and actual data then it will
-  * perform a merge of both to return the result.
-  *
-  * Caveat: Filter push-down does not work when querying both metadata and actual data columns over metadata
-  * bootstrapped files, because then the metadata file and data file can return different number of rows causing errors
-  * merging.
-  *
-  * @param sqlContext Spark SQL Context
-  * @param userSchema User specified schema in the datasource query
-  * @param globPaths  The global paths to query. If it not none, read from the globPaths,
-  *                   else read data from tablePath using HoodiFileIndex.
-  * @param metaClient Hoodie table meta client
-  * @param optParams DataSource options passed by the user
-  */
+ * non-bootstrapped tables. It implements PrunedFilteredScan interface in order to support column pruning and filter
+ * push-down. For metadata bootstrapped files, if we query columns from both metadata and actual data then it will
+ * perform a merge of both to return the result.
+ *
+ * Caveat: Filter push-down does not work when querying both metadata and actual data columns over metadata
+ * bootstrapped files, because then the metadata file and data file can return different number of rows causing errors
+ * merging.
+ *
+ * @param sqlContext Spark SQL Context
+ * @param userSchema User specified schema in the datasource query
+ * @param globPaths  The global paths to query. If it not none, read from the globPaths,
+ *                   else read data from tablePath using HoodieFileIndex.
+ * @param metaClient Hoodie table meta client
+ * @param optParams  DataSource options passed by the user
+ */
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
                                    private val globPaths: Seq[Path],
@@ -65,22 +64,28 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
+  private lazy val bootstrapBasePath = new Path(metaClient.getTableConfig.getBootstrapBasePath.get)
+
   override val mandatoryFields: Seq[String] = Seq.empty
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    val isPartitioned = metaClient.getTableConfig.isTablePartitioned
     fileSlices.map { fileSlice =>
       val baseFile = fileSlice.getBaseFile.get()
-
       if (baseFile.getBootstrapBaseFile.isPresent) {
-        val partitionValues =
-          getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = true)
-        val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
-        val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
+        val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
+          bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
+        val dataFile = createPartitionedFile(
+          partitionValues, baseFile.getBootstrapBaseFile.get.getFileStatus.getPath,
+          0, baseFile.getBootstrapBaseFile.get().getFileLen)
+        val skeletonFile = Option(createPartitionedFile(
+          InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen))
 
         HoodieBootstrapSplit(dataFile, skeletonFile)
       } else {
-        val dataFile = PartitionedFile(getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getPath, 0, baseFile.getFileLen)
+        val dataFile = createPartitionedFile(
+          getPartitionColumnsAsInternalRow(baseFile.getFileStatus), baseFile.getHadoopPath, 0, baseFile.getFileLen)
         HoodieBootstrapSplit(dataFile)
       }
     }
@@ -188,11 +193,21 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
+
+  def toHadoopFsRelation: HadoopFsRelation = {
+      HadoopFsRelation(
+        location = fileIndex,
+        partitionSchema = fileIndex.partitionSchema,
+        dataSchema = fileIndex.dataSchema,
+        bucketSpec = None,
+        fileFormat = fileFormat,
+        optParams)(sparkSession)
+  }
+
 }
 
 
-object HoodieBootstrapRelation {
-
+object HoodieBootstrapRelation extends SparkAdapterSupport {
   private def validate(requiredDataSchema: HoodieTableSchema, requiredDataFileSchema: StructType, requiredSkeletonFileSchema: StructType): Unit = {
     val requiredDataColumns: Seq[String] = requiredDataSchema.structTypeSchema.fieldNames.toSeq
     val combinedColumns = (requiredSkeletonFileSchema.fieldNames ++ requiredDataFileSchema.fieldNames).toSeq
@@ -202,4 +217,11 @@ object HoodieBootstrapRelation {
     checkState(combinedColumns.sorted == requiredDataColumns.sorted)
   }
 
+  def createPartitionedFile(partitionValues: InternalRow,
+                            filePath: Path,
+                            start: Long,
+                            length: Long): PartitionedFile = {
+    sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
+      partitionValues, filePath, start, length)
+  }
 }

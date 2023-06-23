@@ -26,12 +26,12 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
 import org.apache.curator.test.TestingServer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -46,7 +46,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 
 public class TestZookeeperBasedLockProvider {
 
-  private static final Logger LOG = LogManager.getLogger(TestZookeeperBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestZookeeperBasedLockProvider.class);
 
   private static TestingServer server;
   private static CuratorFramework client;

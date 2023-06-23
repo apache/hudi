@@ -39,10 +39,11 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
    * operation = (RUN | SCHEDULE) COMPACTION  ON path = STRING   (AT instantTimestamp = INTEGER_VALUE)?
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "op", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "path", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "timestamp", DataTypes.LongType, None)
+    ProcedureParameter.required(0, "op", DataTypes.StringType),
+    ProcedureParameter.optional(1, "table", DataTypes.StringType),
+    ProcedureParameter.optional(2, "path", DataTypes.StringType),
+    ProcedureParameter.optional(3, "timestamp", DataTypes.LongType),
+    ProcedureParameter.optional(4, "options", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -62,13 +63,18 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val tableName = getArgValueOrDefault(args, PARAMETERS(1))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(2))
     val instantTimestamp = getArgValueOrDefault(args, PARAMETERS(3))
+    var confs: Map[String, String] = Map.empty
+    if (getArgValueOrDefault(args, PARAMETERS(4)).isDefined) {
+      confs = confs ++ HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String])
+    }
 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
+        tableName.asInstanceOf[Option[String]])
       var willCompactionInstants: Seq[String] = Seq.empty
       operation match {
         case "schedule" =>

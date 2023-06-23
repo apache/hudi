@@ -32,8 +32,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,7 +42,7 @@ import java.util.List;
 
 public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
 
-  private static final Logger LOG = LogManager.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
 
   private final List<HoodieRecord<T>> preppedInputRecords;
 

@@ -41,11 +41,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link PostgresDebeziumAvroPayload}.
@@ -108,6 +110,7 @@ public class TestPostgresDebeziumAvroPayload {
   public void testMergeWithDelete() throws IOException {
     GenericRecord deleteRecord = createRecord(2, Operation.DELETE, 100L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(deleteRecord, 100L);
+    assertTrue(payload.isDeleted(avroSchema, new Properties()));
 
     GenericRecord existingRecord = createRecord(2, Operation.UPDATE, 99L);
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);

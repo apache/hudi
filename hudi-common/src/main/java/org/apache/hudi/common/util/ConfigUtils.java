@@ -60,4 +60,24 @@ public class ConfigUtils {
     return Arrays.stream(param.split(","))
         .map(String::trim).distinct().collect(Collectors.toList());
   }
+
+  /**
+   * Case-insensitive resolution of input enum name to the enum type
+   */
+  public static <T extends Enum<T>> T resolveEnum(Class<T> enumType,
+                                              String name) {
+    T[] enumConstants = enumType.getEnumConstants();
+    for (T constant : enumConstants) {
+      if (constant.name().equalsIgnoreCase(name)) {
+        return constant;
+      }
+    }
+
+    throw new IllegalArgumentException("No enum constant found " + enumType.getName() + "." + name);
+  }
+
+  public static <T extends Enum<T>> String[] enumNames(Class<T> enumType) {
+    T[] enumConstants = enumType.getEnumConstants();
+    return Arrays.stream(enumConstants).map(Enum::name).toArray(String[]::new);
+  }
 }

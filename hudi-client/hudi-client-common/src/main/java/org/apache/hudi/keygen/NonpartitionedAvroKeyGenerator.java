@@ -17,27 +17,23 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * Avro simple Key generator for unpartitioned Hive Tables.
+ * Avro simple Key generator for non-partitioned Hive Tables.
  */
 public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
-  private static final String EMPTY_PARTITION = "";
   private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
 
   public NonpartitionedAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(config);
     this.partitionPathFields = EMPTY_PARTITION_FIELD_LIST;
   }
 

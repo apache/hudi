@@ -44,13 +44,11 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -67,12 +65,12 @@ import com.beust.jcommander.Parameter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -147,7 +145,7 @@ import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthorit
  */
 public class HoodieMetadataTableValidator implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataTableValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -161,11 +159,6 @@ public class HoodieMetadataTableValidator implements Serializable {
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
   private final String taskLabels;
-
-  public HoodieMetadataTableValidator(HoodieTableMetaClient metaClient) {
-    this.metaClient = metaClient;
-    this.taskLabels = StringUtils.EMPTY_STRING;
-  }
 
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
@@ -360,7 +353,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   public boolean run() {
     boolean result = false;
     try {
-      LOG.info(cfg);
+      LOG.info(cfg.toString());
       if (cfg.continuous) {
         LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode ******");
         doHoodieMetadataTableValidationContinuous();
@@ -1040,7 +1033,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    */
   private static class HoodieMetadataValidationContext implements AutoCloseable, Serializable {
 
-    private static final Logger LOG = LogManager.getLogger(HoodieMetadataValidationContext.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataValidationContext.class);
 
     private final HoodieTableMetaClient metaClient;
     private final HoodieTableFileSystemView fileSystemView;
@@ -1061,8 +1054,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);
-      this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
-          FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+      this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }

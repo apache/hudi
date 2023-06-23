@@ -39,18 +39,21 @@ public class HoodieMetricsCloudWatchConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> REPORT_PERIOD_SECONDS = ConfigProperty
       .key(CLOUDWATCH_PREFIX + ".report.period.seconds")
       .defaultValue(60)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Reporting interval in seconds");
 
   public static final ConfigProperty<String> METRIC_PREFIX = ConfigProperty
       .key(CLOUDWATCH_PREFIX + ".metric.prefix")
       .defaultValue("")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Metric prefix of reporter");
 
   public static final ConfigProperty<String> METRIC_NAMESPACE = ConfigProperty
       .key(CLOUDWATCH_PREFIX + ".namespace")
       .defaultValue("Hudi")
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Namespace of reporter");
   /*
@@ -60,6 +63,7 @@ public class HoodieMetricsCloudWatchConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> MAX_DATUMS_PER_REQUEST =
       ConfigProperty.key(CLOUDWATCH_PREFIX + ".maxDatumsPerRequest")
           .defaultValue(20)
+          .markAdvanced()
           .sinceVersion("0.10.0")
           .withDocumentation("Max number of Datums per request");
 
