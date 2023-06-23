@@ -157,7 +157,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
       HoodieData<HoodieRecord<R>> incomingRecords,
       HoodieTable hoodieTable) {
-    final boolean shouldUpdatePartitionPath = config.getBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
+    final boolean shouldUpdatePartitionPath = config.getRecordIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     final HoodieRecordMerger merger = config.getRecordMerger();
 
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords = incomingRecords

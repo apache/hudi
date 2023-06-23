@@ -215,7 +215,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
             .withSimpleIndexParallelism(2)
             .withGlobalSimpleIndexParallelism(2)
             .withGlobalIndexReconcileParallelism(2)
-            .withBloomIndexUpdatePartitionPath(true)
+            .withGlobalBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true).build())
         .withSchema(SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()

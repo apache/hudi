@@ -103,7 +103,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
       HoodieData<HoodieRecord<R>> records,
       HoodieTable hoodieTable) {
-    final boolean shouldUpdatePartitionPath = config.getBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
+    final boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     final HoodieRecordMerger merger = config.getRecordMerger();
 
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
