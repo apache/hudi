@@ -55,7 +55,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -73,8 +72,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -83,6 +80,8 @@ import org.apache.spark.sql.SparkSessionExtensions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -115,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
   protected static int timelineServicePort = FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
 
   @AfterAll
@@ -335,21 +334,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     return timelineServicePort;
   }
 
-  protected Properties getPropertiesForKeyGen() {
-    return getPropertiesForKeyGen(false);
-  }
-
-  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
-    return properties;
-  }
-
   protected Properties getPropertiesForMetadataTable() {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -361,7 +345,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
     if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen()))
+      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : HoodieClientTestUtils.getPropertiesForKeyGen()))
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
   }
@@ -513,7 +497,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
       return;
     }
 
-    if (!tableMetadata.getSyncedInstantTime().isPresent() || tableMetadata instanceof FileSystemBackedTableMetadata) {
+    if (tableMetadata instanceof FileSystemBackedTableMetadata || !tableMetadata.getSyncedInstantTime().isPresent()) {
       throw new IllegalStateException("Metadata should have synced some commits or tableMetadata should not be an instance "
           + "of FileSystemBackedTableMetadata");
     }
@@ -526,7 +510,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
     fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
-    if (fsPartitions.isEmpty()) {
+    if (fsPartitions.isEmpty() && testTable.isNonPartitioned()) {
       fsPartitions.add("");
     }
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
@@ -577,8 +561,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   }
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath());
+    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
@@ -616,9 +599,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-    fileGroups.forEach(g -> LogManager.getLogger(getClass()).info(g));
-    fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LogManager.getLogger(getClass()).info(b)));
-    fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LogManager.getLogger(getClass()).info(s)));
+    fileGroups.forEach(g -> LoggerFactory.getLogger(getClass()).info(g.toString()));
+    fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
+    fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
 
     long numFiles = fileGroups.stream()
         .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
@@ -668,10 +651,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
 
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
 
-      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() <= partitionType.getFileGroupCount(), "Should have a single latest base file");
-      assertTrue(latestSlices.size() <= partitionType.getFileGroupCount(), "Should have a single latest file slice");
+      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() > 0, "Should have a single latest base file");
+      assertTrue(latestSlices.size() > 0, "Should have a single latest file slice");
       assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "
-          + numFileVersions + " but was " + latestSlices.size());
+              + numFileVersions + " but was " + latestSlices.size());
     });
   }
 

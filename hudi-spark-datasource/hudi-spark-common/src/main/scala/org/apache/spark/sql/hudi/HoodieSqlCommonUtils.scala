@@ -20,28 +20,29 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
-import java.util.{Locale, Properties}
+import java.util.Locale
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Map
+import scala.util.Try
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
@@ -64,8 +65,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
+      val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
@@ -76,9 +76,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                            partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++
-        table.properties).asJava)
+      val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
@@ -251,11 +249,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    */
   def formatQueryInstant(queryInstant: String): String = {
     val instantLength = queryInstant.length
-    if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
+    if (instantLength == 19 || instantLength == 23) {
+      // Handle "yyyy-MM-dd HH:mm:ss[.SSS]" format
       HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
     } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
-      || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
-      HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
+      || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) {
+      // Handle already serialized "yyyyMMddHHmmss[SSS]" format
+      validateInstant(queryInstant)
       queryInstant
     } else if (instantLength == 10) { // for yyyy-MM-dd
       HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
@@ -355,5 +355,22 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       }.mkString("/")
     }.mkString(",")
     partitionsToDrop
+  }
+
+  private def validateInstant(queryInstant: String): Unit = {
+    // Provided instant has to either
+    //  - Match one of the bootstrapping instants
+    //  - Be parse-able (as a date)
+    val valid = queryInstant match {
+      case HoodieTimeline.INIT_INSTANT_TS |
+           HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS |
+           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS => true
+
+      case _ => Try(parseDateFromInstantTime(queryInstant)).isSuccess
+    }
+
+    if (!valid) {
+      throw new HoodieException(s"Got an invalid instant ($queryInstant)")
+    }
   }
 }

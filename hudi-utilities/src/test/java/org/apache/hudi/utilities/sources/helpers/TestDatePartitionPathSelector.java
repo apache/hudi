@@ -39,11 +39,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.CURRENT_DATE;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_PARTITION_DEPTH;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.LOOKBACK_DAYS;
+import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.CURRENT_DATE;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
@@ -160,11 +160,11 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   private static TypedProperties getProps(
       String basePath, String dateFormat, int datePartitionDepth, int numDaysToList, String currentDate) {
     TypedProperties properties = new TypedProperties();
-    properties.put(ROOT_INPUT_PATH_PROP, basePath);
-    properties.put(DATE_FORMAT, dateFormat);
-    properties.put(DATE_PARTITION_DEPTH, "" + datePartitionDepth);
-    properties.put(LOOKBACK_DAYS, "" + numDaysToList);
-    properties.put(CURRENT_DATE, currentDate);
+    properties.put(ROOT_INPUT_PATH.key(), basePath);
+    properties.put(DATE_FORMAT.key(), dateFormat);
+    properties.put(DATE_PARTITION_DEPTH.key(), "" + datePartitionDepth);
+    properties.put(LOOKBACK_DAYS.key(), "" + numDaysToList);
+    properties.put(CURRENT_DATE.key(), currentDate);
     return properties;
   }
 
@@ -202,8 +202,8 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
     TypedProperties props = getProps(basePath + "/" + tableName, dateFormat, datePartitionDepth, numPrevDaysToList, currentDate);
     DatePartitionPathSelector pathSelector = new DatePartitionPathSelector(props, jsc.hadoopConfiguration());
 
-    Path root = new Path(props.getString(ROOT_INPUT_PATH_PROP));
-    int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH) - 1;
+    Path root = new Path(props.getString(ROOT_INPUT_PATH.key()));
+    int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH.key()) - 1;
 
     // Create parent dir
     List<Path> leafDirs = new ArrayList<>();

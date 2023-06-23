@@ -26,30 +26,31 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.OrcReaderIterator;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
 
 class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
-  private static final Logger LOG = LogManager.getLogger(OrcBootstrapMetadataHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OrcBootstrapMetadataHandler.class);
 
   public OrcBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     super(config, table, srcFileStatus);
@@ -69,28 +70,33 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
-    BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
-    TypeDescription orcSchema = orcReader.getSchema();
-    try (RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema))) {
-      wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          new OrcReaderIterator(reader, avroSchema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
-        String recKey = keyGenerator.getKey(inp).getRecordKey();
-        GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
-        gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
-        BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-        HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
-        return rec;
-      }, table.getPreExecuteRunnable());
-      wrapper.execute();
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
+    HoodieExecutor<Void> executor = null;
+    RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema));
+    try {
+      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
+          new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+            String recKey = keyGenerator.getKey(inp).getRecordKey();
+            GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+            gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
+            BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
+            HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
+            return rec;
+          }, table.getPreExecuteRunnable());
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        bootstrapHandle.close();
       }
-      bootstrapHandle.close();
     }
   }
 }

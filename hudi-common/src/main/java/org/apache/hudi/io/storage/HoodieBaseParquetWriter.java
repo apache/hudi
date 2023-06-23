@@ -21,12 +21,16 @@ package org.apache.hudi.io.storage;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
+import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
@@ -36,11 +40,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
 
-  private static final int WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK = 1000;
-
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
-  private long lastCachedDataSize = -1;
+  private long recordCountForNextSizeCheck;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
@@ -62,17 +64,28 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     // stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+    this.recordCountForNextSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
   }
 
   public boolean canWrite() {
-    // TODO we can actually do evaluation more accurately:
-    //      if we cache last data size check, since we account for how many records
-    //      were written we can accurately project avg record size, and therefore
-    //      estimate how many more records we can write before cut off
-    if (lastCachedDataSize == -1 || getWrittenRecordCount() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
-      lastCachedDataSize = getDataSize();
+    long writtenCount = getWrittenRecordCount();
+    if (writtenCount >= recordCountForNextSizeCheck) {
+      long dataSize = getDataSize();
+      // In some very extreme cases, like all records are same value, then it's possible
+      // the dataSize is much lower than the writtenRecordCount(high compression ratio),
+      // causing avgRecordSize to 0, we'll force the avgRecordSize to 1 for such cases.
+      long avgRecordSize = Math.max(dataSize / writtenCount, 1);
+      // Follow the parquet block size check logic here, return false
+      // if it is within ~2 records of the limit
+      if (dataSize > (maxFileSize - avgRecordSize * 2)) {
+        return false;
+      }
+      recordCountForNextSizeCheck = writtenCount + Math.min(
+          // Do check it in the halfway
+          Math.max(DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
+          DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
     }
-    return lastCachedDataSize < maxFileSize;
+    return true;
   }
 
   @Override
@@ -83,5 +96,10 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
 
   protected long getWrittenRecordCount() {
     return writtenRecordCount.get();
+  }
+
+  @VisibleForTesting
+  protected long getRecordCountForNextSizeCheck() {
+    return recordCountForNextSizeCheck;
   }
 }

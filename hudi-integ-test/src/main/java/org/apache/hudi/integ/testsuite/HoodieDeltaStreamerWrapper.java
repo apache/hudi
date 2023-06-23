@@ -21,6 +21,7 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -41,7 +42,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
 
   public JavaRDD<WriteStatus> upsert(WriteOperationType operation) throws Exception {
     cfg.operation = operation;
-    return deltaSyncService.get().getDeltaSync().syncOnce().getRight();
+    return getDeltaSync().syncOnce().getRight();
   }
 
   public JavaRDD<WriteStatus> insert() throws Exception {
@@ -76,9 +77,14 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
-    DeltaSync service = deltaSyncService.get().getDeltaSync();
+    DeltaSync service = getDeltaSync();
     service.refreshTimeline();
-    return service.readFromSource(service.getCommitTimelineOpt());
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    return service.readFromSource(instantTime);
+  }
+
+  public DeltaSync getDeltaSync() {
+    return ((DeltaSyncService) ingestionService.get()).getDeltaSync();
   }
 
 }

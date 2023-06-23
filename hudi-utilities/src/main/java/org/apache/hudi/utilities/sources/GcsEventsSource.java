@@ -18,33 +18,34 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
 import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
+
+import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES_DEFAULT_VALUE;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.BATCH_SIZE_CONF;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.DEFAULT_BATCH_SIZE;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
 
 /*
@@ -75,7 +76,6 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --allow-commit-on-no-checkpoint-change \
 --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
 --hoodie-conf hoodie.combine.before.insert=true \
---hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
 --hoodie-conf hoodie.deltastreamer.source.gcs.project.id=infra-dev-358110 \
 --hoodie-conf hoodie.deltastreamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \
@@ -102,15 +102,15 @@ public class GcsEventsSource extends RowSource {
 
   private static final String CHECKPOINT_VALUE_ZERO = "0";
 
-  private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
   public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
                          SchemaProvider schemaProvider) {
     this(
             props, jsc, spark, schemaProvider,
             new PubsubMessagesFetcher(
-                    props.getString(GOOGLE_PROJECT_ID), props.getString(PUBSUB_SUBSCRIPTION_ID),
-                    props.getInteger(BATCH_SIZE_CONF, DEFAULT_BATCH_SIZE)
+                    props.getString(GOOGLE_PROJECT_ID.key()), props.getString(PUBSUB_SUBSCRIPTION_ID.key()),
+                    props.getInteger(BATCH_SIZE_CONF.key(), BATCH_SIZE_CONF.defaultValue())
             )
     );
   }
@@ -120,7 +120,7 @@ public class GcsEventsSource extends RowSource {
     super(props, jsc, spark, schemaProvider);
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
-    this.ackMessages = props.getBoolean(ACK_MESSAGES, ACK_MESSAGES_DEFAULT_VALUE);
+    this.ackMessages = props.getBoolean(ACK_MESSAGES.key(), ACK_MESSAGES.defaultValue());
 
     LOG.info("Created GcsEventsSource");
   }
@@ -128,8 +128,14 @@ public class GcsEventsSource extends RowSource {
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
     LOG.info("fetchNextBatch(): Input checkpoint: " + lastCkptStr);
-
-    MessageBatch messageBatch = fetchFileMetadata();
+    MessageBatch messageBatch;
+    try {
+      messageBatch = fetchFileMetadata();
+    } catch (HoodieException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new HoodieReadFromSourceException("Failed to fetch file metadata from GCS events source", e);
+    }
 
     if (messageBatch.isEmpty()) {
       LOG.info("No new data. Returning empty batch with checkpoint value: " + CHECKPOINT_VALUE_ZERO);
@@ -198,7 +204,7 @@ public class GcsEventsSource extends RowSource {
       pubsubMessagesFetcher.sendAcks(messagesToAck);
       messagesToAck.clear();
     } catch (IOException e) {
-      throw new HoodieException("Error when acknowledging messages from Pubsub", e);
+      throw new HoodieReadFromSourceException("Error when acknowledging messages from Pubsub", e);
     }
   }
 

@@ -44,9 +44,9 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -56,7 +56,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
-import static org.apache.hudi.config.HoodieBootstrapConfig.KEYGEN_CLASS_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
@@ -71,7 +70,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
  */
 public class BootstrapExecutor implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BootstrapExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapExecutor.class);
 
   /**
    * Config.
@@ -185,7 +184,9 @@ public class BootstrapExecutor implements Serializable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      new HiveSyncTool(metaProps, configuration).syncHoodieTable();
+      try (HiveSyncTool hiveSyncTool = new HiveSyncTool(metaProps, configuration)) {
+        hiveSyncTool.syncHoodieTable();
+      }
     }
   }
 
@@ -199,6 +200,10 @@ public class BootstrapExecutor implements Serializable {
         throw new HoodieException("target base path already exists at " + cfg.targetBasePath
             + ". Cannot bootstrap data on top of an existing table");
       }
+    }
+
+    if (cfg.targetBasePath.equals(bootstrapBasePath)) {
+      throw new IllegalArgumentException("Bootstrap source base path and Hudi table base path must be different");
     }
 
     HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
@@ -232,9 +237,11 @@ public class BootstrapExecutor implements Serializable {
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     if (!StringUtils.isNullOrEmpty(partitionColumns)) {
-      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
+      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(
+          props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
     } else {
-      builder.setKeyGeneratorClassProp(props.getString(KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
+      builder.setKeyGeneratorClassProp(props.getString(
+          HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
     }
 
     builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);

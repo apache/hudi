@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -27,8 +26,8 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.testutils.SparkClientFunctionalTestHarnessWithHiveSupport;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.avro.Schema;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.junit.jupiter.api.Assertions;
@@ -36,6 +35,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -46,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWithHiveSupport {
-  private static final Logger LOG = LogManager.getLogger(TestHiveSchemaProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHiveSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
   private static final String SOURCE_SCHEMA_TABLE_NAME = "schema_registry.source_schema_tab";
   private static final String TARGET_SCHEMA_TABLE_NAME = "schema_registry.target_schema_tab";

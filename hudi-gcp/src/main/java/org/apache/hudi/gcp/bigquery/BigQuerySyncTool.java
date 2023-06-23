@@ -25,14 +25,15 @@ import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI_PREFIX;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SYNC_BASE_PATH;
@@ -49,7 +50,7 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_
  */
 public class BigQuerySyncTool extends HoodieSyncTool {
 
-  private static final Logger LOG = LogManager.getLogger(BigQuerySyncTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BigQuerySyncTool.class);
 
   public final BigQuerySyncConfig config;
   public final String tableName;
@@ -82,6 +83,14 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     }
   }
 
+  private boolean tableExists(HoodieBigQuerySyncClient bqSyncClient, String tableName) {
+    if (bqSyncClient.tableExists(tableName)) {
+      LOG.info(tableName + " already exists");
+      return true;
+    }
+    return false;
+  }
+
   private void syncCoWTable(HoodieBigQuerySyncClient bqSyncClient) {
     ValidationUtils.checkState(bqSyncClient.getTableType() == HoodieTableType.COPY_ON_WRITE);
     LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + bqSyncClient.getBasePath());
@@ -96,13 +105,30 @@ public class BigQuerySyncTool extends HoodieSyncTool {
         .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
         .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
         .build();
-    manifestFileWriter.writeManifestFile();
 
-    if (!bqSyncClient.tableExists(manifestTableName)) {
-      bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri());
+    if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {
+      manifestFileWriter.writeManifestFile(true);
+
+      if (!tableExists(bqSyncClient, tableName)) {
+        bqSyncClient.createTableUsingBqManifestFile(
+            tableName,
+            manifestFileWriter.getManifestSourceUri(true),
+            config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX));
+        LOG.info("Completed table " + tableName + " creation using the manifest file");
+      }
+
+      LOG.info("Sync table complete for " + tableName);
+      return;
+    }
+
+    manifestFileWriter.writeManifestFile(false);
+
+    if (!tableExists(bqSyncClient, manifestTableName)) {
+      bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri(false));
       LOG.info("Manifest table creation complete for " + manifestTableName);
     }
-    if (!bqSyncClient.tableExists(versionsTableName)) {
+
+    if (!tableExists(bqSyncClient, versionsTableName)) {
       bqSyncClient.createVersionsTable(
           versionsTableName,
           config.getString(BIGQUERY_SYNC_SOURCE_URI),
@@ -110,7 +136,8 @@ public class BigQuerySyncTool extends HoodieSyncTool {
           config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS));
       LOG.info("Versions table creation complete for " + versionsTableName);
     }
-    if (!bqSyncClient.tableExists(snapshotViewName)) {
+
+    if (!tableExists(bqSyncClient, snapshotViewName)) {
       bqSyncClient.createSnapshotView(snapshotViewName, versionsTableName, manifestTableName);
       LOG.info("Snapshot view creation complete for " + snapshotViewName);
     }

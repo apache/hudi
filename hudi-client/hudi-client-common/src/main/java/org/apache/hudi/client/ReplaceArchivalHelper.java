@@ -18,13 +18,13 @@
 
 package org.apache.hudi.client;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -33,7 +33,7 @@ import java.io.Serializable;
  */
 public class ReplaceArchivalHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(ReplaceArchivalHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ReplaceArchivalHelper.class);
 
   /**
    * Convert json metadata to avro format.

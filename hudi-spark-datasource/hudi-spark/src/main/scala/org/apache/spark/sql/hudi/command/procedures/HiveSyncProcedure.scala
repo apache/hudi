@@ -33,7 +33,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
   with ProvidesHoodieConfig with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "metastore_uri", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "username", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "password", DataTypes.StringType, ""),
@@ -41,7 +41,8 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
     ProcedureParameter.optional(5, "mode", DataTypes.StringType, ""),
     ProcedureParameter.optional(6, "partition_fields", DataTypes.StringType, ""),
     ProcedureParameter.optional(7, "partition_extractor_class", DataTypes.StringType, ""),
-    ProcedureParameter.optional(8, "strategy", DataTypes.StringType, "")
+    ProcedureParameter.optional(8, "strategy", DataTypes.StringType, ""),
+    ProcedureParameter.optional(9, "sync_incremental", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -66,6 +67,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
     val partitionFields = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
     val partitionExtractorClass = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
     val strategy = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[String]
+    val syncIncremental = getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[String]
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
     val hadoopConf = sparkSession.sparkContext.hadoopConfiguration
@@ -80,6 +82,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
     if (partitionFields.nonEmpty) sqlConf.setConfString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key, partitionFields)
     if (partitionExtractorClass.nonEmpty) sqlConf.setConfString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key, partitionExtractorClass)
     if (strategy.nonEmpty) sqlConf.setConfString(HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY.key, strategy)
+    if (syncIncremental.nonEmpty) sqlConf.setConfString(HoodieSyncConfig.META_SYNC_INCREMENTAL.key, syncIncremental)
 
     hiveConf.addResource(hadoopConf)
 

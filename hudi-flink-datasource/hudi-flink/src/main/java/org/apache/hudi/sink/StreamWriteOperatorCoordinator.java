@@ -33,11 +33,13 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -155,6 +157,11 @@ public class StreamWriteOperatorCoordinator
   private CkpMetadata ckpMetadata;
 
   /**
+   * The client id heartbeats.
+   */
+  private ClientIds clientIds;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -192,6 +199,10 @@ public class StreamWriteOperatorCoordinator
     if (tableState.syncHive) {
       initHiveSync();
     }
+    // start client id heartbeats for optimistic concurrency control
+    if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+      initClientIds(conf);
+    }
   }
 
   @Override
@@ -211,6 +222,9 @@ public class StreamWriteOperatorCoordinator
     this.eventBuffer = null;
     if (this.ckpMetadata != null) {
       this.ckpMetadata.close();
+    }
+    if (this.clientIds != null) {
+      this.clientIds.close();
     }
   }
 
@@ -242,16 +256,8 @@ public class StreamWriteOperatorCoordinator
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant, checkpointId);
-
-          if (tableState.scheduleCompaction) {
-            // if async compaction is on, schedule the compaction
-            CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
-          }
-
-          if (tableState.scheduleClustering) {
-            // if async clustering is on, schedule the clustering
-            ClusteringUtil.scheduleClustering(conf, writeClient, committed);
-          }
+          // schedules the compaction or clustering if it is enabled in stream execution mode
+          scheduleTableServices(committed);
 
           if (committed) {
             // start new instant.
@@ -334,7 +340,9 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void doSyncHive() {
-    hiveSyncContext.hiveSyncTool().syncHoodieTable();
+    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+      syncTool.syncHoodieTable();
+    }
   }
 
   private static void initMetadataTable(HoodieFlinkWriteClient<?> writeClient) {
@@ -345,6 +353,11 @@ public class StreamWriteOperatorCoordinator
     CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
     ckpMetadata.bootstrap();
     return ckpMetadata;
+  }
+
+  private void initClientIds(Configuration conf) {
+    this.clientIds = ClientIds.builder().conf(conf).build();
+    this.clientIds.start();
   }
 
   private void reset() {
@@ -431,12 +444,20 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
-        // schedules the compaction plan in batch execution mode
-        if (tableState.scheduleCompaction) {
-          // if async compaction is on, schedule the compaction
-          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, true);
-        }
+        // schedules the compaction or clustering if it is enabled in batch execution mode
+        scheduleTableServices(true);
       }
+    }
+  }
+
+  private void scheduleTableServices(Boolean committed) {
+    // if compaction is on, schedule the compaction
+    if (tableState.scheduleCompaction) {
+      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+    }
+    // if clustering is on, schedule the clustering
+    if (tableState.scheduleClustering) {
+      ClusteringUtil.scheduleClustering(conf, writeClient, committed);
     }
   }
 
@@ -501,7 +522,7 @@ public class StreamWriteOperatorCoordinator
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
-    if (writeResults.size() == 0) {
+    if (writeResults.size() == 0 && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
       // No data has written, reset the buffer and returns early
       reset();
       // Send commit ack event to the write function to unblock the flushing

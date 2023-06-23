@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -40,8 +41,8 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,7 +57,7 @@ import java.util.stream.Collectors;
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
  */
 public abstract class AbstractRealtimeRecordReader {
-  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RealtimeSplit split;
   protected final JobConf jobConf;
@@ -72,6 +73,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected boolean supportPayload = true;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
+  private boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -158,6 +160,9 @@ public abstract class AbstractRealtimeRecordReader {
     readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
+
+    // get timestamp columns
+    supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
@@ -198,6 +203,10 @@ public abstract class AbstractRealtimeRecordReader {
 
   public Schema getHiveSchema() {
     return hiveSchema;
+  }
+
+  public boolean isSupportTimestamp() {
+    return supportTimestamp;
   }
 
   public RealtimeSplit getSplit() {

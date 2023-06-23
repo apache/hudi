@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -37,7 +38,9 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
@@ -48,6 +51,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
@@ -55,7 +59,7 @@ import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -97,6 +101,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   imbueConfigs(sqlContext)
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
+
+  protected lazy val resolver: Resolver = sparkSession.sessionState.analyzer.resolver
+
+  protected def tableName: String = metaClient.getTableConfig.getTableName
 
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
@@ -154,12 +162,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
+    val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
     val avroSchema = internalSchemaOpt.map { is =>
-      AvroInternalSchemaConverter.convert(is, "schema")
+      AvroInternalSchemaConverter.convert(is, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
-      schemaSpec.map(convertToAvroSchema)
+      schemaSpec.map(s => convertToAvroSchema(s, tableName))
     } getOrElse {
       Try(schemaResolver.getTableAvroSchema) match {
         case Success(schema) => schema
@@ -174,8 +183,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableStructSchema: StructType = {
     val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
-
-    val resolver = sparkSession.sessionState.analyzer.resolver
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
 
     // NOTE: Here we annotate meta-fields with corresponding metadata such that Spark (>= 3.2)
@@ -219,7 +226,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
+    val shouldUseBootstrapFastRead = optParams.getOrElse(DATA_QUERIES_ONLY.key(), "false").toBoolean
+
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
   }
 
   /**
@@ -350,7 +359,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       schema conversion, which is lossy in nature (for ex, it doesn't preserve original Avro type-names) and
     //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
     //       w/ more than 2 types are involved)
-    val sourceSchema = prunedDataSchema.map(convertToAvroSchema).getOrElse(tableAvroSchema)
+    val sourceSchema = prunedDataSchema.map(s => convertToAvroSchema(s, tableName)).getOrElse(tableAvroSchema)
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
 
@@ -466,11 +475,18 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * For enable hoodie.datasource.write.drop.partition.columns, need to create an InternalRow on partition values
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
-  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
+
+  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow =
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
+
+  protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus, basePath: Path,
+                                                         extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (shouldExtractPartitionValuesFromPartitionPath) {
-        val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
+      if (extractPartitionValuesFromPartitionPath) {
+        val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
+        val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
+        val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
           val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
@@ -514,7 +530,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      requiredDataSchema: HoodieTableSchema,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
-                                     hadoopConf: Configuration): BaseFileReader = {
+                                     hadoopConf: Configuration,
+                                     shouldAppendPartitionValuesOverride: Option[Boolean] = None): BaseFileReader = {
     val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
     // NOTE: PLEASE READ CAREFULLY
@@ -535,7 +552,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             hadoopConf = hadoopConf,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
-            appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
+            appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
@@ -563,7 +580,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     BaseFileReader(
       read = partitionedFile => {
-        val extension = FSUtils.getFileExtension(partitionedFile.filePath)
+        val filePathString = sparkAdapter.getSparkPartitionedFileUtils.getStringPathFromPartitionedFile(partitionedFile)
+        val extension = FSUtils.getFileExtension(filePathString)
         if (tableBaseFileFormat.getFileExtension.equals(extension)) {
           read(partitionedFile)
         } else {
@@ -589,6 +607,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
                                          requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema) = {
+    tryPrunePartitionColumnsInternal(tableSchema, requiredSchema, shouldExtractPartitionValuesFromPartitionPath)
+  }
+
+  protected def tryPrunePartitionColumnsInternal(tableSchema: HoodieTableSchema,
+                                                 requiredSchema: HoodieTableSchema,
+                                                 extractPartitionValuesFromPartitionPath: Boolean): (StructType, HoodieTableSchema, HoodieTableSchema) = {
     // Since schema requested by the caller might contain partition columns, we might need to
     // prune it, removing all partition columns from it in case these columns are not persisted
     // in the data files
@@ -598,21 +622,24 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       the partition path, and omitted from the data file, back into fetched rows;
     //       Note that, by default, partition columns are not omitted therefore specifying
     //       partition schema for reader is not required
-    if (shouldExtractPartitionValuesFromPartitionPath) {
-      val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
+    if (extractPartitionValuesFromPartitionPath) {
+      val partitionSchema = filterInPartitionColumns(tableSchema.structTypeSchema)
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
       (partitionSchema,
-        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString))
+        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema, tableName).toString),
+        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema, tableName).toString))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
     }
   }
 
-  private def prunePartitionColumns(dataStructSchema: StructType): StructType =
-    StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+  private def filterInPartitionColumns(structType: StructType): StructType =
+    StructType(structType.filter(f => partitionColumns.exists(col => resolver(f.name, col))))
+
+  private def prunePartitionColumns(structType: StructType): StructType =
+    StructType(structType.filterNot(f => partitionColumns.exists(pc => resolver(f.name, pc))))
 
   private def getConfigValue(config: ConfigProperty[String],
                              defaultValueOption: Option[String]=Option.empty): String = {
@@ -629,8 +656,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     def apply(file: PartitionedFile): Iterator[InternalRow] = read.apply(file)
   }
 
-  def convertToAvroSchema(structSchema: StructType): Schema =
-    sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, "Record")
+  def convertToAvroSchema(structSchema: StructType, tableName: String ): Schema = {
+    val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
+    val avroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
+    getAvroSchemaWithDefaults(avroSchema, structSchema)
+  }
 
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
@@ -704,8 +734,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
-      val reader = new HoodieAvroHFileReader(hadoopConf, new Path(partitionedFile.filePath),
-        new CacheConfig(hadoopConf))
+      val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
+      val reader = new HoodieAvroHFileReader(hadoopConf, filePath, new CacheConfig(hadoopConf))
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable

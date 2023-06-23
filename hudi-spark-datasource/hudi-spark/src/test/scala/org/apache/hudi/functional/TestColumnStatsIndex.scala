@@ -33,7 +33,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
@@ -55,7 +55,7 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
     new StructType()
       .add("c1", IntegerType)
       .add("c2", StringType)
-      .add("c3", DecimalType(9,3))
+      .add("c3", DecimalType(9, 3))
       .add("c4", TimestampType)
       .add("c5", ShortType)
       .add("c6", DateType)
@@ -95,10 +95,6 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      // NOTE: Currently only this setting is used like following by different MT partitions:
-      //          - Files: using it
-      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
-      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
@@ -647,14 +643,12 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
 
 object TestColumnStatsIndex {
 
-  case class ColumnStatsTestCase(tableType: HoodieTableType, forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
+  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean)
 
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = true)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = false, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = false)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, forceFullLogScan = true, shouldReadInMemory = true)))
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
+        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false)))
     ): _*)
   }
 }

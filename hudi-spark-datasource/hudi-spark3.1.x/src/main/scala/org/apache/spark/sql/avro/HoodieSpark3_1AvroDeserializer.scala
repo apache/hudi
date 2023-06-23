@@ -27,7 +27,8 @@ class HoodieSpark3_1AvroDeserializer(rootAvroType: Schema, rootCatalystType: Dat
   extends HoodieAvroDeserializer {
 
   private val avroDeserializer = {
-    val avroRebaseModeInRead = LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ))
+    val avroRebaseModeInRead = LegacyBehaviorPolicy
+      .withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ, LegacyBehaviorPolicy.CORRECTED.toString))
     new AvroDeserializer(rootAvroType, rootCatalystType, avroRebaseModeInRead, new NoopFilters)
   }
 

@@ -126,17 +126,17 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
    * Step1: Get list of commits to be fetched based on start commit and max commits(for snapshot max commits is -1).
    * Step2: Get list of affected files status for these affected file status.
    * Step3: Construct HoodieTableFileSystemView based on those affected file status.
-   *        a. Filter affected partitions based on inputPaths.
-   *        b. Get list of fileGroups based on affected partitions by fsView.getAllFileGroups.
-   * Step4: Set input paths based on filtered affected partition paths. changes that amony original input paths passed to
-   *        this method. some partitions did not have commits as part of the trimmed down list of commits and hence we need this step.
+   * a. Filter affected partitions based on inputPaths.
+   * b. Get list of fileGroups based on affected partitions by fsView.getAllFileGroups.
+   * Step4: Set input paths based on filtered affected partition paths. changes that among original input paths passed to
+   * this method. some partitions did not have commits as part of the trimmed down list of commits and hence we need this step.
    * Step5: Find candidate fileStatus, since when we get baseFileStatus from HoodieTableFileSystemView,
-   *        the BaseFileStatus will missing file size information.
-   *        We should use candidate fileStatus to update the size information for BaseFileStatus.
+   * the BaseFileStatus will missing file size information.
+   * We should use candidate fileStatus to update the size information for BaseFileStatus.
    * Step6: For every file group from step3(b)
-   *        Get 1st available base file from all file slices. then we use candidate file status to update the baseFileStatus,
-   *        and construct RealTimeFileStatus and add it to result along with log files.
-   *        If file group just has log files, construct RealTimeFileStatus and add it to result.
+   * Get 1st available base file from all file slices. then we use candidate file status to update the baseFileStatus,
+   * and construct RealTimeFileStatus and add it to result along with log files.
+   * If file group just has log files, construct RealTimeFileStatus and add it to result.
    * TODO: unify the incremental view code between hive/spark-sql and spark datasource
    */
   @Override

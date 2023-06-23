@@ -43,10 +43,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -103,7 +103,7 @@ import scala.Tuple2;
  */
 public class HoodieDropPartitionsTool implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDropPartitionsTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
   private final transient JavaSparkContext jsc;
   // config
@@ -382,8 +382,9 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf);
-    hiveSyncTool.syncHoodieTable();
+    try (HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf)) {
+      hiveSyncTool.syncHoodieTable();
+    }
   }
 
   /**

@@ -52,13 +52,13 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -82,13 +82,12 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieBackedTableMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedTableMetadata.class);
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -115,7 +114,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), reuse);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuse);
     assertTrue(tableMetadata.enabled());
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
     String partition = metadataPartitions.get(0);
@@ -158,8 +157,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private void verifyBaseMetadataTable(boolean reuseMetadataReaders) throws IOException {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(),
-        writeConfig.getSpillableMapBasePath(), reuseMetadataReaders);
+        context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuseMetadataReaders);
     assertTrue(tableMetadata.enabled());
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
@@ -198,7 +196,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType);
 
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
 
     assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
@@ -212,7 +210,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
-        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
     FileStatus[] allFilesInPartition =
         tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.length, 0);
@@ -232,7 +230,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withPopulateMetaFields(false)
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();
@@ -255,10 +252,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
       verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000001");
     }, "Metadata table should have valid log files!");
 
-    // Verify no base file created yet.
-    assertThrows(IllegalStateException.class, () -> {
-      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table);
-    }, "Metadata table should not have a base file yet!");
+    verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table);
 
     // 2 more commits
     doWriteOperation(testTable, "0000002", UPSERT);

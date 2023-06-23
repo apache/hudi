@@ -69,7 +69,7 @@ public interface ConsistencyGuard {
    * 
    * @param dirPath Directory Path
    * @param files Files
-   * @param targetVisibility Target Visibitlity
+   * @param targetVisibility Target Visibility
    * @throws IOException
    * @throws TimeoutException
    */

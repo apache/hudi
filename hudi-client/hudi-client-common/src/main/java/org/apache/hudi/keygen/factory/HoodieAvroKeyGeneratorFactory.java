@@ -21,9 +21,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator;
+import org.apache.hudi.keygen.AutoRecordGenWrapperAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -71,21 +73,35 @@ public class HoodieAvroKeyGeneratorFactory {
       throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
     }
 
+    BaseKeyGenerator keyGenerator = null;
+
     switch (keyGeneratorTypeEnum) {
       case SIMPLE:
-        return new SimpleAvroKeyGenerator(props);
+        keyGenerator = new SimpleAvroKeyGenerator(props);
+        break;
       case COMPLEX:
-        return new ComplexAvroKeyGenerator(props);
+        keyGenerator = new ComplexAvroKeyGenerator(props);
+        break;
       case TIMESTAMP:
-        return new TimestampBasedAvroKeyGenerator(props);
+        keyGenerator = new TimestampBasedAvroKeyGenerator(props);
+        break;
       case CUSTOM:
-        return new CustomAvroKeyGenerator(props);
+        keyGenerator = new CustomAvroKeyGenerator(props);
+        break;
       case NON_PARTITION:
-        return new NonpartitionedAvroKeyGenerator(props);
+        keyGenerator = new NonpartitionedAvroKeyGenerator(props);
+        break;
       case GLOBAL_DELETE:
-        return new GlobalAvroDeleteKeyGenerator(props);
+        keyGenerator = new GlobalAvroDeleteKeyGenerator(props);
+        break;
       default:
         throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGeneratorType);
+    }
+
+    if (KeyGenUtils.enableAutoGenerateRecordKeys(props)) {
+      return new AutoRecordGenWrapperAvroKeyGenerator(props, keyGenerator);
+    } else {
+      return keyGenerator;
     }
   }
 

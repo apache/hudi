@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -38,5 +40,10 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
     return new HoodieAvroOrcReader(conf, path);
+  }
+
+  @Override
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+    return new HoodieAvroBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
   }
 }

@@ -17,20 +17,18 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.WriteOperationType
-import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
-import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
-import org.scalatest.Inspectors.forAll
+import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
 
@@ -522,20 +520,36 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
        """.stripMargin)
-      checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
+      val tooManyDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        """
+          |too many data columns:
+          |Table columns: 'id', 'name', 'price'.
+          |Data columns: '1', 'a1', '10', '2021-06-20'.
+          |""".stripMargin
+      } else {
         """
           |too many data columns:
           |Table columns: 'id', 'name', 'price'
           |Data columns: '1', 'a1', '10', '2021-06-20'
           |""".stripMargin
-      )
-      checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(
+      }
+      checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'")(
+        tooManyDataColumnsErrorMsg)
+
+      val notEnoughDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        """
+          |not enough data columns:
+          |Table columns: 'id', 'name', 'price', 'dt'.
+          |Data columns: '1', 'a1', '10'.
+          |""".stripMargin
+      } else {
         """
           |not enough data columns:
           |Table columns: 'id', 'name', 'price', 'dt'
           |Data columns: '1', 'a1', '10'
           |""".stripMargin
-      )
+      }
+      checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(notEnoughDataColumnsErrorMsg)
       withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "strict") {
         val tableName2 = generateTableName
         spark.sql(
@@ -552,7 +566,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | )
           """.stripMargin)
         checkException(s"insert into $tableName2 values(1, 'a1', 10, 1000)")(
-          "Table with primaryKey can not use bulk insert in strict mode."
+          "Table with primaryKey can only use bulk insert in non-strict mode."
         )
 
         spark.sql("set hoodie.sql.insert.mode = non-strict")
@@ -808,7 +822,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
@@ -1062,6 +1075,68 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Bulk Insert Into Bucket Index Table") {
+    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
+      Seq("mor", "cow").foreach { tableType =>
+        Seq("true", "false").foreach { bulkInsertAsRow =>
+          withTempDir { tmp =>
+            val tableName = generateTableName
+            // Create a partitioned table
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  dt string,
+                 |  name string,
+                 |  price double,
+                 |  ts long
+                 |) using hudi
+                 | tblproperties (
+                 | primaryKey = 'id,name',
+                 | type = '$tableType',
+                 | preCombineField = 'ts',
+                 | hoodie.index.type = 'BUCKET',
+                 | hoodie.bucket.index.hash.field = 'id,name',
+                 | hoodie.datasource.write.row.writer.enable = '$bulkInsertAsRow')
+                 | partitioned by (dt)
+                 | location '${tmp.getCanonicalPath}'
+                 """.stripMargin)
+
+            // Note: Do not write the field alias, the partition field must be placed last.
+            spark.sql(
+              s"""
+                 | insert into $tableName values
+                 | (1, 'a1,1', 10, 1000, "2021-01-05"),
+                 | (2, 'a2', 20, 2000, "2021-01-06"),
+                 | (3, 'a3,3', 30, 3000, "2021-01-07")
+                 """.stripMargin)
+
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
+            )
+
+            spark.sql(
+              s"""
+                 | insert into $tableName values
+                 | (1, 'a1', 10, 1000, "2021-01-05"),
+                 | (3, "a3", 30, 3000, "2021-01-07")
+               """.stripMargin)
+
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+              Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+              Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
+              Seq(3, "a3", 30.0, 3000, "2021-01-07")
+            )
+          }
+        }
+      }
+    }
+  }
+
   /**
    * This test is to make sure that bulk insert doesn't create a bunch of tiny files if
    * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns
@@ -1123,6 +1198,189 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         // TODO re-enable
         //assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
       }
+    }
+  }
+
+  test("Test Insert Overwrite Into Bucket Index Table") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
+      Seq("mor", "cow").foreach { tableType =>
+        withRecordType()(withTempDir { tmp =>
+          val tableName = generateTableName
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  hoodie.index.type = 'BUCKET',
+               |  hoodie.bucket.index.num.buckets = '4'
+               |)
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+          spark.sql(
+            s"""insert into $tableName  values
+               |(5, 'a', 35, 1000, '2021-01-05'),
+               |(1, 'a', 31, 1000, '2021-01-05'),
+               |(3, 'a', 33, 1000, '2021-01-05'),
+               |(4, 'b', 16, 1000, '2021-01-05'),
+               |(2, 'b', 18, 1000, '2021-01-05'),
+               |(6, 'b', 17, 1000, '2021-01-05'),
+               |(8, 'a', 21, 1000, '2021-01-05'),
+               |(9, 'a', 22, 1000, '2021-01-05'),
+               |(7, 'a', 23, 1000, '2021-01-05')
+               |""".stripMargin)
+
+          // Insert overwrite static partition
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName partition(dt = '2021-01-05')
+               | select * from (select 13 , 'a2', 12, 1000) limit 10
+        """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+            Seq(13, "a2", 12.0, 1000, "2021-01-05")
+          )
+        })
+      }
+    }
+  }
+
+  test("Test Insert Overwrite Into Consistent Bucket Index Table") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             |tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.index.type = 'BUCKET',
+             |  hoodie.index.bucket.engine = "CONSISTENT_HASHING",
+             |  hoodie.bucket.index.num.buckets = '4'
+             |)
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(
+          s"""insert into $tableName  values
+             |(5, 'a', 35, 1000, '2021-01-05'),
+             |(1, 'a', 31, 1000, '2021-01-05'),
+             |(3, 'a', 33, 1000, '2021-01-05'),
+             |(4, 'b', 16, 1000, '2021-01-05'),
+             |(2, 'b', 18, 1000, '2021-01-05'),
+             |(6, 'b', 17, 1000, '2021-01-05'),
+             |(8, 'a', 21, 1000, '2021-01-05'),
+             |(9, 'a', 22, 1000, '2021-01-05'),
+             |(7, 'a', 23, 1000, '2021-01-05')
+             |""".stripMargin)
+
+        // Insert overwrite static partition
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt = '2021-01-05')
+             | select * from (select 13 , 'a2', 12, 1000) limit 10
+        """.stripMargin)
+
+        // Double insert overwrite static partition
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt = '2021-01-05')
+             | select * from (select 13 , 'a3', 12, 1000) limit 10
+        """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+          Seq(13, "a3", 12.0, 1000, "2021-01-05")
+        )
+      })
+    }
+  }
+
+  test("Test Hudi should not record empty preCombineKey in hoodie.properties") {
+    withSQLConf("hoodie.datasource.write.operation" -> "insert") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             |) using hudi
+             |tblproperties(primaryKey = 'id')
+             |location '${tmp.getCanonicalPath}/$tableName'
+        """.stripMargin)
+
+        spark.sql(s"insert into $tableName select 1, 'name1', 11")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "name1", 11.0)
+        )
+
+        spark.sql(s"insert overwrite table $tableName select 2, 'name2', 12")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(2, "name2", 12.0)
+        )
+
+        spark.sql(s"insert into $tableName select 3, 'name3', 13")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(2, "name2", 12.0),
+          Seq(3, "name3", 13.0)
+        )
+      })
+    }
+  }
+
+  test("Test Insert Into with auto generate record keys") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+
+      val df = spark.read.format("hudi").load(tmp.getCanonicalPath)
+      assertEquals(3, df.select(HoodieRecord.RECORD_KEY_METADATA_FIELD).count())
     }
   }
 }

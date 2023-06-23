@@ -174,6 +174,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       )
     }
   }
+
   test("Test show_compaction Procedure by Path") {
     withTempDir { tmp =>
       val tableName1 = generateTableName
@@ -195,14 +196,59 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
-
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
+        spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
+      }
       assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
+    }
+  }
+
+  test("Test run_compaction Procedure with options") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
+          spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        }
+
+        val result1 = spark.sql(
+          s"""call run_compaction(table => '$tableName', op => 'run', options => "
+             | hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,
+             | hoodie.compaction.logfile.num.threshold=3
+             |")""".stripMargin)
+          .collect()
+        assertResult(0)(result1.length)
+
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
+        }
+        val result2 = spark.sql(
+          s"""call run_compaction(table => '$tableName', op => 'run', options => "
+             | hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,
+             | hoodie.compaction.logfile.num.threshold=3
+             |")""".stripMargin)
+          .collect()
+        assertResult(1)(result2.length)
+      }
     }
   }
 }

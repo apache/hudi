@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_IN
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, TBL_NAME}
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -37,12 +37,13 @@ import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType}
+import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
@@ -242,7 +243,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
     // TODO move to analysis phase
-    validate(mergeInto)
+    validate
 
     val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
@@ -272,29 +273,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * will be applied:
    *
    * <ul>
-   *   <li>Expression for the "primary-key" column is extracted from the merge-on condition of the
-   *   MIT statement: Hudi's implementation of the statement restricts kind of merge-on condition
-   *   permitted to only such referencing primary-key column(s) of the target table; as such we're
-   *   leveraging matching side of such conditional expression (containing [[sourceTable]] attrobute)
-   *   interpreting it as a primary-key column in the [[sourceTable]]</li>
+   * <li>Expression for the "primary-key" column is extracted from the merge-on condition of the
+   * MIT statement: Hudi's implementation of the statement restricts kind of merge-on condition
+   * permitted to only such referencing primary-key column(s) of the target table; as such we're
+   * leveraging matching side of such conditional expression (containing [[sourceTable]] attribute)
+   * interpreting it as a primary-key column in the [[sourceTable]]</li>
    *
-   *   <li>Expression for the "pre-combine" column (optional) is extracted from the matching update
-   *   clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
-   *   pre-combine attribute of the target column</li>
+   * <li>Expression for the "pre-combine" column (optional) is extracted from the matching update
+   * clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
+   * pre-combine attribute of the target column</li>
    * <ul>
    *
    * For example, w/ the following statement (primary-key column is [[id]], while pre-combine column is [[ts]])
    * <pre>
-   *    MERGE INTO target
-   *    USING (SELECT 1 AS sid, 'A1' AS sname, 1000 AS sts) source
-   *    ON target.id = source.sid
-   *    WHEN MATCHED THEN UPDATE SET id = source.sid, name = source.sname, ts = source.sts
+   * MERGE INTO target
+   * USING (SELECT 1 AS sid, 'A1' AS sname, 1000 AS sts) source
+   * ON target.id = source.sid
+   * WHEN MATCHED THEN UPDATE SET id = source.sid, name = source.sname, ts = source.sts
    * </pre>
    *
    * We will append following columns to the source dataset:
    * <ul>
-   *   <li>{@code id = source.sid}</li>
-   *   <li>{@code ts = source.sts}</li>
+   * <li>{@code id = source.sid}</li>
+   * <li>{@code ts = source.sts}</li>
    * </ul>
    */
   def sourceDataset: DataFrame = {
@@ -367,10 +368,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
         //       table's records are updated (w/ the missing ones keeping their existing values)
         serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)),
-          allowPartialAssignments = true),
+          partialAssigmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE)),
       // Append (encoded) inserting actions
       PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
         serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)),
+          partialAssigmentMode = Some(PartialAssignmentMode.NULL_VALUE),
           validator = validateInsertingAssignmentExpression)
     )
 
@@ -416,7 +418,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * </ol>
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
-                                              allowPartialAssignments: Boolean = false,
+                                              partialAssigmentMode: Option[PartialAssignmentMode] = None,
                                               validator: Expression => Unit = scalaFunction1Noop): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
@@ -426,7 +428,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           //       All other actions are expected to provide assignments correspondent to every field
           //       of the [[targetTable]] being assigned
           val reorderedAssignments = if (assignments.nonEmpty) {
-            alignAssignments(assignments, allowPartialAssignments)
+            alignAssignments(assignments, partialAssigmentMode)
           } else {
             Seq.empty
           }
@@ -451,7 +453,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Re-orders assignment expressions to adhere to the ordering of that of [[targetTable]]
    */
-  private def alignAssignments(assignments: Seq[Assignment], allowPartialAssignments: Boolean): Seq[Assignment] = {
+  private def alignAssignments(
+              assignments: Seq[Assignment],
+              partialAssigmentMode: Option[PartialAssignmentMode]): Seq[Assignment] = {
     val attr2Assignments = assignments.map {
       case assign @ Assignment(attr: Attribute, _) => attr -> assign
       case a =>
@@ -467,11 +471,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           case None =>
             // In case partial assignments are allowed and there's no corresponding conditional assignment,
             // create a self-assignment for the target table's attribute
-            if (allowPartialAssignments) {
-              Assignment(attr, attr)
-            } else {
-              throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
-                s"(provided: `${assignments.map(_.sql).mkString(",")}`")
+            partialAssigmentMode match {
+              case Some(mode) =>
+                mode match {
+                  case PartialAssignmentMode.NULL_VALUE =>
+                    Assignment(attr, Literal(null))
+                  case PartialAssignmentMode.ORIGINAL_VALUE =>
+                    Assignment(attr, attr)
+                  case PartialAssignmentMode.DEFAULT_VALUE =>
+                    Assignment(attr, Literal.default(attr.dataType))
+                }
+              case _ =>
+                throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
+                  s"(provided: `${assignments.map(_.sql).mkString(",")}`")
             }
         }
       }
@@ -550,7 +562,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val targetTableDb = tableId.database.getOrElse("default")
     val targetTableName = tableId.identifier
     val path = hoodieCatalogTable.tableLocation
-    val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
@@ -593,6 +604,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
+      SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       SQL_MERGE_INTO_WRITES.key -> "true"
     )
 
@@ -601,7 +613,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
 
-  def validate(mit: MergeIntoTable): Unit = {
+  def validate(): Unit = {
     checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)
@@ -615,16 +627,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private def checkInsertingActions(insertActions: Seq[InsertAction]): Unit = {
     insertActions.foreach(insert =>
-      assert(insert.assignments.length == targetTableSchema.length,
-        s"The number of insert assignments[${insert.assignments.length}] must equal to the " +
+      assert(insert.assignments.length <= targetTableSchema.length,
+        s"The number of insert assignments[${insert.assignments.length}] must less than or equal to the " +
           s"targetTable field size[${targetTableSchema.length}]"))
 
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction]): Unit = {
-    if (updateActions.length > 1) {
-      throw new AnalysisException(s"Only one updating action is supported in MERGE INTO statement (provided ${updateActions.length})")
-    }
 
     //updateActions.foreach(update =>
     //  assert(update.assignments.length == targetTableSchema.length,
@@ -670,3 +679,7 @@ object MergeIntoHoodieTableCommand {
     Base64.getEncoder.encodeToString(Serializer.toBytes(any))
 }
 
+object PartialAssignmentMode extends Enumeration {
+  type PartialAssignmentMode = Value
+  val ORIGINAL_VALUE, DEFAULT_VALUE, NULL_VALUE = Value
+}

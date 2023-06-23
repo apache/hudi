@@ -18,17 +18,15 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
@@ -36,8 +34,11 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -76,34 +77,37 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
                                   Schema schema) throws Exception {
-    BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void> wrapper = null;
-    HoodieRecordMerger recordMerger = table.getConfig().getRecordMerger();
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
-    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordMerger.getRecordType())
+    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(recordType)
             .getFileReader(table.getHadoopConf(), sourceFilePath);
+
+    HoodieExecutor<Void> executor = null;
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
         String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
-        return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordMerger.getRecordType())
+        return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordType)
             // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
             //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
             //       it since these records will be inserted into the queue later.
             .copy();
       };
-
-      wrapper = new BoundedInMemoryExecutor<HoodieRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          reader.getRecordIterator(schema), new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
-
-      wrapper.execute();
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
+      executor = ExecutorFactory.create(config, recordIterator,
+          new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      reader.close();
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        bootstrapHandle.close();
       }
-      bootstrapHandle.close();
     }
   }
 

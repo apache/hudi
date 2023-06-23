@@ -19,6 +19,8 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
+import org.apache.hudi.adapter.SupportsRowLevelDeleteAdapter;
+import org.apache.hudi.adapter.SupportsRowLevelUpdateAdapter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -26,10 +28,12 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.util.DataModificationInfos;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
@@ -37,12 +41,18 @@ import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * Hoodie table sink.
  */
-public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, SupportsOverwrite {
+public class HoodieTableSink implements
+    DynamicTableSink,
+    SupportsPartitioning,
+    SupportsOverwrite,
+    SupportsRowLevelDeleteAdapter,
+    SupportsRowLevelUpdateAdapter {
 
   private final Configuration conf;
   private final ResolvedSchema schema;
@@ -69,6 +79,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       // set up default parallelism
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
+      // set up client id
+      OptionsInference.setupClientId(conf);
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
@@ -145,5 +157,17 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     // set up the operation as INSERT_OVERWRITE_TABLE first,
     // if there are explicit partitions, #applyStaticPartition would overwrite the option.
     this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+  }
+
+  @Override
+  public RowLevelDeleteInfoAdapter applyRowLevelDelete() {
+    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.DELETE.value());
+    return DataModificationInfos.DEFAULT_DELETE_INFO;
+  }
+
+  @Override
+  public RowLevelUpdateInfoAdapter applyRowLevelUpdate(List<Column> list) {
+    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    return DataModificationInfos.DEFAULT_UPDATE_INFO;
   }
 }

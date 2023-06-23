@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.exception.SchemaCompatibilityException
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
@@ -113,6 +112,67 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
       assertResult(0)(cnt)
     })
+  }
+
+  /**
+   * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
+   * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
+   *
+   */
+  test("Test MergeInto with more than once update actions for spark >= 3.1.x") {
+
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      withRecordType()(withTempDir { tmp =>
+        val targetTable = generateTableName
+        spark.sql(
+          s"""
+             |create table ${targetTable} (
+             |  id int,
+             |  name string,
+             |  data int,
+             |  country string,
+             |  ts bigint
+             |) using hudi
+             |tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             |partitioned by (country)
+             |location '${tmp.getCanonicalPath}/$targetTable'
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
+             |) source
+             |on source.id = target.id
+             |when matched then
+             |update set *
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
+             |) source
+             |on source.id = target.id
+             |when matched and source.data > target.data then
+             |update set target.data = source.data, target.ts = source.ts
+             |when matched and source.data = 5 then
+             |update set target.data = source.data, target.ts = source.ts
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, data, country, ts from $targetTable")(
+          Seq(1, "lb", 5, "shu", 1646643196L)
+        )
+      })
+    }
   }
 
   test("Test MergeInto with ignored record") {
@@ -1122,6 +1182,45 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
       checkAnswer(s"select id, name, value, ts from $tableName")(
         Seq(1, "a1", 10, 1004)
+      )
+    })
+  }
+
+  test("Test MergeInto with partial insert") {
+    withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
+      // Create a partitioned mor table
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  price double,
+           |  dt string
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
+           | ) s0
+           | on s0.id = t0.id
+           | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+           | values(s0.id, s0.name, s0.dt)
+         """.stripMargin)
+      checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+        Seq(1, "a1", 10, "2021-03-21"),
+        Seq(2, "a2", null, "2021-03-20")
       )
     })
   }

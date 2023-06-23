@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -28,8 +27,8 @@ import scala.collection.JavaConversions._
 
 class ShowTablePropertiesProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
   )
 

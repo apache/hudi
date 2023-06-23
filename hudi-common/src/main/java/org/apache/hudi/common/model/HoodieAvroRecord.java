@@ -19,9 +19,6 @@
 
 package org.apache.hudi.common.model;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -30,6 +27,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -117,7 +117,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    return new Object[]{HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled)};
+    return HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled);
   }
 
   @Override
@@ -188,11 +188,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields) throws IOException {
+      Boolean populateMetaFields,
+      Option<Schema> schemaWithoutMetaFields) throws IOException {
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override

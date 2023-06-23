@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.table.marker.WriteMarkersFactory
@@ -29,8 +30,8 @@ import scala.util.{Failure, Success, Try}
 
 class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -50,7 +51,8 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     var client: SparkRDDWriteClient[_] = null
     val result = Try {
-      client = createHoodieClient(jsc, basePath)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
+        tableName.asInstanceOf[Option[String]])
       val config = client.getConfig
       val context = client.getEngineContext
       val table = HoodieSparkTable.create(config, context)

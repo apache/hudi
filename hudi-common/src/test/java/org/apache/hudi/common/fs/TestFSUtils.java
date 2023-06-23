@@ -221,7 +221,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testOldLogFileName() {
-    // Check if old log file names are still parseable by FSUtils method
+    // Check if old log file names are still parsable by FSUtils method
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
     String oldLogFile = makeOldLogFileName(fileName, ".log", "100", 1);
@@ -238,7 +238,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void tesLogFileName() {
-    // Check if log file names are parseable by FSUtils method
+    // Check if log file names are parsable by FSUtils method
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
@@ -363,14 +363,14 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fileId = "Id123";
     int version = 1;
     final String LOG_STR = "log";
-    final String LOG_EXTENTION = "." + LOG_STR;
+    final String LOG_EXTENSION = "." + LOG_STR;
 
     // data file name
     String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
-    String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, version, writeToken);
+    String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new Path(logFileName)));
     assertEquals(instantTime, FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName)));
     assertEquals(fileId, FSUtils.getFileIdFromLogPath(new Path(logFileName)));
@@ -380,17 +380,17 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // create three versions of log file
     java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
     Files.createDirectories(partitionPath);
-    String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
+    String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
-    String log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 2, writeToken);
+    String log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 2, writeToken);
     Files.createFile(partitionPath.resolve(log2));
-    String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 3, writeToken);
+    String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
+        new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
     assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+        new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime));
   }
 
   @Test

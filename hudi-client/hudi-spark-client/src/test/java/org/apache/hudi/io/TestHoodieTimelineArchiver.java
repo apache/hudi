@@ -25,9 +25,11 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -61,25 +64,33 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -90,8 +101,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -99,7 +112,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieTimelineArchiver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTimelineArchiver.class);
 
   private Configuration hadoopConf;
   private HoodieWrapperFileSystem wrapperFs;
@@ -122,10 +135,11 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     hadoopConf.addResource(wrapperFs.getConf());
   }
 
-  private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
+  private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      testTable.updateFilesPartitionInTableConfig();
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -251,12 +265,12 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testArchiveTableWithArchival(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
 
-    // min archival commits is 2 and max archival commits is 4. and so, after 5th commit, 3 commits will be archived.
-    // 1,2,3,4,5 : after archival -> 4,5
-    // after 3 more commits, earliest 3 will be archived
-    // 4,5,6,7,8 : after archival -> 7, 8
+    // min archival commits is 4 and max archival commits is 5. and so, after 6th commit, 2 commits will be archived.
+    // 1,2,3,4,5,6 : after archival -> 3,4,5,6
+    // after 2 more commits, earliest 2 will be archived
+    // 3,4,5,6,7,8 : after archival -> 5,6,7,8
     // after 9 no-op wrt archival.
     for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
@@ -264,17 +278,22 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
-      if (i < 5) {
+      if (i < 6) {
         assertEquals(originalCommits, commitsAfterArchival);
-      } else if (i == 5) {
+      } else if (i == 6) {
         // archival should have kicked in.
-        verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003")), getActiveCommitInstants(Arrays.asList("00000004", "00000005")), commitsAfterArchival);
+        verifyArchival(
+            getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002")),
+            getActiveCommitInstants(Arrays.asList("00000003", "00000004", "00000005", "00000006")),
+            commitsAfterArchival);
       } else if (i < 8) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i == 8) {
         // archival should have kicked in.
-        verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006")),
-            getActiveCommitInstants(Arrays.asList("00000007", "00000008")), commitsAfterArchival);
+        verifyArchival(
+            getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004")),
+            getActiveCommitInstants(Arrays.asList("00000005", "00000006", "00000007", "00000008")),
+            commitsAfterArchival);
       } else {
         assertEquals(originalCommits, commitsAfterArchival);
       }
@@ -283,8 +302,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   @Test
   public void testArchiveTableWithReplaceCommits() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 2);
-    for (int i = 1; i < 7; i++) {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2);
+    for (int i = 1; i < 9; i++) {
       if (i < 3) {
         testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(),
             Arrays.asList("p1", "p2"), 2);
@@ -296,12 +315,137 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-      if (i == 6) {
-        // after all rounds, only 3 should be left in active timeline. 4,5,6
-        assertEquals(originalCommits, commitsAfterArchival);
-        assertEquals(3, originalCommits.size());
+      if (i == 8) {
+        // after all rounds, only 4 should be left in active timeline. 5,6,7,8
+        assertEquals(6, originalCommits.size());
+        assertEquals(4, commitsAfterArchival.size());
       }
     }
+  }
+
+  @Disabled("HUDI-6385")
+  @ParameterizedTest
+  @ValueSource(strings = {"KEEP_LATEST_BY_HOURS", "KEEP_LATEST_COMMITS"})
+  public void testArchivalWithAutoAdjustmentBasedOnCleanConfigs(String cleaningPolicy) throws Exception {
+    // This test verifies that when the archival configs are more aggressive than the cleaning
+    // configs, the archiver adjust the min and max commits to keep automatically based on the
+    // cleaning configs.
+    init();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.valueOf(cleaningPolicy))
+            .cleanerNumHoursRetained(1)
+            .retainCommits(5)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(3, 4).build())
+        .build();
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+    Instant instant = Instant.now();
+    ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+    List<HoodieInstant> expectedAllCommits = new ArrayList<>();
+
+    // The following commits should be archived
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 90, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 80, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 70, true, testTable, config));
+    // The following commits should not be archived
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 50, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 45, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 40, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 30, false, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 20, false, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 10, true, testTable, config));
+    expectedAllCommits.add(triggerCommit(p0, p1, commitDateTime, 5, true, testTable, config));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList =
+        archiveAndGetCommitsList(config, true);
+    List<HoodieInstant> originalCommits = commitsList.getKey();
+    List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+    assertInstantListEquals(expectedAllCommits, originalCommits);
+    assertInstantListEquals(
+        expectedAllCommits.subList(2, expectedAllCommits.size()), commitsAfterArchival);
+  }
+
+  private HoodieInstant triggerCommit(
+      String p0, String p1, ZonedDateTime curDateTime, int minutesForCommit,
+      boolean isComplete, HoodieTestTable testTable, HoodieWriteConfig config) throws Exception {
+
+    String file1P0C0 = UUID.randomUUID().toString();
+    String file1P1C0 = UUID.randomUUID().toString();
+    String commitTs = HoodieActiveTimeline.formatDate(Date.from(curDateTime.minusMinutes(minutesForCommit).toInstant()));
+    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+      {
+        put(p0, CollectionUtils.createImmutableList(file1P0C0));
+        put(p1, CollectionUtils.createImmutableList(file1P1C0));
+      }
+    });
+    return commitWithMdt(commitTs, part1ToFileId, testTable, metadataWriter, true, true, isComplete);
+  }
+
+  private HoodieInstant commitWithMdt(String instantTime, Map<String, List<String>> partToFileId,
+                                      HoodieTestTable testTable, HoodieTableMetadataWriter metadataWriter,
+                                      boolean addBaseFiles, boolean addLogFiles, boolean isComplete) throws Exception {
+    testTable.addInflightCommit(instantTime);
+    HoodieCommitMetadata commitMeta;
+    if (isComplete) {
+      Map<String, List<String>> partToFileIds = new HashMap<>();
+      partToFileId.forEach((key, value) -> {
+        try {
+          List<String> files = new ArrayList<>();
+          if (addBaseFiles) {
+            files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
+          }
+          if (addLogFiles) {
+            value.forEach(logFilePrefix -> {
+              try {
+                files.addAll(testTable.withLogFile(key, logFilePrefix, 1, 2).getValue());
+              } catch (Exception e) {
+                e.printStackTrace();
+              }
+            });
+          }
+          partToFileIds.put(key, files);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      });
+      commitMeta = generateCommitMetadata(instantTime, partToFileIds);
+      metadataWriter.performTableServices(Option.of(instantTime));
+      metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
+    } else {
+      commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
+    }
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
+        Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return new HoodieInstant(
+        isComplete ? State.COMPLETED : State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime);
+  }
+
+  protected static HoodieCommitMetadata generateCommitMetadata(
+      String instantTime, Map<String, List<String>> partitionToFilePaths) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
+    partitionToFilePaths.forEach((partitionPath, fileList) -> fileList.forEach(f -> {
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setPartitionPath(partitionPath);
+      writeStat.setPath(partitionPath + "/" + getBaseFilename(instantTime, f));
+      writeStat.setFileId(f);
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
+      metadata.addWriteStat(partitionPath, writeStat);
+    }));
+    return metadata;
   }
 
   @ParameterizedTest
@@ -353,17 +497,17 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     commitsAfterArchival = commitsList.getValue();
 
     metaClient.reloadActiveTimeline();
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002","00000003", "00000004", "00000005", "00000006", "00000007")),
+    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006", "00000007")),
         getActiveCommitInstants(Arrays.asList("00000008", "00000009")), commitsAfterArchival);
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMergeSmallArchiveFilesRecoverFromBuildPlanFailed(boolean enableArchiveMerge) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, enableArchiveMerge, 3, 209715200);
 
     // do ingestion and trigger archive actions here.
-    for (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
@@ -386,7 +530,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // check that damaged plan file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
-    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+    assertEquals(9 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
     // trigger several archive after left damaged merge small archive file plan.
     for (int i = 1; i < 10; i++) {
@@ -399,7 +543,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
 
     // check instant number
-    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+    assertEquals(18 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
 
     // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
@@ -411,10 +555,10 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMergeSmallArchiveFilesRecoverFromMergeFailed(boolean enableArchiveMerge) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, enableArchiveMerge, 3, 209715200);
 
     // do ingestion and trigger archive actions here.
-    for (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
@@ -434,7 +578,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // check loading archived and active timeline success
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
-    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.reload().countInstants());
+    assertEquals(9 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.reload().countInstants());
 
     String s = "Dummy Content";
     // stain the current merged archive file.
@@ -451,7 +595,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
 
-    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+    assertEquals(18 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
 
     // if there are a damaged merged archive files and other common damaged archive file.
     // hoodie need throw ioe while loading archived timeline because of parsing the damaged archive file.
@@ -464,10 +608,10 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMergeSmallArchiveFilesRecoverFromDeleteFailed(boolean enableArchiveMerge) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, enableArchiveMerge, 3, 209715200);
 
     // do ingestion and trigger archive actions here.
-    for (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
@@ -491,7 +635,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // loading archived timeline and active timeline success
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
-    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+    assertEquals(9 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
     // do another archive actions with merge small archive files.
     for (int i = 1; i < 10; i++) {
@@ -503,17 +647,22 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
 
-    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+    assertEquals(18 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testLoadArchiveTimelineWithDamagedPlanFile(boolean enableArchiveMerge) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, enableArchiveMerge, 3, 209715200);
 
     // do ingestion and trigger archive actions here.
-    for (int i = 1; i < 8; i++) {
-      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    int numInstant = 12;
+    for (int i = 1; i < 12; i++) {
+      testTable.doWriteOperation(
+          "000000" + String.format("%02d", i),
+          WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(),
+          Arrays.asList("p1", "p2"),
+          2);
       archiveAndGetCommitsList(writeConfig);
     }
 
@@ -525,7 +674,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // check that damaged plan file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
-    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+    assertEquals((numInstant - 1) * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
     // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
@@ -534,10 +683,11 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
+  @Disabled("HUDI-6386")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 5, 2,
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
         HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
 
@@ -555,7 +705,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         }
         metaClient.reloadActiveTimeline();
         while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
-            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 4) {
+            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
           try {
             HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
             archiver.archiveIfRequired(context, true);
@@ -578,7 +728,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // do ingestion and trigger archive actions here.
     for (int i = 1; i < 30; i++) {
       testTable.doWriteOperation("0000000" + String.format("%02d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-      if (i == 5) {
+      if (i == 6) {
         // start up archival threads only after 4 commits.
         countDownLatch.countDown();
       }
@@ -610,8 +760,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testLoadArchiveTimelineWithUncompletedMergeArchiveFile(boolean enableArchiveMerge) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 3, 2, enableArchiveMerge, 3, 209715200);
-    for (int i = 1; i < 8; i++) {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, enableArchiveMerge, 3, 209715200);
+    for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
@@ -636,7 +786,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline();
 
-    assertEquals(7 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+    assertEquals(9 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
 
     // if there are a damaged merged archive files and other common damaged archive file.
     // hoodie need throw ioe while loading archived timeline because of parsing the damaged archive file.
@@ -649,7 +799,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testNoArchivalUntilMaxArchiveConfigWithExtraInflightCommits(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 5, 2);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
 
     // when max archival commits is set to 5, until 6th commit there should not be any archival.
     for (int i = 1; i < 6; i++) {
@@ -742,7 +892,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testPendingClusteringWillBlockArchival(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 5, 2);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
     HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000000", wrapperFs.getConf());
     for (int i = 1; i < 8; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
@@ -761,18 +911,23 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testArchiveRollbacksTestTable(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
 
-    for (int i = 1; i < 9; i += 2) {
-      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-      testTable.doRollback("0000000" + i, "0000000" + (i + 1));
+    for (int i = 1; i < 13; i += 2) {
+      testTable.doWriteOperation(
+          "000000" + String.format("%02d", i),
+          WriteOperationType.UPSERT,
+          i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"),
+          2);
+      testTable.doRollback(
+          "000000" + String.format("%02d", i), "000000" + String.format("%02d", i + 1));
 
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-      if (i != 7) {
+      if (i != 11) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else {
         // only time when archival will kick in
@@ -780,8 +935,10 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         expectedArchivedInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000003")));
         expectedArchivedInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000004"), HoodieTimeline.ROLLBACK_ACTION));
         List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000007")));
-        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000006", "00000008"), HoodieTimeline.ROLLBACK_ACTION));
+        expectedActiveInstants.addAll(getActiveCommitInstants(
+            Arrays.asList("00000005", "00000007", "00000009", "00000011")));
+        expectedActiveInstants.addAll(getActiveCommitInstants(
+            Arrays.asList("00000006", "00000008", "00000010", "00000012"), HoodieTimeline.ROLLBACK_ACTION));
         verifyArchival(expectedArchivedInstants, expectedActiveInstants, commitsAfterArchival);
       }
     }
@@ -790,10 +947,10 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testNoArchivalWithInflightCompactionInMiddle(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2, 2,
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2, 2,
         HoodieTableType.MERGE_ON_READ);
 
-    // when max archival commits is set to 4, even after 7 commits, if there is an inflight compaction in the middle, archival should not kick in.
+    // when max archival commits is set to 5, even after 7 commits, if there is an inflight compaction in the middle, archival should not kick in.
     HoodieCommitMetadata inflightCompactionMetadata = null;
     for (int i = 1; i < 8; i++) {
       if (i == 2) {
@@ -807,22 +964,24 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
       if (enableMetadata) {
-        if (i != 6) {
+        if (i != 7) {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
-          // on 6th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
-          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
+          // on 7th commit, archival will kick in, but cannot archive any commit,
+          // since 1st deltacommit is the greatest completed commit before an oldest inflight commit.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 0);
         }
       } else {
-        if (i != 6) {
+        if (i != 7) {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
-          // on 7th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
-          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
-          for (int j = 1; j <= 6; j++) {
+          // on 7th commit, archival will kick in, but cannot archive any commit,
+          // since 1st deltacommit is the greatest completed commit before an oldest inflight commit.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 0);
+          for (int j = 1; j <= 7; j++) {
             if (j == 1) {
-              // first commit should be archived
-              assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
+              // first commit should not be archived
+              assertTrue(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
             } else if (j == 2) {
               // 2nd compaction should not be archived
               assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "0000000" + j)));
@@ -838,17 +997,19 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // move inflight compaction to complete and add one regular write commit. archival should archive more commits.
     // an extra one commit is required, bcoz compaction in data table will not trigger table services in metadata table.
     // before this move, timeline : 2_inflight_compaction, 3,4,5,6,7.
-    // after this move: 6,7,8 (2,3,4,5 will be archived)
+    // after this move: 5,6,7,8 (2,3,4 will be archived)
     testTable.moveInflightCompactionToComplete("00000002", inflightCompactionMetadata);
     testTable.doWriteOperation("00000008", WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 2);
 
     Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-    List<HoodieInstant> archivedInstants = getAllArchivedCommitInstants(Arrays.asList("00000001", "00000003", "00000004", "00000005", "00000006"), HoodieTimeline.DELTA_COMMIT_ACTION);
+    List<HoodieInstant> archivedInstants = getAllArchivedCommitInstants(Arrays.asList("00000001", "00000003", "00000004"), HoodieTimeline.DELTA_COMMIT_ACTION);
     archivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "00000002"));
     archivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000002"));
-    verifyArchival(archivedInstants, getActiveCommitInstants(Arrays.asList("00000007", "00000008"), HoodieTimeline.DELTA_COMMIT_ACTION), commitsAfterArchival);
+    verifyArchival(archivedInstants,
+        getActiveCommitInstants(Arrays.asList("00000005", "00000006", "00000007", "00000008"), HoodieTimeline.DELTA_COMMIT_ACTION),
+        commitsAfterArchival);
   }
 
   @ParameterizedTest
@@ -919,56 +1080,62 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testArchiveTableWithCleanCommits(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
 
-    // min archival commits is 2 and max archival commits is 4
-    // (either clean commits has to be > 4 or commits has to be greater than 4)
-    // and so, after 5th commit, 3 commits will be archived.
-    // 1,2,3,4,5,6 : after archival -> 1,5,6 (because, 2,3,4,5 and 6 are clean commits and are eligible for archival)
-    // after 7th and 8th commit no-op wrt archival.
+    // min archival commits is 4 and max archival commits is 5
+    // (either clean commits has to be > 5 or commits has to be greater than 5)
+    // and so, after 6th instant, 2 instants will be archived.
+    // 1,2,3,4,5,6 : after archival -> 1,3,4,5,6
+    // (because, 2,3,4,5 and 6 are clean instants and are eligible for archival)
+    // after 7th and 9th instant no-op wrt archival.  After 8th instant,
+    // archival kicks in when metadata table is enabled.
     Map<String, Integer> cleanStats = new HashMap<>();
     cleanStats.put("p1", 1);
     cleanStats.put("p2", 2);
-    for (int i = 1; i < 9; i++) {
+    for (int i = 1; i <= 10; i++) {
       if (i == 1) {
-        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 10);
-      } else if (i < 7) {
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 20);
+      } else if (i <= 7 || i == 9) {
         testTable.doClean("0000000" + i, cleanStats);
       } else {
-        testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+        testTable.doWriteOperation("000000" + String.format("%02d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       }
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
-      if (i < 6) {
+      if (i < 7) {
         assertEquals(originalCommits, commitsAfterArchival);
-      } else if (i == 6) {
+      } else if (i == 7) {
         if (!enableMetadata) {
-          // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
+          // 1,2,3,4,5,6,7 : after archival -> 1,4,5,6,7 (bcoz, 2,3,4,5,6,7 are clean instants and are eligible for archival)
           List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
           expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-          verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+          expectedActiveInstants.addAll(
+              getActiveCommitInstants(Arrays.asList("00000004", "00000005", "00000006", "00000007"), HoodieTimeline.CLEAN_ACTION));
+          verifyArchival(getAllArchivedCommitInstants(
+              Arrays.asList("00000002", "00000003"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
         } else {
           // with metadata enabled, archival in data table is fenced based on compaction in metadata table. Clean commits in data table will not trigger compaction in
           // metadata table.
           List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
           expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
+          expectedActiveInstants.addAll(getActiveCommitInstants(
+              Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006", "00000007"), HoodieTimeline.CLEAN_ACTION));
           verifyArchival(getAllArchivedCommitInstants(Collections.emptyList(), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
         }
       } else {
         if (!enableMetadata) {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
-          if (i == 7) {
-            // when i == 7 compaction in metadata table will be triggered and hence archival in datatable will kick in.
-            // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
+          if (i == 8) {
+            // when i == 7 compaction in metadata table will be triggered
+            // and afterwards archival in datatable will kick in when i == 8.
+            // 1,2,3,4,5,6,7,8 : after archival -> 1,4,5,6,7,8 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
             List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001", "00000007")));
-            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-            verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001", "00000008")));
+            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000004", "00000005", "00000006", "00000007"), HoodieTimeline.CLEAN_ACTION));
+            verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
           } else {
             assertEquals(originalCommits, commitsAfterArchival);
           }
@@ -979,7 +1146,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   @Test
   public void testArchiveRollbacksAndCleanTestTable() throws Exception {
-    int minArchiveCommits = 2;
+    int minArchiveCommits = 4;
     int maxArchiveCommits = 9;
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, minArchiveCommits, maxArchiveCommits, 2);
 
@@ -1005,13 +1172,13 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     List<HoodieInstant> originalCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-    // out of 10 clean commits, 8 will be archived. 2 to 9. 10 and 11 will be active.
+    // out of 10 clean commits, 6 will be archived. 2 to 7. 8 to 11 will be active.
     // wrt regular commits, there aren't 9 commits yet and so all of them will be active.
     List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-    expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000010", "00000011"), HoodieTimeline.CLEAN_ACTION));
+    expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000008", "00000009", "00000010", "00000011"), HoodieTimeline.CLEAN_ACTION));
     expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001", "00000012", "00000014", "00000016", "00000018")));
     expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000013", "00000015", "00000017", "00000019"), HoodieTimeline.ROLLBACK_ACTION));
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006", "00000007", "00000008", "00000009"),
+    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006", "00000007"),
         HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
   }
 
@@ -1024,9 +1191,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
-          .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-              .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
-              .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -1084,7 +1251,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-                .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                 .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -1115,12 +1282,12 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   @Test
   public void testArchiveTableWithMetadataTableCompaction() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 7);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 7);
 
-    // min archival commits is 2 and max archival commits is 4. and so, after 5th commit, ideally archival should kick in. but max delta commits in metadata table is set to 6. and so
+    // min archival commits is 4 and max archival commits is 5. and so, after 6th commit, ideally archival should kick in. but max delta commits in metadata table is set to 7. and so
     // archival will kick in only by 7th commit in datatable(1 commit for bootstrap + 6 commits from data table).
     // and then 2nd compaction will take place
-    for (int i = 1; i < 6; i++) {
+    for (int i = 1; i < 7; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
@@ -1129,46 +1296,52 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       assertEquals(originalCommits, commitsAfterArchival);
     }
 
-    // two more commits will trigger compaction in metadata table and will let archival move forward.
-    testTable.doWriteOperation("00000006", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    // one more commit will trigger compaction in metadata table and will let archival move forward.
     testTable.doWriteOperation("00000007", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     // trigger archival
     Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
     List<HoodieInstant> originalCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
     // before archival 1,2,3,4,5,6,7
-    // after archival 6,7
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 5);
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005")),
-        getActiveCommitInstants(Arrays.asList("00000006", "00000007")), commitsAfterArchival);
+    // after archival 4,5,6,7
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 3);
+    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003")),
+        getActiveCommitInstants(Arrays.asList("00000004", "00000005", "00000006", "00000007")), commitsAfterArchival);
 
-    // 3 more commits, 6 and 7 will be archived. but will not move after 6 since compaction has to kick in metadata table.
+    // 3 more commits, 4 to 6 will be archived. but will not move after 6 since compaction has to kick in metadata table.
     testTable.doWriteOperation("00000008", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     testTable.doWriteOperation("00000009", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("00000010", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    // trigger archival
+    commitsList = archiveAndGetCommitsList(writeConfig);
+    originalCommits = commitsList.getKey();
+    commitsAfterArchival = commitsList.getValue();
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 3);
+    verifyArchival(getAllArchivedCommitInstants(
+            Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006")),
+        getActiveCommitInstants(
+            Arrays.asList("00000007", "00000008", "00000009", "00000010")),
+        commitsAfterArchival);
+
+    // No archival should kick in since compaction has not kicked in metadata table
+    testTable.doWriteOperation("00000011", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("00000012", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    commitsList = archiveAndGetCommitsList(writeConfig);
+    originalCommits = commitsList.getKey();
+    commitsAfterArchival = commitsList.getValue();
+    assertEquals(originalCommits, commitsAfterArchival);
+    verifyArchival(getAllArchivedCommitInstants(
+            Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006")),
+        getActiveCommitInstants(
+            Arrays.asList("00000007", "00000008", "00000009", "00000010", "00000011", "00000012")),
+        commitsAfterArchival);
+
+    testTable.doWriteOperation("00000013", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
     assertEquals(originalCommits, commitsAfterArchival);
-
-    // ideally, this will archive commits 6, 7, 8 but since compaction in metadata is until 6, only 6 will get archived,
-    testTable.doWriteOperation("00000010", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-    commitsList = archiveAndGetCommitsList(writeConfig);
-    originalCommits = commitsList.getKey();
-    commitsAfterArchival = commitsList.getValue();
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006")),
-        getActiveCommitInstants(Arrays.asList("00000007", "00000008", "00000009", "00000010")), commitsAfterArchival);
-
-    // and then 2nd compaction will take place at 12th commit
-    for (int i = 11; i < 14; i++) {
-      testTable.doWriteOperation("000000" + i, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-      // trigger archival
-      commitsList = archiveAndGetCommitsList(writeConfig);
-      originalCommits = commitsList.getKey();
-      commitsAfterArchival = commitsList.getValue();
-      assertEquals(originalCommits, commitsAfterArchival);
-    }
 
     // one more commit will trigger compaction in metadata table and will let archival move forward.
     testTable.doWriteOperation("00000014", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
@@ -1177,15 +1350,19 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
     // before archival 7,8,9,10,11,12,13,14
-    // after archival 13,14
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 6);
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006", "00000007", "00000008",
-        "00000009", "00000010", "00000011", "00000012")), getActiveCommitInstants(Arrays.asList("00000013", "00000014")), commitsAfterArchival);
+    // after archival 11,12,13,14
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 4);
+    verifyArchival(getAllArchivedCommitInstants(
+            Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006",
+                "00000007", "00000008", "00000009", "00000010")),
+        getActiveCommitInstants(
+            Arrays.asList("00000011", "00000012", "00000013", "00000014")),
+        commitsAfterArchival);
   }
 
   @Test
   public void testArchiveCommitsWithCompactionCommitInMetadataTableTimeline() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 20);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 20);
     int startInstantTime = 100;
     int numCommits = 15;
     int numExpectedArchived = 6; // "100" till "105" should be archived in this case
@@ -1216,9 +1393,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   @ValueSource(booleans = {true, false})
   public void testArchivalWithMaxDeltaCommitsGuaranteeForCompaction(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(
-        enableMetadata, 2, 4, 8, 1, HoodieTableType.MERGE_ON_READ);
+        enableMetadata, 4, 5, 8, 1, HoodieTableType.MERGE_ON_READ);
 
-    // When max archival commits is set to 4, even after 8 delta commits, since the number of delta
+    // When max archival commits is set to 5, even after 8 delta commits, since the number of delta
     // commits is still smaller than 8, the archival should not kick in.
     // The archival should only kick in after the 9th delta commit
     // instant "00000001" to "00000009"
@@ -1253,35 +1430,157 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-      // first 9 delta commits before the completed compaction should be archived
-      IntStream.range(1, 10).forEach(j ->
-          assertFalse(commitsAfterArchival.contains(
-              new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
-
-      if (i == 1) {
-        assertEquals(8, originalCommits.size() - commitsAfterArchival.size());
+      if (i <= 2) {
+        // first 7 delta commits before the completed compaction should be archived in data table
+        IntStream.range(1, 8).forEach(j ->
+            assertFalse(commitsAfterArchival.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
+        assertEquals(i == 1 ? 6 : 0, originalCommits.size() - commitsAfterArchival.size());
         // instant from "00000011" should be in the active timeline
         assertTrue(commitsAfterArchival.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000010")));
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000008")));
         assertTrue(commitsAfterArchival.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000011")));
-      } else if (i < 8) {
-        assertEquals(originalCommits, commitsAfterArchival);
-      } else {
-        assertEquals(1, originalCommits.size() - commitsAfterArchival.size());
-        assertFalse(commitsAfterArchival.contains(
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000009")));
+        assertTrue(commitsAfterArchival.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000010")));
-        // i == 8 -> ["00000011", "00000018"] should be in the active timeline
-        // i == 9 -> ["00000012", "00000019"] should be in the active timeline
-        if (i == 9) {
-          assertFalse(commitsAfterArchival.contains(
-              new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000011")));
+        for (int j = 1; j <= i; j++) {
+          assertTrue(commitsAfterArchival.contains(
+              new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000001" + j)));
         }
-        IntStream.range(i - 7, i + 1).forEach(j ->
-            assertTrue(commitsAfterArchival.contains(
-                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000001" + j))));
+      } else {
+        // first 9 delta commits before the completed compaction should be archived in data table
+        IntStream.range(1, 10).forEach(j ->
+            assertFalse(commitsAfterArchival.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
+        if (i == 3) {
+          assertEquals(2, originalCommits.size() - commitsAfterArchival.size());
+        } else if (i < 8) {
+          assertEquals(originalCommits, commitsAfterArchival);
+        } else {
+          assertEquals(1, originalCommits.size() - commitsAfterArchival.size());
+          assertFalse(commitsAfterArchival.contains(
+              new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000010")));
+          // i == 8 -> ["00000011", "00000018"] should be in the active timeline
+          // i == 9 -> ["00000012", "00000019"] should be in the active timeline
+          if (i == 9) {
+            assertFalse(commitsAfterArchival.contains(
+                new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000011")));
+          }
+          IntStream.range(i - 7, i + 1).forEach(j ->
+              assertTrue(commitsAfterArchival.contains(
+                  new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000001" + j))));
+        }
       }
     }
+  }
+
+  /**
+   * Test archival functionality when there are inflights files.
+   * Archive should hold on to the greatest completed commit that is less than the oldes inflight commit.
+   * @throws Exception
+   */
+  @Test
+  public void testGetCommitInstantsToArchiveDuringInflightCommits() throws Exception {
+    HoodieWriteConfig cfg = initTestTableAndGetWriteConfig(false, 3, 4, 2);
+
+    Set<String> expectedInstants = new HashSet<>();
+    // Create 3 completed commits.
+    for (int i = 0; i < 3; i++) {
+      String instantTime = "100" + i;
+      HoodieTestDataGenerator.createCommitFile(basePath, instantTime, wrapperFs.getConf());
+      expectedInstants.add(instantTime);
+    }
+    // Create an inflight file.
+    String replaceInstant = "1003";
+    HoodieTestDataGenerator.createReplaceCommitRequestedFile(basePath, replaceInstant, wrapperFs.getConf());
+    expectedInstants.add(replaceInstant);
+    // Create 3 more instants
+    for (int i = 4; i < 7; i++) {
+      String instantTime = "100" + i;
+      HoodieTestDataGenerator.createCommitFile(basePath, instantTime, wrapperFs.getConf());
+      expectedInstants.add(instantTime);
+    }
+    // Create another inflight commit
+    HoodieTestDataGenerator.createRequestedCommitFile(basePath, "1007", wrapperFs.getConf());
+    HoodieTestDataGenerator.createPendingCommitFile(basePath, "1007", wrapperFs.getConf());
+    expectedInstants.add("1007");
+    // Create 6 more instants
+    for (int i = 0; i < 6; i++) {
+      String instantTime = "101" + i;
+      HoodieTestDataGenerator.createCommitFile(basePath, instantTime, wrapperFs.getConf());
+      expectedInstants.add(instantTime);
+    }
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline().getWriteTimeline();
+
+    // Check the count of instants.
+    assertEquals(expectedInstants.size(), timeline.countInstants(), "Loaded 14 commits and the count should match");
+
+    // Run archival
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    boolean result = archiver.archiveIfRequired(context);
+    expectedInstants.remove("1000");
+    expectedInstants.remove("1001");
+    assertTrue(result);
+    timeline = metaClient.reloadActiveTimeline().getWriteTimeline();
+
+    // Check the count of instants after archive it should have 2 less instants
+    // because 103 replacecommit's inflight will block archival.
+    assertEquals(12, timeline.countInstants(), "After archival only first 2 commits should be archived");
+    assertEquals(expectedInstants.size(), timeline.countInstants(), "After archival only first 2 commits should be archived");
+
+    HoodieTimeline finalTimeline = timeline;
+    assertEquals(12, expectedInstants.stream().filter(instant -> finalTimeline.containsInstant(instant)).count());
+    assertEquals("1002", timeline.getInstantsAsStream().findFirst().get().getTimestamp());
+
+    // Delete replacecommit requested instant.
+    Path replaceCommitRequestedPath = new Path(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+            + HoodieTimeline.makeRequestedReplaceFileName(replaceInstant));
+    metaClient.getFs().delete(replaceCommitRequestedPath);
+    metaClient.reloadActiveTimeline();
+
+    // Run archival
+    assertTrue(archiver.archiveIfRequired(context));
+    timeline = metaClient.reloadActiveTimeline().getWriteTimeline();
+    expectedInstants.removeAll(Arrays.asList("1002", "1003", "1004", "1005"));
+
+    // Check the count of instants after archive it should have 3 more less instants
+    // This time 1007 inflight commit will block archival.
+    assertEquals(8, timeline.countInstants(), "After archival only first 2 commits should be archived");
+    assertEquals(expectedInstants.size(), timeline.countInstants(), "After archival only first 2 commits should be archived");
+    HoodieTimeline refreshedTimeline = timeline;
+    assertEquals(8, expectedInstants.stream().filter(instant -> refreshedTimeline.containsInstant(instant)).count());
+    assertEquals("1006", timeline.getInstantsAsStream().findFirst().get().getTimestamp());
+  }
+
+  /**
+   * If replacecommit inflight is the oldest commit in the timeline or for that matter any inflight commit is present
+   * then the archival is blocked from there. This method test this scenario.
+   */
+  @Test
+  public void testWithOldestReplaceCommit() throws Exception {
+    HoodieWriteConfig cfg = initTestTableAndGetWriteConfig(false, 2, 3, 2);
+
+    HoodieTestDataGenerator.createReplaceCommitRequestedFile(basePath, "1001", wrapperFs.getConf());
+    HoodieTestDataGenerator.createReplaceCommitInflightFile(basePath, "1001", wrapperFs.getConf());
+    // Create 8 completed commits.
+    for (int i = 2; i < 10; i++) {
+      String instantTime = "100" + i;
+      HoodieTestDataGenerator.createCommitFile(basePath, instantTime, wrapperFs.getConf());
+    }
+
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline();
+    assertEquals(9, timeline.countInstants(), "Loaded 9 commits and the count should match");
+    boolean result = archiver.archiveIfRequired(context);
+    assertTrue(result);
+    timeline = metaClient.reloadActiveTimeline();
+    assertEquals(9, timeline.countInstants(),
+        "Since we have a pending replacecommit at 1001, we should never archive any commit after 1001");
+    assertEquals("1001", timeline.getInstantsAsStream().findFirst().get().getTimestamp());
   }
 
   @Test
@@ -1290,13 +1589,13 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     // Test configs where metadata table has more aggressive archival configs than the compaction config
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 4).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 6).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
-            .retainCommits(3).archiveCommitsWith(4, 5).build())
+            .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
@@ -1328,7 +1627,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         // later on without archival or compaction
         assertEquals(i + 1, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "00000000000000")));
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, SOLO_COMMIT_TIMESTAMP + "010")));
         IntStream.range(1, i + 1).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
@@ -1345,13 +1644,13 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j))));
       } else if (i <= 11) {
-        // In the metadata table timeline, the first delta commit is "00000007"
+        // In the metadata table timeline, the first delta commit is "00000005"
         // because it equals with the earliest commit on the dataset timeline, after archival,
-        // delta commits "00000008" till "00000011" are added later on without archival or compaction
-        assertEquals(i - 5, metadataTableInstants.size());
+        // delta commits "00000006" till "00000011" are added later on without archival or compaction
+        assertEquals(i - 3, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
-        IntStream.range(7, i + 1).forEach(j ->
+        IntStream.range(5, i + 1).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
@@ -1367,9 +1666,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
       } else if (i == 15) {
-        // Only delta commits "00000008" till "00000015" are in the active timeline
-        assertEquals(8, metadataTableInstants.size());
-        assertFalse(metadataTableInstants.contains(
+        // Only delta commits "00000008" till "00000015" are in the active timeline + 007001 for compaction.
+        assertEquals(9, metadataTableInstants.size());
+        assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000007001")));
         IntStream.range(8, 16).forEach(j ->
             assertTrue(metadataTableInstants.contains(
@@ -1388,11 +1687,11 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
                     "000000" + String.format("%02d", j)))));
       } else {
         // i == 17
-        // Only commits [00000015, 00000017] and "00000015001" are on the metadata timeline
-        assertEquals(4, metadataTableInstants.size());
+        // Only commits [00000013, 00000017] and "00000015001" are on the metadata timeline
+        assertEquals(6, metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000015001")));
-        IntStream.range(15, 18).forEach(j ->
+        IntStream.range(13, 18).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
                     "000000" + String.format("%02d", j)))));
@@ -1400,14 +1699,45 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPendingClusteringAfterArchiveCommit(boolean enableMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 2);
+    // timeline:0000000(completed)->00000001(completed)->00000002(replace&inflight)->00000003(completed)->...->00000007(completed)
+    HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000002", wrapperFs.getConf());
+    for (int i = 1; i < 8; i++) {
+      if (i != 2) {
+        testTable.doWriteOperation("0000000" + i, WriteOperationType.CLUSTER, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+      }
+      // archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+      assertEquals(originalCommits, commitsAfterArchival);
+    }
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertEquals(6, timeline.countInstants(),
+        "Since we have a pending clustering instant at 00000002, we should never archive any commit after 00000000");
+  }
+
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {
+    return archiveAndGetCommitsList(writeConfig, false);
+  }
+
+  private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(
+      HoodieWriteConfig writeConfig, boolean includeIncompleteInstants) throws IOException {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = includeIncompleteInstants
+        ? metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
+        : metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
     archiver.archiveIfRequired(context);
-    timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
+    timeline = includeIncompleteInstants
+        ? metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
+        : metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> commitsAfterArchival = timeline.getInstants();
     return Pair.of(originalCommits, commitsAfterArchival);
   }
@@ -1493,5 +1823,16 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata, isEmpty);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
+  }
+
+  private void assertInstantListEquals(List<HoodieInstant> expected, List<HoodieInstant> actual) {
+    assertEquals(expected.size(), actual.size());
+    for (int i = 0; i < expected.size(); i++) {
+      HoodieInstant expectedInstant = expected.get(i);
+      HoodieInstant actualInstant = actual.get(i);
+      assertEquals(expectedInstant.getTimestamp(), actualInstant.getTimestamp());
+      assertEquals(expectedInstant.getAction(), actualInstant.getAction());
+      assertEquals(expectedInstant.getState(), actualInstant.getState());
+    }
   }
 }

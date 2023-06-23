@@ -109,8 +109,9 @@
                   <include>org.apache.avro:avro</include>
                   <include>joda-time:joda-time</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
-                  <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
 
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>
@@ -139,7 +140,7 @@
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
-		          <include>org.apache.hive:hive-exec</include>
+                  <include>org.apache.hive:hive-exec</include>
                   <include>org.apache.hive:hive-standalone-metastore</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
@@ -223,6 +224,9 @@
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
+                    <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
+                    pattern, the default classes in hbase-default.xml can cause ClassNotFoundException. -->
+                    <exclude>hbase-default.xml</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -462,6 +466,12 @@
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>

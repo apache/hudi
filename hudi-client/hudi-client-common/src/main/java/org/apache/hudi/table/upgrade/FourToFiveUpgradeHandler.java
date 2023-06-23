@@ -21,13 +21,15 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -41,13 +43,14 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DE
  */
 public class FourToFiveUpgradeHandler implements UpgradeHandler {
 
-  private static final Logger LOG = LogManager.getLogger(FourToFiveUpgradeHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FourToFiveUpgradeHandler.class);
 
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     try {
-      FileSystem fs = new Path(config.getBasePath()).getFileSystem(context.getHadoopConf().get());
-      if (!config.doSkipDefaultPartitionValidation() && fs.exists(new Path(config.getBasePath() + "/" + DEPRECATED_DEFAULT_PARTITION_PATH))) {
+      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+
+      if (!config.doSkipDefaultPartitionValidation() && hasDefaultPartitionPath(config, table)) {
         LOG.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to %s "
                 + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
                 + " Sample spark command to use to re-write the data: \n\n"
@@ -70,5 +73,21 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       throw new HoodieException("Fetching FileSystem instance failed ", e);
     }
     return new HashMap<>();
+  }
+
+  private boolean hasDefaultPartitionPath(HoodieWriteConfig config, HoodieTable  table) throws IOException {
+    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    if (!tableConfig.getPartitionFields().isPresent()) {
+      return false;
+    }
+    String checkPartitionPath = DEPRECATED_DEFAULT_PARTITION_PATH;
+    boolean hiveStylePartitioningEnable = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+    // dt=default/ht=default, only need check dt=default
+    if (hiveStylePartitioningEnable) {
+      String[] partitions = tableConfig.getPartitionFields().get();
+      checkPartitionPath = partitions[0] + "=" + DEPRECATED_DEFAULT_PARTITION_PATH;
+    }
+    FileSystem fs = new Path(config.getBasePath()).getFileSystem(table.getHadoopConf());
+    return fs.exists(new Path(config.getBasePath() + "/" + checkPartitionPath));
   }
 }

@@ -48,10 +48,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -77,7 +77,7 @@ import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 @ShellComponent
 public class CompactionCommand {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
 

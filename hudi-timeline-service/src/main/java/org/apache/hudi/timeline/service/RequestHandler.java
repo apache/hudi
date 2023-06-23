@@ -49,9 +49,9 @@ import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -68,7 +68,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -160,7 +160,7 @@ public class RequestHandler {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants());
-    }
+    } 
 
     if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
@@ -181,19 +181,20 @@ public class RequestHandler {
    * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
-    if (isLocalViewBehind(ctx)) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      String lastKnownInstantFromClient = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class).getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
-      synchronized (view) {
-        if (isLocalViewBehind(ctx)) {
-          HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the following last instant on timeline :"
-              + localTimeline.lastInstant());
-          view.sync();
-          return true;
-        }
+    String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    synchronized (view) {
+      if (isLocalViewBehind(ctx)) {
+
+        String lastKnownInstantFromClient = ctx.queryParamAsClass(
+                RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, String.class)
+            .getOrDefault(HoodieTimeline.INVALID_INSTANT_TS);
+        HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+        LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+            + " as last known instant but server has the following last instant on timeline :"
+            + localTimeline.lastInstant());
+        view.sync();
+        return true;
       }
     }
     return false;
@@ -378,6 +379,14 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_LATEST_SLICES_BEFORE_ON_INSTANT", 1);
+      Map<String, List<FileSliceDTO>> dtos = sliceHandler.getAllLatestFileSlicesBeforeOrOn(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid")));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.PENDING_COMPACTION_OPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PEDING_COMPACTION_OPS", 1);
       List<CompactionOpDTO> dtos = sliceHandler.getPendingCompactionOperations(
@@ -407,6 +416,13 @@ public class RequestHandler {
       writeValueAsString(ctx, success);
     }, false));
 
+    app.post(RemoteHoodieTableFileSystemView.LOAD_ALL_PARTITIONS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LOAD_ALL_PARTITIONS", 1);
+      boolean success = sliceHandler
+          .loadAllPartitions(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
+      writeValueAsString(ctx, success);
+    }, false));
+
     app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON", 1);
       List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBeforeOrOn(
@@ -421,6 +437,15 @@ public class RequestHandler {
       List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBefore(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_AFTER_OR_ON, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_REPLACED_FILEGROUPS_AFTER_OR_ON", 1);
+      List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsAfterOrOn(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MIN_INSTANT_PARAM, String.class).getOrDefault(""),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
     }, true));

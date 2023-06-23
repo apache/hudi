@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.index.HoodieIndex;
@@ -349,6 +350,10 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   public void testTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(RawTripTestPayload.class.getName())
+            .withPayloadOrderingField("number").build())
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
             .withBloomIndexUpdatePartitionPath(true)
@@ -419,7 +424,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
           break;
         case p2:
           assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+          assertEquals(incomingPayload.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
           break;
         default:
           fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
@@ -435,7 +440,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
     assertEquals(p1, record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
+    assertEquals(incomingPayloadSamePartition.getJsonDataAsMap(), ((RawTripTestPayload) record.getData()).getJsonDataAsMap());
   }
 
   // convert list to map to avoid sorting order dependencies

@@ -32,7 +32,7 @@ import java.util.function.Supplier
 
 class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "read_only", DataTypes.BooleanType, false)
   )
 

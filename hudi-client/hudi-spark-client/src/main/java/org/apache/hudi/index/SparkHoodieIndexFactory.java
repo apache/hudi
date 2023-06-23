@@ -20,7 +20,6 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -46,12 +45,9 @@ public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
-      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
-      if (!(instance instanceof HoodieIndex)) {
-        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
-      }
-      return (HoodieIndex) instance;
+      return HoodieIndexUtils.createUserDefinedIndex(config);
     }
+
     switch (config.getIndexType()) {
       case HBASE:
         return new SparkHoodieHBaseIndex(config);
@@ -74,6 +70,8 @@ public final class SparkHoodieIndexFactory {
           default:
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }
+      case RECORD_INDEX:
+        return new SparkMetadataTableRecordIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -100,6 +98,8 @@ public final class SparkHoodieIndexFactory {
         return true;
       case BUCKET:
         return false;
+      case RECORD_INDEX:
+        return true;
       default:
         return createIndex(config).isGlobal();
     }

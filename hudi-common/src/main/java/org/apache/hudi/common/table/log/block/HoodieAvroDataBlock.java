@@ -167,9 +167,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     }
 
     public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
-      // Get schema from the header
-      Schema writerSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-      return new RecordIterator(dataBlock.readerSchema, writerSchema, content);
+      return new RecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), content);
     }
 
     @Override

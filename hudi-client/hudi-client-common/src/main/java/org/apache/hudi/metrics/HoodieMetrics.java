@@ -21,20 +21,23 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Wrapper for metrics-related operations.
  */
 public class HoodieMetrics {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetrics.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetrics.class);
+
+  private Metrics metrics;
   // Some timers
   public String rollbackTimerName = null;
   public String cleanTimerName = null;
@@ -48,6 +51,8 @@ public class HoodieMetrics {
   private String conflictResolutionTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
+  private String compactionRequestedCounterName = null;
+  private String compactionCompletedCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -62,12 +67,14 @@ public class HoodieMetrics {
   private Timer conflictResolutionTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
+  private Counter compactionRequestedCounter = null;
+  private Counter compactionCompletedCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      Metrics.init(config);
+      metrics = Metrics.getInstance(config);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName("timer", HoodieTimeline.CLEAN_ACTION);
       this.commitTimerName = getMetricsName("timer", HoodieTimeline.COMMIT_ACTION);
@@ -80,11 +87,17 @@ public class HoodieMetrics {
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
+      this.compactionRequestedCounterName = getMetricsName("counter", "compaction.requested");
+      this.compactionCompletedCounterName = getMetricsName("counter", "compaction.completed");
     }
   }
 
   private Timer createTimer(String name) {
-    return config.isMetricsOn() ? Metrics.getInstance().getRegistry().timer(name) : null;
+    return config.isMetricsOn() ? metrics.getRegistry().timer(name) : null;
+  }
+
+  public Metrics getMetrics() {
+    return metrics;
   }
 
   public Timer.Context getRollbackCtx() {
@@ -162,20 +175,20 @@ public class HoodieMetrics {
       // No-op if metrics are not of type PROMETHEUS_PUSHGATEWAY.
       return;
     }
-    Metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), 0);
-    Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), 0);
+    metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), 0);
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
@@ -196,20 +209,20 @@ public class HoodieMetrics {
       long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
-      Metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
-      Metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
-      Metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), totalRecordsWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
-      Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
-      Metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), totalTimeTakenForUpsert);
-      Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
-      Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
-      Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
-      Metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), totalRecordsDeleted);
+      metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
+      metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
+      metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
+      metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), totalRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
+      metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
+      metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
+      metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), totalTimeTakenForUpsert);
+      metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
+      metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
+      metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
+      metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), totalRecordsDeleted);
     }
   }
 
@@ -219,14 +232,14 @@ public class HoodieMetrics {
       Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
       if (eventTimePairMinMax.getLeft().isPresent()) {
         long commitLatencyInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getLeft().get();
-        Metrics.registerGauge(getMetricsName(actionType, "commitLatencyInMs"), commitLatencyInMs);
+        metrics.registerGauge(getMetricsName(actionType, "commitLatencyInMs"), commitLatencyInMs);
       }
       if (eventTimePairMinMax.getRight().isPresent()) {
         long commitFreshnessInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getRight().get();
-        Metrics.registerGauge(getMetricsName(actionType, "commitFreshnessInMs"), commitFreshnessInMs);
+        metrics.registerGauge(getMetricsName(actionType, "commitFreshnessInMs"), commitFreshnessInMs);
       }
-      Metrics.registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
-      Metrics.registerGauge(getMetricsName(actionType, "duration"), durationInMs);
+      metrics.registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
+      metrics.registerGauge(getMetricsName(actionType, "duration"), durationInMs);
     }
   }
 
@@ -234,8 +247,8 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(
           String.format("Sending rollback metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
-      Metrics.registerGauge(getMetricsName("rollback", "duration"), durationInMs);
-      Metrics.registerGauge(getMetricsName("rollback", "numFilesDeleted"), numFilesDeleted);
+      metrics.registerGauge(getMetricsName("rollback", "duration"), durationInMs);
+      metrics.registerGauge(getMetricsName("rollback", "numFilesDeleted"), numFilesDeleted);
     }
   }
 
@@ -243,8 +256,8 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(
           String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
-      Metrics.registerGauge(getMetricsName("clean", "duration"), durationInMs);
-      Metrics.registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
+      metrics.registerGauge(getMetricsName("clean", "duration"), durationInMs);
+      metrics.registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
     }
   }
 
@@ -252,20 +265,32 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)", durationInMs,
           numFilesFinalized));
-      Metrics.registerGauge(getMetricsName("finalize", "duration"), durationInMs);
-      Metrics.registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
+      metrics.registerGauge(getMetricsName("finalize", "duration"), durationInMs);
+      metrics.registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
     }
   }
 
   public void updateIndexMetrics(final String action, final long durationInMs) {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
-      Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
+      metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
     }
   }
 
-  String getMetricsName(String action, String metric) {
+  @VisibleForTesting
+  public String getMetricsName(String action, String metric) {
     return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+  }
+
+  public void updateClusteringFileCreationMetrics(long durationInMs) {
+    reportMetrics("replacecommit", "fileCreationTime", durationInMs);
+  }
+
+  /**
+   * Given a commit action, metrics name and value this method reports custom metrics.
+   */
+  public void reportMetrics(String commitAction, String metricName, long value) {
+    metrics.registerGauge(getMetricsName(commitAction, metricName), value);
   }
 
   /**
@@ -291,9 +316,23 @@ public class HoodieMetrics {
     }
   }
 
+  public void emitCompactionRequested() {
+    if (config.isMetricsOn()) {
+      compactionRequestedCounter = getCounter(compactionRequestedCounter, compactionRequestedCounterName);
+      compactionRequestedCounter.inc();
+    }
+  }
+
+  public void emitCompactionCompleted() {
+    if (config.isMetricsOn()) {
+      compactionCompletedCounter = getCounter(compactionCompletedCounter, compactionCompletedCounterName);
+      compactionCompletedCounter.inc();
+    }
+  }
+
   private Counter getCounter(Counter counter, String name) {
     if (counter == null) {
-      return Metrics.getInstance().getRegistry().counter(name);
+      return metrics.getRegistry().counter(name);
     }
     return counter;
   }

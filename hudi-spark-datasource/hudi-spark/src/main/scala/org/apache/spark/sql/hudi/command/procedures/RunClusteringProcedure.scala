@@ -48,17 +48,17 @@ class RunClusteringProcedure extends BaseProcedure
    * [ORDER BY (col_name1 [, ...] ) ]
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "predicate", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "order", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "predicate", DataTypes.StringType),
+    ProcedureParameter.optional(3, "order", DataTypes.StringType),
     ProcedureParameter.optional(4, "show_involved_partition", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(5, "op", DataTypes.StringType, None),
-    ProcedureParameter.optional(6, "order_strategy", DataTypes.StringType, None),
+    ProcedureParameter.optional(5, "op", DataTypes.StringType),
+    ProcedureParameter.optional(6, "order_strategy", DataTypes.StringType),
     // params => key=value, key2=value2
-    ProcedureParameter.optional(7, "options", DataTypes.StringType, None),
-    ProcedureParameter.optional(8, "instants", DataTypes.StringType, None),
-    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType, None)
+    ProcedureParameter.optional(7, "options", DataTypes.StringType),
+    ProcedureParameter.optional(8, "instants", DataTypes.StringType),
+    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -88,29 +88,34 @@ class RunClusteringProcedure extends BaseProcedure
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    var conf: Map[String, String] = Map.empty
+    var confs: Map[String, String] = Map.empty
 
     val selectedPartitions: String = (parts, predicate) match {
       case (_, Some(p)) => prunePartition(metaClient, p.asInstanceOf[String])
       case (Some(o), _) => o.asInstanceOf[String]
-      case _ => ""
+      case _ => null
     }
 
-    if (selectedPartitions.nonEmpty) {
-      conf = conf ++ Map(
+    if (selectedPartitions == null) {
+      logInfo("No partition selected")
+    } else if (selectedPartitions.isEmpty) {
+      logInfo("No partition matched")
+      // scalastyle:off return
+      return Seq()
+      // scalastyle:on return
+    } else {
+      confs = confs ++ Map(
         HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
         HoodieClusteringConfig.PARTITION_SELECTED.key() -> selectedPartitions
       )
       logInfo(s"Partition selected: $selectedPartitions")
-    } else {
-      logInfo("No partition selected")
     }
 
     // Construct sort column info
     orderColumns match {
       case Some(o) =>
         validateOrderColumns(o.asInstanceOf[String], metaClient)
-        conf = conf ++ Map(
+        confs = confs ++ Map(
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
         logInfo(s"Order columns: $o")
@@ -121,7 +126,7 @@ class RunClusteringProcedure extends BaseProcedure
     orderStrategy match {
       case Some(o) =>
         val strategy = LayoutOptimizationStrategy.fromValue(o.asInstanceOf[String])
-        conf = conf ++ Map(
+        confs = confs ++ Map(
           HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.getValue
         )
       case _ =>
@@ -130,11 +135,7 @@ class RunClusteringProcedure extends BaseProcedure
 
     options match {
       case Some(p) =>
-        val paramPairs = StringUtils.split(p.asInstanceOf[String], ",").asScala
-        paramPairs.foreach{ pair =>
-          val values = StringUtils.split(pair, "=")
-          conf = conf ++ Map(values.get(0) -> values.get(1))
-        }
+        confs = confs ++ HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
       case _ =>
         logInfo("No options")
     }
@@ -171,7 +172,8 @@ class RunClusteringProcedure extends BaseProcedure
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
+        tableName.asInstanceOf[Option[String]])
       if (operator.isSchedule) {
         val instantTime = HoodieActiveTimeline.createNewInstantTime
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {

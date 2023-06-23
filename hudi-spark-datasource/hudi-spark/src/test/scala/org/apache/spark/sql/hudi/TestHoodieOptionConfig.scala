@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroRecordMerger, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -108,16 +107,6 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
         StructField("timestamp", TimestampType, true),
         StructField("dt", StringType, true))
     )
-
-    // miss primaryKey parameter
-    val sqlOptions1 = baseSqlOptions ++ Map(
-      "type" -> "mor"
-    )
-
-    val e1 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions1)
-    }
-    assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
 
     // primary field not found
     val sqlOptions2 = baseSqlOptions ++ Map(

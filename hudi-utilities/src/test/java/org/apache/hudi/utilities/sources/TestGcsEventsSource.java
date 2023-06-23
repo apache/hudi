@@ -40,8 +40,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,8 +67,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
-    props.put(GOOGLE_PROJECT_ID, "dummy-project");
-    props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
+    props.put(GOOGLE_PROJECT_ID.key(), "dummy-project");
+    props.put(PUBSUB_SUBSCRIPTION_ID.key(), "dummy-subscription");
   }
 
   @Test
@@ -163,7 +163,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void shouldGcsEventsSourceDoesNotDedupeInterally() {
+  public void shouldGcsEventsSourceDoesNotDedupeInternally() {
     ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
     ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
 

@@ -31,7 +31,7 @@ import scala.collection.JavaConverters._
 
 class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "partition_path", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "file_ids", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
@@ -75,8 +75,9 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     if (fileIds.nonEmpty) {
       val fileGroupIds = fileIds.split(",").toList.map((fileId: String) => new HoodieFileGroupId(partitionPath, fileId)).asJava
       mappingList.addAll(indexReader.getSourceFileMappingForFileIds(fileGroupIds).values)
-    } else if (partitionPath.nonEmpty) mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
-    else {
+    } else if (partitionPath.nonEmpty) {
+      mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
+    } else {
       for (part <- indexedPartitions) {
         mappingList.addAll(indexReader.getSourceFileMappingForPartition(part))
       }
@@ -111,6 +112,3 @@ object ShowBootstrapMappingProcedure {
     override def get() = new ShowBootstrapMappingProcedure
   }
 }
-
-
-

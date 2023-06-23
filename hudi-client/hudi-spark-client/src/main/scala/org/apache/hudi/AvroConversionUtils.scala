@@ -22,8 +22,10 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
@@ -137,18 +139,26 @@ object AvroConversionUtils {
   def convertStructTypeToAvroSchema(structType: DataType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    val schemaConverters = sparkAdapter.getAvroSchemaConverters
-    val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
-    getAvroSchemaWithDefaults(avroSchema, structType)
+    try {
+      val schemaConverters = sparkAdapter.getAvroSchemaConverters
+      val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+      getAvroSchemaWithDefaults(avroSchema, structType)
+    } catch {
+      case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
+    }
   }
 
   /**
    * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
    */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    val schemaConverters = sparkAdapter.getAvroSchemaConverters
-    schemaConverters.toSqlType(avroSchema) match {
-      case (dataType, _) => dataType.asInstanceOf[StructType]
+    try {
+      val schemaConverters = sparkAdapter.getAvroSchemaConverters
+      schemaConverters.toSqlType(avroSchema) match {
+        case (dataType, _) => dataType.asInstanceOf[StructType]
+      }
+    } catch {
+      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
     }
   }
 

@@ -22,7 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -49,7 +50,7 @@ public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
   private static KafkaTestUtils testUtils;
-  private HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
+  private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   @BeforeAll
   public static void setup() throws Exception {
@@ -150,7 +151,7 @@ public class TestKafkaOffsetGen {
   public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
-    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", 1000), 2));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     String lastCheckpointString = testTopicName + ",0:250,1:249";
     kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
@@ -168,6 +169,76 @@ public class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[0].untilOffset());
     assertEquals(500, nextOffsetRanges[1].fromOffset());
     assertEquals(500, nextOffsetRanges[1].untilOffset());
+  }
+
+  @Test
+  public void testGetNextOffsetRangesWithMinPartitionsForSinglePartition() {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.createTopic(testTopicName, 1);
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    TypedProperties props = getConsumerConfigs("earliest", "string");
+
+    // default no minPartition set
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(300, nextOffsetRanges[0].untilOffset());
+
+    props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 2L);
+    kafkaOffsetGen = new KafkaOffsetGen(props);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(150, nextOffsetRanges[0].untilOffset());
+    assertEquals(150, nextOffsetRanges[1].fromOffset());
+    assertEquals(300, nextOffsetRanges[1].untilOffset());
+  }
+
+  @Test
+  public void testGetNextOffsetRangesWithMinPartitionsForMultiPartition() {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.createTopic(testTopicName, 2);
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    TypedProperties props = getConsumerConfigs("earliest", "string");
+
+    // default no minPartition or minPartition less than TopicPartitions
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(0, nextOffsetRanges[0].partition());
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(150, nextOffsetRanges[0].untilOffset());
+    assertEquals(1, nextOffsetRanges[1].partition());
+    assertEquals(0, nextOffsetRanges[1].fromOffset());
+    assertEquals(150, nextOffsetRanges[1].untilOffset());
+
+    props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 1L);
+    kafkaOffsetGen = new KafkaOffsetGen(props);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(0, nextOffsetRanges[0].partition());
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(150, nextOffsetRanges[0].untilOffset());
+    assertEquals(1, nextOffsetRanges[1].partition());
+    assertEquals(0, nextOffsetRanges[1].fromOffset());
+    assertEquals(150, nextOffsetRanges[1].untilOffset());
+
+    // minPartition more than TopicPartitions
+    props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 4L);
+    kafkaOffsetGen = new KafkaOffsetGen(props);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(4, nextOffsetRanges.length);
+    assertEquals(0, nextOffsetRanges[0].partition());
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(75, nextOffsetRanges[0].untilOffset());
+    assertEquals(0, nextOffsetRanges[1].partition());
+    assertEquals(75, nextOffsetRanges[1].fromOffset());
+    assertEquals(150, nextOffsetRanges[1].untilOffset());
+    assertEquals(1, nextOffsetRanges[2].partition());
+    assertEquals(0, nextOffsetRanges[2].fromOffset());
+    assertEquals(75, nextOffsetRanges[2].untilOffset());
+    assertEquals(1, nextOffsetRanges[3].partition());
+    assertEquals(75, nextOffsetRanges[3].fromOffset());
+    assertEquals(150, nextOffsetRanges[3].untilOffset());
   }
 
   @Test

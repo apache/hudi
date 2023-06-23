@@ -31,14 +31,13 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
-import io.javalin.core.JavalinConfig;
-import io.javalin.jetty.JettyServer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -48,9 +47,9 @@ import java.io.Serializable;
  */
 public class TimelineService {
 
-  private static final Logger LOG = LogManager.getLogger(TimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
-  private static final int DEFAULT_NUM_THREADS = -1;
+  private static final int DEFAULT_NUM_THREADS = 250;
 
   private int serverPort;
   private Config timelineServerConf;
@@ -103,10 +102,10 @@ public class TimelineService {
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
-    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
+    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests. The default number is 250")
     public int numThreads = DEFAULT_NUM_THREADS;
 
-    @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
+    @Parameter(names = {"--async"}, description = "Use asynchronous request processing")
     public boolean async = false;
 
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")
@@ -342,8 +341,13 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new JettyServer(new JavalinConfig()).server() :
-            new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : DEFAULT_NUM_THREADS;
+    QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
+    pool.setDaemon(true);
+    final Server server = new Server(pool);
+    ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);
+    server.addBean(scheduler);
+
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
         c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);

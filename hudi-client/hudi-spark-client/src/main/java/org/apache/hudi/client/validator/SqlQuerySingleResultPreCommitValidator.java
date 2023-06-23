@@ -26,10 +26,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -40,7 +40,7 @@ import java.util.List;
  * Example configuration: "query1#expectedResult1;query2#expectedResult2;"
  */
 public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
-  private static final Logger LOG = LogManager.getLogger(SqlQueryInequalityPreCommitValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQuerySingleResultPreCommitValidator.class);
 
   public SqlQuerySingleResultPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -57,20 +57,19 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     if (queryWithExpectedResult.length != 2) {
       throw new HoodieValidationException("Invalid query format " + query);
     }
-    
+
     String queryToRun = queryWithExpectedResult[0];
     String expectedResult = queryWithExpectedResult[1];
-    LOG.info("Running query on new state: " + queryToRun);
-    String queryWithNewSnapshot = queryToRun.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, newTableSnapshot);
-    List<Row> newRows  = sqlContext.sql(queryWithNewSnapshot).collectAsList();
+    List<Row> newRows = executeSqlQuery(
+        sqlContext, queryToRun, newTableSnapshot, "new state").collectAsList();
     if (newRows.size() != 1 && newRows.get(0).size() != 1) {
       throw new HoodieValidationException("Invalid query result. expect single value for '" + query + "'");
     }
     Object result = newRows.get(0).apply(0);
     if (result == null || !expectedResult.equals(result.toString())) {
-      LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + "Query: " + query);
+      LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
       throw new HoodieValidationException("Query validation failed for '" + query
-          + "'. Expected " + expectedResult + " rows, Found " + result);
+          + "'. Expected " + expectedResult + " row(s), Found " + result);
     } else {
       LOG.info("Query validation successful. Expected: " + expectedResult + " got " + result);
     }

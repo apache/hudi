@@ -20,8 +20,8 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.FileIOUtils;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +39,7 @@ import java.util.stream.Stream;
  */
 public abstract class DiskMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
 
-  private static final Logger LOG = LogManager.getLogger(DiskMap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DiskMap.class);
   private static final String SUBFOLDER_PREFIX = "hudi";
   private final File diskMapPathFile;
   private transient Thread shutdownThread = null;

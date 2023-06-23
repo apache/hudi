@@ -22,12 +22,14 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.apache.hudi.metrics.Metrics.registerGauge;
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -39,35 +41,37 @@ public class TestHoodieJmxMetrics {
 
   @Mock
   HoodieWriteConfig config;
+  HoodieMetrics hoodieMetrics;
+  Metrics metrics;
 
-  @AfterEach
-  void shutdownMetrics() {
-    Metrics.shutdown();
-  }
-
-  @Test
-  public void testRegisterGauge() {
+  @BeforeEach
+  void setup() {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getTableName()).thenReturn("foo");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
     when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
-    new HoodieMetrics(config);
-    registerGauge("jmx_metric1", 123L);
-    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
+    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(config);
+    metrics = hoodieMetrics.getMetrics();
+  }
+
+  @AfterEach
+  void shutdownMetrics() {
+    metrics.shutdown();
+  }
+
+  @Test
+  public void testRegisterGauge() {
+    metrics.registerGauge("jmx_metric1", 123L);
+    assertEquals("123", metrics.getRegistry().getGauges()
         .get("jmx_metric1").getValue().toString());
   }
 
   @Test
   public void testRegisterGaugeByRangerPort() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("foo");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
-    when(config.getJmxHost()).thenReturn("localhost");
-    when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
-    new HoodieMetrics(config);
-    registerGauge("jmx_metric2", 123L);
-    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
+    metrics.registerGauge("jmx_metric2", 123L);
+    assertEquals("123", metrics.getRegistry().getGauges()
         .get("jmx_metric2").getValue().toString());
   }
 }

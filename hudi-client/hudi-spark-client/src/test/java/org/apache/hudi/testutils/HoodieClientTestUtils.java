@@ -52,13 +52,13 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -66,6 +66,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -76,7 +77,7 @@ import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
  */
 public class HoodieClientTestUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
@@ -325,6 +326,20 @@ public class HoodieClientTestUtils {
     } else {
       return Option.empty();
     }
+  }
+
+  public static Properties getPropertiesForKeyGen() {
+    return getPropertiesForKeyGen(false);
+  }
+
+  public static Properties getPropertiesForKeyGen(boolean populateMetaFields) {
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    return properties;
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

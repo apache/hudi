@@ -41,8 +41,9 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,7 +63,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
 public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
-  private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBloomIndex.class);
 
   private final BaseHoodieBloomIndexHelper bloomIndexHelper;
 
@@ -91,7 +92,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
-      keyFilenamePairs.persist("MEMORY_AND_DISK_SER");
+      keyFilenamePairs.persist(new HoodieConfig(config.getProps())
+          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
     if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
@@ -99,7 +101,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
-    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
+    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records, hoodieTable);
 
     if (config.getBloomIndexUseCaching()) {
       records.unpersist();
@@ -304,7 +306,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    */
   protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePair,
-      HoodieData<HoodieRecord<R>> records) {
+      HoodieData<HoodieRecord<R>> records,
+      HoodieTable hoodieTable) {
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),

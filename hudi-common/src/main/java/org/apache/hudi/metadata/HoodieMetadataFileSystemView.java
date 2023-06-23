@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -54,8 +53,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig,
-        metaClient.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true));
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(), true));
   }
 
   /**
@@ -91,14 +89,26 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   @Override
   public void reset() {
-    super.reset();
-    tableMetadata.reset();
+    try {
+      writeLock.lock();
+      clear();
+      // Initialize with new Hoodie timeline.
+      init(metaClient, getTimeline());
+      tableMetadata.reset();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
   public void sync() {
-    super.sync();
-    tableMetadata.reset();
+    try {
+      writeLock.lock();
+      maySyncIncrementally();
+      tableMetadata.reset();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override

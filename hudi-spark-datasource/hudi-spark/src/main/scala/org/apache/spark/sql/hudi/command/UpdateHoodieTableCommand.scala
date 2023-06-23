@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.DATASOURCE_WRITE_PREPPED_KEY
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
@@ -43,8 +44,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    val filteredOutput = removeMetaFields(ut.table.output)
-    val targetExprs = filteredOutput.map { targetAttr =>
+    val targetExprs = ut.table.output.map { targetAttr =>
       // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
       //       assigned attributes to the ones of the target table. Ones not being assigned
       //       will simply be carried over (from the old record)
@@ -56,7 +56,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val condition = ut.condition.getOrElse(TrueLiteral)
     val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
 
-    val config = buildHoodieConfig(catalogTable)
+    // Set config to show that this is a prepped write.
+    val config = buildHoodieConfig(catalogTable) + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
     df.write.format("hudi")
