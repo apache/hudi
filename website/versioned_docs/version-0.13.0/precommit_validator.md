@@ -20,7 +20,7 @@ Today you can use any of these validators and even have the flexibility to exten
 ## SQL Query Single Result
 [org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java)
 
-The SQL Query Single Result validator can be used to validate that a query on the table results in a specific value. This validator allows you to run a SQL command and abort the commit if it does not match the expected output.
+The SQL Query Single Result validator can be used to validate that a query on the table results in a specific value. This validator allows you to run a SQL query and abort the commit if it does not match the expected output.
 
 Multiple queries can be separated by `;` delimiter. Include the expected result as part of the query separated by `#`.
 
@@ -28,14 +28,14 @@ Syntax: `query1#result1;query2#result2`
 
 Example:
 ```scala
-// In this example, we set up a validator that expects exactly 0 rows
+// In this example, we set up a validator that expects there is no row with `col` column as `null`
 
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
   option(TABLE_NAME, tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator").
-  option("hoodie.precommit.validators.single.value.sql.queries", "select count(*) from <TABLE_NAME> where col=null#0").
+  option("hoodie.precommit.validators.single.value.sql.queries", "select count(*) from <TABLE_NAME> where col is null#0").
   save(basePath)
 ```
 
@@ -58,14 +58,14 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 df.write.format("hudi").mode(Overwrite).
   option(TABLE_NAME, tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator").
-  option("hoodie.precommit.validators.equality.sql.queries", "select count(*) from <TABLE_NAME> where col=null").
+  option("hoodie.precommit.validators.equality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)
 ```
 
 ## SQL Query Inequality
 [org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java)
 
-The SQL Query Inquality validator runs a query before ingesting the data, then runs the same query after ingesting the data and confirms that both outputs DO NOT match. This allows you to validate for differences of rows before and after the commit.
+The SQL Query Inquality validator runs a query before ingesting the data, then runs the same query after ingesting the data and confirms that both outputs DO NOT match. This allows you to confirm changes in the rows before and after the commit.
 
 Example:
 ```scala
@@ -76,7 +76,7 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 df.write.format("hudi").mode(Overwrite).
   option(TABLE_NAME, tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator").
-  option("hoodie.precommit.validators.inequality.sql.queries", "select count(*) from <TABLE_NAME> where col=null").
+  option("hoodie.precommit.validators.inequality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)
 ```
 
