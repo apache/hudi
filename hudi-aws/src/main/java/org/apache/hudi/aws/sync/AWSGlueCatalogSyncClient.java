@@ -57,6 +57,8 @@ import com.amazonaws.services.glue.model.StorageDescriptor;
 import com.amazonaws.services.glue.model.Table;
 import com.amazonaws.services.glue.model.TableInput;
 import com.amazonaws.services.glue.model.UpdateTableRequest;
+
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +96,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private final AWSGlueAsync awsGlue;
-  private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
+  private static final int MILLISECOND_TO_SECOND_FACTOR = 1000;
   /**
    * athena v2/v3 table property
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
@@ -116,19 +118,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     try {
-      List<Partition> partitions = new ArrayList<>();
-      String nextToken = null;
-      do {
-        GetPartitionsResult result = awsGlue.getPartitions(new GetPartitionsRequest()
-            .withDatabaseName(databaseName)
-            .withTableName(tableName)
-            .withNextToken(nextToken));
-        partitions.addAll(result.getPartitions().stream()
-            .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
-            .collect(Collectors.toList()));
-        nextToken = result.getNextToken();
-      } while (nextToken != null);
-      return partitions;
+      return getAllGluePartitions(awsGlue, databaseName, tableName).stream()
+          .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
+          .collect(Collectors.toList());
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }
@@ -195,20 +187,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         return new BatchUpdatePartitionRequestEntry().withPartitionInput(partitionInput).withPartitionValueList(partitionValues);
       }).collect(Collectors.toList());
 
-      List<Future<BatchUpdatePartitionResult>> futures = new ArrayList<>();
-      for (List<BatchUpdatePartitionRequestEntry> batch : CollectionUtils.batches(updatePartitionEntries, MAX_PARTITIONS_PER_REQUEST)) {
-        BatchUpdatePartitionRequest request = new BatchUpdatePartitionRequest();
-        request.withDatabaseName(databaseName).withTableName(tableName).withEntries(batch);
-        futures.add(awsGlue.batchUpdatePartitionAsync(request));
-      }
-
-      for (Future<BatchUpdatePartitionResult> future : futures) {
-        BatchUpdatePartitionResult result = future.get();
-        if (CollectionUtils.nonEmpty(result.getErrors())) {
-          throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
-                  + " with error(s): " + result.getErrors());
-        }
-      }
+      batchUpdateGluePartitions(awsGlue, databaseName, tableName, updatePartitionEntries);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName), e);
     }
@@ -250,6 +229,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
+  /**
+   * Update the table properties to the table.
+   */
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     try {
@@ -330,7 +312,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableSchema(String tableName, MessageType newSchema) {
-    // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
     boolean cascade = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0;
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -355,6 +336,43 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .withTableInput(updatedTableInput);
 
       awsGlue.updateTable(request);
+
+      if (!table.getPartitionKeys().isEmpty() && cascade) {
+        LOG.info("Cascading column changes to partitions");
+        List<BatchUpdatePartitionRequestEntry> updatePartitionRequestEntries =
+            getAllGluePartitions(awsGlue, databaseName, tableName)
+                .parallelStream().unordered().distinct()
+                .filter(partition -> partition != null)
+                .map(partition -> {
+                  // update DDL time
+                  if (partition.getParameters() != null) {
+                    String previousTime = partition.getParameters().get(hive_metastoreConstants.DDL_TIME);
+                    if (previousTime == null || Integer.parseInt(previousTime) == 0) {
+                      partition.getParameters()
+                          .put(hive_metastoreConstants.DDL_TIME, Long.toString(now.getTime() / MILLISECOND_TO_SECOND_FACTOR));
+                    }
+                  }
+
+                  // set new columns
+                  partition.getStorageDescriptor().setColumns(newColumns);
+
+                  // transform to partition input
+                  PartitionInput partitionInput = new PartitionInput();
+                  partitionInput.setLastAccessTime(partition.getLastAccessTime());
+                  partitionInput.setParameters(partition.getParameters());
+                  partitionInput.setStorageDescriptor(partition.getStorageDescriptor());
+                  partitionInput.setValues(partition.getValues());
+
+                  // create entry
+                  return new BatchUpdatePartitionRequestEntry()
+                      .withPartitionInput(partitionInput)
+                      .withPartitionValueList(partition.getValues());
+                })
+                .collect(Collectors.toList());
+
+        // update partitions
+        batchUpdateGluePartitions(awsGlue, databaseName, tableName, updatePartitionRequestEntries);
+      }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }
@@ -449,7 +467,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       return Objects.nonNull(awsGlue.getTable(request).getTable());
     } catch (EntityNotFoundException e) {
-      LOG.info("Table not found: " + tableId(databaseName, tableName), e);
+      LOG.info("Table not found: " + tableId(databaseName, tableName));
       return false;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
@@ -463,7 +481,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       return Objects.nonNull(awsGlue.getDatabase(request).getDatabase());
     } catch (EntityNotFoundException e) {
-      LOG.info("Database not found: " + databaseName, e);
+      LOG.info("Database not found: " + databaseName);
       return false;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);
@@ -566,6 +584,52 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       throw new HoodieGlueSyncException("Table not found: " + tableId(databaseName, tableName), e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  // TODO: make this faster with Glue Segment API
+  private static List<com.amazonaws.services.glue.model.Partition> getAllGluePartitions(
+      AWSGlue awsGlue,
+      String databaseName,
+      String tableName) {
+    try {
+      List<com.amazonaws.services.glue.model.Partition> partitions = new ArrayList<>();
+      String nextToken = null;
+      do {
+        GetPartitionsResult result = awsGlue.getPartitions(new GetPartitionsRequest()
+            .withDatabaseName(databaseName)
+            .withTableName(tableName)
+            .withNextToken(nextToken));
+        partitions.addAll(result.getPartitions());
+        nextToken = result.getNextToken();
+      } while (nextToken != null);
+      return partitions;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get all glue partitions for table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private static void batchUpdateGluePartitions(AWSGlueAsync awsGlue,
+                                                String databaseName,
+                                                String tableName,
+                                                List<BatchUpdatePartitionRequestEntry> updatePartitionRequestEntries) {
+    try {
+      List<Future<BatchUpdatePartitionResult>> futures = new ArrayList<>();
+      for (List<BatchUpdatePartitionRequestEntry> batch : CollectionUtils.batches(updatePartitionRequestEntries, MAX_PARTITIONS_PER_REQUEST)) {
+        BatchUpdatePartitionRequest request = new BatchUpdatePartitionRequest();
+        request.withDatabaseName(databaseName).withTableName(tableName).withEntries(batch);
+        futures.add(awsGlue.batchUpdatePartitionAsync(request));
+      }
+
+      for (Future<BatchUpdatePartitionResult> future : futures) {
+        BatchUpdatePartitionResult result = future.get();
+        if (CollectionUtils.nonEmpty(result.getErrors())) {
+          throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + result.getErrors());
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("Fail to update partitions to " + tableId(databaseName, tableName), e);
     }
   }
 
