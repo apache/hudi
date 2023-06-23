@@ -28,7 +28,7 @@ Syntax: `query1#result1;query2#result2`
 
 Example:
 ```scala
-// In this example, we set up a validator that expects exactly 0 rows
+// In this example, we set up a validator that expects there is no row with `col` column as `null`
 
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
