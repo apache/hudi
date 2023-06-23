@@ -278,7 +278,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
     testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, Arrays.asList(p0, p1),
         c1PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, 2,true);
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, 2, true);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
