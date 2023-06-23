@@ -194,7 +194,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             val updatedTargetTable = targetTable match {
               // In the receiving side of the MIT, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
+              case ResolvesToHudiTable(_) => Some(targetTable)
               case _ => None
             }
 
@@ -380,7 +380,7 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
       case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-        MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
+        MergeIntoHoodieTableCommand2(mit.asInstanceOf[MergeIntoTable])
 
       // Convert to UpdateHoodieTableCommand
       case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>

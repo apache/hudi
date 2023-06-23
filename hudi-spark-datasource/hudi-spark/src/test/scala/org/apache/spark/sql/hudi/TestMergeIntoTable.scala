@@ -23,6 +23,66 @@ import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
+  test("Test Merge into multiple cond") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      val tableName2 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName2 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName2'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |    (1, 'a1', 10, 100),
+           |    (2, 'a1', 20, 200),
+           |    (3, 'a3', 20, 100)
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |insert into $tableName2 values
+           |    (1, 'u1', 10, 100),
+           |    (3, 'u3', 30, 300),
+           |    (4, 'u4', 40, 400);
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into $tableName as oldData
+           |using $tableName2
+           |on oldData.price = $tableName2.price and oldData.ts <= $tableName2.ts
+           |when matched then update set oldData.name = $tableName2.name
+           |
+           |""".stripMargin)
+      spark.sql(s"select * from $tableName").show(false)
+    }
+  }
+
   test("Test MergeInto Basic") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
