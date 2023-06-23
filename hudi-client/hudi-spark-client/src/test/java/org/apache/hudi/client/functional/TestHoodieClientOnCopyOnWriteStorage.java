@@ -54,6 +54,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -515,7 +516,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime).collect();
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
           .collect(Collectors.toList()));
     }
   }
@@ -568,7 +569,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime).collect();
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
           .collect(Collectors.toList()));
     }
   }
@@ -576,18 +577,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Assert that there is no duplicate key at the partition level.
    *
-   * @param records List of Hoodie records
+   * @param recordDelegates List of Hoodie record delegates
    */
-  void assertNodupesInPartition(List<HoodieRecord> records) {
+  void assertNodupesInPartition(List<HoodieRecordDelegate> recordDelegates) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
-    for (HoodieRecord r : records) {
-      String key = r.getRecordKey();
+    for (HoodieRecordDelegate r : recordDelegates) {
+      String recordKey = r.getRecordKey();
       String partitionPath = r.getPartitionPath();
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }
-      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
-      partitionToKeys.get(partitionPath).add(key);
+      assertFalse(partitionToKeys.get(partitionPath).contains(recordKey), "key " + recordKey + " is duplicate within partition " + partitionPath);
+      partitionToKeys.get(partitionPath).add(recordKey);
     }
   }
 
