@@ -126,7 +126,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -199,7 +198,12 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     }
 
     // TODO eval whether seeking scanner would be faster than pread
-    HFileScanner scanner = getHFileScanner(reader, false);
+    HFileScanner scanner = null;
+    try {
+      scanner = getHFileScanner(reader, false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Instantiation HfileScanner failed for " + reader.getHFileInfo().toString());
+    }
     return new RecordIterator(scanner, getSchema(), readerSchema);
   }
 
@@ -209,7 +213,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     return new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
   }
 
@@ -219,7 +222,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    scanner.seekTo(); // places the cursor at the beginning of the first data block.
     return new RecordByKeyPrefixIterator(scanner, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
@@ -256,9 +258,12 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     //
     // For the HFile containing list of cells c[0], c[1], ..., c[N], `seekTo(cell)` would return
     // following:
-    //    a) -1, if cell < c[0], no position;
+    //    a) -1, if cell < c[0], no position; but w/ prefix search, if the key to be searched is less than first entry, the cursor will be placed at the beginning.
+    //        scanner.getCell() could return the next key which could match the key we are interested in.
     //    b) 0, such that c[i] = cell and scanner is left in position i;
-    //    c) and 1, such that c[i] < cell, and scanner is left in position i.
+    //    c) and 1, such that c[i] < cell, and scanner is left in position i. If key is somewhere in the middle, and if there is no exact match. So, scanner.next()
+    //        is expected to return the next entry which could potentially match the prefix we are looking for. If the key being looked up is > last entry in the file,
+    //        this could place the cursor in the end. hence we need to check for scanner.next() to ensure there are entries to read or if we reached EOF.
     //
     // Consider entries w/ the following keys in HFile: [key01, key02, key03, key04,..., key20];
     // In case looked up key-prefix is
@@ -266,9 +271,10 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     //    `getCell()` will return "key01" entry
     //    - "key03", `reseekTo()` will return 0 (exact match) and place the cursor just before "key03",
     //    `getCell()` will return "key03" entry
-    //    - "key1", `reseekTo()` will return 1 (first not lower than) and leave the cursor wherever it was just before calling
-    //    reseekTo();
+    //    - "key1", `reseekTo()` will return 1 (first not lower than) and leave the cursor at key10 (assuming there is no exact match i.e. key1)
     //
+    // Do remember that reseek will not do any rewind. So, after searching for key05(cursor is placed at key05), if you search for key01(less than current cursor position),
+    // it may not return any results.
     int val = scanner.reseekTo(kv);
     if (val == 1) {
       // Try moving to next entry, matching the prefix key; if we're at the EOF,
@@ -276,10 +282,6 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
       if (!scanner.next()) {
         return Collections.emptyIterator();
       }
-    } else if (val == -1) {
-      // Whenever val == -1 HFile reader will place the pointer right before the first record. We have to advance it to the first record
-      // of the file to validate whether it matches our search criteria
-      scanner.seekTo();
     }
 
     class KeyPrefixIterator implements Iterator<IndexedRecord> {
@@ -328,6 +330,20 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
+    //       essentially employed
+    //
+    // For the HFile containing list of cells c[0], c[1], ..., c[N], `seekTo(cell)` would return
+    // following:
+    //    a) -1, if cell < c[0], no position; if the key to be searched is less than first entry, the cursor will be placed at the beginning.
+    //    b) 0, such that c[i] = cell and scanner is left in position i;
+    //    c) and 1, such that c[i] < cell, and scanner is left in position i.
+    // In summary, with exact match, we are interested in return value of 0. in all other cases, key is not found.
+    // Also, do remeber we are using reseek(), which means, the cursor will not rewind after searching for a key.
+    // Lets say the file contains key01, key02, .., key20.
+    // After searching for key09, if we search for key05, it may not return the matching entry since just after reseeking to key09, the cursor is at key09 and
+    // further reseek calls may not look back in positions.
+
     if (scanner.reseekTo(kv) != 0) {
       // key is not found.
       return Option.empty();
@@ -421,10 +437,12 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) throws IOException {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
-    return reader.getScanner(cacheBlocks, true);
+    HFileScanner scanner = reader.getScanner(cacheBlocks, true);
+    scanner.seekTo(); // places the cursor at the beginning of the first data block.
+    return scanner;
   }
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
