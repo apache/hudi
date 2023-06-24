@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -262,15 +263,15 @@ public class HoodieIndexUtils {
   /**
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
-  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdates(
-      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> taggedHoodieRecords, HoodieWriteConfig config, HoodieTable hoodieTable) {
+  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
+      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     // completely new records
-    HoodieData<HoodieRecord<R>> newRecords = taggedHoodieRecords.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
-    // the records tagged to existing base files
-    HoodieData<HoodieRecord<R>> updatingRecords = taggedHoodieRecords.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
+    HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
+    // the records found in existing base files
+    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
-    HoodieData<HoodieRecordGlobalLocation> globalLocations = taggedHoodieRecords
+    HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
         .map(p -> p.getRight().get())
         .distinct(config.getGlobalIndexReconcileParallelism());
@@ -278,7 +279,7 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
 
     final HoodieRecordMerger recordMerger = config.getRecordMerger();
-    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = updatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
+    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
           HoodieRecord<R> incoming = entry.getLeft();
@@ -311,7 +312,51 @@ public class HoodieIndexUtils {
             return Arrays.asList(deleteRecord, getTaggedRecord(merged, Option.empty())).iterator();
           }
         });
-    return taggedUpdatingRecords.union(newRecords);
+    return taggedUpdatingRecords.union(taggedNewRecords);
+  }
+
+  public static <R> HoodieData<HoodieRecord<R>> tagGlobalLocationBackToRecords(
+      HoodieData<HoodieRecord<R>> incomingRecords,
+      HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
+      boolean mayContainDuplicateLookup,
+      HoodieWriteConfig config,
+      HoodieTable table) {
+    final boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath()
+        && table.isPartitioned();
+    final HoodieRecordMerger merger = config.getRecordMerger();
+
+    HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
+        incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
+
+    // Pair of incoming record and the global location if meant for merged lookup in later stage
+    HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
+        = keyAndIncomingRecords.leftOuterJoin(keyAndExistingLocations).values()
+        .map(v -> {
+          final HoodieRecord<R> incomingRecord = v.getLeft();
+          Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
+          if (currentLocOpt.isPresent()) {
+            HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
+            boolean shouldPerformMergedLookUp = mayContainDuplicateLookup
+                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath());
+            if (shouldUpdatePartitionPath && shouldPerformMergedLookUp) {
+              return Pair.of(incomingRecord, currentLocOpt);
+            } else {
+              // - When update partition path is set to false,
+              //   the incoming record will be tagged to the existing record's partition regardless of being equal or not.
+              // - When update partition path is set to true,
+              //   the incoming record will be tagged to the existing record's partition
+              //   when partition is not updated and the look-up won't have duplicates (e.g. COW, or using RLI).
+              return Pair.of((HoodieRecord<R>) getTaggedRecord(
+                      createNewHoodieRecord(incomingRecord, currentLoc, merger), Option.of(currentLoc)),
+                  Option.empty());
+            }
+          } else {
+            return Pair.of(getTaggedRecord(incomingRecord, Option.empty()), Option.empty());
+          }
+        });
+    return shouldUpdatePartitionPath
+        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table)
+        : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 
   public static HoodieRecord createNewHoodieRecord(HoodieRecord oldRecord, HoodieRecordGlobalLocation location, HoodieRecordMerger merger) {

@@ -50,7 +50,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 public class HoodieSimpleIndex
     extends HoodieIndex<Object, Object> {
 
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   public HoodieSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config);

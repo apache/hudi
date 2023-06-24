@@ -28,9 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,9 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.index.HoodieIndexUtils.createNewHoodieRecord;
-import static org.apache.hudi.index.HoodieIndexUtils.getTaggedRecord;
-import static org.apache.hudi.index.HoodieIndexUtils.mergeForPartitionUpdates;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.index.HoodieIndexUtils.tagGlobalLocationBackToRecords;
 
 /**
  * This filter will only work with hoodie table since it will only load partitions
@@ -103,40 +100,12 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
       HoodieData<HoodieRecord<R>> records,
       HoodieTable hoodieTable) {
-    final boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
-    final HoodieRecordMerger merger = config.getRecordMerger();
-
-    HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
-        records.mapToPair(record -> Pair.of(record.getRecordKey(), record));
-
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = keyLocationPairs
         .mapToPair(p -> Pair.of(p.getLeft().getRecordKey(),
             HoodieRecordGlobalLocation.fromLocal(p.getLeft().getPartitionPath(), p.getRight())));
 
-    // Pair of a tagged record and the global location if meant for merged-read lookup in later stage
-    HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> taggedRecordsAndLocationInfo
-        = keyAndIncomingRecords.leftOuterJoin(keyAndExistingLocations).values()
-        .map(v -> {
-          final HoodieRecord<R> incomingRecord = v.getLeft();
-          Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
-          if (currentLocOpt.isPresent()) {
-            if (shouldUpdatePartitionPath) {
-              return Pair.of(incomingRecord, currentLocOpt);
-            } else {
-              HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
-              // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
-              // When it differs, the record will still be updated at its old partition.
-              return Pair.of((HoodieRecord<R>) getTaggedRecord(
-                      createNewHoodieRecord(incomingRecord, currentLoc, merger), Option.of(currentLoc)),
-                  Option.empty());
-            }
-          } else {
-            return Pair.of(getTaggedRecord(incomingRecord, Option.empty()), Option.empty());
-          }
-        });
-    return shouldUpdatePartitionPath
-        ? mergeForPartitionUpdates(taggedRecordsAndLocationInfo, config, hoodieTable)
-        : taggedRecordsAndLocationInfo.map(Pair::getLeft);
+    return tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
+        hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ, config, hoodieTable);
   }
 
   @Override
