@@ -59,7 +59,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
       throw new IllegalArgumentException(
           "Avro does not support TIMESTAMP type with precision: "
               + precision
-              + ", it only supports precision less than 6.");
+              + ", it only support precisions <= 6.");
     }
     checkTypeName(PrimitiveType.PrimitiveTypeName.INT64);
   }

@@ -31,7 +31,7 @@ import scala.collection.JavaConversions._
 
 class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "dry_run", DataTypes.BooleanType, true)
   )
 

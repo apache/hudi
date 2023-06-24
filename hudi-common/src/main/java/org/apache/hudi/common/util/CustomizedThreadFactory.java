@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.util;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
+
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -33,6 +34,8 @@ public class CustomizedThreadFactory implements ThreadFactory {
   private final String threadName;
   private final boolean daemon;
 
+  private Runnable preExecuteRunnable;
+
   public CustomizedThreadFactory() {
     this("pool-" + POOL_NUM.getAndIncrement(), false);
   }
@@ -41,14 +44,31 @@ public class CustomizedThreadFactory implements ThreadFactory {
     this(threadNamePrefix, false);
   }
 
+  public CustomizedThreadFactory(String threadNamePrefix, Runnable preExecuteRunnable) {
+    this(threadNamePrefix, false, preExecuteRunnable);
+  }
+
+  public CustomizedThreadFactory(String threadNamePrefix, boolean daemon, Runnable preExecuteRunnable) {
+    this.threadName = threadNamePrefix + "-thread-";
+    this.daemon = daemon;
+    this.preExecuteRunnable = preExecuteRunnable;
+  }
+
   public CustomizedThreadFactory(String threadNamePrefix, boolean daemon) {
     this.threadName = threadNamePrefix + "-thread-";
     this.daemon = daemon;
   }
 
   @Override
-  public Thread newThread(@NotNull Runnable r) {
-    Thread runThread = new Thread(r);
+  public Thread newThread(@Nonnull Runnable r) {
+    Thread runThread = preExecuteRunnable == null ? new Thread(r) : new Thread(new Runnable() {
+
+      @Override
+      public void run() {
+        preExecuteRunnable.run();
+        r.run();
+      }
+    });
     runThread.setDaemon(daemon);
     runThread.setName(threadName + threadNum.getAndIncrement());
     return runThread;

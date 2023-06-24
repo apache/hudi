@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.apache.hadoop.fs.Path;
 
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +39,7 @@ import java.util.stream.Stream;
  *
  */
 public class HoodieTablePreCommitFileSystemView {
-  
+
   private Map<String, List<String>> partitionToReplaceFileIds;
   private List<HoodieWriteStat> filesWritten;
   private String preCommitInstantTime;

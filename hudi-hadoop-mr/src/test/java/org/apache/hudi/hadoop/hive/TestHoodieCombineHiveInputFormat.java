@@ -28,7 +28,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -73,28 +73,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
-  private JobConf jobConf;
-  private FileSystem fs;
-  private Configuration hadoopConf;
+  private static HdfsTestService hdfsTestService;
+  private static FileSystem fs;
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    MiniClusterUtil.setUp();
+    hdfsTestService = new HdfsTestService();
+    fs = hdfsTestService.start(true).getFileSystem();
   }
 
   @AfterAll
   public static void tearDownClass() {
-    MiniClusterUtil.shutdown();
+    hdfsTestService.stop();
   }
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
-    this.fs = MiniClusterUtil.fileSystem;
-    jobConf = new JobConf();
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
-    HoodieTestUtils.init(MiniClusterUtil.configuration, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
   }
 
   @Test
@@ -103,7 +99,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     Configuration conf = new Configuration();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 partitions, each partition holds one parquet file and 1000 records
@@ -133,7 +129,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
-    jobConf = new JobConf(conf);
+    JobConf jobConf = new JobConf(conf);
     // Add three partition path to InputPaths
     Path[] partitionDirArray = new Path[partitionDirs.size()];
     partitionDirs.stream().map(p -> new Path(p.getPath())).collect(Collectors.toList()).toArray(partitionDirArray);
@@ -186,7 +182,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     Configuration conf = new Configuration();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
@@ -219,7 +215,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
-    jobConf = new JobConf(conf);
+    JobConf jobConf = new JobConf(conf);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     jobConf.set(HAS_MAP_WORK, "true");
@@ -258,7 +254,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     Configuration conf = new Configuration();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
@@ -292,7 +288,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     mrwork.getMapWork().setPathToAliases(tableAlias);
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
-    jobConf = new JobConf(conf);
+    JobConf jobConf = new JobConf(conf);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     jobConf.set(HAS_MAP_WORK, "true");
@@ -328,7 +324,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     Configuration conf = new Configuration();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
@@ -364,7 +360,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     mrwork.getMapWork().setPathToPartitionInfo(pt);
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
-    jobConf = new JobConf(conf);
+    JobConf jobConf = new JobConf(conf);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     jobConf.set(HAS_MAP_WORK, "true");

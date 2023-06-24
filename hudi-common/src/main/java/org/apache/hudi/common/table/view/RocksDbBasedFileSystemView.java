@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -35,8 +33,11 @@ import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -60,7 +61,7 @@ import java.util.stream.Stream;
  */
 public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(RocksDbBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RocksDbBasedFileSystemView.class);
 
   private final FileSystemViewStorageConfig config;
 
@@ -136,6 +137,49 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean isPendingLogCompactionScheduledForFileId(HoodieFileGroupId fgId) {
+    return getPendingLogCompactionOperationWithInstant(fgId).isPresent();
+  }
+
+  @Override
+  protected void resetPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch -> {
+      operations.forEach(opPair ->
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opPair.getValue().getFileGroupId()), opPair)
+      );
+      LOG.info("Initializing pending Log compaction operations. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  protected void addPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          ValidationUtils.checkArgument(!isPendingLogCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
+              "Duplicate FileGroupId found in pending log compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
+        })
+    );
+  }
+
+  @Override
+  void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          ValidationUtils.checkArgument(
+              getPendingLogCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
+              "Trying to remove a FileGroupId which is not found in pending Log compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
+              schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()));
+        })
+    );
+  }
+
+  @Override
   protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
     return getPendingClusteringInstant(fgId).isPresent();
   }
@@ -171,7 +215,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         fileGroups.forEach(fgIdToClusterInstant -> {
           ValidationUtils.checkArgument(!isPendingClusteringScheduledForFileId(fgIdToClusterInstant.getLeft()),
-              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+              "Duplicate FileGroupId found in pending clustering operations. FgId :"
                   + fgIdToClusterInstant.getLeft());
 
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
@@ -186,7 +230,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         fileGroups.forEach(fgToPendingClusteringInstant -> {
           ValidationUtils.checkArgument(
               !isPendingClusteringScheduledForFileId(fgToPendingClusteringInstant.getLeft()),
-              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+              "Trying to remove a FileGroupId which is not found in pending clustering operations. FgId :"
                   + fgToPendingClusteringInstant.getLeft());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
               schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
@@ -207,6 +251,14 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     String lookupKey = schemaHelper.getKeyForPendingCompactionLookup(fgId);
     Pair<String, CompactionOperation> instantOperationPair =
         rocksDB.get(schemaHelper.getColFamilyForPendingCompaction(), lookupKey);
+    return Option.ofNullable(instantOperationPair);
+  }
+
+  @Override
+  protected Option<Pair<String, CompactionOperation>> getPendingLogCompactionOperationWithInstant(HoodieFileGroupId fgId) {
+    String lookupKey = schemaHelper.getKeyForPendingLogCompactionLookup(fgId);
+    Pair<String, CompactionOperation> instantOperationPair =
+        rocksDB.get(schemaHelper.getColFamilyForPendingLogCompaction(), lookupKey);
     return Option.ofNullable(instantOperationPair);
   }
 
@@ -320,6 +372,12 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   @Override
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
     return rocksDB.<Pair<String, CompactionOperation>>prefixSearch(schemaHelper.getColFamilyForPendingCompaction(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
+  Stream<Pair<String, CompactionOperation>> fetchPendingLogCompactionOperations() {
+    return rocksDB.<Pair<String, CompactionOperation>>prefixSearch(schemaHelper.getColFamilyForPendingLogCompaction(), "")
         .map(Pair::getValue);
   }
 

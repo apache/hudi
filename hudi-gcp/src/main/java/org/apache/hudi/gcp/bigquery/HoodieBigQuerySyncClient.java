@@ -19,6 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
@@ -31,18 +32,23 @@ import com.google.cloud.bigquery.ExternalTableDefinition;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.FormatOptions;
 import com.google.cloud.bigquery.HivePartitioningOptions;
+import com.google.cloud.bigquery.Job;
+import com.google.cloud.bigquery.JobId;
+import com.google.cloud.bigquery.JobInfo;
+import com.google.cloud.bigquery.QueryJobConfiguration;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
@@ -50,7 +56,7 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJ
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBigQuerySyncClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBigQuerySyncClient.class);
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
@@ -75,6 +81,44 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       } catch (BigQueryException e) {
         throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
       }
+    }
+  }
+
+  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix) {
+    try {
+      String withClauses = "";
+      String extraOptions = "";
+      if (!StringUtils.isNullOrEmpty(sourceUriPrefix)) {
+        withClauses = "WITH PARTITION COLUMNS";
+        extraOptions = String.format("hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
+      }
+      String query =
+          String.format(
+              "CREATE EXTERNAL TABLE `%s.%s` %s OPTIONS (%s "
+              + "uris=[\"%s\"], format=\"PARQUET\", file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")",
+              datasetName,
+              tableName,
+              withClauses,
+              extraOptions,
+              bqManifestFileUri);
+
+      QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(query)
+          .setUseLegacySql(false)
+          .build();
+      JobId jobId = JobId.of(UUID.randomUUID().toString());
+      Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
+
+      queryJob = queryJob.waitFor();
+
+      if (queryJob == null) {
+        LOG.error("Job for table creation no longer exists");
+      } else if (queryJob.getStatus().getError() != null) {
+        LOG.error("Job for table creation failed: " + queryJob.getStatus().getError().toString());
+      } else {
+        LOG.info("External table created using manifest file.");
+      }
+    } catch (InterruptedException | BigQueryException e) {
+      throw new HoodieBigQuerySyncException("Failed to create external table using manifest file. ", e);
     }
   }
 

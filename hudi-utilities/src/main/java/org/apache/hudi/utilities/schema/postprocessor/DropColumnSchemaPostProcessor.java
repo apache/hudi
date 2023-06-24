@@ -20,13 +20,14 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -45,24 +46,27 @@ import java.util.stream.Collectors;
  */
 public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
-  private static final Logger LOG = LogManager.getLogger(DropColumnSchemaPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DropColumnSchemaPostProcessor.class);
 
   public DropColumnSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
 
+  @Deprecated
   public static class Config {
+    @Deprecated
     public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
-        "hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns";
+        SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key();
   }
 
   @Override
   public Schema processSchema(Schema schema) {
 
-    String columnToDeleteStr = this.config.getString(Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP);
+    String columnToDeleteStr = this.config.getString(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema", Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP));
+      LOG.warn(String.format("Param %s is null or empty, return original schema",
+          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
     }
 
     // convert field to lowerCase for compare purpose

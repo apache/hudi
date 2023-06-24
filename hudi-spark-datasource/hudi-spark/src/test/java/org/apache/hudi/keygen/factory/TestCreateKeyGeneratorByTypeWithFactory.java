@@ -21,9 +21,11 @@ package org.apache.hudi.keygen.factory;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.GlobalDeleteKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -33,6 +35,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -97,5 +100,15 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
       default:
         throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + keyGenType);
     }
+  }
+
+  @Test
+  public void testAutoRecordKeyGenerator() throws IOException {
+    props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
+    props.put(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, "100");
+    props.put(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, 1);
+    KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    Assertions.assertEquals(AutoRecordGenWrapperKeyGenerator.class.getName(), keyGenerator.getClass().getName());
   }
 }

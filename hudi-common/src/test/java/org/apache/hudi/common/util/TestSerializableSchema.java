@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

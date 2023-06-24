@@ -21,14 +21,13 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
   // Compatible with the spark bucket name
@@ -39,18 +38,18 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return getBucketId(getHashKeys(hoodieKey, indexKeyFields), numBuckets);
   }
 
   public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return getBucketId(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields), numBuckets);
   }
 
   public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
     return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
 
-  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
+  public static int getBucketId(List<String> hashKeyFields, int numBuckets) {
     return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
@@ -69,11 +68,7 @@ public class BucketIdentifier implements Serializable {
   }
 
   private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
-    Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
-        .map(p -> p.split(":"))
-        .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-    return indexKeyFields.stream()
-        .map(recordKeyPairs::get).collect(Collectors.toList());
+    return Arrays.asList(KeyGenUtils.extractRecordKeysByFields(recordKey, indexKeyFields));
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {
@@ -81,7 +76,11 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int bucketIdFromFileId(String fileId) {
-    return Integer.parseInt(fileId.substring(0, 8));
+    return Integer.parseInt(bucketIdStrFromFileId(fileId));
+  }
+
+  public static String bucketIdStrFromFileId(String fileId) {
+    return fileId.substring(0, 8);
   }
 
   public static String bucketIdStr(int n) {
@@ -90,6 +89,10 @@ public class BucketIdentifier implements Serializable {
 
   public static String newBucketFileIdPrefix(int bucketId) {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
+  public static String newBucketFileIdPrefix(String fileId, int bucketId) {
+    return fileId.replaceFirst(".{8}", bucketIdStr(bucketId));
   }
 
   public static String newBucketFileIdPrefix(String bucketId) {

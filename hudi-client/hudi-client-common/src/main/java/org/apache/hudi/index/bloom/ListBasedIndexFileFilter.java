@@ -58,7 +58,7 @@ class ListBasedIndexFileFilter implements IndexFileFilter {
   }
 
   /**
-   * if we dont have key ranges, then also we need to compare against the file. no other choice if we do, then only
+   * if we don't have key ranges, then also we need to compare against the file. no other choice if we do, then only
    * compare the file if the record key falls in range.
    */
   protected boolean shouldCompareWithFile(BloomIndexFileInfo indexInfo, String recordKey) {

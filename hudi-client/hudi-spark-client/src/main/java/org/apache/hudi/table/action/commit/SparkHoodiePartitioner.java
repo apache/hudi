@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.spark.Partitioner;
@@ -26,7 +25,7 @@ import org.apache.spark.Partitioner;
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> extends Partitioner
+public abstract class SparkHoodiePartitioner<T> extends Partitioner
     implements org.apache.hudi.table.action.commit.Partitioner {
 
   /**

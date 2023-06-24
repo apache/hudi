@@ -23,6 +23,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.ServerSocket;
 
+/**
+ * Utils for networking setup in testing.
+ */
 public class NetworkTestUtils {
 
   public static int nextFreePort() {

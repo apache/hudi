@@ -19,24 +19,33 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
@@ -49,14 +58,15 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
  */
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(FileSystemBasedLockProvider.class);
-
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemBasedLockProvider.class);
   private static final String LOCK_FILE_NAME = "lock";
-
   private final int lockTimeoutMinutes;
   private final transient FileSystem fs;
   private final transient Path lockFile;
   protected LockConfiguration lockConfiguration;
+  private SimpleDateFormat sdf;
+  private LockInfo lockInfo;
+  private String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
     checkRequiredProps(lockConfiguration);
@@ -64,11 +74,17 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
       lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
-            + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+          + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
     this.lockFile = new Path(lockDirectory + Path.SEPARATOR + LOCK_FILE_NAME);
+    this.lockInfo = new LockInfo();
+    this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
     this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
+    List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
+    if (!customSupportedFSs.contains(this.fs.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.fs.getScheme())) {
+      throw new HoodieLockException("Unsupported scheme :" + this.fs.getScheme() + ", since this fs can not support atomic creation");
+    }
   }
 
   @Override
@@ -92,6 +108,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
             fs.delete(this.lockFile, true);
             LOG.warn("Delete expired lock file: " + this.lockFile);
           } else {
+            reloadCurrentOwnerLockInfo();
             return false;
           }
         }
@@ -122,6 +139,11 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     return this.lockFile.toString();
   }
 
+  @Override
+  public String getCurrentOwnerLockInfo() {
+    return currentOwnerLockInfo;
+  }
+
   private boolean checkIfExpired() {
     if (lockTimeoutMinutes == 0) {
       return false;
@@ -139,7 +161,32 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private void acquireLock() {
     try {
-      fs.create(this.lockFile, false).close();
+      if (!fs.exists(this.lockFile)) {
+        FSDataOutputStream fos = fs.create(this.lockFile, false);
+        initLockInfo();
+        fos.writeBytes(lockInfo.toString());
+        fos.close();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+    }
+  }
+
+  public void initLockInfo() {
+    lockInfo.setLockCreateTime(sdf.format(System.currentTimeMillis()));
+    lockInfo.setLockThreadName(Thread.currentThread().getName());
+    lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
+  }
+
+  public void reloadCurrentOwnerLockInfo() {
+    try {
+      if (fs.exists(this.lockFile)) {
+        FSDataInputStream fis = fs.open(this.lockFile);
+        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(fis);
+        fis.close();
+      } else {
+        this.currentOwnerLockInfo = "";
+      }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }

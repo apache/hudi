@@ -30,9 +30,9 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.SortedMap;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -57,7 +57,7 @@ public class InternalSchemaUtils {
     List<Integer> prunedIds = names.stream().map(name -> {
       int id = schema.findIdByName(name);
       if (id == -1) {
-        throw new IllegalArgumentException(String.format("cannot prune col: %s which not exisit in hudi table", name));
+        throw new IllegalArgumentException(String.format("cannot prune col: %s which does not exist in hudi table", name));
       }
       return id;
     }).collect(Collectors.toList());
@@ -94,7 +94,7 @@ public class InternalSchemaUtils {
         }
       }
     }
-    return new InternalSchema(newFields.isEmpty() ? recordType.fields() : newFields);
+    return new InternalSchema(newFields.isEmpty() ? recordType : Types.RecordType.get(newFields));
   }
 
   /**
@@ -177,7 +177,7 @@ public class InternalSchemaUtils {
   public static String reBuildFilterName(String name, InternalSchema fileSchema, InternalSchema querySchema) {
     int nameId = querySchema.findIdByName(name);
     if (nameId == -1) {
-      throw new IllegalArgumentException(String.format("cannot found filter col name：%s from querySchema: %s", name, querySchema));
+      throw new IllegalArgumentException(String.format("cannot find filter col name：%s from querySchema: %s", name, querySchema));
     }
     if (fileSchema.findField(nameId) == null) {
       // added operation found
@@ -278,9 +278,9 @@ public class InternalSchemaUtils {
   public static Map<String, String> collectRenameCols(InternalSchema oldSchema, InternalSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
     return colNamesFromWriteSchema.stream().filter(f -> {
-      int filedIdFromWriteSchema = oldSchema.findIdByName(f);
+      int fieldIdFromWriteSchema = oldSchema.findIdByName(f);
       // try to find the cols which has the same id, but have different colName;
-      return newSchema.getAllIds().contains(filedIdFromWriteSchema) && !newSchema.findfullName(filedIdFromWriteSchema).equalsIgnoreCase(f);
+      return newSchema.getAllIds().contains(fieldIdFromWriteSchema) && !newSchema.findfullName(fieldIdFromWriteSchema).equalsIgnoreCase(f);
     }).collect(Collectors.toMap(e -> newSchema.findfullName(oldSchema.findIdByName(e)), e -> {
       int lastDotIndex = e.lastIndexOf(".");
       return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);

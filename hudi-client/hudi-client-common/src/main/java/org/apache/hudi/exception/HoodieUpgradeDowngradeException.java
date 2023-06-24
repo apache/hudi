@@ -25,6 +25,10 @@ public class HoodieUpgradeDowngradeException extends HoodieException {
   }
 
   public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
-    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), null);
+    this(fromVersion, toVersion, upgrade, null);
+  }
+
+  public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade, Throwable t) {
+    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), t);
   }
 }

@@ -19,8 +19,8 @@
 EXAMPLES_DIR="$(dirname $(dirname "${BASH_SOURCE[0]}"))"
 PROJECT_DIR="$(dirname ${EXAMPLES_DIR})"
 
-JAR_FILE=`ls ${PROJECT_DIR}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_*.jar | grep -v sources | grep -v tests.jar`
-EXAMPLES_JARS=`ls ${PROJECT_DIR}/hudi-examples/target/hudi-examples-*.jar | grep -v sources | grep -v tests.jar`
+JAR_FILE=`ls ${PROJECT_DIR}/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_*.jar | grep -v sources | grep -v javadoc | grep -v tests.jar`
+EXAMPLES_JARS=`ls ${PROJECT_DIR}/hudi-examples/target/hudi-examples-*.jar | grep -v sources | grep -v javadoc | grep -v tests.jar`
 
 if [ -z "${SPARK_MASTER}" ]; then
   SPARK_MASTER="yarn-cluster"
@@ -29,6 +29,8 @@ fi
 exec "${SPARK_HOME}"/bin/spark-submit \
 --master ${SPARK_MASTER} \
 --conf spark.serializer="org.apache.spark.serializer.KryoSerializer" \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
 --conf spark.kryoserializer.buffer.max=128m \
 --conf spark.yarn.queue=root.default \
 --conf spark.yarn.submit.waitAppCompletion=false \

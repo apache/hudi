@@ -286,7 +286,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+  public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     throw new UnsupportedOperationException("Not support updateTableProperties yet");
   }
 

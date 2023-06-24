@@ -90,7 +90,7 @@ public class HoodieSyncValidateCommand {
   private String getString(HoodieTableMetaClient target, HoodieTimeline targetTimeline, HoodieTableMetaClient source, long sourceCount, long targetCount, String sourceLatestCommit)
       throws IOException {
     List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-        .getInstants().collect(Collectors.toList());
+        .getInstants();
     if (commitsToCatchup.isEmpty()) {
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);

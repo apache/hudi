@@ -18,9 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.avro.AvroRuntimeException;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.cli.DeDupeType;
+import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -38,14 +36,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
+import org.apache.avro.AvroRuntimeException;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -55,6 +55,8 @@ import java.util.Properties;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConverters;
+
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
@@ -63,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 @ShellComponent
 public class RepairsCommand {
 
-  private static final Logger LOG = LogManager.getLogger(RepairsCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RepairsCommand.class);
   public static final String DEDUPLICATE_RETURN_PREFIX = "Deduplicated files placed in:  ";
 
   @ShellMethod(key = "repair deduplicate",
@@ -157,7 +159,9 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
-    newProps.load(new FileInputStream(overwriteFilePath));
+    try (FileInputStream fileInputStream = new FileInputStream(overwriteFilePath)) {
+      newProps.load(fileInputStream);
+    }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
@@ -203,6 +207,13 @@ public class RepairsCommand {
         }
       }
     });
+  }
+
+  @ShellMethod(key = "repair show empty commit metadata", value = "show failed commits")
+  public void showFailedCommits() {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
+    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

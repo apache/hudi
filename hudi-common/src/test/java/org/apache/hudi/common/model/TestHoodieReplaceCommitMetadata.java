@@ -29,6 +29,9 @@ import java.util.List;
 
 import static org.apache.hudi.common.model.TestHoodieCommitMetadata.verifyMetadataFieldNames;
 
+/**
+ * Tests {@link HoodieReplaceCommitMetadata}.
+ */
 public class TestHoodieReplaceCommitMetadata {
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(

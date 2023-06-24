@@ -33,7 +33,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -61,28 +61,20 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
   private static Stream<Arguments> testClustering() {
     // enableClusteringAsRow, doUpdates, populateMetaFields, preserveCommitMetadata
     return Stream.of(
-        Arguments.of(true, true, true, true),
-        Arguments.of(true, true, true, false),
-        Arguments.of(true, true, false, true),
-        Arguments.of(true, true, false, false),
-        Arguments.of(true, false, true, true),
-        Arguments.of(true, false, true, false),
-        Arguments.of(true, false, false, true),
-        Arguments.of(true, false, false, false),
-        Arguments.of(false, true, true, true),
-        Arguments.of(false, true, true, false),
-        Arguments.of(false, true, false, true),
-        Arguments.of(false, true, false, false),
-        Arguments.of(false, false, true, true),
-        Arguments.of(false, false, true, false),
-        Arguments.of(false, false, false, true),
-        Arguments.of(false, false, false, false)
+        Arguments.of(true, true, true),
+        Arguments.of(true, true, false),
+        Arguments.of(true, false, true),
+        Arguments.of(true, false, false),
+        Arguments.of(false, true, true),
+        Arguments.of(false, true, false),
+        Arguments.of(false, false, true),
+        Arguments.of(false, false, false)
     );
   }
 
   @ParameterizedTest
   @MethodSource
-  void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -106,7 +98,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
             .withClusteringTargetPartitions(0)
             .withInlineClustering(true)
             .withInlineClusteringNumCommits(1)
-            .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build())
+            .build())
         .withRollbackUsingMarkers(false);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();

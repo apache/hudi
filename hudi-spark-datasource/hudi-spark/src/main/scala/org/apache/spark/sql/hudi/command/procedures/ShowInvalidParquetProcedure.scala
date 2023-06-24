@@ -31,7 +31,7 @@ import java.util.function.Supplier
 
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -78,6 +78,3 @@ object ShowInvalidParquetProcedure {
     override def get(): ProcedureBuilder = new ShowInvalidParquetProcedure()
   }
 }
-
-
-

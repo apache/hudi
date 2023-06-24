@@ -20,12 +20,16 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.locks.LockSupport;
 
+/**
+ * Tests {@link CustomizedThreadFactory}.
+ */
 public class TestCustomizedThreadFactory {
 
   @Test

@@ -32,8 +32,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -43,7 +43,7 @@ import java.util.List;
  */
 public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBucketIndex.class);
 
   protected final int numBuckets;
   protected final List<String> indexKeyFields;
@@ -95,6 +95,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
+      case BULK_INSERT:
         return true;
       default:
         return false;

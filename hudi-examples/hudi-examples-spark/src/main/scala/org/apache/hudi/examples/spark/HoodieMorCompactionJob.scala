@@ -85,7 +85,7 @@ object HoodieMorCompactionJob {
     val commitTime: String = System.currentTimeMillis().toString
     val inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20))
     val df = spark.read.json(spark.sparkContext.parallelize(inserts.asScala, 1))
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
@@ -101,7 +101,7 @@ object HoodieMorCompactionJob {
     val commitTime: String = System.currentTimeMillis().toString
     val updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10))
     val df = spark.read.json(spark.sparkContext.parallelize(updates.asScala, 1))
-    df.write.format("org.apache.hudi").
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").

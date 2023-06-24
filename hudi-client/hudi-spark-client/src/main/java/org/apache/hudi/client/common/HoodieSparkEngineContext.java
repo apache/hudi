@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -36,13 +37,15 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import scala.Tuple2;
 
+import javax.annotation.concurrent.ThreadSafe;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -50,22 +53,25 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import scala.Tuple2;
+
 /**
  * A Spark engine implementation of HoodieEngineContext.
  */
+@ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
-  private SQLContext sqlContext;
+  private final SQLContext sqlContext;
+  private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
-    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
-    this.javaSparkContext = jsc;
-    this.sqlContext = SQLContext.getOrCreate(jsc.sc());
+    this(jsc, SQLContext.getOrCreate(jsc.sc()));
   }
 
-  public void setSqlContext(SQLContext sqlContext) {
+  public HoodieSparkEngineContext(JavaSparkContext jsc, SQLContext sqlContext) {
+    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
+    this.javaSparkContext = jsc;
     this.sqlContext = sqlContext;
   }
 
@@ -179,5 +185,30 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     javaSparkContext.setJobGroup(activeModule, activityDescription);
+  }
+
+  @Override
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
+    synchronized (cachedRddIds) {
+      cachedRddIds.putIfAbsent(cacheKey, new ArrayList<>());
+      for (int id : ids) {
+        cachedRddIds.get(cacheKey).add(id);
+      }
+    }
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
+    synchronized (cachedRddIds) {
+      return cachedRddIds.getOrDefault(cacheKey, Collections.emptyList());
+    }
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
+    synchronized (cachedRddIds) {
+      List<Integer> removed = cachedRddIds.remove(cacheKey);
+      return removed == null ? Collections.emptyList() : removed;
+    }
   }
 }

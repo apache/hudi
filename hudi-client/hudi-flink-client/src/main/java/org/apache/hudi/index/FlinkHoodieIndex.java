@@ -26,7 +26,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -37,7 +36,7 @@ import java.util.stream.Collectors;
 /**
  * Base flink implementation of {@link HoodieIndex}.
  */
-public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<List<HoodieRecord<T>>, List<WriteStatus>> {
+public abstract class FlinkHoodieIndex<T> extends HoodieIndex<List<HoodieRecord<T>>, List<WriteStatus>> {
   protected FlinkHoodieIndex(HoodieWriteConfig config) {
     super(config);
   }

@@ -22,6 +22,8 @@ import org.apache.hudi.HoodieUnsafeRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
+import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
 
@@ -29,6 +31,38 @@ import org.apache.spark.util.MutablePair
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
 object HoodieUnsafeUtils {
+
+  /**
+   * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
+   *
+   * NOTE: Invoking [[QueryExecution#executedPlan]] wouldn't actually execute the query (ie start pumping the data)
+   *       but instead will just execute Spark resolution, optimization and actual execution planning stages
+   *       returning instance of [[SparkPlan]] ready for execution
+   */
+  def getNumPartitions(df: DataFrame): Int = {
+    // NOTE: In general we'd rely on [[outputPartitioning]] of the executable [[SparkPlan]] to determine
+    //       number of partitions plan is going to be executed with.
+    //       However in case of [[LogicalRDD]] plan's output-partitioning will be stubbed as [[UnknownPartitioning]]
+    //       and therefore we will be falling back to determine number of partitions by looking at the RDD itself
+    df.queryExecution.logical match {
+      case LogicalRDD(_, rdd, outputPartitioning, _, _) =>
+        outputPartitioning match {
+          case _: UnknownPartitioning => rdd.getNumPartitions
+          case _ => outputPartitioning.numPartitions
+        }
+
+      case _ => df.queryExecution.executedPlan.outputPartitioning.numPartitions
+    }
+  }
+
+  /**
+   * Creates [[DataFrame]] from provided [[plan]]
+   *
+   * @param spark spark's session
+   * @param plan given plan to wrap into [[DataFrame]]
+   */
+  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame =
+    Dataset.ofRows(spark, plan)
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
@@ -39,7 +73,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
     Dataset.ofRows(spark, LocalRelation.fromExternalRows(schema.toAttributes, rows))
@@ -53,7 +86,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
     Dataset.ofRows(spark, LocalRelation(schema.toAttributes, rows))
@@ -65,7 +97,6 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rdd RDD w/ [[Row]]s to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
   def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
     spark.internalCreateDataFrame(rdd, schema)

@@ -18,7 +18,10 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.runtime.io.disk.iomanager.IOManager;
+import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.Output;
@@ -28,7 +31,13 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
+import org.apache.flink.table.runtime.generated.RecordComparator;
+import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
+import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
+import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 
 import java.util.Collections;
 
@@ -58,5 +67,19 @@ public class Utils {
       ReadableConfig conf) {
     return new FactoryUtil.DefaultDynamicTableContext(tablePath, catalogTable,
         Collections.emptyMap(), conf, Thread.currentThread().getContextClassLoader(), false);
+  }
+
+  public static BinaryExternalSorter getBinaryExternalSorter(
+      final Object owner,
+      MemoryManager memoryManager,
+      long reservedMemorySize,
+      IOManager ioManager,
+      AbstractRowDataSerializer<RowData> inputSerializer,
+      BinaryRowDataSerializer serializer,
+      NormalizedKeyComputer normalizedKeyComputer,
+      RecordComparator comparator,
+      Configuration conf) {
+    return new BinaryExternalSorter(owner, memoryManager, reservedMemorySize,
+        ioManager, inputSerializer, serializer, normalizedKeyComputer, comparator, conf);
   }
 }

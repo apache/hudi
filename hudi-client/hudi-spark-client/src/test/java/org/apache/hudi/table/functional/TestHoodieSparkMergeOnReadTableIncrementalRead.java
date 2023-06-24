@@ -170,13 +170,13 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
 
       // verify new write shows up in snapshot mode after compaction is complete
       snapshotROFiles = getROSnapshotFiles(partitionPath);
-      validateFiles(partitionPath,2, snapshotROFiles, false, roSnapshotJobConf,400, commitTime1, compactionCommitTime,
+      validateFiles(partitionPath,2, snapshotROFiles, false, roSnapshotJobConf,400, commitTime1, updateTime,
           insertsTime);
 
       incrementalROFiles = getROIncrementalFiles(partitionPath, "002", -1, true);
       assertTrue(incrementalROFiles.length == 2);
       // verify 006 shows up because of pending compaction
-      validateFiles(partitionPath, 2, incrementalROFiles, false, roJobConf, 400, commitTime1, compactionCommitTime,
+      validateFiles(partitionPath, 2, incrementalROFiles, false, roJobConf, 400, commitTime1, updateTime,
           insertsTime);
     }
   }

@@ -17,6 +17,8 @@
 
 package org.apache.hudi.hadoop.config;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+
 /**
  * Class to hold props related to Hoodie RealtimeInputFormat and RealtimeRecordReader.
  */
@@ -39,4 +41,6 @@ public final class HoodieRealtimeConfig {
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
   // Default file path prefix for spillable file
   public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
+  public static final String ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN =
+      "hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN;
 }

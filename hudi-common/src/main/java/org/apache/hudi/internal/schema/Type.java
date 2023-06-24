@@ -21,6 +21,7 @@ package org.apache.hudi.internal.schema;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * The type of a schema, reference avro schema.
@@ -28,10 +29,14 @@ import java.util.Locale;
  * to do add support for localTime if avro version is updated
  */
 public interface Type extends Serializable {
+  /**
+   * Enums for type names.
+   */
   enum TypeID {
     RECORD, ARRAY, MAP, FIXED, STRING, BINARY,
     INT, LONG, FLOAT, DOUBLE, DATE, BOOLEAN, TIME, TIMESTAMP, DECIMAL, UUID;
     private String name;
+
     TypeID() {
       this.name = this.name().toLowerCase(Locale.ROOT);
     }
@@ -55,13 +60,40 @@ public interface Type extends Serializable {
     return false;
   }
 
+  /**
+   * The type of a schema for primitive fields.
+   */
   abstract class PrimitiveType implements Type {
     @Override
     public boolean isNestedType() {
       return false;
     }
+
+    /**
+     * We need to override equals because the check {@code intType1 == intType2} can return {@code false}.
+     * Despite the fact that most subclasses look like singleton with static field {@code INSTANCE},
+     * they can still be created by deserializer.
+     */
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      } else if (!(o instanceof PrimitiveType)) {
+        return false;
+      }
+      PrimitiveType that = (PrimitiveType) o;
+      return typeId().equals(that.typeId());
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(typeId());
+    }
   }
 
+  /**
+   * The type of a schema for nested fields.
+   */
   abstract class NestedType implements Type {
 
     @Override

@@ -36,7 +36,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import java.util.Locale
 
 class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
-  extends ParserInterface with Logging {
+  extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
   private lazy val builder = new HoodieSpark3_2ExtendedSqlAstBuilder(conf, delegate)

@@ -25,7 +25,7 @@ coverage:
   range: "50...100"
   status:
     project: # settings affecting project coverage
-      enabled: no
+      enabled: yes
 
     # do not run coverage on patch nor changes
     patch: no

@@ -141,9 +141,19 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
   }
 
+  @Test
+  public void testInsertAppendMode() {
+    // append mode is only valid for cow table.
+  }
+
   @Override
   public void testInsertClustering() {
     // insert clustering is only valid for cow table.
+  }
+
+  @Test
+  public void testInsertAsyncClustering() {
+    // insert async clustering is only valid for cow table.
   }
 
   @Override

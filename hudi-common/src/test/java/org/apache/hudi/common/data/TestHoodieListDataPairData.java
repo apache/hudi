@@ -22,6 +22,7 @@ package org.apache.hudi.common.data;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,6 +43,9 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link HoodieListPairData}.
+ */
 public class TestHoodieListDataPairData {
 
   private static final String KEY1 = "key1";
@@ -80,7 +84,7 @@ public class TestHoodieListDataPairData {
   @Test
   public void testValues() {
     assertHoodieDataEquals(Arrays.asList(
-        STRING_VALUE1, STRING_VALUE2, STRING_VALUE3, STRING_VALUE4, STRING_VALUE5, STRING_VALUE6),
+            STRING_VALUE1, STRING_VALUE2, STRING_VALUE3, STRING_VALUE4, STRING_VALUE5, STRING_VALUE6),
         testHoodiePairData.values());
   }
 
@@ -103,7 +107,7 @@ public class TestHoodieListDataPairData {
   @Test
   public void testMap() {
     assertHoodieDataEquals(Arrays.asList(
-        "key1,value1", "key1,value2", "key2,value3", "key2,value4", "key3,value5", "key4,value6"),
+            "key1,value1", "key1,value2", "key2,value3", "key2,value4", "key3,value5", "key4,value6"),
         testHoodiePairData.map(pair -> pair.getKey() + "," + pair.getValue()));
   }
 

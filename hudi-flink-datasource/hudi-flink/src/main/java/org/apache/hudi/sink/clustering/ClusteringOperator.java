@@ -18,26 +18,30 @@
 
 package org.apache.hudi.sink.clustering;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.adapter.MaskingOutputAdapter;
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
-import org.apache.hudi.common.model.ClusteringGroupInfo;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -46,20 +50,21 @@ import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
@@ -80,12 +85,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-
-import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
  * Operator to execute the actual clustering task assigned by the clustering plan task.
@@ -125,13 +129,23 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
     this.conf = conf;
-    this.rowType = rowType;
+    this.rowType = BulkInsertWriterHelper.addMetadataFields(rowType, false);
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
 
     // override max parquet file size in conf
     this.conf.setLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(),
         this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES));
+
+    // target size should larger than small file limit
+    this.conf.setLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT.key(),
+        Math.min(this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES) / 1024 / 1024,
+            this.conf.getLong(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT)));
+  }
+
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<ClusteringCommitEvent>> output) {
+    super.setup(containingTask, config, new MaskingOutputAdapter<>(output));
   }
 
   @Override
@@ -139,12 +153,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     super.open();
 
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = HoodieAvroUtils.addMetadataFields(this.schema);
+    this.readerSchema = this.schema;
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
@@ -154,30 +168,33 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
 
-    collector = new StreamRecordCollector<>(output);
+    this.collector = new StreamRecordCollector<>(output);
   }
 
   @Override
   public void processElement(StreamRecord<ClusteringPlanEvent> element) throws Exception {
-    ClusteringPlanEvent event = element.getValue();
+    final ClusteringPlanEvent event = element.getValue();
     final String instantTime = event.getClusteringInstantTime();
+    final List<ClusteringOperation> clusteringOperations = event.getClusteringGroupInfo().getOperations();
     if (this.asyncClustering) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
-          () -> doClustering(instantTime, event),
-          (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, taskID)),
+          () -> doClustering(instantTime, clusteringOperations),
+          (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), taskID)),
           "Execute clustering for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the clustering task synchronously for batch mode.
       LOG.info("Execute clustering for instant {} from task {}", instantTime, taskID);
-      doClustering(instantTime, event);
+      doClustering(instantTime, clusteringOperations);
     }
   }
 
   @Override
-  public void close() {
+  public void close() throws Exception {
+    if (null != this.executor) {
+      this.executor.close();
+    }
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
       this.writeClient = null;
     }
@@ -194,28 +211,22 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void doClustering(String instantTime, ClusteringPlanEvent event) throws Exception {
-    final ClusteringGroupInfo clusteringGroupInfo = event.getClusteringGroupInfo();
-
+  private void doClustering(String instantTime, List<ClusteringOperation> clusteringOperations) throws Exception {
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
-
-    List<ClusteringOperation> clusteringOps = clusteringGroupInfo.getOperations();
-    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
+        this.rowType, true);
 
     Iterator<RowData> iterator;
-    if (hasLogFiles) {
+    if (clusteringOperations.stream().anyMatch(operation -> CollectionUtils.nonEmpty(operation.getDeltaFilePaths()))) {
       // if there are log files, we read all records into memory for a file group and apply updates.
-      iterator = readRecordsForGroupWithLogs(clusteringOps, instantTime);
+      iterator = readRecordsForGroupWithLogs(clusteringOperations, instantTime);
     } else {
       // We want to optimize reading records for case there are no log files.
-      iterator = readRecordsForGroupBaseFiles(clusteringOps);
+      iterator = readRecordsForGroupBaseFiles(clusteringOperations);
     }
 
-    RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
-
     if (this.sortClusteringEnabled) {
+      RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
       BinaryExternalSorter sorter = initSorter();
       while (iterator.hasNext()) {
         RowData rowData = iterator.next();
@@ -235,7 +246,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
-    collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
+    collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), writeStatuses, this.taskID));
     writerHelper.close();
   }
 
@@ -253,7 +264,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       try {
         Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+            : Option.of(HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordMerger().getRecordType()).getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withFileSystem(table.getMetaClient().getFs())
             .withBasePath(table.getMetaClient().getBasePath())
@@ -267,18 +278,18 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
             .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
             .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+            .withRecordMerger(writeConfig.getRecordMerger())
             .build();
 
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
-            tableConfig.getPayloadClass(),
-            tableConfig.getPreCombineField(),
+            tableConfig.getProps(),
             tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                 tableConfig.getPartitionFieldProp())));
 
         recordIterators.add(StreamSupport.stream(Spliterators.spliteratorUnknownSize(hoodieFileSliceReader, Spliterator.NONNULL), false).map(hoodieRecord -> {
           try {
-            return this.transform((IndexedRecord) hoodieRecord.getData().getInsertValue(readerSchema).get());
+            return this.transform(hoodieRecord.toIndexedRecord(readerSchema, new Properties()).get().getData());
           } catch (IOException e) {
             throw new HoodieIOException("Failed to read next record", e);
           }
@@ -299,7 +310,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          return HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+          HoodieFileReaderFactory fileReaderFactory = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
+          HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+
+          return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
@@ -316,7 +330,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    * Transform IndexedRecord into HoodieRecord.
    */
   private RowData transform(IndexedRecord indexedRecord) {
-    GenericRecord record = buildAvroRecordBySchema(indexedRecord, schema, requiredPos, new GenericRecordBuilder(schema));
+    GenericRecord record = (GenericRecord) indexedRecord;
     return (RowData) avroToRowDataConverter.convert(record);
   }
 
@@ -334,8 +348,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
-    BinaryExternalSorter sorter =
-        new BinaryExternalSorter(
+    BinaryExternalSorter sorter = Utils.getBinaryExternalSorter(
             this.getContainingTask(),
             memManager,
             computeMemorySize(),
@@ -344,7 +357,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            this.conf);
     sorter.startThreads();
 
     // register the metrics.
@@ -358,6 +371,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType,
         conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(","));
     return sortOperatorGen.createSortCodeGenerator();
+  }
+
+  private String getFileIds(List<ClusteringOperation> clusteringOperations) {
+    return clusteringOperations.stream().map(ClusteringOperation::getFileId).collect(Collectors.joining(","));
   }
 
   @VisibleForTesting

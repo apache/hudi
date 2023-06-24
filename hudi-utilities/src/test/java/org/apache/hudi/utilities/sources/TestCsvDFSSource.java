@@ -38,7 +38,7 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/jsonFiles";
+    this.dfsRoot = basePath + "/jsonFiles";
     this.fileSuffix = ".json";
     this.useFlattenedSchema = true;
     this.schemaProvider = new FilebasedSchemaProvider(
@@ -57,6 +57,6 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   @Override
   public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveCsvToDFS(
-        true, '\t', Helpers.jsonifyRecords(records), dfs, path.toString());
+        true, '\t', Helpers.jsonifyRecords(records), fs, path.toString());
   }
 }

@@ -18,13 +18,12 @@
 
 package org.apache.hudi.common.metrics;
 
+import org.apache.hudi.common.util.ReflectionUtils;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import org.apache.hudi.common.util.ReflectionUtils;
-
 
 /**
  * Interface which defines a lightweight Metrics Registry to track Hudi events.

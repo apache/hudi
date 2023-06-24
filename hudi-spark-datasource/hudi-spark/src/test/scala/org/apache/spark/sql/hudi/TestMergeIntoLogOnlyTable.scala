@@ -22,7 +22,7 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
 
   test("Test Query Log Only MOR Table") {
-    withTempDir { tmp =>
+    withRecordType()(withTempDir { tmp =>
       // Create table with INMEMORY index to generate log only mor table.
       val tableName = generateTableName
       spark.sql(
@@ -42,9 +42,12 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
            |  hoodie.compact.inline = 'true'
            | )
        """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      //need to upsert so we only create log file
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      }
       // 3 commits will not trigger compaction, so it should be log only.
       assertResult(true)(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
@@ -86,6 +89,6 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 11.0, 1000)
       )
-    }
+    })
   }
 }

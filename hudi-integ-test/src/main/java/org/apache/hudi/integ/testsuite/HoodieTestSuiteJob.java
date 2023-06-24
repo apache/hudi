@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -317,7 +318,10 @@ public class HoodieTestSuiteJob {
     public Boolean useHudiToGenerateUpdates = false;
 
     @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
-    public Boolean testContinousMode = false;
+    public Boolean testContinuousMode = false;
+
+    @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
+    public Boolean enablePrestoValidation = false;
 
     @Parameter(names = {"--presto-jdbc-url"}, description = "Presto JDBC URL in the format jdbc:presto://<host>:<port>/<catalog>/<schema>  "
         + "e.g. URL to connect to Presto running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
@@ -340,5 +344,11 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--trino-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
     public String trinoPassword;
+
+    @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
+    public String indexType = "SIMPLE";
+
+    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enables metadata for queries")
+    public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }

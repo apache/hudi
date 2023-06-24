@@ -19,37 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call delete_metadata_table Procedure") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
-       """.stripMargin)
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-
-      // delete the metadata
-      val deleteResult = spark.sql(s"""call delete_metadata_table(table => '$tableName')""").collect()
-      assertResult(1) {
-        deleteResult.length
-      }
-    }
-  }
-
-  test("Test Call create_metadata_table Procedure") {
+  test("Test Call create_metadata_table then create_metadata_table") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table

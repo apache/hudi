@@ -30,8 +30,8 @@ import scala.collection.JavaConverters._
 
 class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -55,9 +55,9 @@ class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
     val sourceTimeline = source.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetTimeline = target.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetLatestCommit =
-      if (targetTimeline.getInstants.iterator.hasNext) targetTimeline.lastInstant.get.getTimestamp else "0"
+      if (targetTimeline.getInstants.iterator().hasNext) targetTimeline.lastInstant.get.getTimestamp else "0"
     val sourceLatestCommit =
-      if (sourceTimeline.getInstants.iterator.hasNext) sourceTimeline.lastInstant.get.getTimestamp else "0"
+      if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant.get.getTimestamp else "0"
 
     if (sourceLatestCommit != null && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) { // source is behind the target
       val commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getTimestamp).toList.asJava

@@ -62,6 +62,11 @@ public class TestSQL {
       + "(2, array['abc2', 'def2'], array[2, 2], map['abc2', 1, 'def2', 3], row(array['abc2', 'def2'], row(2, 'abc2'))),\n"
       + "(3, array['abc3', 'def3'], array[3, 3], map['abc3', 1, 'def3', 3], row(array['abc3', 'def3'], row(3, 'abc3')))";
 
+  public static final String NULL_CHILD_COLUMNS_ROW_TYPE_INSERT_T1 = "insert into t1 values\n"
+      + "(1, row(cast(null as int), 'abc1')),\n"
+      + "(2, row(2, cast(null as varchar))),\n"
+      + "(3, row(cast(null as int), cast(null as varchar)))";
+
   public static final String INSERT_DATE_PARTITION_T1 = "insert into t1 values\n"
       + "('id1','Danny',23,DATE '1970-01-01'),\n"
       + "('id2','Stephen',33,DATE '1970-01-01'),\n"

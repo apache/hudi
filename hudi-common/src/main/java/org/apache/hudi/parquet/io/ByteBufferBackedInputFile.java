@@ -19,6 +19,7 @@
 package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.SeekableInputStream;
@@ -35,10 +36,6 @@ public class ByteBufferBackedInputFile implements InputFile {
     this.buffer = buffer;
     this.offset = offset;
     this.length = length;
-  }
-
-  public ByteBufferBackedInputFile(byte[] buffer) {
-    this(buffer, 0, buffer.length);
   }
 
   @Override

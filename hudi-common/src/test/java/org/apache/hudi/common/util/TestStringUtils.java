@@ -30,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link StringUtils}.
+ */
 public class TestStringUtils {
 
   private static final String[] STRINGS = {"This", "is", "a", "test"};

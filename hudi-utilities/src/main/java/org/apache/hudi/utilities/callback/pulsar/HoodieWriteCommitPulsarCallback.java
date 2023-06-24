@@ -25,8 +25,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.pulsar.client.api.MessageRoutingMode;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -34,6 +32,8 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -58,7 +58,7 @@ import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarC
  */
 public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallback, Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteCommitPulsarCallback.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitPulsarCallback.class);
 
   private final String serviceUrl;
   private final String topic;

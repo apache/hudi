@@ -30,68 +30,38 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * The test harness for resource initialization and cleanup.
  */
-public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implements Serializable {
+public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
-  protected static final Logger LOG = LogManager.getLogger(HoodieFlinkClientTestHarness.class);
-  private String testMethodName;
-  protected transient Configuration hadoopConf = null;
-  protected transient FileSystem fs;
-  protected transient MiniClusterWithClientResource flinkCluster = null;
-  protected transient HoodieFlinkEngineContext context = null;
-  protected transient ExecutorService executorService;
-  protected transient HoodieFlinkWriteClient writeClient;
-  protected transient HoodieTableFileSystemView tableView;
+  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClientTestHarness.class);
+  protected Configuration hadoopConf;
+  protected FileSystem fs;
+  protected HoodieFlinkEngineContext context;
+  protected ExecutorService executorService;
+  protected HoodieFlinkWriteClient writeClient;
+  protected HoodieTableFileSystemView tableView;
 
   protected final FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
-
-  // dfs
-  protected transient HdfsTestService hdfsTestService;
-  protected transient MiniDFSCluster dfsCluster;
-  protected transient DistributedFileSystem dfs;
-
-  @BeforeEach
-  public void setTestMethodName(TestInfo testInfo) {
-    if (testInfo.getTestMethod().isPresent()) {
-      testMethodName = testInfo.getTestMethod().get().getName();
-    } else {
-      testMethodName = "Unknown";
-    }
-  }
-
-  protected void initFlinkMiniCluster() {
-    flinkCluster = new MiniClusterWithClientResource(
-        new MiniClusterResourceConfiguration.Builder()
-            .setNumberSlotsPerTaskManager(2)
-            .setNumberTaskManagers(1)
-            .build());
-  }
 
   protected void initFileSystem() {
     hadoopConf = new Configuration();
@@ -100,9 +70,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   }
 
   private void initFileSystemWithConfiguration(Configuration configuration) {
-    if (basePath == null) {
-      throw new IllegalStateException("The base path has not been initialized.");
-    }
+    checkState(basePath != null);
     fs = FSUtils.getFs(basePath, configuration);
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
@@ -124,9 +92,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   }
 
   protected void initMetaClient(HoodieTableType tableType) throws IOException {
-    if (basePath == null) {
-      throw new IllegalStateException("The base path has not been initialized.");
-    }
+    checkState(basePath != null);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
   }
 
@@ -156,16 +122,8 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     cleanupFlinkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
-    cleanupDFS();
     cleanupExecutorService();
     System.gc();
-  }
-
-  protected void cleanupFlinkMiniCluster() {
-    if (flinkCluster != null) {
-      flinkCluster.after();
-      flinkCluster = null;
-    }
   }
 
   /**
@@ -185,7 +143,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   /**
    * Cleanups hoodie clients.
    */
-  protected void cleanupClients() throws java.io.IOException {
+  protected void cleanupClients() {
     if (metaClient != null) {
       metaClient = null;
     }
@@ -197,24 +155,6 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
       tableView.close();
       tableView = null;
     }
-  }
-
-  /**
-   * Cleanups the distributed file system.
-   *
-   * @throws IOException
-   */
-  protected void cleanupDFS() throws java.io.IOException {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-      dfsCluster.shutdown(true, true);
-      hdfsTestService = null;
-      dfsCluster = null;
-      dfs = null;
-    }
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
   }
 
   /**

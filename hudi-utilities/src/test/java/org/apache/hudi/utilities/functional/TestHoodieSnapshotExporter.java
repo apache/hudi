@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -40,8 +41,6 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -54,6 +53,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -68,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness {
 
-  static final Logger LOG = LogManager.getLogger(TestHoodieSnapshotExporter.class);
+  static final Logger LOG = LoggerFactory.getLogger(TestHoodieSnapshotExporter.class);
   static final int NUM_RECORDS = 100;
   static final String COMMIT_TIME = "20200101000000";
   static final String PARTITION_PATH = "2020";
@@ -220,6 +221,12 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     @ParameterizedTest
     @ValueSource(strings = {"json", "parquet", "orc"})
     public void testExportAsNonHudi(String format) throws IOException {
+      // NOTE: Hudi doesn't support Orc in Spark < 3.0
+      //       Please check HUDI-4496 for more details
+      if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_0()) {
+        return;
+      }
+
       HoodieSnapshotExporter.Config cfg = new Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;

@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.format.cdc;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -26,6 +28,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -33,12 +36,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -84,15 +90,15 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       String defaultPartName,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete);
+    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
-  protected RecordIterator initIterator(MergeOnReadInputSplit split) throws IOException {
+  protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
     if (split instanceof CdcInputSplit) {
       HoodieCDCSupplementalLoggingMode mode = OptionsResolver.getCDCSupplementalLoggingMode(conf);
       ImageManager manager = new ImageManager(conf, tableState.getRowType(), this::getFileSliceIterator);
-      Function<HoodieCDCFileSplit, RecordIterator> recordIteratorFunc =
+      Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc =
           cdcFileSplit -> getRecordIteratorV2(split.getTablePath(), split.getMaxCompactionMemoryInBytes(), cdcFileSplit, mode, manager);
       return new CdcFileSplitsIterator((CdcInputSplit) split, manager, recordIteratorFunc);
     } else {
@@ -107,10 +113,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     return new Builder();
   }
 
-  private RecordIterator getFileSliceIterator(MergeOnReadInputSplit split) {
+  private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       // base file only
-      return new BaseFileOnlyIterator(getFullSchemaReader(split.getBasePath().get()));
+      return getBaseFileIteratorWithMetadata(split.getBasePath().get());
     } else if (!split.getBasePath().isPresent()) {
       // log files only
       return new LogFileOnlyIterator(getFullLogFileIterator(split));
@@ -123,15 +129,16 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           this.tableState.getRowType(),
           this.tableState.getRowType(),
           tableSchema,
+          InternalSchema.getEmptyInternalSchema(),
           Option.empty(),
           Option.empty(),
           false,
           this.tableState.getOperationPos(),
-          getFullSchemaReader(split.getBasePath().get()));
+          getBaseFileIteratorWithMetadata(split.getBasePath().get()));
     }
   }
 
-  private RecordIterator getRecordIteratorV2(
+  private ClosableIterator<RowData> getRecordIteratorV2(
       String tablePath,
       long maxCompactionMemoryInBytes,
       HoodieCDCFileSplit fileSplit,
@@ -144,7 +151,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
   }
 
-  private RecordIterator getRecordIterator(
+  private ClosableIterator<RowData> getRecordIterator(
       String tablePath,
       long maxCompactionMemoryInBytes,
       HoodieCDCFileSplit fileSplit,
@@ -152,10 +159,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       ImageManager imageManager) throws IOException {
     switch (fileSplit.getCdcInferCase()) {
       case BASE_FILE_INSERT:
-        ValidationUtils.checkState(fileSplit.getCdcFile() != null,
-            "CDC file path should exist");
-        String path = new Path(tablePath, fileSplit.getCdcFile()).toString();
-        return new AddBaseFileIterator(getRequiredSchemaReader(path));
+        ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
+            "CDC file path should exist and be only one");
+        String path = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
+        return new AddBaseFileIterator(getBaseFileIterator(path));
       case BASE_FILE_DELETE:
         ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
             "Before file slice should exist");
@@ -166,11 +173,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
         Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
-          case WITH_BEFORE_AFTER:
+          case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
-          case WITH_BEFORE:
+          case DATA_BEFORE:
             return new BeforeImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          case OP_KEY:
+          case OP_KEY_ONLY:
             return new RecordKeyImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected mode" + mode);
@@ -185,26 +192,26 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
-  static class CdcFileSplitsIterator implements RecordIterator {
+  static class CdcFileSplitsIterator implements ClosableIterator<RowData> {
     private ImageManager imageManager; //  keep a reference to release resource
     private final Iterator<HoodieCDCFileSplit> fileSplitIterator;
-    private final Function<HoodieCDCFileSplit, RecordIterator> recordIteratorFunc;
-    private RecordIterator recordIterator;
+    private final Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc;
+    private ClosableIterator<RowData> recordIterator;
 
     CdcFileSplitsIterator(
         CdcInputSplit inputSplit,
         ImageManager imageManager,
-        Function<HoodieCDCFileSplit, RecordIterator> recordIteratorFunc) {
+        Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc) {
       this.fileSplitIterator = Arrays.asList(inputSplit.getChanges()).iterator();
       this.imageManager = imageManager;
       this.recordIteratorFunc = recordIteratorFunc;
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
+    public boolean hasNext() {
       if (recordIterator != null) {
-        if (!recordIterator.reachedEnd()) {
-          return false;
+        if (recordIterator.hasNext()) {
+          return true;
         } else {
           recordIterator.close(); // release resource
           recordIterator = null;
@@ -213,18 +220,18 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       if (fileSplitIterator.hasNext()) {
         HoodieCDCFileSplit fileSplit = fileSplitIterator.next();
         recordIterator = recordIteratorFunc.apply(fileSplit);
-        return recordIterator.reachedEnd();
+        return recordIterator.hasNext();
       }
-      return true;
+      return false;
     }
 
     @Override
-    public RowData nextRecord() {
-      return recordIterator.nextRecord();
+    public RowData next() {
+      return recordIterator.next();
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
       if (recordIterator != null) {
         recordIterator.close();
       }
@@ -235,63 +242,33 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
   }
 
-  static class AddBaseFileIterator implements RecordIterator {
-    // base file reader
-    private ParquetColumnarRowSplitReader reader;
+  static class AddBaseFileIterator implements ClosableIterator<RowData> {
+    // base file record iterator
+    private ClosableIterator<RowData> nested;
 
     private RowData currentRecord;
 
-    AddBaseFileIterator(ParquetColumnarRowSplitReader reader) {
-      this.reader = reader;
+    AddBaseFileIterator(ClosableIterator<RowData> nested) {
+      this.nested = nested;
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
-      if (!this.reader.reachedEnd()) {
-        currentRecord = this.reader.nextRecord();
+    public boolean hasNext() {
+      if (this.nested.hasNext()) {
+        currentRecord = this.nested.next();
         currentRecord.setRowKind(RowKind.INSERT);
-        return false;
+        return true;
       }
-      return true;
+      return false;
     }
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       return currentRecord;
     }
 
     @Override
-    public void close() throws IOException {
-      if (this.reader != null) {
-        this.reader.close();
-        this.reader = null;
-      }
-    }
-  }
-
-  static class RemoveBaseFileIterator implements RecordIterator {
-    private RecordIterator nested;
-    private final RowDataProjection projection;
-
-    RemoveBaseFileIterator(MergeOnReadTableState tableState, RecordIterator iterator) {
-      this.nested = iterator;
-      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-    }
-
-    @Override
-    public boolean reachedEnd() throws IOException {
-      return nested.reachedEnd();
-    }
-
-    @Override
-    public RowData nextRecord() {
-      RowData row = nested.nextRecord();
-      row.setRowKind(RowKind.DELETE);
-      return this.projection.project(row);
-    }
-
-    @Override
-    public void close() throws IOException {
+    public void close() {
       if (this.nested != null) {
         this.nested.close();
         this.nested = null;
@@ -299,7 +276,37 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
   }
 
-  abstract static class BaseImageIterator implements RecordIterator {
+  static class RemoveBaseFileIterator implements ClosableIterator<RowData> {
+    private ClosableIterator<RowData> nested;
+    private final RowDataProjection projection;
+
+    RemoveBaseFileIterator(MergeOnReadTableState tableState, ClosableIterator<RowData> iterator) {
+      this.nested = iterator;
+      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+    }
+
+    @Override
+    public boolean hasNext() {
+      return nested.hasNext();
+    }
+
+    @Override
+    public RowData next() {
+      RowData row = nested.next();
+      row.setRowKind(RowKind.DELETE);
+      return this.projection.project(row);
+    }
+
+    @Override
+    public void close() {
+      if (this.nested != null) {
+        this.nested.close();
+        this.nested = null;
+      }
+    }
+  }
+
+  abstract static class BaseImageIterator implements ClosableIterator<RowData> {
     private final Schema requiredSchema;
     private final int[] requiredPos;
     private final GenericRecordBuilder recordBuilder;
@@ -319,13 +326,21 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String tablePath,
         MergeOnReadTableState tableState,
         Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit) throws IOException {
+        HoodieCDCFileSplit fileSplit) {
       this.requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
       this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-      Path cdcFilePath = new Path(tablePath, fileSplit.getCdcFile());
-      this.cdcItr = new HoodieCDCLogRecordIterator(hadoopConf, cdcFilePath, cdcSchema);
+      Path hadoopTablePath = new Path(tablePath);
+      FileSystem fs = FSUtils.getFs(hadoopTablePath, hadoopConf);
+      HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream().map(cdcFile -> {
+        try {
+          return new HoodieLogFile(fs.getFileStatus(new Path(hadoopTablePath, cdcFile)));
+        } catch (IOException e) {
+          throw new HoodieIOException("Fail to call getFileStatus", e);
+        }
+      }).toArray(HoodieLogFile[]::new);
+      this.cdcItr = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcSchema);
     }
 
     private int[] getRequiredPos(String tableSchema, Schema required) {
@@ -338,18 +353,18 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     @Override
-    public boolean reachedEnd() {
+    public boolean hasNext() {
       if (this.sideImage != null) {
         currentImage = this.sideImage;
         this.sideImage = null;
-        return false;
+        return true;
       } else if (this.cdcItr.hasNext()) {
         cdcRecord = (GenericRecord) this.cdcItr.next();
         String op = String.valueOf(cdcRecord.get(0));
         resolveImage(op);
-        return false;
+        return true;
       }
-      return true;
+      return false;
     }
 
     protected abstract RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord);
@@ -357,12 +372,12 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     protected abstract RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord);
 
     @Override
-    public RowData nextRecord() {
+    public RowData next() {
       return currentImage;
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
       if (this.cdcItr != null) {
         this.cdcItr.close();
         this.cdcItr = null;
@@ -405,7 +420,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         org.apache.hadoop.conf.Configuration hadoopConf,
         Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit) throws IOException {
+        HoodieCDCFileSplit fileSplit) {
       super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
     }
 
@@ -500,8 +515,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
   }
 
-  static class ReplaceCommitIterator implements RecordIterator {
-    private final RecordIterator itr;
+  static class ReplaceCommitIterator implements ClosableIterator<RowData> {
+    private final ClosableIterator<RowData> itr;
     private final RowDataProjection projection;
 
     ReplaceCommitIterator(
@@ -509,16 +524,16 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String tablePath,
         MergeOnReadTableState tableState,
         HoodieCDCFileSplit fileSplit,
-        Function<MergeOnReadInputSplit, RecordIterator> splitIteratorFunc) {
+        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       this.itr = initIterator(tablePath, StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf), fileSplit, splitIteratorFunc);
       this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
     }
 
-    private RecordIterator initIterator(
+    private ClosableIterator<RowData> initIterator(
         String tablePath,
         long maxCompactionMemoryInBytes,
         HoodieCDCFileSplit fileSplit,
-        Function<MergeOnReadInputSplit, RecordIterator> splitIteratorFunc) {
+        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       // init before images
 
       // the before file slice must exist,
@@ -531,19 +546,19 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     @Override
-    public boolean reachedEnd() throws IOException {
-      return this.itr.reachedEnd();
+    public boolean hasNext() {
+      return this.itr.hasNext();
     }
 
     @Override
-    public RowData nextRecord() {
-      RowData row = this.itr.nextRecord();
+    public RowData next() {
+      RowData row = this.itr.next();
       row.setRowKind(RowKind.DELETE);
       return this.projection.project(row);
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
       this.itr.close();
     }
   }
@@ -587,18 +602,18 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     private final HoodieWriteConfig writeConfig;
 
     private final RowDataSerializer serializer;
-    private final Function<MergeOnReadInputSplit, RecordIterator> splitIteratorFunc;
+    private final Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc;
 
     private final Map<String, ExternalSpillableMap<String, byte[]>> cache;
 
     public ImageManager(
         Configuration flinkConf,
         RowType rowType,
-        Function<MergeOnReadInputSplit, RecordIterator> splitIteratorFunc) {
+        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       this.serializer = new RowDataSerializer(rowType);
       this.splitIteratorFunc = splitIteratorFunc;
       this.cache = new TreeMap<>();
-      this.writeConfig = StreamerUtil.getHoodieClientConfig(flinkConf);
+      this.writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
     }
 
     public ExternalSpillableMap<String, byte[]> getOrLoadImages(
@@ -623,12 +638,12 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         long maxCompactionMemoryInBytes,
         FileSlice fileSlice) throws IOException {
       MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(writeConfig.getBasePath(), fileSlice, maxCompactionMemoryInBytes);
-      RecordIterator itr = splitIteratorFunc.apply(inputSplit);
+      ClosableIterator<RowData> itr = splitIteratorFunc.apply(inputSplit);
       // initialize the image records map
       ExternalSpillableMap<String, byte[]> imageRecordsMap =
           FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes);
-      while (!itr.reachedEnd()) {
-        RowData row = itr.nextRecord();
+      while (itr.hasNext()) {
+        RowData row = itr.next();
         String recordKey = row.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
         serializer.serialize(row, new BytesArrayOutputView(baos));

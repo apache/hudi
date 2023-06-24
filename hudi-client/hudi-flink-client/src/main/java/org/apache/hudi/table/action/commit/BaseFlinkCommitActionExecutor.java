@@ -19,11 +19,12 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -41,8 +42,8 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -67,10 +68,10 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayload> extends
+public abstract class BaseFlinkCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseFlinkCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseFlinkCommitActionExecutor.class);
 
   protected HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 
@@ -106,7 +107,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
         ? BucketType.INSERT
         : BucketType.UPDATE;
     handleUpsertPartition(
-        instantTime,
         partitionPath,
         fileId,
         bucketType,
@@ -131,7 +131,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
 
   @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(extraMetadata, result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(extraMetadata, HoodieListData.eager(result.getWriteStatuses()), result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
@@ -140,7 +140,8 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
         extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result,
+      List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     result.setCommitted(true);
@@ -152,7 +153,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
-      writeTableMetadata(metadata, actionType);
+      writeTableMetadata(metadata, writeStatuses, actionType);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -164,14 +165,8 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
-  @Override
-  protected boolean isWorkloadProfileNeeded() {
-    return true;
-  }
-
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(
-      String instantTime,
       String partitionPath,
       String fileIdHint,
       BucketType bucketType,
@@ -225,7 +220,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      FlinkMergeHelper.newInstance().runMerge(table, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited

@@ -128,12 +128,12 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     // assert clustering complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-        .filterCompletedInstants().getInstants()
+        .filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending clustering must be completed");
 
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-            .getCompletedReplaceTimeline().getInstants()
+            .getCompletedReplaceTimeline().getInstantsAsStream()
             .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending clustering must be completed");
   }
@@ -156,7 +156,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     // assert clustering complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-            .getCompletedReplaceTimeline().getInstants()
+            .getCompletedReplaceTimeline().getInstantsAsStream()
             .map(HoodieInstant::getTimestamp).count() > 0,
         "Completed clustering couldn't be 0");
   }

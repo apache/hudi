@@ -32,6 +32,12 @@
     {
            "name":"version",
            "type":["int", "null"],
-           "default": 1
-    }]
+           "default": 2
+    },
+    {
+           "name": "savepointToRestoreTimestamp",
+           "type": ["null", "string"],
+           "default": null
+    }
+    ]
 }

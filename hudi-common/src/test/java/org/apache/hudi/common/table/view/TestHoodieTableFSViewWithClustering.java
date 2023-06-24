@@ -51,6 +51,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+/**
+ * Tests {@link TestHoodieTableFSViewWithClustering}.
+ */
 public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness {
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";
@@ -64,6 +67,12 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
     basePath = metaClient.getBasePathV2().toString();
     refreshFsView();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    closeFsView();
+    cleanMetaClient();
   }
 
   protected void refreshFsView() throws IOException {

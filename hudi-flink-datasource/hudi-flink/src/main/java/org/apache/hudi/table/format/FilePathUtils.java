@@ -20,9 +20,11 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -133,6 +135,52 @@ public class FilePathUtils {
       }
     }
     return sb.toString();
+  }
+
+  /**
+   * Generates partition key value mapping from path with special cases processing:
+   * - for date time type partition field
+   * - for field that does not exist in schema
+   * Common method for usage in both COW and MOR tables.
+   *
+   * @param filePath   Partition file path
+   * @param fieldNames Table field names
+   * @param fieldTypes Table field types
+   * @param partDefaultName FlinkOptions.PARTITION_DEFAULT_NAME
+   * @param partPathField FlinkOptions.PARTITION_PATH_FIELD
+   * @param hiveStylePartitioning FlinkOptions.HIVE_STYLE_PARTITIONING
+   * @return Sequential partition specs
+   */
+  public static LinkedHashMap<String, Object> generatePartitionSpecs(
+      String filePath,
+      List<String> fieldNames,
+      List<DataType> fieldTypes,
+      String partDefaultName,
+      String partPathField,
+      boolean hiveStylePartitioning) {
+    String[] partitionKeys = partPathField == null || FlinkOptions.PARTITION_PATH_FIELD.defaultValue().equals(partPathField)
+        ? new String[0]
+        : partPathField.split(",");
+    LinkedHashMap<String, String> partSpec = extractPartitionKeyValues(
+        new org.apache.hadoop.fs.Path(filePath).getParent(),
+        hiveStylePartitioning,
+        partitionKeys);
+    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
+    partSpec.forEach((k, v) -> {
+      final int idx = fieldNames.indexOf(k);
+      if (idx == -1) {
+        // for any rare cases that the partition field does not exist in schema,
+        // fallback to file read
+        return;
+      }
+      DataType fieldType = fieldTypes.get(idx);
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(partDefaultName.equals(v) ? null : v, fieldType));
+      }
+    });
+    return partObjects;
   }
 
   /**

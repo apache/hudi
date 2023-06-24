@@ -21,6 +21,9 @@ package org.apache.hudi.common.util;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+/**
+ * Utils for Base64 encoding and decoding.
+ */
 public final class Base64CodecUtil {
 
   /**

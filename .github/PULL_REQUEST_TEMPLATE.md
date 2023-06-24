@@ -6,9 +6,9 @@ _Describe context and summary for this change. Highlight if any code was copied.
 
 _Describe any public API or user-facing feature change or any performance impact._
 
-**Risk level: none | low | medium | high**
+### Risk level (write none, low medium or high below)
 
-_Choose one. If medium or high, explain what verification was done to mitigate the risks._
+_If medium or high, explain what verification was done to mitigate the risks._
 
 ### Documentation Update
 

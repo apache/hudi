@@ -19,6 +19,7 @@
 package org.apache.hudi.common;
 
 import org.apache.hudi.common.metrics.Registry;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -27,6 +28,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests metrics {@link Registry}.
+ */
 public class TestRegistry {
 
   @Test

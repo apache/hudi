@@ -32,6 +32,8 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -40,8 +42,10 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -65,6 +69,8 @@ import java.util.stream.Collectors;
 @ShellComponent
 public class ExportCommand {
 
+  private static final Logger LOG = LoggerFactory.getLogger(ExportCommand.class);
+
   @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
       @ShellOption(value = {"--limit"}, help = "Limit Instants", defaultValue = "-1") final Integer limit,
@@ -75,7 +81,7 @@ public class ExportCommand {
       throws Exception {
 
     final String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    final Path archivePath = new Path(basePath + "/.hoodie/.commits_.archive*");
+    final Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath());
     final Set<String> actionSet = new HashSet<String>(Arrays.asList(filter.split(",")));
     int numExports = limit == -1 ? Integer.MAX_VALUE : limit;
     int numCopied = 0;
@@ -87,7 +93,7 @@ public class ExportCommand {
     // The non archived instants can be listed from the Timeline.
     HoodieTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedInstants()
         .filter(i -> actionSet.contains(i.getAction()));
-    List<HoodieInstant> nonArchivedInstants = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> nonArchivedInstants = timeline.getInstants();
 
     // Archived instants are in the commit archive files
     FileStatus[] statuses = FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
@@ -119,11 +125,11 @@ public class ExportCommand {
       Reader reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       // read the avro blocks
-      while (reader.hasNext() && copyCount < limit) {
+      while (reader.hasNext() && copyCount++ < limit) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
+        try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
           while (recordItr.hasNext()) {
-            IndexedRecord ir = recordItr.next();
+            IndexedRecord ir = recordItr.next().getData();
             // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
             // metadata record from the entry and convert it to json.
             HoodieArchivedMetaEntry archiveEntryRecord = (HoodieArchivedMetaEntry) SpecificData.get()
@@ -156,11 +162,12 @@ public class ExportCommand {
             }
 
             final String instantTime = archiveEntryRecord.get("commitTime").toString();
+            if (metadata == null) {
+              LOG.error("Could not load metadata for action " + action + " at instant time " + instantTime);
+              continue;
+            }
             final String outPath = localFolder + Path.SEPARATOR + instantTime + "." + action;
             writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
-            if (++copyCount == limit) {
-              break;
-            }
           }
         }
       }

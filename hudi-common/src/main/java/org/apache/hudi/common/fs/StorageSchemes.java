@@ -25,58 +25,69 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false),
+  FILE("file", false, false, true),
   // Hadoop File System
-  HDFS("hdfs", true),
+  HDFS("hdfs", true, false, true),
   // Baidu Advanced File System
-  AFS("afs", true),
+  AFS("afs", true, null, null),
   // Mapr File System
-  MAPRFS("maprfs", true),
+  MAPRFS("maprfs", true, null, null),
   // Apache Ignite FS
-  IGNITE("igfs", true),
+  IGNITE("igfs", true, null, null),
   // AWS S3
-  S3A("s3a", false), S3("s3", false),
+  S3A("s3a", false, true, null), S3("s3", false, true, null),
   // Google Cloud Storage
-  GCS("gs", false),
+  GCS("gs", false, true, null),
   // Azure WASB
-  WASB("wasb", false), WASBS("wasbs", false),
+  WASB("wasb", false, null, null), WASBS("wasbs", false, null, null),
   // Azure ADLS
-  ADL("adl", false),
+  ADL("adl", false, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", false), ABFSS("abfss", false),
+  ABFS("abfs", false, null, null), ABFSS("abfss", false, null, null),
   // Aliyun OSS
-  OSS("oss", false),
+  OSS("oss", false, null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
-  VIEWFS("viewfs", true),
+  // View FS support atomic creation
+  VIEWFS("viewfs", true, null, true),
   //ALLUXIO
-  ALLUXIO("alluxio", false),
+  ALLUXIO("alluxio", false, null, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", false),
+  COSN("cosn", false, null, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true),
+  CHDFS("ofs", true, null, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false),
+  GOOSEFS("gfs", false, null, null),
   // Databricks file system
-  DBFS("dbfs", false),
+  DBFS("dbfs", false, null, null),
   // IBM Cloud Object Storage
-  COS("cos", false),
+  COS("cos", false, null, null),
   // Huawei Cloud Object Storage
-  OBS("obs", false),
+  OBS("obs", false, null, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false),
+  KS3("ks3", false, null, null),
   // JuiceFileSystem
-  JFS("jfs", true),
+  JFS("jfs", true, null, null),
   // Baidu Object Storage
-  BOS("bos", false),
+  BOS("bos", false, null, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false);
+  OCI("oci", false, null, null),
+  // Volcengine Object Storage
+  TOS("tos", false, null, null),
+  // Volcengine Cloud HDFS
+  CFS("cfs", true, null, null);
 
   private String scheme;
   private boolean supportsAppend;
+  // null for uncertain if write is transactional, please update this for each FS
+  private Boolean isWriteTransactional;
+  // null for uncertain if dfs support atomic create&delete, please update this for each FS
+  private Boolean supportAtomicCreation;
 
-  StorageSchemes(String scheme, boolean supportsAppend) {
+  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
+    this.isWriteTransactional = isWriteTransactional;
+    this.supportAtomicCreation = supportAtomicCreation;
   }
 
   public String getScheme() {
@@ -85,6 +96,14 @@ public enum StorageSchemes {
 
   public boolean supportsAppend() {
     return supportsAppend;
+  }
+
+  public boolean isWriteTransactional() {
+    return isWriteTransactional != null && isWriteTransactional;
+  }
+
+  public boolean isAtomicCreationSupported() {
+    return supportAtomicCreation != null && supportAtomicCreation;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -96,5 +115,20 @@ public enum StorageSchemes {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isWriteTransactional(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isWriteTransactional() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isAtomicCreationSupported(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isAtomicCreationSupported() && s.scheme.equals(scheme));
   }
 }

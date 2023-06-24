@@ -39,6 +39,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -216,11 +217,17 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
   private String generateExpectDataWithExtraMetadata(int records, Map<String, Integer[]> data) throws IOException {
     List<Comparable[]> rows = new ArrayList<>();
+    Map<String, Pair<String, String>> expectedNums = new HashMap<>();
+    expectedNums.put("106", Pair.of("50", "30"));
+    expectedNums.put("105", Pair.of("40", "20"));
+    expectedNums.put("104", Pair.of("20", "10"));
+    expectedNums.put("103", Pair.of("15", "15"));
     data.forEach((key, value) -> {
       for (int i = 0; i < records; i++) {
         // there are more than 1 partitions, so need to * partitions
         rows.add(new Comparable[] {HoodieTimeline.COMMIT_ACTION, key, "2015/03/16", HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
-            HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT, key.equals("104") ? "20" : "15", "0", "0", key.equals("104") ? "10" : "15",
+            HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
+            expectedNums.get(key).getLeft(), "0", "0", expectedNums.get(key).getRight(),
             "0", HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_BLOCKS, "0", "0", HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
             "0", HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES});
       }
@@ -247,12 +254,14 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // archived 101 and 102 instant, generate expect data
-    assertEquals(2, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
-        "There should 2 instants not be archived!");
+    assertEquals(4, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+        "There should 4 instants not be archived!");
 
-    // archived 101 and 102 instants, remove 103 and 104 instant
+    // archived 101 and 102 instants, remove instant 103 to 106
     data.remove("103");
     data.remove("104");
+    data.remove("105");
+    data.remove("106");
     String expected = generateExpectData(1, data);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(result.toString());
@@ -264,7 +273,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -272,6 +281,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     // generate data and metadata
     Map<String, Integer[]> data = new LinkedHashMap<>();
+    data.put("106", new Integer[] {50, 30});
+    data.put("105", new Integer[] {40, 20});
     data.put("104", new Integer[] {20, 10});
     data.put("103", new Integer[] {15, 15});
     data.put("102", new Integer[] {25, 45});
@@ -287,7 +298,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     if (enableMetadataTable) {
       // Simulate a compaction commit in metadata table timeline
       // so the archival in data table can happen
-      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "104");
+      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "106");
     }
 
     // archive
@@ -305,7 +316,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -340,8 +351,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     Object result = shell.evaluate(() -> String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
-    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
-        "There should 3 instants not be archived!");
+    assertEquals(5, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+        "There should 5 instants not be archived!");
 
     Map<String, Integer[]> data2 = new LinkedHashMap<>();
     for (int i = 174; i >= 161; i--) {
@@ -521,7 +532,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     // the latest instant of test_table2 is 101
     List<String> commitsToCatchup = metaClient.getActiveTimeline().findInstantsAfter("101", Integer.MAX_VALUE)
-        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     String expected = String.format("Source %s is ahead by %d commits. Commits to catch up - %s",
         tableName1, commitsToCatchup.size(), commitsToCatchup);
     assertEquals(expected, result.toString());

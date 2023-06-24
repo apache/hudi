@@ -24,11 +24,13 @@ import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -39,8 +41,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -82,10 +84,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
+  private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new HashMap<>();
 
-  private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
   /**
    * Loads all the archived instants.
@@ -140,7 +143,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadCompletedInstantDetailsInMemory() {
     loadInstants(null, true,
-        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString()));
+        record -> {
+          // Very old archived instants don't have action state set.
+          Object action = record.get(ACTION_STATE);
+          return action == null || HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+        });
   }
 
   public void loadCompactionDetailsInMemory(String compactionInstantTime) {
@@ -149,9 +156,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new TimeRangeFilter(startTs, endTs), true, record ->
-        record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
-            && HoodieInstant.State.INFLIGHT.toString().equals(record.get(ACTION_STATE).toString())
+    loadInstants(new TimeRangeFilter(startTs, endTs), true,
+        record -> {
+          // Older files don't have action state set.
+          Object action = record.get(ACTION_STATE);
+          return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
+            && (action == null || HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+      }
     );
   }
 
@@ -176,6 +187,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
+    final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     if (loadDetails) {
       getMetadataKey(action).map(key -> {
         Object actionData = record.get(key);
@@ -189,7 +201,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return null;
       });
     }
-    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
+    return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+        instantTime, stateTransitionTime);
   }
 
   @Nonnull
@@ -205,6 +218,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       case HoodieTimeline.SAVEPOINT_ACTION:
         return Option.of("hoodieSavePointMetadata");
       case HoodieTimeline.COMPACTION_ACTION:
+      case HoodieTimeline.LOG_COMPACTION_ACTION:
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
@@ -257,11 +271,12 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
               // TODO If we can store additional metadata in datablock, we can skip parsing records
               // (such as startTime, endTime of records in the block)
-              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordIterator()) {
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> itr = avroBlock.getRecordIterator(HoodieRecordType.AVRO)) {
                 StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
                     // Filter blocks in desired time window
-                    .filter(r -> commitsFilter.apply((GenericRecord) r))
-                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                    .map(r -> (GenericRecord) r.getData())
+                    .filter(commitsFilter::apply)
+                    .map(r -> readCommit(r, loadInstantDetails))
                     .filter(c -> filter == null || filter.isInRange(c))
                     .forEach(instantsInRange::add);
               }
@@ -363,8 +378,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
     // filter in-memory instants
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return new HoodieDefaultTimeline(getInstants().filter(i ->
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(i ->
             readCommits.containsKey(i.getTimestamp()))
         .filter(s -> validActions.contains(s.getAction())), details);
   }

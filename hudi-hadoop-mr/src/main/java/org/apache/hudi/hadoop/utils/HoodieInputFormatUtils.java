@@ -18,6 +18,30 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -31,30 +55,8 @@ import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.HoodieHFileInputFormat;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,9 +69,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 
 public class HoodieInputFormatUtils {
 
@@ -79,7 +83,7 @@ public class HoodieInputFormatUtils {
   public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
   public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
 
-  private static final Logger LOG = LogManager.getLogger(HoodieInputFormatUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieInputFormatUtils.class);
 
   public static FileInputFormat getInputFormat(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
     switch (baseFileFormat) {
@@ -106,6 +110,16 @@ public class HoodieInputFormatUtils {
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
+  }
+
+  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
+    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && usePreApacheFormat) {
+      // Parquet input format had an InputFormat class visible under the old naming scheme.
+      return realtime
+          ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
+          : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
+    }
+    return getInputFormatClassName(baseFileFormat, realtime);
   }
 
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime) {
@@ -272,7 +286,14 @@ public class HoodieInputFormatUtils {
     } else {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
-    return Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants());
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(job.getConfiguration()
+        .get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
+    HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(
+        baseTimeline.getCommitsTimeline().filterCompletedInstants(),
+        tableMetaClient,
+        handlingMode);
+
+    return Option.of(filteredTimeline);
   }
 
   /**
@@ -283,8 +304,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static Option<List<HoodieInstant>> getCommitsForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
-    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline)
-        .getInstants().collect(Collectors.toList()));
+    return Option.of(getHoodieTimelineForIncrementalQuery(job, tableName, timeline).getInstants());
   }
 
   /**
@@ -386,8 +406,9 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Takes in a list of filesStatus and a list of table metadatas. Groups the files status list
+   * Takes in a list of filesStatus and a list of table metadata. Groups the files status list
    * based on given table metadata.
+   *
    * @param fileStatuses
    * @param fileExtension
    * @param metaClientList
@@ -496,19 +517,5 @@ public class HoodieInputFormatUtils {
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
         .collect(Collectors.toSet());
-  }
-
-  /**
-   * Returns the commit metadata of the given instant.
-   *
-   * @param instant   The hoodie instant
-   * @param timeline  The timeline
-   * @return the commit metadata
-   */
-  public static HoodieCommitMetadata getCommitMetadata(
-      HoodieInstant instant,
-      HoodieTimeline timeline) throws IOException {
-    byte[] data = timeline.getInstantDetails(instant).get();
-    return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
   }
 }

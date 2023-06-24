@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
+import org.joda.time.DateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -103,5 +104,33 @@ public class TestSparkClusteringPlanPartitionFilter {
     List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
     assertEquals(1, list.size());
     assertSame("20211222", list.get(0));
+  }
+
+  @Test
+  public void testDayRollingPartitionFilter() {
+    HoodieWriteConfig config = hoodieWriteConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.DAY_ROLLING)
+            .build())
+        .build();
+    PartitionAwareClusteringPlanStrategy sg = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
+    ArrayList<String> fakeTimeBasedPartitionsPath = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
+    }
+    List filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    assertEquals(1, filterPartitions.size());
+    assertEquals(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
+    fakeTimeBasedPartitionsPath = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
+      fakeTimeBasedPartitionsPath.add("20220302" + (i >= 10 ? String.valueOf(i) : "0" + i));
+    }
+    filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    assertEquals(2, filterPartitions.size());
+
+    int hourOfDay = DateTime.now().getHourOfDay();
+    String suffix = hourOfDay >= 10 ? hourOfDay + "" : "0" + hourOfDay;
+    assertEquals("20220301" + suffix, filterPartitions.get(0));
+    assertEquals("20220302" + suffix, filterPartitions.get(1));
   }
 }

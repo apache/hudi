@@ -48,10 +48,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -77,7 +77,7 @@ import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 @ShellComponent
 public class CompactionCommand {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
 
@@ -220,13 +220,13 @@ public class CompactionCommand {
       @ShellOption(value = {"--parallelism"}, defaultValue = "3",
           help = "Parallelism for hoodie compaction") final String parallelism,
       @ShellOption(value = "--schemaFilePath",
-          help = "Path for Avro schema file", defaultValue = ShellOption.NULL) final String schemaFilePath,
+          help = "Path for Avro schema file", defaultValue = "") final String schemaFilePath,
       @ShellOption(value = "--sparkMaster", defaultValue = "local",
           help = "Spark Master") String master,
       @ShellOption(value = "--sparkMemory", defaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
       @ShellOption(value = "--retry", defaultValue = "1", help = "Number of retries") final String retry,
-      @ShellOption(value = "--compactionInstant", help = "Base path for the target hoodie table",
+      @ShellOption(value = "--compactionInstant", help = "Instant of compaction.request",
           defaultValue = ShellOption.NULL) String compactionInstantTime,
       @ShellOption(value = "--propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
           defaultValue = "") final String propsFilePath,
@@ -317,7 +317,7 @@ public class CompactionCommand {
         .collect(Collectors.toList());
 
     Set<String> committedInstants = timeline.getCommitTimeline().filterCompletedInstants()
-        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();
     for (Pair<HoodieInstant, HoodieCompactionPlan> compactionPlan : compactionPlans) {

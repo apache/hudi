@@ -52,6 +52,30 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("ks3"));
     assertTrue(StorageSchemes.isAppendSupported("ofs"));
     assertFalse(StorageSchemes.isAppendSupported("oci"));
+    assertFalse(StorageSchemes.isAppendSupported("tos"));
+    assertTrue(StorageSchemes.isAppendSupported("cfs"));
+
+    assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
+    assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("afs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("s3a"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("gs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("wasb"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("adl"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("abfs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("oss"));
+    assertTrue(StorageSchemes.isAtomicCreationSupported("viewfs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("alluxio"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("cosn"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("dbfs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("cos"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("jfs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("bos"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("ks3"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("ofs"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("oci"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("tos"));
+    assertFalse(StorageSchemes.isAtomicCreationSupported("cfs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");

@@ -36,6 +36,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,6 +58,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests {@link PriorityBasedFileSystemView}.
+ */
 @ExtendWith(MockitoExtension.class)
 public class TestPriorityBasedFileSystemView {
 
@@ -78,6 +82,13 @@ public class TestPriorityBasedFileSystemView {
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    testFileSliceStream.close();
+    testBaseFileStream.close();
+    fsView.close();
   }
 
   private void resetMocks() {
@@ -529,7 +540,7 @@ public class TestPriorityBasedFileSystemView {
   public void testGetPendingCompactionOperations() {
     Stream<Pair<String, CompactionOperation>> actual;
     Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
-        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
         .stream();
 
     when(primary.getPendingCompactionOperations()).thenReturn(expected);
@@ -551,6 +562,35 @@ public class TestPriorityBasedFileSystemView {
     when(secondary.getPendingCompactionOperations()).thenThrow(new RuntimeException());
     assertThrows(RuntimeException.class, () -> {
       fsView.getPendingCompactionOperations();
+    });
+  }
+
+  @Test
+  public void testGetPendingLogCompactionOperations() {
+    Stream<Pair<String, CompactionOperation>> actual;
+    Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
+            (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+        .stream();
+
+    when(primary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(primary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getPendingLogCompactionOperations();
     });
   }
 

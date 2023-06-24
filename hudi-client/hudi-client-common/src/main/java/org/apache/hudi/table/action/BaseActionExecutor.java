@@ -24,14 +24,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O, R> implements Serializable {
+public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
@@ -54,11 +54,11 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
 
   /**
    * Writes commits metadata to table metadata.
+   *
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
-    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
-        metadata, instantTime, table.isTableServiceAction(actionType)));
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, writeStatus, instantTime));
   }
 
   /**
@@ -74,7 +74,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata rollback metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRollbackMetadata metadata) {
-    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
   }
 
   /**
@@ -82,6 +82,6 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata restore metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRestoreMetadata metadata) {
-    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
   }
 }

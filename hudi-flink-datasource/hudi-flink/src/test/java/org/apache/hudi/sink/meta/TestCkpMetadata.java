@@ -28,20 +28,23 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Test cases for {@link CkpMetadata}.
  */
 public class TestCkpMetadata {
-
-  private CkpMetadata metadata;
 
   @TempDir
   File tempFile;
@@ -49,16 +52,14 @@ public class TestCkpMetadata {
   @BeforeEach
   public void beforeEach() throws Exception {
     String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(new Configuration()));
-
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     StreamerUtil.initTableIfNotExists(conf);
-
-    this.metadata = CkpMetadata.getInstance(fs, basePath);
   }
 
-  @Test
-  void testWriteAndReadMessage() {
+  @ParameterizedTest
+  @ValueSource(strings = {"", "1"})
+  void testWriteAndReadMessage(String uniqueId) {
+    CkpMetadata metadata = getCkpMetadata(uniqueId);
     // write and read 5 committed checkpoints
     IntStream.range(0, 3).forEach(i -> metadata.startInstant(i + ""));
 
@@ -73,5 +74,29 @@ public class TestCkpMetadata {
     metadata.commitInstant("6");
     metadata.abortInstant("7");
     assertThat(metadata.getMessages().size(), is(5));
+  }
+
+  @Test
+  void testBootstrap() throws Exception {
+    CkpMetadata metadata = getCkpMetadata("");
+    // write 4 instants to the ckp_meta
+    IntStream.range(0, 4).forEach(i -> metadata.startInstant(i + ""));
+    assertThat("The first instant should be removed from the instant cache",
+        metadata.getInstantCache(), is(Arrays.asList("1", "2", "3")));
+
+    // simulate the reboot of coordinator
+    CkpMetadata metadata1 = getCkpMetadata("");
+    metadata1.bootstrap();
+    assertNull(metadata1.getInstantCache(), "The instant cache should be recovered from bootstrap");
+
+    metadata1.startInstant("4");
+    assertThat("The first instant should be removed from the instant cache",
+        metadata1.getInstantCache(), is(Collections.singletonList("4")));
+  }
+
+  private CkpMetadata getCkpMetadata(String uniqueId) {
+    String basePath = tempFile.getAbsolutePath();
+    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
+    return CkpMetadata.getInstance(fs, basePath, uniqueId);
   }
 }

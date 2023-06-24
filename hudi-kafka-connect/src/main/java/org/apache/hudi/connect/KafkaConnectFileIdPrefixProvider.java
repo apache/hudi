@@ -23,13 +23,13 @@ import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.FileIdPrefixProvider;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
 
   public static final String KAFKA_CONNECT_PARTITION_ID = "hudi.kafka.connect.partition";
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectFileIdPrefixProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectFileIdPrefixProvider.class);
 
   private final String kafkaPartition;
 

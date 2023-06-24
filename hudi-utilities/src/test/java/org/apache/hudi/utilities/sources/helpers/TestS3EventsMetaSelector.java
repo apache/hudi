@@ -44,8 +44,8 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,8 +73,8 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
     props = new TypedProperties();
     sqsUrl = "test-queue";
-    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
-    props.setProperty(S3_SOURCE_QUEUE_REGION, REGION_NAME);
+    props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION.key(), REGION_NAME);
   }
 
   @AfterEach
@@ -89,7 +89,8 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
     // setup s3 record
     String bucket = "test-bucket";
-    String key = "part-foo-bar.snappy.parquet";
+    String key = "part%3Dpart%2Bpart%24part%A3part%23part%26part%3Fpart%7Epart%25.snappy.parquet";
+    String keyRes = "part=part+part$part£part#part&part?part~part%.snappy.parquet";
     Path path = new Path(bucket, key);
     CloudObjectTestUtils.setMessagesInQueue(sqs, path);
 
@@ -102,7 +103,7 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     assertEquals(1, eventFromQueue.getLeft().size());
     assertEquals(1, processed.size());
     assertEquals(
-        key,
+        keyRes,
         new JSONObject(eventFromQueue.getLeft().get(0))
             .getJSONObject("s3")
             .getJSONObject("object")

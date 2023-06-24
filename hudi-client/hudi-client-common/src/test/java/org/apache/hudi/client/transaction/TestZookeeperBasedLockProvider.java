@@ -18,19 +18,22 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.exception.HoodieLockException;
+
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
 import org.apache.curator.test.TestingServer;
-import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -43,7 +46,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 
 public class TestZookeeperBasedLockProvider {
 
-  private static final Logger LOG = LogManager.getLogger(TestZookeeperBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestZookeeperBasedLockProvider.class);
 
   private static TestingServer server;
   private static CuratorFramework client;
@@ -73,6 +76,16 @@ public class TestZookeeperBasedLockProvider {
     properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
     properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
     lockConfiguration = new LockConfiguration(properties);
+  }
+
+  @AfterAll
+  public static void tearDown() throws IOException {
+    if (server != null) {
+      server.close();
+    }
+    if (client != null) {
+      client.close();
+    }
   }
 
   @Test

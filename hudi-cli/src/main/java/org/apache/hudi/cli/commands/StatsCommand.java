@@ -45,7 +45,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * CLI command to displays stats options.
@@ -73,7 +72,7 @@ public class StatsCommand {
 
     List<Comparable[]> rows = new ArrayList<>();
     DecimalFormat df = new DecimalFormat("#.00");
-    for (HoodieInstant instantTime : timeline.getInstants().collect(Collectors.toList())) {
+    for (HoodieInstant instantTime : timeline.getInstants()) {
       String waf = "0";
       HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instantTime).get(),
           HoodieCommitMetadata.class);

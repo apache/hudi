@@ -24,6 +24,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -118,5 +119,44 @@ public class TypedProperties extends Properties implements Serializable {
 
   public double getDouble(String property, double defaultValue) {
     return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
+  }
+
+  /**
+   * This method is introduced to get rid of the scala compile error:
+   * <pre>
+   *   <code>
+   *   ambiguous reference to overloaded definition,
+   *   both method putAll in class Properties of type (x$1: java.util.Map[_, _])Unit
+   *   and  method putAll in class Hashtable of type (x$1: java.util.Map[_ <: Object, _ <: Object])Unit
+   *   match argument types (java.util.HashMap[Nothing,Nothing])
+   *       properties.putAll(new java.util.HashMap())
+   *   </code>
+   * </pre>
+   *
+   * @param items The new items to put
+   */
+  public static TypedProperties fromMap(Map<?, ?> items) {
+    TypedProperties props = new TypedProperties();
+    props.putAll(items);
+    return props;
+  }
+
+  /**
+   * This method is introduced to get rid of the scala compile error:
+   * <pre>
+   *   <code>
+   *   ambiguous reference to overloaded definition,
+   *   both method putAll in class Properties of type (x$1: java.util.Map[_, _])Unit
+   *   and  method putAll in class Hashtable of type (x$1: java.util.Map[_ <: Object, _ <: Object])Unit
+   *   match argument types (java.util.HashMap[Nothing,Nothing])
+   *       properties.putAll(new java.util.HashMap())
+   *   </code>
+   * </pre>
+   *
+   * @param props The properties
+   * @param items The new items to put
+   */
+  public static void putAll(TypedProperties props, Map<?, ?> items) {
+    props.putAll(items);
   }
 }

@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -59,6 +60,16 @@ public class BaseFileHandler extends Handler {
   public List<BaseFileDTO> getLatestDataFilesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFilesBeforeOrOn(partitionPath, maxInstantTime)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
+  }
+
+  public Map<String, List<BaseFileDTO>> getAllLatestDataFilesBeforeOrOn(String basePath, String maxInstantTime) {
+    return viewManager.getFileSystemView(basePath)
+        .getAllLatestBaseFilesBeforeOrOn(maxInstantTime)
+        .entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue().map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList())
+        ));
   }
 
   public List<BaseFileDTO> getLatestDataFileOn(String basePath, String partitionPath, String instantTime,

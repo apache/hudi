@@ -28,6 +28,9 @@ import java.time.format.DateTimeParseException;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Tests {@link DateTimeUtils}.
+ */
 public class TestDateTimeUtils {
 
   @ParameterizedTest

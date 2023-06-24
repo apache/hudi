@@ -23,14 +23,14 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,8 +53,17 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public class HiveSchemaUtil {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSchemaUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
+
+  public static final String BOOLEAN_TYPE_NAME = "boolean";
+  public static final String INT_TYPE_NAME = "int";
+  public static final String BIGINT_TYPE_NAME = "bigint";
+  public static final String FLOAT_TYPE_NAME = "float";
+  public static final String DOUBLE_TYPE_NAME = "double";
+  public static final String STRING_TYPE_NAME = "string";
+  public static final String BINARY_TYPE_NAME = "binary";
+  public static final String DATE_TYPE_NAME = "date";
 
   /**
    * Get the schema difference between the storage schema and hive table schema.
@@ -230,7 +239,7 @@ public class HiveSchemaUtil {
             .append(decimalMetadata.getScale()).append(")").toString();
       } else if (originalType == OriginalType.DATE) {
         return field.append("DATE").toString();
-      } else if (supportTimestamp && originalType == OriginalType.TIMESTAMP_MICROS) {
+      } else if (supportTimestamp && (originalType == OriginalType.TIMESTAMP_MICROS || originalType == OriginalType.TIMESTAMP_MILLIS)) {
         return field.append("TIMESTAMP").toString();
       }
 
@@ -238,17 +247,17 @@ public class HiveSchemaUtil {
       return parquetPrimitiveTypeName.convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
         @Override
         public String convertBOOLEAN(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "boolean";
+          return BOOLEAN_TYPE_NAME;
         }
 
         @Override
         public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "int";
+          return INT_TYPE_NAME;
         }
 
         @Override
         public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "bigint";
+          return BIGINT_TYPE_NAME;
         }
 
         @Override
@@ -258,25 +267,25 @@ public class HiveSchemaUtil {
 
         @Override
         public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "float";
+          return FLOAT_TYPE_NAME;
         }
 
         @Override
         public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "double";
+          return DOUBLE_TYPE_NAME;
         }
 
         @Override
         public String convertFIXED_LEN_BYTE_ARRAY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "binary";
+          return BINARY_TYPE_NAME;
         }
 
         @Override
         public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
           if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
-            return "string";
+            return STRING_TYPE_NAME;
           } else {
-            return "binary";
+            return BINARY_TYPE_NAME;
           }
         }
       });
@@ -314,7 +323,7 @@ public class HiveSchemaUtil {
             return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
           case ENUM:
           case UTF8:
-            return "string";
+            return STRING_TYPE_NAME;
           case MAP_KEY_VALUE:
             // MAP_KEY_VALUE was supposed to be used to annotate key and
             // value group levels in a
@@ -420,9 +429,9 @@ public class HiveSchemaUtil {
     newType = newType.toLowerCase();
     if (prevType.equals(newType)) {
       return true;
-    } else if (prevType.equalsIgnoreCase("int") && newType.equalsIgnoreCase("bigint")) {
+    } else if (prevType.equalsIgnoreCase(INT_TYPE_NAME) && newType.equalsIgnoreCase(BIGINT_TYPE_NAME)) {
       return true;
-    } else if (prevType.equalsIgnoreCase("float") && newType.equalsIgnoreCase("double")) {
+    } else if (prevType.equalsIgnoreCase(FLOAT_TYPE_NAME) && newType.equalsIgnoreCase(DOUBLE_TYPE_NAME)) {
       return true;
     } else {
       return prevType.contains("struct") && newType.toLowerCase().contains("struct");
@@ -516,6 +525,6 @@ public class HiveSchemaUtil {
     // Default the unknown partition fields to be String
     // TODO - all partition fields should be part of the schema. datestr is treated as special.
     // Dont do that
-    return "String";
+    return STRING_TYPE_NAME;
   }
 }

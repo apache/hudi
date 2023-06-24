@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.StringUtils;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import com.beust.jcommander.ParametersDelegate;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -46,7 +46,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
     + "  The tool does not roll back any synced partitions but only the timestamp.")
 public class HiveSyncGlobalCommitParams {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitParams.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncGlobalCommitParams.class);
 
   public static String LOCAL_HIVE_SITE_URI = "hivesyncglobal.local_hive_site_uri";
   public static String REMOTE_HIVE_SITE_URI = "hivesyncglobal.remote_hive_site_uri";

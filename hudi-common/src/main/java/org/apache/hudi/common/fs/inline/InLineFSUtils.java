@@ -95,11 +95,11 @@ public class InLineFSUtils {
    * input: "inlinefs://file1/s3a/?start_offset=20&length=40".
    * output: 20
    */
-  public static int startOffset(Path inlineFSPath) {
+  public static long startOffset(Path inlineFSPath) {
     assertInlineFSPath(inlineFSPath);
 
     String[] slices = inlineFSPath.toString().split("[?&=]");
-    return Integer.parseInt(slices[slices.length - 3]);
+    return Long.parseLong(slices[slices.length - 3]);
   }
 
   /**
@@ -108,11 +108,11 @@ public class InLineFSUtils {
    * input: "inlinefs:/file1/s3a/?start_offset=20&length=40".
    * output: 40
    */
-  public static int length(Path inlinePath) {
+  public static long length(Path inlinePath) {
     assertInlineFSPath(inlinePath);
 
     String[] slices = inlinePath.toString().split("[?&=]");
-    return Integer.parseInt(slices[slices.length - 1]);
+    return Long.parseLong(slices[slices.length - 1]);
   }
 
   private static void assertInlineFSPath(Path inlinePath) {

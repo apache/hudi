@@ -102,6 +102,12 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_SUCCEEDED = "Succeeded";
 
   /**
+   * Fields of Restore.
+   */
+  public static final String HEADER_RESTORE_INSTANT = "Restored " + HEADER_INSTANT;
+  public static final String HEADER_RESTORE_STATE = "Restore State";
+
+  /**
    * Fields of Stats.
    */
   public static final String HEADER_COMMIT_TIME = "CommitTime";

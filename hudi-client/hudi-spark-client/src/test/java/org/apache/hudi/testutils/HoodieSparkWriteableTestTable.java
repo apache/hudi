@@ -32,8 +32,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
-  private static final Logger LOG = LogManager.getLogger(HoodieSparkWriteableTestTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkWriteableTestTable.class);
 
   private HoodieSparkWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
                                         BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {

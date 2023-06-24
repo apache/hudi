@@ -238,6 +238,9 @@ public class TestRocksDBDAO {
     assertFalse(new File(rocksDBBasePath).exists());
   }
 
+  /**
+   * Payload key object.
+   */
   public static class PayloadKey implements Serializable {
     private String key;
 

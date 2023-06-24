@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
@@ -31,6 +32,9 @@ import java.util.List;
 import static org.apache.hudi.common.util.ObjectSizeCalculator.getObjectSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link ObjectSizeCalculator}.
+ */
 public class TestObjectSizeCalculator {
 
   @Test
@@ -73,7 +77,10 @@ public class TestObjectSizeCalculator {
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
     assertEquals(40, getObjectSize(payloadClass));
-    assertEquals(1240, getObjectSize(Schema.create(Schema.Type.STRING)));
+    // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
+    // implement props, which will change the size of the object.
+    assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
+        getObjectSize(Schema.create(Schema.Type.STRING)));
     assertEquals(104, getObjectSize(person));
   }
 
@@ -88,6 +95,9 @@ public class TestObjectSizeCalculator {
     private HoodieRecord record;
   }
 
+  /**
+   * Test class for object size estimation.
+   */
   class Person {
     private String name;
 
@@ -96,6 +106,9 @@ public class TestObjectSizeCalculator {
     }
   }
 
+  /**
+   * Test enum for object size estimation.
+   */
   public enum DayOfWeek {
     MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
   }

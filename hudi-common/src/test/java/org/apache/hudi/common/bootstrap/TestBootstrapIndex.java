@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -70,6 +71,11 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
   @BeforeEach
   public void init() throws IOException {
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test

@@ -45,7 +45,6 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   private final TypedProperties config;
 
-
   /**
    * Configs supported.
    */

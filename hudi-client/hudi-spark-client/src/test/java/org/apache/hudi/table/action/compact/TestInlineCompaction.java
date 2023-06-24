@@ -126,7 +126,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       scheduleCompaction(requestInstant, writeClient, cfg);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-      assertEquals(metaClient.getActiveTimeline().getInstants()
+      assertEquals(metaClient.getActiveTimeline().getInstantsAsStream()
             .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
                   && hoodieInstant.getState() == HoodieInstant.State.REQUESTED).count(), 1);
 
@@ -135,12 +135,12 @@ public class TestInlineCompaction extends CompactionTestBase {
       requestInstant = HoodieActiveTimeline.createNewInstantTime();
       try {
         scheduleCompaction(requestInstant, writeClient, cfg);
-        Assertions.fail();
+        Object fail = Assertions.fail();
       } catch (AssertionError error) {
         //should be here
       }
 
-      // step 3: compelete another 4 delta commit should be 2 compaction request after this
+      // step 3: complete another 4 delta commit should be 2 compaction request after this
       instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
       records = dataGen.generateInsertsForPartition(instants.get(0), 100, "2022/03/15");
       for (String instant : instants) {
@@ -223,19 +223,19 @@ public class TestInlineCompaction extends CompactionTestBase {
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(HoodieActiveTimeline.createNewInstantTime(), 10);
       SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
-      List<String> instants = IntStream.range(0, 3).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
+      List<String> instants = IntStream.range(0, 2).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
       // Then: ensure no compaction is executed since there are only 3 delta commits
-      assertEquals(3, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
-      // 4th commit, that will trigger compaction
+      assertEquals(2, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
+      // 3d commit, that will trigger compaction
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       String finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-      assertEquals(5, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
+      assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
     }
   }
 
@@ -295,7 +295,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     }
 
     // When: commit happens after 1000s. assumption is that, there won't be any new compaction getting scheduled within 100s, but the previous failed one will be
-    // rolledback and retried to move it to completion.
+    // rolled back and retried to move it to completion.
     HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(5, 1000, CompactionTriggerStrategy.TIME_ELAPSED);
     String instantTime2;
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(inlineCfg)) {

@@ -18,10 +18,40 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class TestKeyGenUtils {
+
+  @Test
+  public void testInferKeyGeneratorType() {
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), ""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), null));
+  }
 
   @Test
   public void testExtractRecordKeys() {
@@ -41,5 +71,20 @@ public class TestKeyGenUtils {
     // test simple key form: val1
     String[] s5 = KeyGenUtils.extractRecordKeys("1");
     Assertions.assertArrayEquals(new String[] {"1"}, s5);
+
+    String[] s6 = KeyGenUtils.extractRecordKeys("id:1,id2:2,2");
+    Assertions.assertArrayEquals(new String[]{"1", "2", "2"}, s6);
+  }
+
+  @Test
+  public void testExtractRecordKeysWithFields() {
+    List<String> fields = new ArrayList<>(1);
+    fields.add("id2");
+
+    String[] s1 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {"2"}, s1);
+
+    String[] s2 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,2,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {"2", "2"}, s2);
   }
 }

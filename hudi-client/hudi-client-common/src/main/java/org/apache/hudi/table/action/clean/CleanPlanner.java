@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -30,42 +31,38 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
@@ -74,9 +71,9 @@ import java.util.stream.Stream;
  * <p>
  * 2) It bounds the growth of the files in the file system
  */
-public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public class CleanPlanner<T, I, K, O> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CleanPlanner.class);
 
   public static final Integer CLEAN_PLAN_VERSION_1 = CleanPlanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
@@ -85,6 +82,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
+  private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
   private HoodieTable<T, I, K, O> hoodieTable;
   private HoodieWriteConfig config;
   private transient HoodieEngineContext context;
@@ -95,12 +93,22 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.config = config;
-    this.fgIdToPendingCompactionOperations =
-        ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
+    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) hoodieTable.getSliceView();
+    this.fgIdToPendingCompactionOperations = fileSystemView
+        .getPendingCompactionOperations()
             .map(entry -> Pair.of(
                 new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()),
                 entry.getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    this.fgIdToPendingLogCompactionOperations = fileSystemView.getPendingLogCompactionOperations()
+        .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    // load all partitions in advance if necessary.
+    if (shouldUseBatchLookup(hoodieTable.getMetaClient().getTableConfig(), config)) {
+      LOG.info("Load all partitions and files into file system view in advance.");
+      fileSystemView.loadAllPartitions();
+    }
   }
 
   /**
@@ -162,7 +170,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                  && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
+                  && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
+                  && !hoodieTable.getActiveTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
             return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
           }
         }
@@ -182,7 +191,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
         + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
         + ". New Instant to retain : " + newInstantToRetain);
-    return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
+    return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
         instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
             HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
@@ -209,21 +218,28 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    try {
-      // Because the partition of BaseTableMetadata has been deleted,
-      // all partition information can only be obtained from FileSystemBackedTableMetadata.
-      FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
-          context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
-      return fsBackedTableMetadata.getAllPartitionPaths();
-    } catch (IOException e) {
-      return Collections.emptyList();
+    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+  }
+
+  /**
+   *  Verify whether file slice exists in savepointedFiles, check both base file and log files
+   */
+  private boolean isFileSliceExistInSavepointedFiles(FileSlice fs, List<String> savepointedFiles) {
+    if (fs.getBaseFile().isPresent() && savepointedFiles.contains(fs.getBaseFile().get().getFileName())) {
+      return true;
     }
+    for (HoodieLogFile hoodieLogFile : fs.getLogFiles().collect(Collectors.toList())) {
+      if (savepointedFiles.contains(hoodieLogFile.getFileName())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
    * Selects the older versions of files for cleaning, such that it bounds the number of versions of each file. This
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
-   * single file (i.e run it with versionsRetained = 1)
+   * single file (i.e., run it with versionsRetained = 1)
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
@@ -243,8 +259,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       int keepVersions = config.getCleanerFileVersionsRetained();
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
-          fileGroup.getAllFileSlices().filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
-      if (isFileGroupInPendingCompaction(fileGroup)) {
+          fileGroup.getAllFileSlices()
+              .filter(fs -> !isFileSliceNeededForPendingMajorOrMinorCompaction(fs))
+              .iterator();
+      if (isFileGroupInPendingMajorOrMinorCompaction(fileGroup)) {
         // We have already saved the last version of file-groups for pending compaction Id
         keepVersions--;
       }
@@ -257,16 +275,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
-        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
+        if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
           continue;
         }
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
-    // if there are no valid file groups for the partition, mark it to be deleted
-    if (fileGroups.isEmpty()) {
+    // if there are no valid file groups
+    // and no pending data files under the partition [IMPORTANT],
+    // mark it to be deleted
+    if (fileGroups.isEmpty() && !hasPendingFiles(partitionPath)) {
       toDeletePartition = true;
     }
     return Pair.of(toDeletePartition, deletePaths);
@@ -323,17 +342,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
             getLatestVersionBeforeCommit(fileSliceList, earliestCommitToRetain);
 
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
-        // i.e always spare the last commit.
+        // i.e., always spare the last commit.
         for (FileSlice aSlice : fileSliceList) {
           Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
-          if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
+          if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
             continue;
           }
 
           if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-            // Dont delete the latest commit and also the last commit before the earliest commit we
+            // Do not delete the latest commit and also the last commit before the earliest commit we
             // are retaining
             // The window of commit retain == max query run time. So a query could be running which
             // still
@@ -352,7 +371,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
 
           // Always keep the last commit
-          if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
+          if (!isFileSliceNeededForPendingMajorOrMinorCompaction(aSlice) && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
@@ -361,22 +380,46 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-                || hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-              // 1. If merge on read, then clean the log files for the commits as well;
-              // 2. If change log capture is enabled, clean the log files no matter the table type is mor or cow.
-              deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-                  .collect(Collectors.toList()));
-            }
+            // clean the log files for the commits, which contain cdc log files in cdc scenario
+            // and normal log files for mor tables.
+            deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+                .collect(Collectors.toList()));
           }
         }
       }
-      // if there are no valid file groups for the partition, mark it to be deleted
-      if (fileGroups.isEmpty()) {
+      // if there are no valid file groups
+      // and no pending data files under the partition [IMPORTANT],
+      // and no subsequent replace commit after the earliest retained commit
+      // mark it to be deleted
+      if (fileGroups.isEmpty()
+          && !hasPendingFiles(partitionPath)
+          && noSubsequentReplaceCommit(earliestCommitToRetain.getTimestamp(), partitionPath)) {
         toDeletePartition = true;
       }
     }
     return Pair.of(toDeletePartition, deletePaths);
+  }
+
+  /**
+   * Returns whether there are uncommitted data files under the given partition,
+   * the pending files are generated by the inflight instants and maybe ready to commit,
+   * the partition can not be deleted as a whole if any pending file exists.
+   *
+   * <p>IMPORTANT: {@code fsView.getAllFileGroups} does not return pending file groups for metadata table,
+   * file listing must be used instead.
+   */
+  private boolean hasPendingFiles(String partitionPath) {
+    try {
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
+      Path fullPartitionPath = new Path(hoodieTable.getMetaClient().getBasePathV2(), partitionPath);
+      fsView.addFilesToView(FSUtils.getAllDataFilesInPartition(hoodieTable.getMetaClient().getFs(), fullPartitionPath));
+      // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
+      return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
+    } catch (Exception ex) {
+      // if any exception throws, assume there are existing pending files
+      LOG.warn("Error while checking the pending files under partition: " + partitionPath + ", assumes the files exist", ex);
+      return true;
+    }
   }
 
   /**
@@ -400,7 +443,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+        .filter(slice -> !isFileSliceExistInSavepointedFiles(slice, savepointedFiles))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
   }
@@ -430,23 +473,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
-    if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      // If merge on read, then clean the log files for the commits as well
-      Predicate<HoodieLogFile> notCDCLogFile =
-          hoodieLogFile -> !hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-      cleanPaths.addAll(
-          nextSlice.getLogFiles().filter(notCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-              .collect(Collectors.toList()));
-    }
-    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-      // The cdc log files will be written out in cdc scenario, no matter the table type is mor or cow.
-      // Here we need to clean uo these cdc log files.
-      Predicate<HoodieLogFile> isCDCLogFile =
-          hoodieLogFile -> hoodieLogFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
-      cleanPaths.addAll(
-          nextSlice.getLogFiles().filter(isCDCLogFile).map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
-              .collect(Collectors.toList()));
-    }
+
+    // clean the log files for the commits, which contain cdc log files in cdc scenario
+    // and normal log files for mor tables.
+    cleanPaths.addAll(
+        nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
+            .collect(Collectors.toList()));
     return cleanPaths;
   }
 
@@ -476,20 +508,13 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * Returns earliest commit to retain based on cleaning policy.
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
-    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
-    int commitsRetained = config.getCleanerCommitsRetained();
-    int hoursRetained = config.getCleanerHoursRetained();
-    if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
-        && commitTimeline.countInstants() > commitsRetained) {
-      earliestCommitToRetain = commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
-    } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      Instant instant = Instant.now();
-      ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-      String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
-              HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
-    }
-    return earliestCommitToRetain;
+    return CleanerUtils.getEarliestCommitToRetain(
+        hoodieTable.getMetaClient().getActiveTimeline().getCommitsTimeline(),
+        config.getCleanerPolicy(),
+        config.getCleanerCommitsRetained(),
+        Instant.now(),
+        config.getCleanerHoursRetained(),
+        hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
   }
 
   /**
@@ -501,6 +526,15 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     } else {
       return "";
     }
+  }
+
+  /*
+   * Determine if file slice needed to be preserved for pending compaction or log compaction.
+   * @param fileSlice File slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingMajorOrMinorCompaction(FileSlice fileSlice) {
+    return isFileSliceNeededForPendingCompaction(fileSlice) || isFileSliceNeededForPendingLogCompaction(fileSlice);
   }
 
   /**
@@ -519,7 +553,28 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return false;
   }
 
-  private boolean isFileGroupInPendingCompaction(HoodieFileGroup fg) {
-    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId());
+  /**
+   * Determine if file slice needed to be preserved for pending logcompaction.
+   *
+   * @param fileSlice File Slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingLogCompaction(FileSlice fileSlice) {
+    CompactionOperation op = fgIdToPendingLogCompactionOperations.get(fileSlice.getFileGroupId());
+    if (null != op) {
+      // If file slice's instant time is newer or same as that of operation, do not clean
+      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.GREATER_THAN_OR_EQUALS, op.getBaseInstantTime()
+      );
+    }
+    return false;
+  }
+
+  private boolean isFileGroupInPendingMajorOrMinorCompaction(HoodieFileGroup fg) {
+    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId())
+        || fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
+  }
+
+  private boolean noSubsequentReplaceCommit(String earliestCommitToRetain, String partitionPath) {
+    return !fileSystemView.getReplacedFileGroupsAfterOrOn(earliestCommitToRetain, partitionPath).findAny().isPresent();
   }
 }

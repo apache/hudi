@@ -18,14 +18,14 @@
 
 package org.apache.hudi.client.transaction.lock.metrics;
 
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.Metrics;
-
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
+
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.Metrics;
 
 import java.util.concurrent.TimeUnit;
 
@@ -46,13 +46,16 @@ public class HoodieLockMetrics {
   private transient Counter failedLockAttempts;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
+  private static final Object REGISTRY_LOCK = new Object();
+  private Metrics metrics;
 
   public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
     this.isMetricsEnabled = writeConfig.isLockingMetricsEnabled();
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {
-      MetricRegistry registry = Metrics.getInstance().getRegistry();
+      metrics = Metrics.getInstance(writeConfig);
+      MetricRegistry registry = metrics.getRegistry();
 
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
       successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
@@ -70,9 +73,13 @@ public class HoodieLockMetrics {
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {
     String metricName = getMetricsName(metric);
     if (registry.getMetrics().get(metricName) == null) {
-      lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
-      registry.register(metricName, lockDuration);
-      return lockDuration;
+      synchronized (REGISTRY_LOCK) {
+        if (registry.getMetrics().get(metricName) == null) {
+          lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
+          registry.register(metricName, lockDuration);
+          return lockDuration;
+        }
+      }
     }
     return (Timer) registry.getMetrics().get(metricName);
   }

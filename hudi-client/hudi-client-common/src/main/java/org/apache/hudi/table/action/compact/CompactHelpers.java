@@ -22,18 +22,23 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Base class helps to perform compact.
@@ -43,7 +48,7 @@ import java.util.List;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
+public class CompactHelpers<T, I, K, O> {
 
   private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
 
@@ -66,6 +71,7 @@ public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
     metadata.addMetadata(org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY, schema);
+    metadata.setOperationType(WriteOperationType.COMPACT);
     if (compactionPlan.getExtraMetadata() != null) {
       compactionPlan.getExtraMetadata().forEach(metadata::addMetadata);
     }
@@ -82,5 +88,33 @@ public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
     }
+  }
+
+  public void completeInflightLogCompaction(HoodieTable table, String logCompactionCommitTime, HoodieCommitMetadata commitMetadata) {
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    try {
+      activeTimeline.transitionLogCompactionInflightToComplete(
+          HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime),
+          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieCompactionException(
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
+    }
+  }
+
+  public Option<InstantRange> getInstantRange(HoodieTableMetaClient metaClient) {
+    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+        ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
+  }
+
+  private InstantRange getMetadataLogReaderInstantRange(HoodieTableMetaClient metadataMetaClient) {
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metadataMetaClient.getHadoopConf())
+        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePathV2().toString()))
+        .build();
+    Set<String> validInstants = HoodieTableMetadataUtil.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
+    return InstantRange.builder()
+        .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+        .explicitInstants(validInstants).build();
   }
 }

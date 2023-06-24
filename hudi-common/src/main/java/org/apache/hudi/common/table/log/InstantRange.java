@@ -22,7 +22,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A instant commits range used for incremental reader filtering.
@@ -63,7 +65,7 @@ public abstract class InstantRange implements Serializable {
    * Represents a range type.
    */
   public static enum RangeType {
-    OPEN_CLOSE, CLOSE_CLOSE
+    OPEN_CLOSE, CLOSE_CLOSE, EXPLICIT_MATCH
   }
 
   private static class OpenCloseRange extends InstantRange {
@@ -138,6 +140,23 @@ public abstract class InstantRange implements Serializable {
     }
   }
 
+  /**
+   * Class to assist in checking if an instant is part of a set of instants.
+   */
+  private static class ExplicitMatchRange extends InstantRange {
+    Set<String> instants;
+
+    public ExplicitMatchRange(Set<String> instants) {
+      super(Collections.min(instants), Collections.max(instants));
+      this.instants = instants;
+    }
+
+    @Override
+    public boolean isInRange(String instant) {
+      return this.instants.contains(instant);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
@@ -150,6 +169,7 @@ public abstract class InstantRange implements Serializable {
     private String endInstant;
     private RangeType rangeType;
     private boolean nullableBoundary = false;
+    private Set<String> explicitInstants;
 
     private Builder() {
     }
@@ -174,6 +194,11 @@ public abstract class InstantRange implements Serializable {
       return this;
     }
 
+    public Builder explicitInstants(Set<String> instants) {
+      this.explicitInstants = instants;
+      return this;
+    }
+
     public InstantRange build() {
       ValidationUtils.checkState(this.rangeType != null, "Range type is required");
       switch (rangeType) {
@@ -185,6 +210,8 @@ public abstract class InstantRange implements Serializable {
           return nullableBoundary
               ? new CloseCloseRangeNullableBoundary(startInstant, endInstant)
               : new CloseCloseRange(startInstant, endInstant);
+        case EXPLICIT_MATCH:
+          return new ExplicitMatchRange(this.explicitInstants);
         default:
           throw new AssertionError();
       }

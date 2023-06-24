@@ -21,8 +21,8 @@ package org.apache.hudi.metrics;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class ConsoleMetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(ConsoleMetricsReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConsoleMetricsReporter.class);
   private final ConsoleReporter consoleReporter;
 
   public ConsoleMetricsReporter(MetricRegistry registry) {

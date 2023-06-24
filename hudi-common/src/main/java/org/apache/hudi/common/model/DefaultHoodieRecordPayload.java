@@ -19,7 +19,10 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -37,8 +40,9 @@ import java.util.Properties;
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
  */
 public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
-
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
+  public static final String DELETE_KEY = "hoodie.payload.delete.field";
+  public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
   private Option<Object> eventTime = Option.empty();
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
@@ -71,7 +75,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
   }
 
   @Override
@@ -82,7 +86,30 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
-    return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+  }
+
+  /**
+   * @param genericRecord instance of {@link GenericRecord} of interest.
+   * @param properties payload related properties
+   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
+   */
+  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
+    final String deleteKey = properties.getProperty(DELETE_KEY);
+    if (StringUtils.isNullOrEmpty(deleteKey)) {
+      return isDeleteRecord(genericRecord);
+    }
+
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    // Modify to be compatible with new version Avro.
+    // The new version Avro throws for GenericRecord.get if the field name
+    // does not exist in the schema.
+    if (genericRecord.getSchema().getField(deleteKey) == null) {
+      return false;
+    }
+    Object deleteMarker = genericRecord.get(deleteKey);
+    return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 
   private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {
@@ -123,7 +150,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    String orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
+    String orderField = ConfigUtils.getOrderingField(properties);
     if (orderField == null) {
       return true;
     }

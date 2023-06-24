@@ -18,7 +18,9 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -26,10 +28,6 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 
 import java.io.IOException;
@@ -239,8 +237,8 @@ public class QuickstartUtils {
 
   private static Option<String> convertToString(HoodieRecord record) {
     try {
-      String str = HoodieAvroUtils
-          .bytesToAvro(((OverwriteWithLatestAvroPayload) record.getData()).recordBytes, DataGenerator.avroSchema)
+      String str = ((OverwriteWithLatestAvroPayload) record.getData())
+          .getInsertValue(DataGenerator.avroSchema)
           .toString();
       str = "{" + str.substring(str.indexOf("\"ts\":"));
       return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));

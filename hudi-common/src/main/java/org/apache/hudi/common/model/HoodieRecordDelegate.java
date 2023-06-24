@@ -1,0 +1,123 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.common.model;
+
+import org.apache.hudi.common.util.Option;
+
+import javax.annotation.Nullable;
+
+/**
+ * Delegate for {@link HoodieRecord}.
+ * <p>
+ * This is used when write handles report back write operation's info and stats,
+ * instead of passing back the full {@link HoodieRecord}, this lean delegate
+ * of it will be passed instead.
+ */
+public class HoodieRecordDelegate {
+
+  private final HoodieKey hoodieKey;
+
+  /**
+   * Current location of record on storage. Filled in by looking up index
+   */
+  private final Option<HoodieRecordLocation> currentLocation;
+
+  /**
+   * New location of record on storage, after written.
+   */
+  private final Option<HoodieRecordLocation> newLocation;
+
+  private HoodieRecordDelegate(HoodieKey hoodieKey,
+                               @Nullable HoodieRecordLocation currentLocation,
+                               @Nullable HoodieRecordLocation newLocation) {
+    this.hoodieKey = hoodieKey;
+    this.currentLocation = Option.ofNullable(currentLocation);
+    this.newLocation = Option.ofNullable(newLocation);
+  }
+
+  public static HoodieRecordDelegate create(String recordKey, String partitionPath) {
+    return new HoodieRecordDelegate(new HoodieKey(recordKey, partitionPath), null, null);
+  }
+
+  public static HoodieRecordDelegate create(String recordKey,
+                                            String partitionPath,
+                                            HoodieRecordLocation currentLocation) {
+    return new HoodieRecordDelegate(new HoodieKey(recordKey, partitionPath), currentLocation, null);
+  }
+
+  public static HoodieRecordDelegate create(String recordKey,
+                                            String partitionPath,
+                                            HoodieRecordLocation currentLocation,
+                                            HoodieRecordLocation newLocation) {
+    return new HoodieRecordDelegate(new HoodieKey(recordKey, partitionPath), currentLocation, newLocation);
+  }
+
+  public static HoodieRecordDelegate create(HoodieKey key) {
+    return new HoodieRecordDelegate(key, null, null);
+  }
+
+  public static HoodieRecordDelegate create(HoodieKey key, HoodieRecordLocation currentLocation) {
+    return new HoodieRecordDelegate(key, currentLocation, null);
+  }
+
+  public static HoodieRecordDelegate create(HoodieKey key,
+                                            HoodieRecordLocation currentLocation,
+                                            HoodieRecordLocation newLocation) {
+    return new HoodieRecordDelegate(key, currentLocation, newLocation);
+  }
+
+  public static HoodieRecordDelegate fromHoodieRecord(HoodieRecord record) {
+    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), record.getNewLocation());
+  }
+
+  public static HoodieRecordDelegate fromHoodieRecord(HoodieRecord record,
+                                                      @Nullable HoodieRecordLocation newLocationOverride) {
+    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), newLocationOverride);
+  }
+
+  public String getRecordKey() {
+    return hoodieKey.getRecordKey();
+  }
+
+  public String getPartitionPath() {
+    return hoodieKey.getPartitionPath();
+  }
+
+  public HoodieKey getHoodieKey() {
+    return hoodieKey;
+  }
+
+  public Option<HoodieRecordLocation> getCurrentLocation() {
+    return currentLocation;
+  }
+
+  public Option<HoodieRecordLocation> getNewLocation() {
+    return newLocation;
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieRecordDelegate{"
+        + "hoodieKey=" + hoodieKey
+        + ", currentLocation=" + currentLocation
+        + ", newLocation=" + newLocation
+        + '}';
+  }
+}

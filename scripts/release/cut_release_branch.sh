@@ -56,12 +56,13 @@ else
 fi
 
 if [[ -z "$RELEASE" || -z "$NEXT_VERSION_IN_BASE_BRANCH" || -z "$RC_NUM" ]]; then
-	echo "This sricpt needs to be ran with params, please run with -h to get more instructions."
+	echo "This script needs to be ran with params, please run with -h to get more instructions."
 	exit
 fi
 
 
 MASTER_BRANCH=master
+NEXT_VERSION_BRANCH=MINOR-move-to-${NEXT_VERSION_IN_BASE_BRANCH}
 RELEASE_BRANCH=release-${RELEASE}
 GITHUB_REPO_URL=git@github.com:apache/hudi.git
 HUDI_ROOT_DIR=hudi
@@ -71,6 +72,7 @@ echo "=====================Environment Variables====================="
 echo "version: ${RELEASE}"
 echo "next_release: ${NEXT_VERSION_IN_BASE_BRANCH}"
 echo "working master branch: ${MASTER_BRANCH}"
+echo "working next-version branch: ${NEXT_VERSION_BRANCH}"
 echo "working release branch: ${RELEASE_BRANCH}"
 echo "local repo dir: ~/${LOCAL_CLONE_DIR}/${HUDI_ROOT_DIR}"
 echo "RC_NUM: $RC_NUM"
@@ -90,15 +92,16 @@ cd ${HUDI_ROOT_DIR}
 git branch ${RELEASE_BRANCH}
 
 git checkout ${MASTER_BRANCH}
+git checkout -b ${NEXT_VERSION_BRANCH}
 
 echo "====================Current working branch====================="
-echo ${MASTER_BRANCH}
+echo ${NEXT_VERSION_BRANCH}
 echo "==============================================================="
 
 # Update master branch
 mvn versions:set -DnewVersion=${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT
 
-echo "==============Update master branch as following================"
+echo "===========Update next-version branch as following============="
 git diff
 echo "==============================================================="
 
@@ -110,14 +113,11 @@ if [[ $confirmation != "y" ]]; then
   exit
 fi
 
-git commit -am "Moving to ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT on master branch."
+git commit -am "[MINOR] Moving to ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT on master branch."
 
-if git push origin ${MASTER_BRANCH}; then
-  break
-else
-  clean_up
-  exit
-fi
+echo "==============================================================="
+echo "!!Please open a PR based on ${NEXT_VERSION_BRANCH} branch for approval!! [Press ENTER to continue]"
+read confirmation
 
 # Checkout and update release branch
 git checkout ${RELEASE_BRANCH}

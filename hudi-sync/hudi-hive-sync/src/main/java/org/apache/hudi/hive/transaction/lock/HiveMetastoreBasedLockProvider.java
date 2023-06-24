@@ -19,6 +19,13 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -32,14 +39,9 @@ import org.apache.hadoop.hive.metastore.api.LockType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -71,7 +73,7 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  */
 public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse> {
 
-  private static final Logger LOG = LogManager.getLogger(HiveMetastoreBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
@@ -87,7 +89,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
       hiveConf.addResource(conf);
-      this.hiveClient = Hive.get(hiveConf).getMSC();
+      this.hiveClient = IMetaStoreClientUtil.getMSC(hiveConf);
     } catch (MetaException | HiveException e) {
       throw new HoodieLockException("Failed to create HiveMetaStoreClient", e);
     }

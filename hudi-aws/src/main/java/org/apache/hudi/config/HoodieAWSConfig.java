@@ -23,11 +23,12 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY;
@@ -35,6 +36,8 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
+
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE;
 
 /**
  * Configurations used by the AWS credentials and AWS DynamoDB based lock.
@@ -46,22 +49,25 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE
             + " Amazon CloudWatch (metrics).")
 public class HoodieAWSConfig extends HoodieConfig {
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
-        .key("hoodie.aws.access.key")
-        .noDefaultValue()
-        .sinceVersion("0.10.0")
-        .withDocumentation("AWS access key id");
+      .key("hoodie.aws.access.key")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.10.0")
+      .withDocumentation("AWS access key id");
 
   public static final ConfigProperty<String> AWS_SECRET_KEY = ConfigProperty
-        .key("hoodie.aws.secret.key")
-        .noDefaultValue()
-        .sinceVersion("0.10.0")
-        .withDocumentation("AWS secret key");
+      .key("hoodie.aws.secret.key")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.10.0")
+      .withDocumentation("AWS secret key");
 
   public static final ConfigProperty<String> AWS_SESSION_TOKEN = ConfigProperty
-        .key("hoodie.aws.session.token")
-        .noDefaultValue()
-        .sinceVersion("0.10.0")
-        .withDocumentation("AWS session token");
+      .key("hoodie.aws.session.token")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.10.0")
+      .withDocumentation("AWS session token");
 
   private HoodieAWSConfig() {
     super();
@@ -141,6 +147,11 @@ public class HoodieAWSConfig extends HoodieConfig {
 
     public Builder withDynamoDBWriteCapacity(String capacity) {
       awsConfig.setValue(DYNAMODB_LOCK_WRITE_CAPACITY, capacity);
+      return this;
+    }
+
+    public Builder withGlueSkipTableArchive(String skipTableArchive) {
+      awsConfig.setValue(GLUE_SKIP_TABLE_ARCHIVE, skipTableArchive);
       return this;
     }
 

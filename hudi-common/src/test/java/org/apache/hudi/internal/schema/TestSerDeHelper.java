@@ -20,19 +20,23 @@ package org.apache.hudi.internal.schema;
 
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+/**
+ * Tests {@link SerDeHelper}.
+ */
 public class TestSerDeHelper {
 
   @Test
   public void testComplexSchema2Json() {
-    InternalSchema internalSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(7, false, "feature1",
@@ -41,9 +45,10 @@ public class TestSerDeHelper {
             Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
         Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
             Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
-        Types.Field.get(5, false,"doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
         Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
     );
+    InternalSchema internalSchema = new InternalSchema(recordType);
     // test schema2json
     String result = SerDeHelper.toJson(internalSchema);
     InternalSchema convertedSchema = SerDeHelper.fromJson(result).get();
@@ -71,7 +76,7 @@ public class TestSerDeHelper {
         Types.Field.get(11, "binary", Types.BinaryType.get()),
         Types.Field.get(12, "decimal", Types.DecimalType.get(10, 2))
     }));
-    InternalSchema internalSchema = new InternalSchema(record.fields());
+    InternalSchema internalSchema = new InternalSchema(record);
     String result = SerDeHelper.toJson(internalSchema);
     InternalSchema convertedSchema = SerDeHelper.fromJson(result).get();
     Assertions.assertEquals(internalSchema, convertedSchema);
@@ -81,8 +86,7 @@ public class TestSerDeHelper {
   public void testSearchSchema() {
     List schemas = new ArrayList<>();
     for (int i = 0; i < 100; i++) {
-      schemas.add(new InternalSchema(i * 10,
-          Arrays.asList(Types.Field.get(1, true, "schema" + i * 10, Types.LongType.get()))));
+      schemas.add(new InternalSchema(i * 10, Types.RecordType.get(Arrays.asList(Types.Field.get(1, true, "schema" + i * 10, Types.LongType.get())))));
     }
 
     Assertions.assertEquals(InternalSchemaUtils.searchSchema(0, schemas).getRecord().fields().get(0),
@@ -102,12 +106,10 @@ public class TestSerDeHelper {
   public void testInheritSchemas() {
     List schemas = new ArrayList<>();
     for (int i = 0; i < 2; i++) {
-      schemas.add(new InternalSchema(i,
-          Arrays.asList(Types.Field.get(1, true, "schema" + i, Types.LongType.get()))));
+      schemas.add(new InternalSchema(i, Types.RecordType.get(Arrays.asList(Types.Field.get(1, true, "schema" + i, Types.LongType.get())))));
     }
     String oldSchemas = SerDeHelper.toJson(schemas);
-    InternalSchema newSchema = new InternalSchema(3,
-        Arrays.asList(Types.Field.get(1, true, "schema" + 3, Types.LongType.get())));
+    InternalSchema newSchema = new InternalSchema(3, Types.RecordType.get(Arrays.asList(Types.Field.get(1, true, "schema" + 3, Types.LongType.get()))));
 
     String finalResult = SerDeHelper.inheritSchemas(newSchema, oldSchemas);
     // convert back

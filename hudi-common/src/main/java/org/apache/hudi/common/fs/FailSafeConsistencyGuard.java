@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
-  private static final Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FailSafeConsistencyGuard.class);
 
   protected final FileSystem fs;
   protected final ConsistencyGuardConfig consistencyGuardConfig;
@@ -139,7 +139,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Retries the predicate for condfigurable number of times till we the predicate returns success.
+   * Retries the predicate for configurable number of times till we the predicate returns success.
    *
    * @param dir directory of interest in which list of files are checked for visibility
    * @param files List of files to check for visibility

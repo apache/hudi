@@ -46,24 +46,28 @@ public class HoodieMetricsGraphiteConfig extends HoodieConfig {
   public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_NAME = ConfigProperty
       .key(GRAPHITE_PREFIX + ".host")
       .defaultValue("localhost")
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .withDocumentation("Graphite host to connect to.");
 
   public static final ConfigProperty<Integer> GRAPHITE_SERVER_PORT_NUM = ConfigProperty
       .key(GRAPHITE_PREFIX + ".port")
       .defaultValue(4756)
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .withDocumentation("Graphite port to connect to.");
 
   public static final ConfigProperty<String> GRAPHITE_METRIC_PREFIX_VALUE = ConfigProperty
       .key(GRAPHITE_PREFIX + ".metric.prefix")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g");
 
   public static final ConfigProperty<Integer> GRAPHITE_REPORT_PERIOD_IN_SECONDS = ConfigProperty
       .key(GRAPHITE_PREFIX + ".report.period.seconds")
       .defaultValue(30)
+      .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Graphite reporting period in seconds. Default to 30.");
 

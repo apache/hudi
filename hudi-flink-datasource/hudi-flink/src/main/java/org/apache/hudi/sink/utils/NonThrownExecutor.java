@@ -136,15 +136,15 @@ public class NonThrownExecutor implements AutoCloseable {
   }
 
   private void handleException(Throwable t, ExceptionHook hook, Supplier<String> actionString) {
-    // if we have a JVM critical error, promote it immediately, there is a good
-    // chance the
-    // logging or job failing will not succeed any more
-    ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
     final String errMsg = String.format("Executor executes action [%s] error", actionString.get());
     logger.error(errMsg, t);
     if (hook != null) {
       hook.apply(errMsg, t);
     }
+    // if we have a JVM critical error, promote it immediately, there is a good
+    // chance the
+    // logging or job failing will not succeed any more
+    ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
   }
 
   private Supplier<String> getActionString(String actionName, Object... actionParams) {

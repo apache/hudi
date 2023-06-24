@@ -31,6 +31,7 @@ import java.util.Properties;
 
 @ConfigClassProperty(name = "HBase Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
+    subGroupName = ConfigGroups.SubGroupNames.INDEX,
     description = "Configurations that control indexing behavior "
         + "(when HBase based indexing is enabled), which tags incoming "
         + "records as either inserts or updates to older records.")
@@ -39,51 +40,60 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> ZKQUORUM = ConfigProperty
       .key("hoodie.index.hbase.zkquorum")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Only applies if index type is HBASE. HBase ZK Quorum url to connect to");
 
   public static final ConfigProperty<String> ZKPORT = ConfigProperty
       .key("hoodie.index.hbase.zkport")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Only applies if index type is HBASE. HBase ZK Quorum port to connect to");
 
   public static final ConfigProperty<String> TABLENAME = ConfigProperty
       .key("hoodie.index.hbase.table")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Only applies if index type is HBASE. HBase Table name to use as the index. "
           + "Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table");
 
   public static final ConfigProperty<Integer> GET_BATCH_SIZE = ConfigProperty
       .key("hoodie.index.hbase.get.batch.size")
       .defaultValue(100)
+      .markAdvanced()
       .withDocumentation("Controls the batch size for performing gets against HBase. "
           + "Batching improves throughput, by saving round trips.");
 
   public static final ConfigProperty<String> ZK_NODE_PATH = ConfigProperty
       .key("hoodie.index.hbase.zknode.path")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Only applies if index type is HBASE. This is the root znode that will contain "
           + "all the znodes created/used by HBase");
 
   public static final ConfigProperty<Integer> PUT_BATCH_SIZE = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size")
       .defaultValue(100)
+      .markAdvanced()
       .withDocumentation("Controls the batch size for performing puts against HBase. "
           + "Batching improves throughput, by saving round trips.");
 
   public static final ConfigProperty<String> QPS_ALLOCATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.index.hbase.qps.allocator.class")
       .defaultValue(DefaultHBaseQPSResourceAllocator.class.getName())
+      .markAdvanced()
       .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used, which"
           + "controls the batching rate dynamically.");
 
   public static final ConfigProperty<Boolean> PUT_BATCH_SIZE_AUTO_COMPUTE = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size.autocompute")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Property to set to enable auto computation of put batch size");
 
   public static final ConfigProperty<Float> QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.qps.fraction")
       .defaultValue(0.5f)
+      .markAdvanced()
       .withDocumentation("Property to set the fraction of the global share of QPS that should be allocated to this job. Let's say there are 3"
           + " jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then"
           + " this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively."
@@ -92,6 +102,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> MAX_QPS_PER_REGION_SERVER = ConfigProperty
       .key("hoodie.index.hbase.max.qps.per.region.server")
       .defaultValue(1000)
+      .markAdvanced()
       .withDocumentation("Property to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to\n"
           + " limit the aggregate QPS generated across various jobs to an Hbase Region Server. It is recommended to set this\n"
           + " value based on global indexing throughput needs and most importantly, how much the HBase installation in use is\n"
@@ -100,52 +111,62 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> COMPUTE_QPS_DYNAMICALLY = ConfigProperty
       .key("hoodie.index.hbase.dynamic_qps")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.");
 
   public static final ConfigProperty<String> MIN_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.min.qps.fraction")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Minimum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
 
   public static final ConfigProperty<String> MAX_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.max.qps.fraction")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
 
   public static final ConfigProperty<Integer> DESIRED_PUTS_TIME_IN_SECONDS = ConfigProperty
       .key("hoodie.index.hbase.desired_puts_time_in_secs")
       .defaultValue(600)
+      .markAdvanced()
       .withDocumentation("");
 
   public static final ConfigProperty<String> SLEEP_MS_FOR_PUT_BATCH = ConfigProperty
       .key("hoodie.index.hbase.sleep.ms.for.put.batch")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("");
 
   public static final ConfigProperty<String> SLEEP_MS_FOR_GET_BATCH = ConfigProperty
       .key("hoodie.index.hbase.sleep.ms.for.get.batch")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("");
 
   public static final ConfigProperty<Integer> ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.session_timeout_ms")
       .defaultValue(60 * 1000)
+      .markAdvanced()
       .withDocumentation("Session timeout value to use for Zookeeper failure detection, for the HBase client."
           + "Lower this value, if you want to fail faster.");
 
   public static final ConfigProperty<Integer> ZK_CONNECTION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.connection_timeout_ms")
       .defaultValue(15 * 1000)
+      .markAdvanced()
       .withDocumentation("Timeout to use for establishing connection with zookeeper, from HBase client.");
 
   public static final ConfigProperty<String> ZKPATH_QPS_ROOT = ConfigProperty
       .key("hoodie.index.hbase.zkpath.qps_root")
       .defaultValue("/QPS_ROOT")
+      .markAdvanced()
       .withDocumentation("chroot in zookeeper, to use for all qps allocation co-ordination.");
 
   public static final ConfigProperty<Boolean> UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
       .key("hoodie.hbase.index.update.partition.path")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Only applies if index type is HBASE. "
           + "When an already existing record is upserted to a new partition compared to whats in storage, "
           + "this config when set, will delete old record in old partition "
@@ -154,38 +175,45 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ROLLBACK_SYNC_ENABLE = ConfigProperty
       .key("hoodie.index.hbase.rollback.sync")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("When set to true, the rollback method will delete the last failed task index. "
           + "The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback");
 
   public static final ConfigProperty<String> SECURITY_AUTHENTICATION = ConfigProperty
       .key("hoodie.index.hbase.security.authentication")
       .defaultValue("simple")
+      .markAdvanced()
       .withDocumentation("Property to decide if the hbase cluster secure authentication is enabled or not. "
           + "Possible values are 'simple' (no authentication), and 'kerberos'.");
 
   public static final ConfigProperty<String> KERBEROS_USER_KEYTAB = ConfigProperty
       .key("hoodie.index.hbase.kerberos.user.keytab")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("File name of the kerberos keytab file for connecting to the hbase cluster.");
 
   public static final ConfigProperty<String> KERBEROS_USER_PRINCIPAL = ConfigProperty
       .key("hoodie.index.hbase.kerberos.user.principal")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The kerberos principal name for connecting to the hbase cluster.");
 
   public static final ConfigProperty<String> REGIONSERVER_PRINCIPAL = ConfigProperty
       .key("hoodie.index.hbase.regionserver.kerberos.principal")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The value of hbase.regionserver.kerberos.principal in hbase cluster.");
 
   public static final ConfigProperty<String> MASTER_PRINCIPAL = ConfigProperty
       .key("hoodie.index.hbase.master.kerberos.principal")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("The value of hbase.master.kerberos.principal in hbase cluster.");
 
   public static final ConfigProperty<Integer> BUCKET_NUMBER = ConfigProperty
       .key("hoodie.index.hbase.bucket.number")
       .defaultValue(8)
+      .markAdvanced()
       .withDocumentation("Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance");
 
   /**

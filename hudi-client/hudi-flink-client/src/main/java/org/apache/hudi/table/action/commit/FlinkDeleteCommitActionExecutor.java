@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -33,7 +32,7 @@ import java.util.List;
 /**
  * Flink delete commit action executor.
  */
-public class FlinkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+public class FlinkDeleteCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
   private final List<HoodieKey> keys;
 
   public FlinkDeleteCommitActionExecutor(HoodieEngineContext context,

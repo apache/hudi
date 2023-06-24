@@ -24,6 +24,7 @@ import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
 import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.reader.ArrayColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.EmptyColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.FixedLenBytesColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.Int64TimestampColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.MapColumnReader;
@@ -354,7 +355,7 @@ public class ParquetSplitReaderUtil {
             return new BytesColumnReader(descriptor, pageReader);
           case FIXED_LEN_BYTE_ARRAY:
             return new FixedLenBytesColumnReader(
-                descriptor, pageReader, ((DecimalType) fieldType).getPrecision());
+                descriptor, pageReader);
           default:
             throw new AssertionError();
         }
@@ -387,14 +388,20 @@ public class ParquetSplitReaderUtil {
         GroupType groupType = physicalType.asGroupType();
         List<ColumnReader> fieldReaders = new ArrayList<>();
         for (int i = 0; i < rowType.getFieldCount(); i++) {
-          fieldReaders.add(
-              createColumnReader(
-                  utcTimestamp,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  pages,
-                  depth + 1));
+          // schema evolution: read the parquet file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            fieldReaders.add(new EmptyColumnReader());
+          } else {
+            fieldReaders.add(
+                createColumnReader(
+                    utcTimestamp,
+                    rowType.getTypeAt(i),
+                    groupType.getType(fieldIndex),
+                    descriptors,
+                    pages,
+                    depth + 1));
+          }
         }
         return new RowColumnReader(fieldReaders);
       default:
@@ -508,20 +515,35 @@ public class ParquetSplitReaderUtil {
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();
-        WritableColumnVector[] columnVectors =
-            new WritableColumnVector[rowType.getFieldCount()];
+        WritableColumnVector[] columnVectors = new WritableColumnVector[rowType.getFieldCount()];
         for (int i = 0; i < columnVectors.length; i++) {
-          columnVectors[i] =
-              createWritableColumnVector(
-                  batchSize,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  depth + 1);
+          // schema evolution: read the file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
+          } else {
+            columnVectors[i] =
+                createWritableColumnVector(
+                    batchSize,
+                    rowType.getTypeAt(i),
+                    groupType.getType(fieldIndex),
+                    descriptors,
+                    depth + 1);
+          }
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
+  }
+
+  /**
+   * Returns the field index with given physical row type {@code groupType} and field name {@code fieldName}.
+   *
+   * @return The physical field index or -1 if the field does not exist
+   */
+  private static int getFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
+    // get index from fileSchema type, else, return -1
+    return groupType.containsField(fieldName) ? groupType.getFieldIndex(fieldName) : -1;
   }
 }

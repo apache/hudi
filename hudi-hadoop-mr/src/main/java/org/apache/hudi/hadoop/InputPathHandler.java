@@ -22,12 +22,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaCl
  */
 public class InputPathHandler {
 
-  public static final Logger LOG = LogManager.getLogger(InputPathHandler.class);
+  public static final Logger LOG = LoggerFactory.getLogger(InputPathHandler.class);
 
   private final Configuration conf;
   // tableName to metadata mapping for all Hoodie tables(both incremental & snapshot)

@@ -47,7 +47,7 @@
 
  statement
     : compactionStatement                                                       #compactionCommand
-    | CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'      #call
+    | CALL multipartIdentifier   callArgumentList?    #call
     | CREATE INDEX (IF NOT EXISTS)? identifier ON TABLE?
           tableIdentifier (USING indexType=identifier)?
           LEFT_PAREN columns=multipartIdentifierPropertyList RIGHT_PAREN
@@ -67,6 +67,10 @@
 
  tableIdentifier
     : (db=IDENTIFIER '.')? table=IDENTIFIER
+    ;
+
+ callArgumentList
+    : '(' (callArgument (',' callArgument)*)? ')'
     ;
 
  callArgument

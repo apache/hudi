@@ -32,7 +32,6 @@ import java.util.List;
 
 import scala.collection.JavaConverters;
 
-
 /**
  * Helper class to read avro and/or parquet files and generate a RDD of {@link GenericRecord}.
  */

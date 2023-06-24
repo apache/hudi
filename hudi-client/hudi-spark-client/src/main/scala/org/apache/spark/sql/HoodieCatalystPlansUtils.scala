@@ -17,11 +17,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -49,45 +48,53 @@ trait HoodieCatalystPlansUtils {
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
 
   /**
-   * Convert a AliasIdentifier to TableIdentifier.
-   */
-  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
-
-  /**
-   * Convert a UnresolvedRelation to TableIdentifier.
-   */
-  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
-
-  /**
    * Create Join logical plan.
    */
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
-   * Test if the logical plan is a Insert Into LogicalPlan.
+   * Decomposes [[MatchMergeIntoTable]] into its arguments with accommodation for
+   * case class changes of [[MergeIntoTable]] in Spark 3.4.
+   *
+   * Before Spark 3.4.0 (five arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
+   *
+   * Since Spark 3.4.0 (six arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction],
+   * notMatchedBySourceActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
    */
-  def isInsertInto(plan: LogicalPlan): Boolean
+  def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
-   * Get the member of the Insert Into LogicalPlan.
+   * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
+   * changes in Spark 3.3
    */
-  def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   * Rebases instance of {@code InsertIntoStatement} onto provided instance of {@code targetTable} and {@code query}
    */
-  def isRelationTimeTravel(plan: LogicalPlan): Boolean
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan
 
   /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
+   * Test if the logical plan is a Repair Table LogicalPlan.
    */
-  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
+  def isRepairTable(plan: LogicalPlan): Boolean
 
   /**
-   * Create a Insert Into LogicalPlan.
+   * Get the member of the Repair Table LogicalPlan.
    */
-  def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                       query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
-
+  def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
 }

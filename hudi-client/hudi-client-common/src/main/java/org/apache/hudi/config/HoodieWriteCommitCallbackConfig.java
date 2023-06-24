@@ -32,8 +32,9 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Write commit callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Controls callback behavior into HTTP endpoints, to push "
-        + " notifications on commits on hudi tables.")
+    subGroupName = ConfigGroups.SubGroupNames.COMMIT_CALLBACK,
+    areCommonConfigs = true,
+    description = "")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
@@ -41,12 +42,14 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> TURN_CALLBACK_ON = ConfigProperty
       .key(CALLBACK_PREFIX + "on")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Turn commit callback on/off. off by default.");
 
   public static final ConfigProperty<String> CALLBACK_CLASS_NAME = ConfigProperty
       .key(CALLBACK_PREFIX + "class")
       .defaultValue("org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, "
           + "org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default");
@@ -55,20 +58,23 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
   public static final ConfigProperty<String> CALLBACK_HTTP_URL = ConfigProperty
       .key(CALLBACK_PREFIX + "http.url")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Callback host to be sent along with callback messages");
 
   public static final ConfigProperty<String> CALLBACK_HTTP_API_KEY_VALUE = ConfigProperty
       .key(CALLBACK_PREFIX + "http.api.key")
       .defaultValue("hudi_write_commit_http_callback")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Http callback API key. hudi_write_commit_http_callback by default");
 
   public static final ConfigProperty<Integer> CALLBACK_HTTP_TIMEOUT_IN_SECONDS = ConfigProperty
       .key(CALLBACK_PREFIX + "http.timeout.seconds")
-      .defaultValue(3)
+      .defaultValue(30)
+      .markAdvanced()
       .sinceVersion("0.6.0")
-      .withDocumentation("Callback timeout in seconds. 3 by default");
+      .withDocumentation("Callback timeout in seconds.");
 
   /**
    * @deprecated Use {@link #TURN_CALLBACK_ON} and its methods instead

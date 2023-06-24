@@ -18,41 +18,20 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
-
-  /**
-   * Check the nullability of the input Avro type and resolve it when it is nullable. The first
-   * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
-   * return value is either provided Avro type if it's not nullable, or its resolved non-nullable part
-   * in case it is
-   */
-  def resolveAvroTypeNullability(avroType: Schema): (Boolean, Schema) = {
-    if (avroType.getType == Type.UNION) {
-      val fields = avroType.getTypes.asScala
-      val actualType = fields.filter(_.getType != Type.NULL)
-      if (fields.length != 2 || actualType.length != 1) {
-        throw new AvroRuntimeException(
-          s"Unsupported Avro UNION type $avroType: Only UNION of a null type and a non-null " +
-            "type is supported")
-      }
-      (true, actualType.head)
-    } else {
-      (false, avroType)
-    }
-  }
 
   /**
    * Creates converter to transform Avro payload into Spark's Catalyst one
@@ -104,7 +83,7 @@ object AvroConversionUtils {
                             recordNamespace: String): Row => GenericRecord = {
     val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
-    val (nullable, _) = resolveAvroTypeNullability(avroSchema)
+    val nullable = AvroSchemaUtils.resolveNullableSchema(avroSchema) != avroSchema
 
     val converter = AvroConversionUtils.createInternalRowToAvroConverter(sourceSqlType, avroSchema, nullable)
 
@@ -133,26 +112,53 @@ object AvroConversionUtils {
   }
 
   /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * Returns avro schema from spark StructType.
+   * @param structType    Catalyst's [[StructType]]
+   * @param qualifiedName Avro's schema qualified name
+   * @return Avro schema corresponding to given struct type.
+   */
+  def convertStructTypeToAvroSchema(structType: DataType,
+                                    qualifiedName: String): Schema = {
+    val (namespace, name) = {
+      val parts = qualifiedName.split('.')
+      (parts.init.mkString("."), parts.last)
+    }
+    convertStructTypeToAvroSchema(structType, name, namespace)
+  }
+
+
+  /**
+   * Converts [[StructType]] into Avro's [[Schema]]
    *
-   * @param structType      Dataframe Struct Type.
-   * @param structName      Avro record name.
-   * @param recordNamespace Avro record namespace.
+   * @param structType      Catalyst's [[StructType]]
+   * @param structName      Avro record name
+   * @param recordNamespace Avro record namespace
    * @return Avro schema corresponding to given struct type.
    */
   def convertStructTypeToAvroSchema(structType: DataType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    val schemaConverters = sparkAdapter.getAvroSchemaConverters
-    val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
-    getAvroSchemaWithDefaults(avroSchema, structType)
+    try {
+      val schemaConverters = sparkAdapter.getAvroSchemaConverters
+      val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+      getAvroSchemaWithDefaults(avroSchema, structType)
+    } catch {
+      case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
+    }
   }
 
+  /**
+   * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
+   */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    val schemaConverters = sparkAdapter.getAvroSchemaConverters
-    schemaConverters.toSqlType(avroSchema) match {
-      case (dataType, _) => dataType.asInstanceOf[StructType]
+    try {
+      val schemaConverters = sparkAdapter.getAvroSchemaConverters
+      schemaConverters.toSqlType(avroSchema) match {
+        case (dataType, _) => dataType.asInstanceOf[StructType]
+      }
+    } catch {
+      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
     }
   }
 
@@ -211,8 +217,13 @@ object AvroConversionUtils {
     }
   }
 
+  /**
+   * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
+   */
+  @Deprecated
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
-    val name = HoodieAvroUtils.sanitizeName(tableName)
-    (s"${name}_record", s"hoodie.${name}")
+    val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+    val nameParts = qualifiedName.split('.')
+    (nameParts.last, nameParts.init.mkString("."))
   }
 }

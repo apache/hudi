@@ -29,8 +29,6 @@ import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,8 +40,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,28 +58,17 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void beforeAll() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
-  }
-
-  @AfterAll
-  public static void afterAll() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.initTestServices();
   }
 
   @BeforeEach
   public void beforeEach() throws Exception {
-    super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
-    props.put(GOOGLE_PROJECT_ID, "dummy-project");
-    props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
-  }
-
-  @AfterEach
-  public void afterEach() throws Exception {
-    super.teardown();
+    props.put(GOOGLE_PROJECT_ID.key(), "dummy-project");
+    props.put(PUBSUB_SUBSCRIPTION_ID.key(), "dummy-subscription");
   }
 
   @Test
@@ -176,7 +163,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void shouldGcsEventsSourceDoesNotDedupeInterally() {
+  public void shouldGcsEventsSourceDoesNotDedupeInternally() {
     ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
     ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
 

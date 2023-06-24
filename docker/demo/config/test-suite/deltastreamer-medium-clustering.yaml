@@ -17,7 +17,7 @@
 # to be used with test-aggressive-clean-archival.properties
 
 dag_name: deltastreamer-medium-clustering.yaml
-dag_rounds: 20
+dag_rounds: 15
 dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
@@ -62,14 +62,27 @@ dag_content:
     deps: first_upsert
   second_validate:
     config:
+      validate_once_every_itr: 3
       validate_hive: false
       delete_input_data: true
       max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateDatasetNode
     deps: first_delete
+  first_presto_query:
+    config:
+      execute_itr_count: 15
+      presto_props:
+        prop1: "SET SESSION hive.parquet_use_column_names = true"
+      presto_queries:
+        query1: "select count(*) from testdb.table1"
+        result1: 3600
+        query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
+        result2: 0
+    type: PrestoQueryNode
+    deps: second_validate
   last_validate:
     config:
-      execute_itr_count: 20
+      execute_itr_count: 15
       max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateAsyncOperations
-    deps: second_validate
+    deps: first_presto_query

@@ -38,10 +38,10 @@ import org.apache.hudi.table.repair.RepairUtils;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -95,7 +95,7 @@ import java.util.stream.Stream;
  */
 public class HoodieDataTableValidator implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDataTableValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataTableValidator.class);
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -250,7 +250,7 @@ public class HoodieDataTableValidator implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg);
+      LOG.info(cfg.toString());
       if (cfg.continuous) {
         LOG.info(" ****** do hoodie data table validation in CONTINUOUS mode ******");
         doHoodieDataTableValidationContinuous();
@@ -321,7 +321,7 @@ public class HoodieDataTableValidator implements Serializable {
         Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
             metaClient.getBasePath(), allDataFilePaths);
         HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-        List<HoodieInstant> hoodieInstants = activeTimeline.filterCompletedInstants().getInstants().collect(Collectors.toList());
+        List<HoodieInstant> hoodieInstants = activeTimeline.filterCompletedInstants().getInstants();
 
         List<String> danglingFiles = engineContext.flatMap(hoodieInstants, instant -> {
           Option<Set<String>> filesFromTimeline = RepairUtils.getBaseAndLogFilePathsFromTimeline(

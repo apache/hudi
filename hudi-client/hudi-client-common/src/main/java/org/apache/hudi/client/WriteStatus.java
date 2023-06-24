@@ -20,24 +20,30 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Status of a write operation.
@@ -45,15 +51,15 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_E
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public class WriteStatus implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
+  private static final Logger LOG = LoggerFactory.getLogger(WriteStatus.class);
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecord> writtenRecords = new ArrayList<>();
+  private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
 
-  private final List<HoodieRecord> failedRecords = new ArrayList<>();
+  private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -86,25 +92,55 @@ public class WriteStatus implements Serializable {
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecords.add(record);
+      writtenRecordDelegates.add(HoodieRecordDelegate.fromHoodieRecord(record));
     }
+    updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  /**
+   * Used by native write handles like HoodieRowCreateHandle and HoodieRowDataCreateHandle.
+   *
+   * @see WriteStatus#markSuccess(HoodieRecord, Option)
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
+    if (trackSuccessRecords) {
+      writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
+    }
+    updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  private void updateStatsForSuccess(Option<Map<String, String>> optionalRecordMetadata) {
     totalRecords++;
 
     // get the min and max event time for calculating latency and freshness
-    if (optionalRecordMetadata.isPresent()) {
-      String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
-      try {
-        long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
-        stat.setMinEventTime(eventTime);
-        stat.setMaxEventTime(eventTime);
-      } catch (DateTimeException | IllegalArgumentException e) {
-        LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+    String eventTimeVal = optionalRecordMetadata.orElse(Collections.emptyMap())
+        .getOrDefault(METADATA_EVENT_TIME_KEY, null);
+    if (isNullOrEmpty(eventTimeVal)) {
+      return;
+    }
+    try {
+      int length = eventTimeVal.length();
+      long millisEventTime;
+      // eventTimeVal in seconds unit
+      if (length == 10) {
+        millisEventTime = Long.parseLong(eventTimeVal) * 1000;
+      } else if (length == 13) {
+        // eventTimeVal in millis unit
+        millisEventTime = Long.parseLong(eventTimeVal);
+      } else {
+        throw new IllegalArgumentException("not support event_time format:" + eventTimeVal);
       }
+      long eventTime = DateTimeUtils.parseDateTime(Long.toString(millisEventTime)).toEpochMilli();
+      stat.setMinEventTime(eventTime);
+      stat.setMaxEventTime(eventTime);
+    } catch (DateTimeException | IllegalArgumentException e) {
+      LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
     }
   }
 
@@ -112,15 +148,35 @@ public class WriteStatus implements Serializable {
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
-      failedRecords.add(record);
+      failedRecords.add(Pair.of(HoodieRecordDelegate.fromHoodieRecord(record), t));
       errors.put(record.getKey(), t);
     }
+    updateStatsForFailure();
+  }
+
+  /**
+   * Used by native write handles like HoodieRowCreateHandle and HoodieRowDataCreateHandle.
+   *
+   * @see WriteStatus#markFailure(HoodieRecord, Throwable, Option)
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public void markFailure(String recordKey, String partitionPath, Throwable t) {
+    if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
+      // Guaranteed to have at-least one error
+      HoodieRecordDelegate recordDelegate = HoodieRecordDelegate.create(recordKey, partitionPath);
+      failedRecords.add(Pair.of(recordDelegate, t));
+      errors.put(recordDelegate.getHoodieKey(), t);
+    }
+    updateStatsForFailure();
+  }
+
+  private void updateStatsForFailure() {
     totalRecords++;
     totalErrorRecords++;
   }
@@ -157,11 +213,11 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<HoodieRecord> getWrittenRecords() {
-    return writtenRecords;
+  public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
+    return writtenRecordDelegates;
   }
 
-  public List<HoodieRecord> getFailedRecords() {
+  public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {
     return failedRecords;
   }
 
@@ -195,6 +251,10 @@ public class WriteStatus implements Serializable {
 
   public void setTotalErrorRecords(long totalErrorRecords) {
     this.totalErrorRecords = totalErrorRecords;
+  }
+
+  public boolean isTrackingSuccessfulWrites() {
+    return trackSuccessRecords;
   }
 
   @Override

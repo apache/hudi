@@ -20,8 +20,10 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -44,13 +46,12 @@ import java.util.List;
  * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkAppendHandle<T, I, K, O>
     extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
-  private final WriteMarkers writeMarkers;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -61,17 +62,22 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
-    this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
   }
 
-  @Override
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    // In some rare cases, the task was pulled up again with same write file name,
-    // for e.g, reuse the small log files from last commit instant.
+  protected HoodieLogFileWriteCallback getLogWriteCallback() {
+    return new AppendLogWriteCallback() {
+      @Override
+      public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+        // In some rare cases, the task was pulled up again with same write file name,
+        // for e.g, reuse the small log files from last commit instant.
 
-    // Just skip the marker creation if it already exists, the new data would append to
-    // the file directly.
-    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+        // Just skip the marker creation if it already exists, the new data would append to
+        // the file directly.
+        WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+        writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND);
+        return true;
+      }
+    };
   }
 
   @Override

@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
@@ -61,7 +62,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
   public static S3EventsMetaSelector createSourceSelector(TypedProperties props) {
     String sourceSelectorClass =
         props.getString(
-            S3EventsMetaSelector.Config.SOURCE_INPUT_SELECTOR,
+            DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
             S3EventsMetaSelector.class.getName());
     try {
       S3EventsMetaSelector selector =
@@ -151,7 +152,9 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
               .getTime()).max().orElse(lastCheckpointStr.map(Long::parseLong).orElse(0L));
 
       for (Map<String, Object> eventRecord : eventRecords) {
-        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "="));
+        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "=")
+            .replace("%24", "$").replace("%A3", "£").replace("%23", "#").replace("%26", "&").replace("%3F", "?")
+            .replace("%7E", "~").replace("%25", "%").replace("%2B", "+"));
       }
       // Return the old checkpoint if no messages to consume from queue.
       String newCheckpoint = newCheckpointTime == 0 ? lastCheckpointStr.orElse(null) : String.valueOf(newCheckpointTime);

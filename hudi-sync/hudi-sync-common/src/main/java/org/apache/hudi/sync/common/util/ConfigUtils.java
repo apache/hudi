@@ -34,6 +34,12 @@ public class ConfigUtils {
   public static final String IS_QUERY_AS_RO_TABLE = "hoodie.query.as.ro.table";
 
   /**
+   * Config stored in hive serde properties to tell query engine (spark) the
+   * location to read.
+   */
+  public static final String TABLE_SERDE_PATH = "path";
+
+  /**
    * Convert the key-value config to a map.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *

@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.{LocalFileSystem, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 
@@ -48,6 +49,16 @@ class TestDropTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"show tables like '$tableName'")()
         assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName"))
       }
+    }
+  }
+
+  test("Test Drop Table with non existent table") {
+    // drop table if exists
+    spark.sql("drop table if exists non_existent_table")
+
+    // drop table
+    assertThrows[AnalysisException]{
+      spark.sql("drop table non_existent_table")
     }
   }
 

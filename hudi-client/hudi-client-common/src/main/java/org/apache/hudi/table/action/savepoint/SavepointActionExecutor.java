@@ -18,12 +18,10 @@
 
 package org.apache.hudi.table.action.savepoint;
 
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -36,17 +34,23 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
-  private static final Logger LOG = LogManager.getLogger(SavepointActionExecutor.class);
+public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SavepointActionExecutor.class);
 
   private final String user;
   private final String comment;
@@ -64,36 +68,76 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public HoodieSavepointMetadata execute() {
-    Option<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
     if (!table.getCompletedCommitsTimeline().containsInstant(instantTime)) {
       throw new HoodieSavepointException("Could not savepoint non-existing commit " + instantTime);
     }
 
     try {
       // Check the last commit that was not cleaned and check if savepoint time is > that commit
-      String lastCommitRetained;
-      if (cleanInstant.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(cleanInstant.get()).get());
-        lastCommitRetained = cleanMetadata.getEarliestCommitToRetain();
-      } else {
-        lastCommitRetained = table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp();
-      }
+      Option<HoodieInstant> cleanInstant = table.getCleanTimeline().lastInstant();
+      String lastCommitRetained = cleanInstant.map(instant -> {
+        try {
+          if (instant.isCompleted()) {
+            return deserializeHoodieCleanMetadata(
+                table.getActiveTimeline().getInstantDetails(instant).get())
+                .getEarliestCommitToRetain();
+          } else {
+            // clean is pending or inflight
+            return deserializeCleanerPlan(
+                table.getActiveTimeline().getInstantDetails(new HoodieInstant(REQUESTED, instant.getAction(), instant.getTimestamp())).get())
+                .getEarliestInstantToRetain().getTimestamp();
+          }
+        } catch (IOException e) {
+          throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
+        }
+      }).orElse(table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
-      List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
-      Map<String, List<String>> latestFilesMap = context.mapToPair(partitions, partitionPath -> {
-        // Scan all partitions files with this commit time
-        LOG.info("Collecting latest files in partition path " + partitionPath);
-        TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
-        List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
-            .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
-        return new ImmutablePair<>(partitionPath, latestFiles);
-      }, null);
+      TableFileSystemView.SliceView view = table.getSliceView();
+
+      Map<String, List<String>> latestFilesMap;
+      // NOTE: for performance, we have to use different logic here for listing the latest files
+      // before or on the given instant:
+      // (1) using metadata-table-based file listing: instead of parallelizing the partition
+      // listing which incurs unnecessary metadata table reads, we directly read the metadata
+      // table once in a batch manner through the timeline server;
+      // (2) using direct file system listing:  we parallelize the partition listing so that
+      // each partition can be listed on the file system concurrently through Spark.
+      // Note that
+      if (shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config)) {
+        latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> {
+                  List<String> latestFiles = new ArrayList<>();
+                  entry.getValue().forEach(fileSlice -> {
+                    if (fileSlice.getBaseFile().isPresent()) {
+                      latestFiles.add(fileSlice.getBaseFile().get().getFileName());
+                    }
+                    latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
+                  });
+                  return latestFiles;
+                }));
+      } else {
+        List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+        latestFilesMap = context.mapToPair(partitions, partitionPath -> {
+          // Scan all partitions files with this commit time
+          LOG.info("Collecting latest files in partition path " + partitionPath);
+          List<String> latestFiles = new ArrayList<>();
+          view.getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true).forEach(fileSlice -> {
+            if (fileSlice.getBaseFile().isPresent()) {
+              latestFiles.add(fileSlice.getBaseFile().get().getFileName());
+            }
+            latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
+          });
+          return new ImmutablePair<>(partitionPath, latestFiles);
+        }, null);
+      }
+
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(
@@ -107,4 +151,5 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
     }
   }
+
 }

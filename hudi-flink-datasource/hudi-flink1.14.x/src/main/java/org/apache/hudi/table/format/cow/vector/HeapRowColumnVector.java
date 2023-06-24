@@ -43,4 +43,12 @@ public class HeapRowColumnVector extends AbstractHeapVector
     columnarRowData.setRowId(i);
     return columnarRowData;
   }
+
+  @Override
+  public void reset() {
+    super.reset();
+    for (WritableColumnVector vector : vectors) {
+      vector.reset();
+    }
+  }
 }

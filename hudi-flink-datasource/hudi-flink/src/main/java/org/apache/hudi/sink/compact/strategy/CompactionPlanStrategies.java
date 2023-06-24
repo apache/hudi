@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact.strategy;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.util.CompactionUtil;
@@ -44,7 +45,7 @@ public class CompactionPlanStrategies {
   public static CompactionPlanStrategy getStrategy(FlinkCompactionConfig config) {
     switch (config.compactionPlanSelectStrategy.toLowerCase(Locale.ROOT)) {
       case CompactionPlanStrategy.ALL:
-        return pendingCompactionTimeline -> pendingCompactionTimeline.getInstants().collect(Collectors.toList());
+        return HoodieTimeline::getInstants;
       case CompactionPlanStrategy.INSTANTS:
         return pendingCompactionTimeline -> {
           if (StringUtils.isNullOrEmpty(config.compactionPlanInstant)) {
@@ -52,13 +53,13 @@ public class CompactionPlanStrategies {
             return Collections.emptyList();
           }
           List<String> instants = Arrays.asList(config.compactionPlanInstant.split(","));
-          return pendingCompactionTimeline.getInstants()
+          return pendingCompactionTimeline.getInstantsAsStream()
               .filter(instant -> instants.contains(instant.getTimestamp()))
               .collect(Collectors.toList());
         };
       case CompactionPlanStrategy.NUM_INSTANTS:
         return pendingCompactionTimeline -> {
-          List<HoodieInstant> pendingCompactionPlanInstants = pendingCompactionTimeline.getInstants().collect(Collectors.toList());
+          List<HoodieInstant> pendingCompactionPlanInstants = pendingCompactionTimeline.getInstants();
           if (CompactionUtil.isLIFO(config.compactionSeq)) {
             Collections.reverse(pendingCompactionPlanInstants);
           }

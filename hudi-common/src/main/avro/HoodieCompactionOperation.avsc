@@ -84,6 +84,18 @@
        "name":"version",
        "type":["int", "null"],
        "default": 1
+    },
+    {
+       "name":"strategy",
+       "type":[
+         "null", "HoodieCompactionStrategy"
+       ],
+       "default": null
+    },
+    {
+       "name":"preserveHoodieMetadata",
+       "type":["boolean", "null"],
+       "default": false
     }
   ]
 }

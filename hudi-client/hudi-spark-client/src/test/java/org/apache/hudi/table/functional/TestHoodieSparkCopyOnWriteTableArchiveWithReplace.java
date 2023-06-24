@@ -56,7 +56,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
@@ -81,8 +81,8 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
 
-      // 2nd write batch; 4 commits for the 4th partition; the 4th commit to trigger archiving the replace commit
-      for (int i = 5; i < 9; i++) {
+      // 2nd write batch; 6 commits for the 4th partition; the 6th commit to trigger archiving the replace commit
+      for (int i = 5; i < 11; i++) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime(i * 1000);
         client.startCommitWithTime(instantTime);
         client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 1, DEFAULT_THIRD_PARTITION_PATH), 1), instantTime);
@@ -98,8 +98,8 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
 
       // verify records
       final HoodieTimeline timeline2 = metaClient.getCommitTimeline().filterCompletedInstants();
-      assertEquals(5, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline2, Option.empty()),
-          "should only have the 5 records from the 3rd partition.");
+      assertEquals(7, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline2, Option.empty()),
+          "should only have the 7 records from the 3rd partition.");
     }
   }
 }

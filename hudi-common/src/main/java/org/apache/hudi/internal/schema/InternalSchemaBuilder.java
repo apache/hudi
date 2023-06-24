@@ -43,7 +43,6 @@ public class InternalSchemaBuilder implements Serializable {
   private InternalSchemaBuilder() {
   }
 
-
   /**
    * Build a mapping from id to full field name for a internal Type.
    * if a field y belong to a struct filed x, then the full name of y is x.y
@@ -72,7 +71,7 @@ public class InternalSchemaBuilder implements Serializable {
    * Use to traverse all types in internalSchema with visitor.
    *
    * @param schema hoodie internal schema
-   * @return vistor expected result.
+   * @return visitor expected result.
    */
   public <T> T visit(InternalSchema schema, InternalSchemaVisitor<T> visitor) {
     return visitor.schema(schema, visit(schema.getRecord(), visitor));

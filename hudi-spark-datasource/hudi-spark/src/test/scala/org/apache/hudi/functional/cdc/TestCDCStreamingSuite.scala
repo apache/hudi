@@ -17,19 +17,17 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.hudi.DataSourceReadOptions
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.QueryTest.checkAnswer
-import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
-
+import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.EnumSource
 
 class TestCDCStreamingSuite extends HoodieCDCTestBase {
 
@@ -45,8 +43,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
    *     and write to country_to_population_tbl.
    */
   @ParameterizedTest
-  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
-  def cdcStreaming(cdcSupplementalLoggingMode: String): Unit = {
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def cdcStreaming(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val commonOptions = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -69,7 +67,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     userToCountryDF.write.format("hudi")
       .options(commonOptions)
       .option(HoodieTableConfig.CDC_ENABLED.key, "true")
-      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key, cdcSupplementalLoggingMode)
+      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key, loggingMode.name())
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")

@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,6 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HoodiePartitionMetadata}.
+ */
 public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
 
   FileSystem fs;
@@ -46,6 +50,12 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
   public void setupTest() throws IOException {
     initMetaClient();
     fs = metaClient.getFs();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    fs.close();
+    cleanMetaClient();
   }
 
   static Stream<Arguments> formatProviderFn() {

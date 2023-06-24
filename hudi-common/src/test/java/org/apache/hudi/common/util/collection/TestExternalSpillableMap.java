@@ -82,7 +82,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled); // 16B
 
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
 
@@ -115,7 +116,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled); // 16B
 
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
@@ -124,7 +126,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       assert recordKeys.contains(rec.getRecordKey());
     }
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys,
-        SchemaTestUtil.generateHoodieTestRecords(0, 100), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 100), HoodieActiveTimeline.createNewInstantTime());
 
     // update records already inserted
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
@@ -154,7 +156,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled); // 16B
 
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     IndexedRecord inMemoryRecord = iRecords.get(0);
@@ -210,7 +213,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         failureOutputPath, new DefaultSizeEstimator(),
         new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled); // 16B
 
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
@@ -236,7 +240,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
     while (records.getDiskBasedMapNumEntries() < 1) {
-      List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
       recordKeys.addAll(SpillableMapTestUtils.upsertRecords(iRecords, records));
     }
 
@@ -288,10 +293,12 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled); // 16B
 
+    SchemaTestUtil testUtil = new SchemaTestUtil();
     List<String> recordKeys = new ArrayList<>();
+
     // Ensure we spill to disk
     while (records.getDiskBasedMapNumEntries() < 1) {
-      List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 100);
+      List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 100);
       hoodieRecords.stream().forEach(r -> {
         records.put(r.getRecordKey(), r);
         recordKeys.add(r.getRecordKey());
@@ -354,16 +361,18 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
             new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled);
 
     List<String> recordKeys = new ArrayList<>();
+    SchemaTestUtil testUtil = new SchemaTestUtil();
 
     // Put a single record. Payload size estimation happens as part of this initial put.
-    HoodieRecord seedRecord = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1).get(0);
+    HoodieRecord seedRecord = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1).get(0);
     records.put(seedRecord.getRecordKey(), seedRecord);
 
     // Remove the key immediately to make the map empty again.
     records.remove(seedRecord.getRecordKey());
 
     // Verify payload size re-estimation does not throw exception
-    List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 250);
+    SchemaTestUtil testUtilx = new SchemaTestUtil();
+    List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 250);
     hoodieRecords.stream().forEach(hoodieRecord -> {
       assertDoesNotThrow(() -> {
         records.put(hoodieRecord.getRecordKey(), hoodieRecord);

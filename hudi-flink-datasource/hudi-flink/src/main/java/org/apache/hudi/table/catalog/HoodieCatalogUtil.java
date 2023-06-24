@@ -21,8 +21,12 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
+import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.PartitionSpecInvalidException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -35,9 +39,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
@@ -112,5 +118,58 @@ public class HoodieCatalogUtil {
           .collect(Collectors.toList());
     }
     return Collections.emptyList();
+  }
+
+  /**
+   * Returns the partition path with given {@link CatalogPartitionSpec}.
+   */
+  public static String inferPartitionPath(boolean hiveStylePartitioning, CatalogPartitionSpec catalogPartitionSpec) {
+    return catalogPartitionSpec.getPartitionSpec().entrySet()
+        .stream().map(entry ->
+            hiveStylePartitioning
+                ? String.format("%s=%s", entry.getKey(), entry.getValue())
+                : entry.getValue())
+        .collect(Collectors.joining("/"));
+  }
+
+  /**
+   * Returns a list of ordered partition values by re-arranging them based on the given list of
+   * partition keys. If the partition value is null, it'll be converted into default partition
+   * name.
+   *
+   * @param partitionSpec The partition spec
+   * @param partitionKeys The partition keys
+   * @param tablePath     The table path
+   * @return A list of partition values ordered by partition keys
+   * @throws PartitionSpecInvalidException thrown if partitionSpec and partitionKeys have
+   *     different sizes, or any key in partitionKeys doesn't exist in partitionSpec.
+   */
+  @VisibleForTesting
+  public static List<String> getOrderedPartitionValues(
+      String catalogName,
+      HiveConf hiveConf,
+      CatalogPartitionSpec partitionSpec,
+      List<String> partitionKeys,
+      ObjectPath tablePath)
+      throws PartitionSpecInvalidException {
+    Map<String, String> spec = partitionSpec.getPartitionSpec();
+    if (spec.size() != partitionKeys.size()) {
+      throw new PartitionSpecInvalidException(catalogName, partitionKeys, tablePath, partitionSpec);
+    }
+
+    List<String> values = new ArrayList<>(spec.size());
+    for (String key : partitionKeys) {
+      if (!spec.containsKey(key)) {
+        throw new PartitionSpecInvalidException(catalogName, partitionKeys, tablePath, partitionSpec);
+      } else {
+        String value = spec.get(key);
+        if (value == null) {
+          value = hiveConf.getVar(HiveConf.ConfVars.DEFAULTPARTITIONNAME);
+        }
+        values.add(value);
+      }
+    }
+
+    return values;
   }
 }

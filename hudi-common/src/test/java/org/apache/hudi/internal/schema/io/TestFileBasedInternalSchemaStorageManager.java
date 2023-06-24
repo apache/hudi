@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +47,11 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanMetaClient();
   }
 
   @Test
@@ -104,7 +111,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
         Types.Field.get(0, "bool", Types.BooleanType.get()),
         Types.Field.get(1, "int", Types.IntType.get()),
     }));
-    return new InternalSchema(record.fields());
+    return new InternalSchema(record);
   }
 }
 

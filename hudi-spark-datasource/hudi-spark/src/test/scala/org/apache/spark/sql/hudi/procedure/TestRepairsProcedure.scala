@@ -178,7 +178,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // first, there are four instants
       assertResult(4) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.countInstants
       }
 
       checkAnswer(s"""call repair_corrupted_clean_files(table => '$tableName')""")(Seq(true))
@@ -187,7 +187,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // after clearing, there should be 0 instant
       assertResult(0) {
-        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstants.count
+        metaClient.getActiveTimeline.filterInflightsAndRequested.getInstantsAsStream.count
       }
     }
   }
@@ -488,8 +488,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
     val schema: Schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
     val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
 
-    val hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema)
-    val hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema)
+    val testUtil = new SchemaTestUtil
+    val hoodieRecords1 = testUtil.generateHoodieTestRecords(0, 100, schema)
+    val hoodieRecords2 = testUtil.generateHoodieTestRecords(100, 100, schema)
     testTable.addCommit("20160401010101")
       .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
     testTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "2", hoodieRecords2)

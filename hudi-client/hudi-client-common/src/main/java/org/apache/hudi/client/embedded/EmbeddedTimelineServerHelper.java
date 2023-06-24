@@ -23,8 +23,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -33,7 +33,7 @@ import java.io.IOException;
  */
 public class EmbeddedTimelineServerHelper {
 
-  private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
 
   private static Option<EmbeddedTimelineService> TIMELINE_SERVER = Option.empty();
 

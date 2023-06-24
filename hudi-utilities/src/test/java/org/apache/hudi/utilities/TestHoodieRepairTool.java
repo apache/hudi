@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.HoodieTestCommitGenerator;
 import org.apache.hudi.client.SparkRDDReadClient;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,8 +33,7 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -46,6 +44,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieRepairTool extends HoodieCommonTestHarness implements SparkProvider {
-  private static final Logger LOG = LogManager.getLogger(TestHoodieRepairTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieRepairTool.class);
   // Instant time -> List<Pair<relativePartitionPath, fileId>>
   private static final Map<String, List<Pair<String, String>>> BASE_FILE_INFO = new HashMap<>();
   private static final Map<String, List<Pair<String, String>>> LOG_FILE_INFO = new HashMap<>();
@@ -93,7 +93,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     boolean initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();

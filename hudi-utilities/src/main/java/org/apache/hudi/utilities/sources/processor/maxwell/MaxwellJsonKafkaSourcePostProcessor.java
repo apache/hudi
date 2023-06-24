@@ -18,12 +18,12 @@
 
 package org.apache.hudi.utilities.sources.processor.maxwell;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 
@@ -55,8 +55,8 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   public MaxwellJsonKafkaSourcePostProcessor(TypedProperties props) {
     super(props);
-    databaseRegex = Option.ofNullable(props.getString(Config.DATABASE_NAME_REGEX_PROP.key(), null));
-    tableRegex = props.getString(Config.TABLE_NAME_REGEX_PROP.key());
+    databaseRegex = Option.ofNullable(props.getString(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key(), null));
+    tableRegex = props.getString(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key());
   }
 
   // ------------------------------------------------------------------------
@@ -77,33 +77,6 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
   private static final String UPDATE = "update";
   private static final String DELETE = "delete";
 
-  /**
-   * Configs to be passed for this processor.
-   */
-  public static class Config {
-    public static final ConfigProperty<String> DATABASE_NAME_REGEX_PROP = ConfigProperty
-        .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex")
-        .noDefaultValue()
-        .withDocumentation("Database name regex.");
-
-    public static final ConfigProperty<String> TABLE_NAME_REGEX_PROP = ConfigProperty
-        .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.table.regex")
-        .noDefaultValue()
-        .withDocumentation("Table name regex.");
-
-    public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE_PROP = ConfigProperty
-        .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type")
-        .defaultValue(DATE_STRING.toString())
-        .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
-            + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATE_STRING by default ");
-
-    public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT_PROP = ConfigProperty
-        .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.format")
-        .defaultValue("yyyy-MM-dd HH:mm:ss")
-        .withDocumentation("When the preCombine filed is in DATE_STRING format, use should tell hoodie"
-            + "what format it is. 'yyyy-MM-dd HH:mm:ss' by default");
-  }
-
   @Override
   public JavaRDD<String> process(JavaRDD<String> maxwellJsonRecords) {
     return maxwellJsonRecords.map(record -> {
@@ -119,7 +92,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
         // insert or update
         if (INSERT.equals(type) || UPDATE.equals(type)) {
           // tag this record not delete.
-          result.put(HoodieRecord.HOODIE_IS_DELETED, false);
+          result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, false);
           return result.toString();
 
           // delete
@@ -138,11 +111,11 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   private String processDelete(JsonNode inputJson, ObjectNode result) {
     // tag this record as delete.
-    result.put(HoodieRecord.HOODIE_IS_DELETED, true);
+    result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
 
     PreCombineFieldType preCombineFieldType =
-        valueOf(this.props.getString(Config.PRECOMBINE_FIELD_TYPE_PROP.key(),
-            Config.PRECOMBINE_FIELD_TYPE_PROP.defaultValue()).toUpperCase(Locale.ROOT));
+        valueOf(this.props.getString(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(),
+            JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.defaultValue()).toUpperCase(Locale.ROOT));
 
     // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
     // want to delete this record correctly, we should update its `update_time` to a time closer to where the
@@ -159,7 +132,8 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
       // convert the `update_time`(delete time) to the proper format.
       if (preCombineFieldType.equals(DATE_STRING)) {
         // DATE_STRING format
-        String timeFormat = this.props.getString(Config.PRECOMBINE_FIELD_FORMAT_PROP.key(), Config.PRECOMBINE_FIELD_FORMAT_PROP.defaultValue());
+        String timeFormat = this.props.getString(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.key(),
+            JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.defaultValue());
         result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
       } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
         // EPOCHMILLISECONDS format

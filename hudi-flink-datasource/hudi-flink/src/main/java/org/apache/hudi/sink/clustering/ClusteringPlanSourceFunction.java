@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -60,9 +61,12 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
    */
   private final String clusteringInstantTime;
 
-  public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan) {
+  private final Configuration conf;
+
+  public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan, Configuration conf) {
     this.clusteringInstantTime = clusteringInstantTime;
     this.clusteringPlan = clusteringPlan;
+    this.conf = conf;
   }
 
   @Override
@@ -72,9 +76,14 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
-    for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
-      LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
-      sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
+    boolean isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingReplaceTimeline().containsInstant(clusteringInstantTime);
+    if (isPending) {
+      for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
+        LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
+        sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
+      }
+    } else {
+      LOG.warn(clusteringInstantTime + " not found in pending clustering instants.");
     }
   }
 

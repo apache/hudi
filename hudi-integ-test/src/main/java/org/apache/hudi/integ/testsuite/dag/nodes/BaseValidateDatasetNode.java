@@ -92,7 +92,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         || (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
       FileSystem fs = new Path(context.getHoodieTestSuiteWriter().getCfg().inputBasePath)
           .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
-      if (context.getHoodieTestSuiteWriter().getCfg().testContinousMode) {
+      if (context.getHoodieTestSuiteWriter().getCfg().testContinuousMode) {
         awaitUntilDeltaStreamerCaughtUp(context, context.getHoodieTestSuiteWriter().getCfg().targetBasePath, fs,
             context.getHoodieTestSuiteWriter().getCfg().inputBasePath);
       }
@@ -192,7 +192,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       waitedSoFar += 20000;
       if (waitedSoFar >= maxWaitTime) {
         throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint "
-            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caugth up " + latestSubDir);
+            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caught up " + latestSubDir);
       }
       log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
           + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
@@ -222,8 +222,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     Dataset<Row> trimmedDf = inputDf;
-    if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
-      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitonsToSkipWithValidate() + "\') != 1");
+    if (!config.inputPartitionsToSkipWithValidate().isEmpty()) {
+      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitionsToSkipWithValidate() + "\') != 1");
     }
 
     ExpressionEncoder encoder = getEncoder(inputDf.schema());

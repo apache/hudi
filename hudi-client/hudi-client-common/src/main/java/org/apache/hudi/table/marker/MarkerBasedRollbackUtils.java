@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,7 +48,7 @@ import static org.apache.hudi.common.util.MarkerUtils.readTimelineServerBasedMar
  */
 public class MarkerBasedRollbackUtils {
 
-  private static final Logger LOG = LogManager.getLogger(MarkerBasedRollbackUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackUtils.class);
 
   /**
    * Gets all marker paths.

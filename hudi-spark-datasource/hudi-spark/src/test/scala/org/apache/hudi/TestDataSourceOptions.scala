@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test
 class TestDataSourceOptions {
   @Test def inferDataSourceOptions(): Unit = {
     val inputOptions1 = Map(
+      RECORDKEY_FIELD.key -> "uuid",
       TABLE_NAME.key -> "hudi_table",
       PARTITIONPATH_FIELD.key -> "year,month"
     )
@@ -38,6 +39,7 @@ class TestDataSourceOptions {
       modifiedOptions1(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key))
 
     val inputOptions2 = Map(
+      RECORDKEY_FIELD.key -> "uuid",
       TABLE_NAME.key -> "hudi_table",
       PARTITIONPATH_FIELD.key -> "year",
       HIVE_STYLE_PARTITIONING.key -> "true"

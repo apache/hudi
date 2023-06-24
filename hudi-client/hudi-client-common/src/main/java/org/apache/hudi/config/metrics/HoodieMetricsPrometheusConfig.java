@@ -45,36 +45,49 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
   public static final ConfigProperty<String> PUSHGATEWAY_HOST_NAME = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".host")
       .defaultValue("localhost")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Hostname of the prometheus push gateway.");
 
   public static final ConfigProperty<Integer> PUSHGATEWAY_PORT_NUM = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".port")
       .defaultValue(9091)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Port for the push gateway.");
 
   public static final ConfigProperty<Integer> PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".report.period.seconds")
       .defaultValue(30)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Reporting interval in seconds.");
 
   public static final ConfigProperty<Boolean> PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".delete.on.shutdown")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Delete the pushgateway info or not when job shutdown, true by default.");
 
   public static final ConfigProperty<String> PUSHGATEWAY_JOBNAME = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".job.name")
       .defaultValue("")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Name of the push gateway job.");
+
+  public static final ConfigProperty<String> PUSHGATEWAY_LABELS = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".report.labels")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Label for the metrics emitted to the Pushgateway. Labels can be specified with key:value pairs separated by commas");
 
   public static final ConfigProperty<Boolean> PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".random.job.name.suffix")
       .defaultValue(true)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Whether the pushgateway name need a random suffix , default true.");
 
@@ -84,6 +97,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> PROMETHEUS_PORT_NUM = ConfigProperty
       .key(PROMETHEUS_PREFIX + ".port")
       .defaultValue(9090)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Port for prometheus server.");
 
@@ -202,6 +216,11 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
 
     public HoodieMetricsPrometheusConfig.Builder withPushgatewayRandomJobnameSuffix(boolean randomJobnameSuffix) {
       hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX, String.valueOf(randomJobnameSuffix));
+      return this;
+    }
+
+    public Builder withPushgatewayLabels(String pushGatewayLabels) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_LABELS, pushGatewayLabels);
       return this;
     }
 

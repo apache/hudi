@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -114,7 +114,7 @@ public interface HoodieLogFormat {
    */
   class WriterBuilder {
 
-    private static final Logger LOG = LogManager.getLogger(WriterBuilder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
 
@@ -141,8 +141,12 @@ public interface HoodieLogFormat {
     private Path parentPath;
     // Log File Write Token
     private String logWriteToken;
+    // optional file suffix
+    private String suffix;
     // Rollover Log file write token
     private String rolloverLogWriteToken;
+    // A call back triggered with log file operation
+    private HoodieLogFileWriteCallback logFileWriteCallback;
 
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
@@ -161,6 +165,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withLogWriteToken(String logWriteToken) {
       this.logWriteToken = logWriteToken;
+      return this;
+    }
+
+    public WriterBuilder withSuffix(String suffix) {
+      this.suffix = suffix;
       return this;
     }
 
@@ -191,6 +200,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withLogVersion(int version) {
       this.logVersion = version;
+      return this;
+    }
+
+    public WriterBuilder withLogWriteCallback(HoodieLogFileWriteCallback logFileWriteCallback) {
+      this.logFileWriteCallback = logFileWriteCallback;
       return this;
     }
 
@@ -226,6 +240,11 @@ public interface HoodieLogFormat {
         rolloverLogWriteToken = UNKNOWN_WRITE_TOKEN;
       }
 
+      if (logFileWriteCallback == null) {
+        // use a callback do nothing here as default callback.
+        logFileWriteCallback = new HoodieLogFileWriteCallback() {};
+      }
+
       if (logVersion == null) {
         LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
         Option<Pair<Integer, String>> versionAndWriteToken =
@@ -250,6 +269,14 @@ public interface HoodieLogFormat {
         logWriteToken = rolloverLogWriteToken;
       }
 
+      if (suffix != null) {
+        // A little hacky to simplify the file name concatenation:
+        // patch the write token with an optional suffix
+        // instead of adding a new extension
+        logWriteToken = logWriteToken + suffix;
+        rolloverLogWriteToken = rolloverLogWriteToken + suffix;
+      }
+
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
@@ -264,7 +291,8 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken);
+      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold,
+          rolloverLogWriteToken, logFileWriteCallback);
     }
   }
 

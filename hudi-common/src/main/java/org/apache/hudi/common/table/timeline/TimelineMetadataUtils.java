@@ -59,6 +59,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Utils for Hudi timeline metadata.
+ */
 public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
@@ -74,7 +77,7 @@ public class TimelineMetadataUtils {
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
-      List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
+                                                               List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
@@ -87,20 +90,20 @@ public class TimelineMetadataUtils {
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-      instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
-      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-      instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
-      Map<String, List<String>> latestFiles) {
+                                                                 Map<String, List<String>> latestFiles) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {

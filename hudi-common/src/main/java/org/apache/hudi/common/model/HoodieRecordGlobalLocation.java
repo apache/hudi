@@ -18,18 +18,21 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
 import java.util.Objects;
 
 /**
  * Similar with {@link org.apache.hudi.common.model.HoodieRecordLocation} but with partition path.
  */
-public class HoodieRecordGlobalLocation extends HoodieRecordLocation {
+public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
   private static final long serialVersionUID = 1L;
 
   private String partitionPath;
 
-  public HoodieRecordGlobalLocation() {
-  }
+  public HoodieRecordGlobalLocation() {}
 
   public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId) {
     super(instantTime, fileId);
@@ -92,6 +95,20 @@ public class HoodieRecordGlobalLocation extends HoodieRecordLocation {
    */
   public HoodieRecordGlobalLocation copy(String partitionPath) {
     return new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId);
+  }
+
+  @Override
+  public final void write(Kryo kryo, Output output) {
+    super.write(kryo, output);
+
+    kryo.writeObjectOrNull(output, partitionPath, String.class);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+
+    this.partitionPath = kryo.readObject(input, String.class);
   }
 }
 

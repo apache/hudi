@@ -82,6 +82,10 @@ public class BootstrapCommand {
           defaultValue = "") final String[] configs)
       throws IOException, InterruptedException, URISyntaxException {
 
+    if (targetPath.equals(srcPath)) {
+      throw new IllegalArgumentException("srcPath and targetPath must be different");
+    }
+
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
 

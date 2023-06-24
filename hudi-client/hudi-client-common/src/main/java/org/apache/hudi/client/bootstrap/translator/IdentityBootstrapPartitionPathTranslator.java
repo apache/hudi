@@ -18,15 +18,13 @@
 
 package org.apache.hudi.client.bootstrap.translator;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 /**
  * Return same path as bootstrap partition path.
  */
 public class IdentityBootstrapPartitionPathTranslator extends BootstrapPartitionPathTranslator {
 
-  public IdentityBootstrapPartitionPathTranslator(TypedProperties properties) {
-    super(properties);
+  public IdentityBootstrapPartitionPathTranslator() {
+    super();
   }
 
   @Override

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -65,6 +66,10 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   private HoodieFlinkEngineContext() {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+  }
+
+  public HoodieFlinkEngineContext(org.apache.hadoop.conf.Configuration hadoopConf) {
+    this(new SerializableConfiguration(hadoopConf), new DefaultTaskContextSupplier());
   }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
@@ -159,6 +164,21 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     // no operation for now
+  }
+
+  @Override
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
+    // no operation for now
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
   }
 
   /**
