@@ -319,10 +319,9 @@ public class HoodieIndexUtils {
       HoodieData<HoodieRecord<R>> incomingRecords,
       HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
       boolean mayContainDuplicateLookup,
+      boolean shouldUpdatePartitionPath,
       HoodieWriteConfig config,
       HoodieTable table) {
-    final boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath()
-        && table.isPartitioned();
     final HoodieRecordMerger merger = config.getRecordMerger();
 
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =

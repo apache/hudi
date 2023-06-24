@@ -103,9 +103,10 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = keyLocationPairs
         .mapToPair(p -> Pair.of(p.getLeft().getRecordKey(),
             HoodieRecordGlobalLocation.fromLocal(p.getLeft().getPartitionPath(), p.getRight())));
-
+    boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
+    boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     return tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
-        hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ, config, hoodieTable);
+        mayContainDuplicateLookup, shouldUpdatePartitionPath, config, hoodieTable);
   }
 
   @Override

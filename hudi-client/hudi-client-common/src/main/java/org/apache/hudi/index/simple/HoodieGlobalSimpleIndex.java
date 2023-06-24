@@ -71,8 +71,10 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
     List<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable);
     HoodiePairData<String, HoodieRecordGlobalLocation> allKeysAndLocations =
         fetchRecordGlobalLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism(), latestBaseFiles);
+    boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
+    boolean shouldUpdatePartitionPath = config.getGlobalSimpleIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     return tagGlobalLocationBackToRecords(inputRecords, allKeysAndLocations,
-        hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ, config, hoodieTable);
+        mayContainDuplicateLookup, shouldUpdatePartitionPath, config, hoodieTable);
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> fetchRecordGlobalLocations(

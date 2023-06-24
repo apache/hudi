@@ -106,8 +106,9 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
         HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
 
     // Tag the incoming records, as inserts or updates, by joining with existing record keys
+    boolean shouldUpdatePartitionPath = config.getRecordIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
-        false, config, hoodieTable);
+        false, shouldUpdatePartitionPath, config, hoodieTable);
 
     // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
     // keyToLocationPairRDD and records RDD.
@@ -148,14 +149,6 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   @Override
   public boolean isImplicitWithStorage() {
     return false;
-  }
-
-  private <R> HoodieData<HoodieRecord<R>> tagLocationBackToRecords(
-      HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
-      HoodieData<HoodieRecord<R>> incomingRecords,
-      HoodieTable hoodieTable) {
-    return tagGlobalLocationBackToRecords(incomingRecords, keyAndExistingLocations,
-        false, config, hoodieTable);
   }
 
   /**
