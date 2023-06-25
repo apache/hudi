@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
@@ -41,9 +40,17 @@ public class FlinkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
       HoodieTable table, HoodieEngineContext engineContext,
       HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
-    ValidationUtils.checkArgument(
-        !writeConfig.isBucketClusteringMergeEnabled(),
-        "FlinkConsistentBucketClusteringPlanStrategy does not support merge bucket for consistent hash index."
-    );
+  }
+
+  @Override
+  protected boolean isBucketClusteringMergeEnabled() {
+    // Flink would not generate merge plan because it would cause multiple write sub tasks write to the same file group.
+    return false;
+  }
+
+  @Override
+  protected boolean isBucketClusteringSortEnabled() {
+    // Flink would not generate sort clustering plans for buckets that are not involved in merge or split to avoid unnecessary clustering costs.
+    return false;
   }
 }

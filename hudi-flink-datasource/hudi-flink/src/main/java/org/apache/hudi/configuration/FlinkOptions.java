@@ -865,13 +865,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(30)
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
-  @AdvancedConfig
-  public static final ConfigOption<Boolean> BUCKET_CLUSTERING_SORT_ENABLED = ConfigOptions
-      .key("bucket.clustering.sort.enabled")
-      .booleanType()
-      .defaultValue(false) // default false for pipeline
-      .withDescription("Controls whether to generate regular clustering plans for buckets that are not involved in merge or split within the consistent hashing bucket index clustering plan.");
-
   // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------

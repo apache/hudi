@@ -330,20 +330,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
-  public static final ConfigProperty<Boolean> BUCKET_CLUSTERING_MERGE_ENABLED = ConfigProperty
-      .key("hoodie.bucket.clustering.merge.enabled")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("Control whether enabled buckets merged when using consistent hashing bucket index.");
-
-  public static final ConfigProperty<Boolean> BUCKET_CLUSTERING_SORT_ENABLED = ConfigProperty
-      .key("hoodie.bucket.clustering.sort.enabled")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("Controls whether to generate regular clustering plans for buckets that are not involved in merge or split within the consistent hashing bucket index clustering plan.");
-
   /**
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
    */
@@ -627,16 +613,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBucketClusteringMergeEnabled(Boolean enableMerge) {
-      clusteringConfig.setValue(BUCKET_CLUSTERING_MERGE_ENABLED, String.valueOf(enableMerge));
-      return this;
-    }
-
-    public Builder withBucketClusteringSortEnabled(Boolean enableSort) {
-      clusteringConfig.setValue(BUCKET_CLUSTERING_SORT_ENABLED, String.valueOf(enableSort));
-      return this;
-    }
-
     public HoodieClusteringConfig build() {
       setDefaults();
       validate();
@@ -659,14 +635,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
       if (isConsistentHashingBucketIndex()) {
         String planStrategy = clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME);
-        ValidationUtils.checkArgument(
-            planStrategy.equalsIgnoreCase(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY)
-                || planStrategy.equalsIgnoreCase(FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
-            "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY + " | " + FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        ValidationUtils.checkArgument(
-            engineType == EngineType.FLINK
-                || clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
-            "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
+        if (engineType == EngineType.FLINK) {
+          ValidationUtils.checkArgument(planStrategy.equalsIgnoreCase(FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Consistent hashing bucket index only supports clustering plan strategy : " + FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+        } else {
+          ValidationUtils.checkArgument(
+              planStrategy.equalsIgnoreCase(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+          ValidationUtils.checkArgument(
+              clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
+              "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
+        }
       }
     }
 

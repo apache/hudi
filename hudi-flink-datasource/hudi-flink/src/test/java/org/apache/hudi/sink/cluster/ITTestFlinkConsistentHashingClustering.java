@@ -108,25 +108,6 @@ public class ITTestFlinkConsistentHashingClustering {
     Assertions.assertFalse(clusteringInstantOption.isPresent());
   }
 
-  @Test
-  public void testScheduleSortPlan() throws Exception {
-    TableEnvironment tableEnv = setupTableEnv();
-    prepareData(tableEnv);
-
-    Configuration conf = getDefaultConfiguration();
-    conf.setBoolean(FlinkOptions.BUCKET_CLUSTERING_SORT_ENABLED, true);
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
-    Option<String> clusteringInstantOption = writeClient.scheduleClustering(Option.empty());
-    Assertions.assertTrue(clusteringInstantOption.isPresent());
-    // Validate clustering plan
-    HoodieClusteringPlan clusteringPlan = getLatestClusteringPlan(writeClient);
-    Assertions.assertEquals(4, clusteringPlan.getInputGroups().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(0).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(1).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(2).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(3).getSlices().size());
-  }
-
   private HoodieClusteringPlan getLatestClusteringPlan(HoodieFlinkWriteClient writeClient) {
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     table.getMetaClient().reloadActiveTimeline();

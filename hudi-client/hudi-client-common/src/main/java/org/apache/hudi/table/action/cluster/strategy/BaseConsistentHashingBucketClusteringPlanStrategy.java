@@ -107,7 +107,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
     List<HoodieClusteringGroup> ret = new ArrayList<>(splitResult.getLeft());
 
     List<FileSlice> remainedSlices = splitResult.getRight();
-    if (getWriteConfig().isBucketClusteringMergeEnabled()) {
+    if (isBucketClusteringMergeEnabled()) {
       // Apply merge rule
       int mergeSlot = identifier.getNumBuckets() - getWriteConfig().getBucketIndexMinNumBuckets() + splitResult.getMiddle();
       Triple<List<HoodieClusteringGroup>, Integer, List<FileSlice>> mergeResult =
@@ -115,7 +115,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
       ret.addAll(mergeResult.getLeft());
       remainedSlices = mergeResult.getRight();
     }
-    if (getWriteConfig().isBucketClusteringSortEnabled()) {
+    if (isBucketClusteringSortEnabled()) {
       // Apply sort only to the remaining file groups
       ret.addAll(remainedSlices.stream().map(fs -> {
         ConsistentHashingNode oldNode = identifier.getBucketByFileId(fs.getFileId());
@@ -129,6 +129,24 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
       }).collect(Collectors.toList()));
     }
     return ret.stream();
+  }
+
+  /**
+   * Whether enable buckets merged when using consistent hashing bucket index.
+   *
+   * @return true if bucket merge is enabled, false otherwise.
+   */
+  protected boolean isBucketClusteringMergeEnabled() {
+    return true;
+  }
+
+  /**
+   * Whether generate regular sort clustering plans for buckets that are not involved in merge or split.
+   *
+   * @return true if generate regular sort clustering plans for buckets that are not involved in merge or split, false otherwise.
+   */
+  protected boolean isBucketClusteringSortEnabled() {
+    return true;
   }
 
   /**
