@@ -35,7 +35,7 @@ import java.util.stream.IntStream;
 
 public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata {
 
-  protected final transient HoodieEngineContext engineContext;
+  protected transient HoodieEngineContext engineContext;
 
   protected final SerializableConfiguration hadoopConf;
   protected final SerializablePath dataBasePath;

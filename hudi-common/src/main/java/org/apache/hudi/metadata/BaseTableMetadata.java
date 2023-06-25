@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -100,6 +101,13 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     } else {
       this.metrics = Option.empty();
     }
+  }
+
+  protected HoodieEngineContext getEngineContext() {
+    if (engineContext == null) {
+      engineContext = new HoodieLocalEngineContext(dataMetaClient.getHadoopConf());
+    }
+    return engineContext;
   }
 
   /**
