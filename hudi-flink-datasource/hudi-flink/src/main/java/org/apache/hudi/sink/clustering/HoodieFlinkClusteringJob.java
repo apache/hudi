@@ -310,9 +310,12 @@ public class HoodieFlinkClusteringJob {
 
       HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant.getTimestamp());
 
+      int inputGroupSize = clusteringPlan.getInputGroups().size();
+
       // get clusteringParallelism.
       int clusteringParallelism = conf.getInteger(FlinkOptions.CLUSTERING_TASKS) == -1
-          ? clusteringPlan.getInputGroups().size() : conf.getInteger(FlinkOptions.CLUSTERING_TASKS);
+          ? inputGroupSize
+          : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
       table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
@@ -327,7 +330,7 @@ public class HoodieFlinkClusteringJob {
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.getTimestamp(), clusteringPlan))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.getTimestamp(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()

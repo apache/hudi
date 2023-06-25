@@ -313,8 +313,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields) throws Exception {
 
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
-        .withInlineCompaction(false)
-        .withLogCompactionBlocksThreshold("1")
+        .withMaxNumDeltaCommitsBeforeCompaction(1)
+        .withLogCompactionBlocksThreshold(1)
         .build();
     // insert 100 recordsx
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true)

@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
@@ -65,8 +67,11 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestH
         getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
 
     List<HoodieRecord> records = generateTestRecordsForBulkInsert(1000);
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath("basePath").build();
+    cfg.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "partition_path");
+    cfg.setValue(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED, "false");
     testBulkInsertInternalPartitioner(
-        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, cfg),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 

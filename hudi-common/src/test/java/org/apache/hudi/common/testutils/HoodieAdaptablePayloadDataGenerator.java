@@ -22,7 +22,10 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -117,6 +120,18 @@ public class HoodieAdaptablePayloadDataGenerator {
     return updates;
   }
 
+  public static List<HoodieRecord> getUpdates(List<HoodieRecord> baseRecords, String newPartition, long ts, Class<?> payloadClass) throws IOException {
+    RecordGen recordGen = new RecordGen(payloadClass);
+    List<HoodieRecord> updates = new ArrayList<>();
+    Properties props = new Properties();
+    for (HoodieRecord r : baseRecords) {
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
+      updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
+    }
+    return updates;
+  }
+
   private static GenericRecord getUpdate(int id, String pt, long ts, RecordGen recordGen) {
     GenericRecord r = new GenericData.Record(SCHEMA);
     r.put("id", id);
@@ -136,6 +151,35 @@ public class HoodieAdaptablePayloadDataGenerator {
     return deletes;
   }
 
+  public static List<HoodieRecord> getDeletesWithNewPartition(List<HoodieRecord> baseRecords, String newPartition, long ts, Class<?> payloadClass)
+      throws IOException {
+    RecordGen recordGen = new RecordGen(payloadClass);
+    List<HoodieRecord> deletes = new ArrayList<>();
+    Properties props = new Properties();
+    for (HoodieRecord r : baseRecords) {
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
+      deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
+    }
+    return deletes;
+  }
+
+  public static List<HoodieRecord> getDeletesWithEmptyPayload(List<HoodieRecord> baseRecords) {
+    List<HoodieRecord> deletes = new ArrayList<>();
+    for (HoodieRecord r : baseRecords) {
+      deletes.add(getHoodieRecordForEmptyPayload(r.getKey()));
+    }
+    return deletes;
+  }
+
+  public static List<HoodieRecord> getDeletesWithEmptyPayloadAndNewPartition(List<HoodieRecord> baseRecords, String newPartition) {
+    List<HoodieRecord> deletes = new ArrayList<>();
+    for (HoodieRecord r : baseRecords) {
+      deletes.add(getHoodieRecordForEmptyPayload(new HoodieKey(r.getRecordKey(), newPartition)));
+    }
+    return deletes;
+  }
+
   private static GenericRecord getDelete(int id, String pt, long ts, RecordGen recordGen) {
     GenericRecord r = new GenericData.Record(SCHEMA);
     r.put("id", id);
@@ -143,7 +187,14 @@ public class HoodieAdaptablePayloadDataGenerator {
     return recordGen.populateForDelete(r, ts);
   }
 
+  private static HoodieRecord getHoodieRecordForEmptyPayload(HoodieKey key) {
+    return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
+  }
+
   private static HoodieRecord getHoodieRecord(GenericRecord r, Class<?> payloadClass) throws IOException {
+    if (payloadClass == EmptyHoodieRecordPayload.class) {
+      return getHoodieRecordForEmptyPayload(new HoodieKey(r.get("id").toString(), r.get("pt").toString()));
+    }
     return new HoodieAvroIndexedRecord(r)
         .prependMetaFields(
             SCHEMA,

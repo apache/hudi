@@ -36,7 +36,8 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |   primaryKey = 'id',
            |   type = 'cow',
-           |   preCombineField = 'ts'
+           |   preCombineField = 'ts',
+           |   hoodie.metadata.enable = "false"
            | )
            |""".stripMargin)
 
@@ -48,7 +49,7 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName values(6, 'a6', 60, 6000)")
 
       val result1 = spark.sql(s"call archive_commits(table => '$tableName'" +
-        s", min_commits => 2, max_commits => 3, retain_commits => 1)")
+        s", min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false)")
         .collect()
         .map(row => Seq(row.getInt(0)))
       assertResult(1)(result1.length)

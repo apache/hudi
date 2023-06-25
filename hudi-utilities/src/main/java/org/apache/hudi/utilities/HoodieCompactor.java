@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -91,7 +90,7 @@ public class HoodieCompactor {
     public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
@@ -268,7 +267,8 @@ public class HoodieCompactor {
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
         } else {
-          throw new HoodieCompactionException("There is no scheduled compaction in the table.");
+          LOG.info("There is no scheduled compaction in the table.");
+          return 0;
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);

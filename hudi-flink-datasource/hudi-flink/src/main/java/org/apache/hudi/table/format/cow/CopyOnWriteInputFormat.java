@@ -21,9 +21,9 @@ package org.apache.hudi.table.format.cow;
 import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
-import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
@@ -34,7 +34,6 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.utils.PartitionPathUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -72,6 +71,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final DataType[] fullFieldTypes;
   private final int[] selectedFields;
   private final String partDefaultName;
+  private final String partPathField;
+  private final boolean hiveStylePartitioning;
   private final boolean utcTimestamp;
   private final SerializableConfiguration conf;
   private final long limit;
@@ -92,6 +93,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       DataType[] fullFieldTypes,
       int[] selectedFields,
       String partDefaultName,
+      String partPathField,
+      boolean hiveStylePartitioning,
       long limit,
       Configuration conf,
       boolean utcTimestamp,
@@ -99,6 +102,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     super.setFilePaths(paths);
     this.limit = limit;
     this.partDefaultName = partDefaultName;
+    this.partPathField = partPathField;
+    this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
     this.selectedFields = selectedFields;
@@ -109,25 +114,14 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
-    // generate partition specs.
-    List<String> fieldNameList = Arrays.asList(fullFieldNames);
-    LinkedHashMap<String, String> partSpec = PartitionPathUtils.extractPartitionSpecFromPath(
-        fileSplit.getPath());
-    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> {
-      final int idx = fieldNameList.indexOf(k);
-      if (idx == -1) {
-        // for any rare cases that the partition field does not exist in schema,
-        // fallback to file read
-        return;
-      }
-      DataType fieldType = fullFieldTypes[idx];
-      if (!DataTypeUtils.isDatetimeType(fieldType)) {
-        // date time type partition field is formatted specifically,
-        // read directly from the data file to avoid format mismatch or precision loss
-        partObjects.put(k, DataTypeUtils.resolvePartition(partDefaultName.equals(v) ? null : v, fieldType));
-      }
-    });
+    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+        fileSplit.getPath().getPath(),
+        Arrays.asList(fullFieldNames),
+        Arrays.asList(fullFieldTypes),
+        this.partDefaultName,
+        this.partPathField,
+        this.hiveStylePartitioning
+    );
 
     this.itr = RecordIterators.getParquetRecordIterator(
         internalSchemaManager,

@@ -108,7 +108,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // (2) using direct file system listing:  we parallelize the partition listing so that
       // each partition can be listed on the file system concurrently through Spark.
       // Note that
-      if (shouldUseBatchLookup(config)) {
+      if (shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config)) {
         latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,

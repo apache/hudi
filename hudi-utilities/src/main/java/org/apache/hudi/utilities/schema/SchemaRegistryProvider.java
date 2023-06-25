@@ -21,8 +21,9 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -89,12 +90,16 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String convert(String schema) throws IOException;
   }
 
-  public Schema parseSchemaFromRegistry(String registryUrl) throws IOException {
+  public Schema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    SchemaConverter converter = config.containsKey(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key())
-        ? ReflectionUtils.loadClass(config.getString(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key()))
-        : s -> s;
-    return new Schema.Parser().parse(converter.convert(schema));
+    try {
+      SchemaConverter converter = config.containsKey(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key())
+          ? ReflectionUtils.loadClass(config.getString(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key()))
+          : s -> s;
+      return new Schema.Parser().parse(converter.convert(schema));
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Failed to parse schema from registry: " + schema, e);
+    }
   }
 
   /**
@@ -105,22 +110,25 @@ public class SchemaRegistryProvider extends SchemaProvider {
    *
    * @param registryUrl
    * @return the Schema in String form.
-   * @throws IOException
    */
-  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
-    HttpURLConnection connection;
-    Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
-    if (matcher.find()) {
-      String creds = matcher.group(1);
-      String urlWithoutCreds = registryUrl.replace(creds + "@", "");
-      connection = getConnection(urlWithoutCreds);
-      setAuthorizationHeader(matcher.group(1), connection);
-    } else {
-      connection = getConnection(registryUrl);
+  public String fetchSchemaFromRegistry(String registryUrl) {
+    try {
+      HttpURLConnection connection;
+      Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
+      if (matcher.find()) {
+        String creds = matcher.group(1);
+        String urlWithoutCreds = registryUrl.replace(creds + "@", "");
+        connection = getConnection(urlWithoutCreds);
+        setAuthorizationHeader(matcher.group(1), connection);
+      } else {
+        connection = getConnection(registryUrl);
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode node = mapper.readTree(getStream(connection));
+      return node.get("schema").asText();
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException("Failed to fetch schema from registry", e);
     }
-    ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(getStream(connection));
-    return node.get("schema").asText();
   }
 
   private SSLSocketFactory sslSocketFactory;
@@ -182,8 +190,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
     try {
       return parseSchemaFromRegistry(registryUrl);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException("Error reading source schema from registry :" + registryUrl, e);
     }
   }
 
@@ -193,8 +201,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String targetRegistryUrl = config.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), registryUrl);
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException("Error reading target schema from registry :" + targetRegistryUrl, e);
     }
   }
 }

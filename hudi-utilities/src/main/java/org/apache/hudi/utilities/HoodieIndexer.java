@@ -333,18 +333,7 @@ public class HoodieIndexer {
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
-        .map(p -> {
-          MetadataPartitionType metadataPartitionType = MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT));
-          if (metadataConfig.isPresent()) { // this is expected to be non-null during scheduling where file groups for a given partition are instantiated for the first time.
-            if (!metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.FILES.toString())) {
-              if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getColumnStatsIndexFileGroupCount());
-              } else if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getBloomFilterIndexFileGroupCount());
-              }
-            }
-          }
-          return metadataPartitionType;
-        }).collect(Collectors.toList());
+            .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+            .collect(Collectors.toList());
   }
 }

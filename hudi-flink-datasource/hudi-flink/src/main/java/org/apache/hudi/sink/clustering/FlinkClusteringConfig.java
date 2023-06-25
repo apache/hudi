@@ -19,13 +19,10 @@
 package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
-import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
@@ -35,6 +32,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.util.StreamerUtil.buildProperties;
+import static org.apache.hudi.util.StreamerUtil.createMetaClient;
+import static org.apache.hudi.util.StreamerUtil.readConfig;
 
 /**
  * Configurations for Hoodie Flink clustering.
@@ -141,25 +142,13 @@ public class FlinkClusteringConfig extends Configuration {
   public List<String> configs = new ArrayList<>();
 
   @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
-      + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
-      + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
-      + "to individual classes, for supported properties.")
+      + "hoodie and hadoop etc.")
   public String propsFilePath = "";
-
-  public static TypedProperties buildProperties(List<String> props) {
-    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
-    props.forEach(x -> {
-      String[] kv = x.split("=");
-      ValidationUtils.checkArgument(kv.length == 2);
-      properties.setProperty(kv[0], kv[1]);
-    });
-    return properties;
-  }
 
   public static TypedProperties getProps(FlinkClusteringConfig cfg) {
     return cfg.propsFilePath.isEmpty()
         ? buildProperties(cfg.configs)
-        : StreamerUtil.readConfig(HadoopConfigurations.getHadoopConf(cfg),
+        : readConfig(HadoopConfigurations.getHadoopConf(cfg),
             new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -199,7 +188,7 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, config.schedule);
 
     // bulk insert conf
-    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(conf).getTableConfig();
+    HoodieTableConfig tableConfig = createMetaClient(conf).getTableConfig();
     conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning()));
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable()));
 

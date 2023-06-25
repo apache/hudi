@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -126,8 +127,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
+    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
+    Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionHelper))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
   }
 
@@ -141,7 +144,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String instantTime,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
-    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime,
+    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
         taskContextSupplier, new CompactionExecutionHelper());
   }
 
@@ -154,6 +157,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    CompactionOperation operation,
                                    String instantTime,
                                    String maxInstantTime,
+                                   Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
     FileSystem fs = metaClient.getFs();
@@ -162,7 +166,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       readerSchema = new Schema.Parser().parse(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-      // its safe to modify config here, since we running in task side.
+      // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
       readerSchema = HoodieAvroUtils.addMetadataFields(
@@ -189,6 +193,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+        .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
@@ -201,6 +206,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withPartition(operation.getPartitionPath())
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
+        .withInstantRange(instantRange)
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

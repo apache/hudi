@@ -20,11 +20,15 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.ErrorTableUtils;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
 
@@ -34,8 +38,8 @@ import java.util.List;
  * if that column is not dropped in any of the transformations.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
-  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, int... ignore) {
-    super(configuredTransformers);
+  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt) {
+    super(configuredTransformers, sourceSchemaOpt);
   }
 
   public ErrorTableAwareChainedTransformer(List<Transformer> transformers) {
@@ -49,10 +53,15 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties));
-      // validate in every stage to ensure it's not dropped by one of the transformer and added by next transformer.
+      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
+      // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
       ErrorTableUtils.validate(dataset);
     }
     return dataset;
+  }
+
+  @Override
+  public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    return super.transformedSchema(jsc, sparkSession, incomingStruct, properties);
   }
 }

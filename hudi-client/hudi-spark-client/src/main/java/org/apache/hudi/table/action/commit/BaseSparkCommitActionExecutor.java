@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -124,8 +125,15 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
         .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
             this.context, table, fileGroupsInPendingClustering);
+    // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
+    // the file group intersection between current ingestion and pending clustering file groups.
+    // This will be handled at the conflict resolution strategy.
+    if (updateStrategy instanceof SparkAllowUpdateStrategy && !config.isRollbackPendingClustering()) {
+      return inputRecords;
+    }
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
         updateStrategy.handleUpdate(inputRecords);
+
     Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
     if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
       return recordsAndPendingClusteringFileGroups.getLeft();
@@ -299,7 +307,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      writeTableMetadata(metadata, actionType);
+      writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);

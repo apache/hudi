@@ -20,22 +20,22 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hudi.Spark30HoodieFileScanRDD
+import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_0AvroDeserializer, HoodieSpark3_0AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30HoodieParquetFileFormat}
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
-import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -61,8 +61,8 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
   def createCatalystMetadataForMetaField: Metadata =
-    // NOTE: Since [[METADATA_COL_ATTR_KEY]] flag is not available in Spark 2.x,
-    //       we simply produce an empty [[Metadata]] instance
+  // NOTE: Since [[METADATA_COL_ATTR_KEY]] flag is not available in Spark 2.x,
+  //       we simply produce an empty [[Metadata]] instance
     new MetadataBuilder().build()
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark30CatalogUtils
@@ -70,6 +70,10 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark30CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark30CatalystExpressionUtils
+
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark30SchemaUtils
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark30PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_0AvroSerializer(rootCatalystType, rootAvroType, nullable)

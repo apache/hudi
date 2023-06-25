@@ -44,7 +44,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -698,6 +697,16 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
+  public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
+          .key("hoodie.rollback.instant.backup.enabled")
+          .defaultValue(false)
+          .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
+
+  public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
+          .key("hoodie.rollback.instant.backup.dir")
+          .defaultValue(".rollback_backup")
+          .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -707,7 +716,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
-  private HoodieMetaserverConfig metastoreConfig;
+  private HoodieMetaserverConfig metaserverConfig;
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
@@ -1101,7 +1110,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
-    this.metastoreConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
+    this.metaserverConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
@@ -1403,6 +1412,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * compaction properties.
    */
+
+  public boolean isLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_LOG_COMPACTION);
+  }
 
   public int getLogCompactionBlocksThreshold() {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
@@ -1948,6 +1961,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
   }
 
+  public boolean getRecordIndexUseCaching() {
+    return getBoolean(HoodieIndexConfig.RECORD_INDEX_USE_CACHING);
+  }
+
   /**
    * storage properties.
    */
@@ -2183,7 +2200,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getMetricReporterMetricsNamePrefix() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+    // Metrics prefixes should not have a dot as this is usually a separator
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX).replaceAll("\\.", "_");
   }
 
   public String getMetricReporterFileBasedConfigs() {
@@ -2322,6 +2340,34 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isMetadataAsyncIndex() {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
+  }
+
+  public int getMetadataLogCompactBlocksThreshold() {
+    return getInt(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD);
+  }
+
+  public boolean isLogCompactionEnabledOnMetadata() {
+    return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
+  }
+
+  public boolean isRecordIndexEnabled() {
+    return metadataConfig.enableRecordIndex();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public int getRecordIndexMaxFileGroupSizeBytes() {
+    return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
   }
 
   /**
@@ -2467,25 +2513,18 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Metastore configs.
+   * Metaserver configs.
    */
   public boolean isMetaserverEnabled() {
-    return metastoreConfig.isMetaserverEnabled();
+    return metaserverConfig.isMetaserverEnabled();
   }
 
-  /**
-   * CDC supplemental logging mode.
-   */
-  public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.valueOf(
-        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
+  public boolean shouldBackupRollbacks() {
+    return getBoolean(ROLLBACK_INSTANT_BACKUP_ENABLED);
   }
 
-  /**
-   * Table Service Manager configs.
-   */
-  public boolean isTableServiceManagerEnabled() {
-    return tableServiceManagerConfig.isTableServiceManagerEnabled();
+  public String getRollbackBackupDirectory() {
+    return getString(ROLLBACK_INSTANT_BACKUP_DIRECTORY);
   }
 
   public static class Builder {
@@ -2960,6 +2999,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRollbackBackupEnabled(boolean rollbackBackupEnabled) {
+      writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_ENABLED, String.valueOf(rollbackBackupEnabled));
+      return this;
+    }
+
+    public Builder withRollbackBackupDirectory(String backupDir) {
+      writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_DIRECTORY, backupDir);
+      return this;
+    }
+
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
@@ -3078,12 +3127,13 @@ public class HoodieWriteConfig extends HoodieConfig {
                 "Increase %s=%d to be greater than %s=%d.",
                 HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep,
                 HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep));
-        checkArgument(minInstantsToKeep > cleanerCommitsRetained,
-            String.format(
-                "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
-                    + "missing data from few instants.",
-                HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
-                HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+        if (minInstantsToKeep <= cleanerCommitsRetained) {
+          LOG.warn("Increase {}={} to be greater than {}={} (there is risk of incremental pull "
+                  + "missing data from few instants based on the current configuration). "
+                  + "The Hudi archiver will automatically adjust the configuration regardless.",
+              HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
+              HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
+        }
       }
 
       boolean inlineCompact = writeConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);

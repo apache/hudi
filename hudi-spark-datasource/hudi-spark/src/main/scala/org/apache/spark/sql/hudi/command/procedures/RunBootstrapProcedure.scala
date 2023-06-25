@@ -95,6 +95,10 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key, bootstrapPath)
 
+    if (bootstrapPath.equals(basePath)) {
+      throw new IllegalArgumentException("bootstrap_path and base_path must be different")
+    }
+
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass) && KeyGeneratorType.getNames.contains(keyGeneratorClass.toUpperCase(Locale.ROOT))) {
       properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key, keyGeneratorClass.toUpperCase(Locale.ROOT))
     }

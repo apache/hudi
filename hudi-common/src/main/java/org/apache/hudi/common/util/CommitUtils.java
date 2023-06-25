@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to generate commit metadata.
@@ -143,6 +144,12 @@ public class CommitUtils {
       }
     }
     return partitionTofileId;
+  }
+
+  public static Set<Pair<String, String>> flattenPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
+    return partitionToReplaceFileIds.entrySet().stream()
+        .flatMap(partitionFileIds -> partitionFileIds.getValue().stream().map(replaceFileId -> Pair.of(partitionFileIds.getKey(), replaceFileId)))
+        .collect(Collectors.toSet());
   }
 
   /**
