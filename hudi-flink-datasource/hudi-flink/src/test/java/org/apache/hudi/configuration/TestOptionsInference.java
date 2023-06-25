@@ -30,7 +30,6 @@ import java.io.File;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Test cases for {@link OptionsInference}.
@@ -68,13 +67,6 @@ public class TestOptionsInference {
       assertThat("The inactive client id should be reused",
           nextId, is(""));
     }
-  }
-
-  @Test
-  void testAutoGenerateClient() {
-    Configuration conf = getConf();
-    OptionsInference.setupClientId(conf);
-    assertNotNull(conf.getString(FlinkOptions.WRITE_CLIENT_ID), "auto generate client failed!");
   }
 
   private Configuration getConf() {

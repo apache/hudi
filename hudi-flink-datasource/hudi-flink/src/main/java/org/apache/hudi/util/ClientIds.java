@@ -70,7 +70,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
   private static final String HEARTBEAT_FOLDER_NAME = ".ids";
   private static final String HEARTBEAT_FILE_NAME_PREFIX = "_";
-  public static final String INIT_CLIENT_ID = String.valueOf(new Random().nextInt(100));
+  public static final String INIT_CLIENT_ID = "";
   public static final long DEFAULT_HEARTBEAT_INTERVAL_IN_MS = 60 * 1000; // default 1 minute
   public static final int DEFAULT_NUM_TOLERABLE_HEARTBEAT_MISSES = 5;    // by default decide the service is stopped if it is inactive for 5 minutes
 
@@ -168,7 +168,7 @@ public class ClientIds implements AutoCloseable, Serializable {
           this.fs.create(heartbeatFilePath, true);
       outputStream.close();
     } catch (IOException io) {
-      LOG.error("Unable to generate heartbeat,heartbeatFilePath:{}",heartbeatFilePath,io);
+      LOG.error("Unable to generate heartbeat,heartbeatFilePath:{}", heartbeatFilePath, io);
       throw new HoodieHeartbeatException("Unable to generate heartbeat ", io);
     }
   }
