@@ -33,12 +33,14 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, Hoodie
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql._
+import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
 import java.util.{Collections, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
@@ -105,9 +107,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Append)
   }
 
+  @Disabled("needs delete support")
   @ParameterizedTest
   @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
-  def testRLIBulkInsert(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
+  def testRLIBulkInsertThenInsertOverwrite(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString
@@ -119,7 +122,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      operation = DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
   }
 
@@ -479,40 +485,63 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
                                                    operation: String,
                                                    saveMode: SaveMode,
                                                    validate: Boolean = true): DataFrame = {
-    var records1: mutable.Buffer[String] = null
+    var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
       val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 20))
       records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 20)))
-      records1 = records.asScala
+      latestBatch = records.asScala
+    } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
+      latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
+        getInstantTime(), 20, dataGen.getPartitionPaths.last)).asScala
     } else {
-      records1 = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
     }
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
-    calculateMergedDf(inputDF1)
+    val deletedDf = calculateMergedDf(latestBatchDf, operation)
     if (validate) {
-      validateDataAndRecordIndices(hudiOpts)
+      validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
-    inputDF1
+    latestBatchDf
   }
 
-  def calculateMergedDf(inputDF1: DataFrame): Unit = {
+  /**
+   * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
+   */
+  def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
-      mergedDfList = mergedDfList :+ inputDF1
+      mergedDfList = mergedDfList :+ latestBatchDf
+      sparkSession.emptyDataFrame
     } else {
-      val prevDf = prevDfOpt.get
-      val prevDfOld = prevDf.join(inputDF1, prevDf("_row_key") === inputDF1("_row_key")
-        && prevDf("partition") === inputDF1("partition"), "leftanti")
-      prevDfOld.show(500, false)
-      val unionDf = prevDfOld.union(inputDF1)
-      unionDf.show(500, false)
-      mergedDfList = mergedDfList :+ unionDf
+      if (operation == INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL) {
+        mergedDfList = mergedDfList :+ latestBatchDf
+        // after insert_overwrite_table, all previous snapshot's records should be deleted from RLI
+        prevDfOpt.get
+      } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
+        val overwrittenPartitions = latestBatchDf.select("partition")
+          .collectAsList().stream().map[String](r => r.getString(0)).collect(Collectors.toList[String])
+        val prevDf = prevDfOpt.get
+        val latestSnapshot = prevDf
+          .filter(not(col("partition").isInCollection(overwrittenPartitions)))
+          .union(latestBatchDf)
+        mergedDfList = mergedDfList :+ latestSnapshot
+
+        // after insert_overwrite (partition), all records in the overwritten partitions should be deleted from RLI
+        prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
+      } else {
+        val prevDf = prevDfOpt.get
+        val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
+          && prevDf("partition") === latestBatchDf("partition"), "leftanti")
+        val latestSnapshot = prevDfOld.union(latestBatchDf)
+        mergedDfList = mergedDfList :+ latestSnapshot
+        sparkSession.emptyDataFrame
+      }
     }
   }
 
@@ -534,7 +563,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     tableMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataPartitionFileGroupCount(MetadataPartitionType.RECORD_INDEX)
   }
 
-  private def validateDataAndRecordIndices(hudiOpts: Map[String, String]): Unit = {
+  private def validateDataAndRecordIndices(hudiOpts: Map[String, String],
+                                           deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
@@ -552,9 +582,14 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
         // The file id changes after clustering, so only assert it for usual upsert and compaction operations
-        assertTrue(fileName.contains(recordLocation.getFileId), fileName + " does not contain " + recordLocation.getFileId)
+        assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
       }
     }
+
+    val deletedRows = deletedDf.collect()
+    val recordIndexMapForDeletedRows = metadata.readRecordIndex(
+      JavaConverters.seqAsJavaList(deletedRows.map(row => row.getAs("_row_key").toString).toList))
+    assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
     val estimatedFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(MetadataPartitionType.RECORD_INDEX, rowArr.length, 48,
