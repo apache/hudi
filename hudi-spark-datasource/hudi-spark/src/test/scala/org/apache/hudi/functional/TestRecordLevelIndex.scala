@@ -106,9 +106,12 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIBulkInsert(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+  @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
+  def testRLIBulkInsert(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString
+    )
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
