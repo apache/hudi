@@ -200,7 +200,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // TODO eval whether seeking scanner would be faster than pread
     HFileScanner scanner = null;
     try {
-      scanner = getHFileScanner(reader, false);
+      scanner = getHFileScanner(reader, false, false);
     } catch (IOException e) {
       throw new HoodieIOException("Instantiation HfileScanner failed for " + reader.getHFileInfo().toString());
     }
@@ -438,10 +438,16 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) throws IOException {
+    return getHFileScanner(reader, cacheBlocks, true);
+  }
+
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks, boolean doSeek) throws IOException {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
     HFileScanner scanner = reader.getScanner(cacheBlocks, true);
-    scanner.seekTo(); // places the cursor at the beginning of the first data block.
+    if (doSeek) {
+      scanner.seekTo(); // places the cursor at the beginning of the first data block.
+    }
     return scanner;
   }
 
