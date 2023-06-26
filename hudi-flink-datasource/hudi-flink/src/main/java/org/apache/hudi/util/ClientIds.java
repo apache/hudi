@@ -168,7 +168,7 @@ public class ClientIds implements AutoCloseable, Serializable {
       outputStream.close();
     } catch (IOException io) {
       LOG.error("Unable to generate heartbeat,heartbeatFilePath:{}", heartbeatFilePath, io);
-      throw new HoodieHeartbeatException("Unable to generate heartbeat ", io);
+      throw new HoodieHeartbeatException("Unable to generate heartbeat for file path " + heartbeatFilePath, io);
     }
   }
 
