@@ -79,14 +79,7 @@ public class HoodieRecordUtils {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
       java.util.Optional<HoodieRecordMerger> mergerOpt = mergerClassList.stream()
-          .map(clazz -> {
-            try {
-              return loadRecordMerger(clazz);
-            } catch (HoodieException e) {
-              LOG.warn(String.format("Unable to init %s", clazz), e);
-              return null;
-            }
-          })
+          .map(clazz -> loadRecordMerger(clazz))
           .filter(Objects::nonNull)
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
