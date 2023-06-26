@@ -182,6 +182,7 @@ public class DirectWriteMarkers extends WriteMarkers {
   private Option<Path> create(Path markerPath, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
     Path dirPath = markerPath.getParent();
+    boolean overwrite = false;
     try {
       if (!fs.exists(dirPath)) {
         fs.mkdirs(dirPath); // create a new partition as needed.
@@ -195,7 +196,10 @@ public class DirectWriteMarkers extends WriteMarkers {
         return Option.empty();
       }
       LOG.info("Creating Marker Path=" + markerPath);
-      fs.create(markerPath, false).close();
+      if (fs.exists(markerPath)) {
+        overwrite = true;
+      }
+      fs.create(markerPath, overwrite).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
