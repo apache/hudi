@@ -154,8 +154,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
-  public static final ConfigProperty<Integer> CLUSTERING_MAX_THREADS = ConfigProperty
-      .key("hoodie.clustering.max.threads")
+  public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "

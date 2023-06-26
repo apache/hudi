@@ -1634,8 +1634,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
   }
 
-  public int getClusteringMaxThreads() {
-    return getInt(HoodieClusteringConfig.CLUSTERING_MAX_THREADS);
+  public int getClusteringMaxParallelism() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_MAX_PARALLELISM);
   }
 
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {

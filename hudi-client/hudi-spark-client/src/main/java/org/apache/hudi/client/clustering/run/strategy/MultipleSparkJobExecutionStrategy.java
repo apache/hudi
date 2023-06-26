@@ -109,7 +109,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
     ExecutorService clusteringExecutorService = Executors.newFixedThreadPool(
-        Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxThreads()),
+        Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
       // execute clustering for each group async and collect WriteStatus
