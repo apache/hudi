@@ -23,8 +23,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test Partial Update") {
     withTempDir { tmp =>
-      // TODO after we support partial update for MOR, we can add test case for 'mor'.
-      Seq("cow").foreach { tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         spark.sql(
           s"""
