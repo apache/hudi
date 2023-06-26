@@ -344,6 +344,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (!filesPartitionAvailable) {
       partitionsToInit.remove(MetadataPartitionType.FILES);
       partitionsToInit.add(0, MetadataPartitionType.FILES);
+      // By default we allocate 10 FG's in RLI. but for very large tables, these needs to be configured properly. For an existing table, we dynamically
+      // deduce the number of file groups for RLI. but for a fresh table since there are no records, we might choose default value of 10.
+      // So, deferring te instantiation of RLI to atleast 1 completed commit in DT.
+      if (partitionsToInit.contains(MetadataPartitionType.RECORD_INDEX) &&
+          dataMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+        partitionsToInit.remove(MetadataPartitionType.RECORD_INDEX);
+      }
     } else {
       // Check and then open the metadata table reader so FILES partition can be read during initialization of other partitions
       initMetadataReader();
