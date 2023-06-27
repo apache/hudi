@@ -560,8 +560,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   def getFileGroupCountForRecordIndex(writeConfig: HoodieWriteConfig): Long = {
-    val tableMetadata = getHoodieTable(metaClient, writeConfig).getMetadataTable
-    tableMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataPartitionFileGroupCount(MetadataPartitionType.RECORD_INDEX)
+    val tableMetadata = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata]
+    tableMetadata.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
   }
 
   private def validateDataAndRecordIndices(hudiOpts: Map[String, String],

@@ -534,10 +534,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return metadataMetaClient;
   }
 
-  public long getMetadataPartitionFileGroupCount(MetadataPartitionType partitionType) {
-    return metadataFileSystemView.getAllFileGroups(partitionType.getPartitionPath()).count();
-  }
-
   public HoodieTableFileSystemView getMetadataFileSystemView() {
     return metadataFileSystemView;
   }
