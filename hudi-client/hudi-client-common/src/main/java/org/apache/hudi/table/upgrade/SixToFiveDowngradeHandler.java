@@ -18,19 +18,25 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.Path;
 
 import java.util.Collections;
 import java.util.Map;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTablePartition;
+import static org.apache.hudi.table.upgrade.FiveToSixUpgradeHandler.checkUncompletedInstants;
 
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 6 to 5.
@@ -41,9 +47,30 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+
+    checkUncompletedInstants(table);
+    removeRecordIndexIfNeeded(table, context);
+    syncCompactionRequestedFileToAuxiliaryFolder(table);
+
+    return Collections.emptyMap();
+  }
+
+  /**
+   * Record-level index, a new partition in metadata table, was first added in
+   * 0.14.0 ({@link HoodieTableVersion#SIX}. Any downgrade from this version
+   * should remove this partition.
+   */
+  private static void removeRecordIndexIfNeeded(HoodieTable table, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // sync compaction requested file to .aux
+    deleteMetadataTablePartition(metaClient, context, MetadataPartitionType.RECORD_INDEX, false);
+  }
+
+  /**
+   * See HUDI-6040.
+   */
+  private static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTimeline compactionTimeline = new HoodieActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(instant -> {
@@ -52,6 +79,5 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
           new Path(metaClient.getMetaPath(), fileName),
           new Path(metaClient.getMetaAuxiliaryPath(), fileName));
     });
-    return Collections.emptyMap();
   }
 }
