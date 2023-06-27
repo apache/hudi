@@ -29,7 +29,11 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.*;
+import java.util.Properties;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 
 /**
  * Memory related config.
