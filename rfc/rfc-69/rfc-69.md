@@ -138,12 +138,32 @@ In short, we propose Hudi 1.0 try and achieve the following.
 4. Land all major, outstanding "needle mover" PRs, in a safe manner guarded by configs.
 5. Integrate some/all of the existing indexes for Spark/Flink/Presto, and validate intended functionality and performance gains.
 
-
 All changes should be backward compatible and not require rewriting of base/parquet files in existing tables. However, full compaction of the logs or planned downtime to rewrite the 
-timeline or rebuilding the metadata table may be necessary when moving from 0.x to 1.0 release.
+timeline or rebuilding the metadata table may be necessary when moving from 0.x to 1.0 release. 
 
+Following table details the concrete changes along with JIRAs tracking each of these proposed changes for the first release. Also, we indicate what changes 
+are preferable to land in 0.X/master branch before we cut a 1.0 feature branch and fork off using the `Pre Branching` column. (value yes indicates this change
+could be landed to ease the process of cherry-picking changes from 0.x -> 1.x for the next few months). Such epics are marking with both `1.0.0` and `0.14.0`/`0.15.0` as fix-versions.
 
-This RFC will be expanded with concrete changes to different parts of Hudi. Note that this RFC only serves to identify these areas, and separate RFCs should follow for any changes impacting the storage format, backward compatibility or new public APIs.
+JIRA Issues Filter for 1.0: [link](https://issues.apache.org/jira/issues/?filter=12352767)
+
+| Change | Impact | Pre Branching? | JIRAs/RFCs |
+|--------|--------|----------------|------------|
+|        |        |                |            |
+|        |        |                |            |
+
+## Follow-on/1.1 Release
+
+The RFC feedback process has generated some awesome new ideas, and we propose to have the following be taken up post 1.0 release, 
+for easy sequencing of these projects. However, contributors can feel free to drive these JIRAs/designs as they see fit.
+
+JIRA release: [link](https://issues.apache.org/jira/projects/HUDI/versions/12353261)
+
+| Change | Impact | JIRAs/RFCs |
+|--------|--------|------------|
+|        |        |            |
+|        |        |            |
+
 
 ## Rollout/Adoption Plan
 
@@ -155,5 +175,11 @@ We propose 1.0 execution be done in a series of three releases below.
 
 
 ## Test Plan
-TBD
+We intend to test the 1.0 release candidates across the following vectors, extensively. 
+
+ - Performance of SQL operations across incremental and snapshot/batch read/write statements, with and without indexes. 
+ - Improvements in MoR read/write performance (CoW numbers expected to be on-par for read, improving for incremental writes)
+ - Backwards compatibility, and upgrade scenarios.
+ - Testing across various query engines with Spark, Flink, Presto, Trino and Hive being mandatory.
+ - Soak testing in large user workloads in the community (any volunteers would be amazing!)
 
