@@ -46,7 +46,7 @@ case class MergeIntoHoodieTableCommand2(mergeInto: MergeIntoTable) extends Hoodi
     val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val datacols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
     val projectedData = Project(tablemetacols ++ datacols, joinData)
-    Dataset.ofRows(sparkSession, projectedData).show(false)
+    Dataset.ofRows(sparkSession, joinData).show(false)
     Seq.empty[Row]
   }
 }

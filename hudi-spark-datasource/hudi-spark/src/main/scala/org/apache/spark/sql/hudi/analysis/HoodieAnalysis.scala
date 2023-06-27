@@ -380,7 +380,7 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
       case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-        MergeIntoHoodieTableCommand2(mit.asInstanceOf[MergeIntoTable])
+        MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
 
       // Convert to UpdateHoodieTableCommand
       case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>

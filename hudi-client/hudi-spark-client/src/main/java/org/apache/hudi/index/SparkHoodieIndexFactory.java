@@ -43,6 +43,9 @@ import java.io.IOException;
  */
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
+    if (config.getProps().get("_hoodie.datasource.write.mergeInto.prepped").equals("true")) {
+      return new HoodieNonIndex(config);
+    }
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       return HoodieIndexUtils.createUserDefinedIndex(config);

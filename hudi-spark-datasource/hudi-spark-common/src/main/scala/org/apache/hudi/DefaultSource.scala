@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, DATASOURCE_WRITE_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, DATASOURCE_WRITE_MIT_PREPPED_KEY, DATASOURCE_WRITE_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -144,7 +144,8 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               rawDf: DataFrame): BaseRelation = {
-    val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false")
+    val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY,
+      optParams.getOrDefault(DATASOURCE_WRITE_MIT_PREPPED_KEY, "false"))
       .equalsIgnoreCase("true")) {
       rawDf // Don't remove meta columns for prepped write.
     } else {

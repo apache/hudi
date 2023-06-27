@@ -60,7 +60,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |insert into $tableName values
            |    (1, 'a1', 10, 100),
-           |    (2, 'a1', 20, 200),
+           |    (2, 'a2', 20, 200),
            |    (3, 'a3', 20, 100)
            |""".stripMargin)
       spark.sql(
@@ -75,7 +75,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |merge into $tableName as oldData
            |using $tableName2
-           |on oldData.price = $tableName2.price and oldData.ts <= $tableName2.ts
+           |on oldData.price = $tableName2.price
            |when matched then update set oldData.name = $tableName2.name
            |
            |""".stripMargin)

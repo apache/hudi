@@ -34,7 +34,8 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeE
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, LessThanOrEqual, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -245,11 +246,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
-    val sourceDF: DataFrame = sourceDataset
+    val df: DataFrame = joinedDataset
+    //val df: DataFrame = sourceDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     // Do the upsert
-    executeUpsert(sourceDF, props)
+    executeUpsert(df, props)
     // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
@@ -259,6 +261,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
+
+  def joinData: LogicalPlan = {
+    Join(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), JoinHint.NONE)
+  }
+
+  def joinedDataset: DataFrame = {
+    val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+    val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
+    val projectedData = Project(tablemetacols ++ incomingDataCols, joinData)
+    Dataset.ofRows(sparkSession, projectedData)
+  }
 
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
@@ -463,7 +476,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
 
     // Reorder the assignments to follow the ordering of the target table
-    mergeInto.targetTable.output
+    joinedExpectedOutput
       .filterNot(attr => isMetaField(attr.name))
       .map { attr =>
         attr2Assignments.find(tuple => attributeEquals(tuple._1, attr)) match {
@@ -518,7 +531,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       check its corresponding java-doc for more details) we have to get up-to-date list
     //       of its output attributes
     val joinedExpectedOutputAttributes = joinedExpectedOutput
-
     bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false)
   }
 
@@ -530,7 +542,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
+    //sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
+    joinData.output.filterNot(a => isMetaField(a.name))
   }
 
   private def resolvesToSourceAttribute(expr: Expression): Boolean = {
@@ -582,7 +595,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+      KEYGENERATOR_CLASS_NAME.key -> classOf[MergeIntoKeyGenerator].getCanonicalName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
@@ -595,6 +608,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
+      DATASOURCE_WRITE_MIT_PREPPED_KEY -> "true",
 
         // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'

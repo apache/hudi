@@ -348,10 +348,11 @@ object HoodieSparkSqlWriter {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val processedDataSchema = if (isPrepped) {
-              HoodieAvroUtils.removeMetadataFields(writerSchema);
+            val isMITPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_MIT_PREPPED_KEY, false)
+            val processedDataSchema = if (isPrepped || isMITPrepped) {
+              HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
-              dataFileSchema;
+              dataFileSchema
             }
 
             // Create a HoodieWriteClient & issue the write.
@@ -364,10 +365,13 @@ object HoodieSparkSqlWriter {
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
+//            if (isMITPrepped) {
+//              writeConfig.setValue("_hoodie.datasource.write.mergeInto.prepped", "true")
+//            }
             // Convert to RDD[HoodieRecord]
             val hoodieRecords =
               HoodieCreateRecordUtils.createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                processedDataSchema, operation, instantTime, isPrepped)
+                processedDataSchema, operation, instantTime, isPrepped, isMITPrepped)
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)

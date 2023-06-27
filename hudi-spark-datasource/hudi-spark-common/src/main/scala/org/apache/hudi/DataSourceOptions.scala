@@ -311,6 +311,7 @@ object DataSourceWriteOptions {
    * Config key with boolean value that indicates whether record being written is already prepped.
    */
   val DATASOURCE_WRITE_PREPPED_KEY = "_hoodie.datasource.write.prepped";
+  val DATASOURCE_WRITE_MIT_PREPPED_KEY = "_hoodie.datasource.write.mergeInto.prepped"
 
   /**
     * May be derive partition path from incoming df if not explicitly set.
