@@ -94,6 +94,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
+
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private final AWSGlueAsync awsGlue;
   private static final int MILLISECOND_TO_SECOND_FACTOR = 1000;
@@ -103,7 +104,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private final String databaseName;
-
   private final Boolean skipTableArchive;
   private final String enableMetadataTable;
 
@@ -467,7 +467,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       return Objects.nonNull(awsGlue.getTable(request).getTable());
     } catch (EntityNotFoundException e) {
-      LOG.info("Table not found: " + tableId(databaseName, tableName));
+      LOG.warn("Table not found: " + tableId(databaseName, tableName));
       return false;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
@@ -481,7 +481,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       return Objects.nonNull(awsGlue.getDatabase(request).getDatabase());
     } catch (EntityNotFoundException e) {
-      LOG.info("Database not found: " + databaseName);
+      LOG.warn("Database not found: " + databaseName);
       return false;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);
@@ -588,10 +588,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   // TODO: make this faster with Glue Segment API
-  private static List<com.amazonaws.services.glue.model.Partition> getAllGluePartitions(
-      AWSGlue awsGlue,
-      String databaseName,
-      String tableName) {
+  private static List<com.amazonaws.services.glue.model.Partition> getAllGluePartitions(AWSGlue awsGlue,
+                                                                                        String databaseName,
+                                                                                        String tableName) {
     try {
       List<com.amazonaws.services.glue.model.Partition> partitions = new ArrayList<>();
       String nextToken = null;
@@ -628,8 +627,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
               + " with error(s): " + result.getErrors());
         }
       }
+    } catch (HoodieGlueSyncException glueSyncException) {
+      throw glueSyncException;
     } catch (Exception e) {
-      LOG.error("Fail to update partitions to " + tableId(databaseName, tableName), e);
+      throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName), e);
     }
   }
 
