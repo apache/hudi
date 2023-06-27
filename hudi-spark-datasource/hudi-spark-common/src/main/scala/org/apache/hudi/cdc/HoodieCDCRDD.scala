@@ -561,7 +561,7 @@ class HoodieCDCRDD(
       originTableSchema.structTypeSchema.zipWithIndex.foreach {
         case (field, idx) =>
           if (field.dataType.isInstanceOf[StringType]) {
-            map(field.name) = record.getString(idx)
+            map(field.name) = Option(record.getUTF8String(idx)).map(_.toString).orNull
           } else {
             map(field.name) = record.get(idx, field.dataType)
           }
