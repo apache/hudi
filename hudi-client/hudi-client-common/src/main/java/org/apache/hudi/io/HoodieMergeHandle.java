@@ -314,6 +314,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         recordsWritten++;
       } else {
         recordsDeleted++;
+        // Clear the new location which is set for all records in init()
+        if (needsUpdateLocation()) {
+          newRecord.unseal();
+          newRecord.clearNewLocation();
+          newRecord.seal();
+        }
       }
       writeStatus.markSuccess(newRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a

@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -209,9 +210,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
+  private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
-    this(Option.of(record));
+    this(Option.ofNullable(record));
   }
 
   public HoodieMetadataPayload(Option<GenericRecord> recordOpt) {
@@ -283,6 +285,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()));
       }
+    } else {
+      this.isDeletedRecord = true;
     }
   }
 
@@ -403,6 +407,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public HoodieMetadataPayload preCombine(HoodieMetadataPayload previousRecord) {
+    // Handling of deletes with same key added again
+    ValidationUtils.checkState(!(previousRecord.isDeletedRecord && this.isDeletedRecord), "Cannot combine two deleted records");
+    if (this.isDeletedRecord) {
+      // This happens when a record has been deleted. The previous version of the record should be ignored.
+      return this;
+    }
+    if (previousRecord.isDeletedRecord) {
+      // This happens when a record with same key is added after a deletion.
+      return this;
+    }
+
+    // Validation of record merge scenario. Only records of same type and key can be combined. 
     checkArgument(previousRecord.type == type,
         "Cannot combine " + previousRecord.type + " with " + type);
     checkArgument(previousRecord.key.equals(key),
@@ -419,6 +435,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       case METADATA_TYPE_COLUMN_STATS:
         return new HoodieMetadataPayload(key, combineColumnStatsMetadata(previousRecord));
       case METADATA_TYPE_RECORD_INDEX:
+        // There is always a single mapping and the latest mapping is maintained.
+        // Mappings in record index can change in two scenarios:
+        // 1. A key deleted from dataset and then added again (new filedID)
+        // 2. A key moved to a different file due to clustering
+
         // No need to merge with previous record index, always pick the latest payload.
         return this;
       default:
@@ -765,6 +786,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     final java.util.Date instantDate = new java.util.Date(recordIndexMetadata.getInstantTime());
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
+  }
+
+  public boolean isDeleted() {
+    return isDeletedRecord;
   }
 
   @Override

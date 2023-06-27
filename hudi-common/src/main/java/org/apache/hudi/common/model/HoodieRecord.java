@@ -312,6 +312,17 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected abstract T readRecordPayload(Kryo kryo, Input input);
 
   /**
+   * Clears the new currentLocation of the record. 
+   *
+   * This is required in the delete path so that Index can track that this record was deleted.
+   */
+  public HoodieRecord clearNewLocation() {
+    checkState();
+    this.newLocation = null;
+    return this;
+  }
+
+  /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore
    *       JIT compiler could perform more aggressive optimizations
    */

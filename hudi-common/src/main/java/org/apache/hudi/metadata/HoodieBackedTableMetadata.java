@@ -328,8 +328,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         records.merge(
             logRecord.getRecordKey(),
             logRecord,
-            (oldRecord, newRecord) ->
-                new HoodieAvroRecord<>(oldRecord.getKey(), newRecord.getData().preCombine(oldRecord.getData()))
+            (oldRecord, newRecord) -> {
+              HoodieMetadataPayload mergedPayload = newRecord.getData().preCombine(oldRecord.getData());
+              return mergedPayload.isDeleted() ? null : new HoodieAvroRecord<>(oldRecord.getKey(), mergedPayload);
+            }
         ));
 
     timings.add(timer.endTimer());

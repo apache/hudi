@@ -555,6 +555,66 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
   }
 
+  @Test
+  public void testDelete() throws Exception {
+    setUp(IndexType.INMEMORY, true, false);
+
+    // Insert records
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records = getInserts();
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
+    assertNoWriteErrors(writeStatues.collect());
+    writeClient.commit(newCommitTime, writeStatues);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+
+    // Now tagLocation for these records, index should tag them correctly
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
+    Map<String, String> recordKeyToPartitionPathMap = new HashMap<>();
+    List<HoodieRecord> hoodieRecords = writeRecords.collect();
+    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
+
+    assertEquals(records.size(), javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
+    assertEquals(records.size(), javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
+    assertEquals(records.size(), javaRDD.filter(record -> (record.getCurrentLocation() != null
+        && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
+    javaRDD.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry.getRecordKey()), entry.getPartitionPath(), "PartitionPath mismatch"));
+
+    JavaRDD<HoodieKey> hoodieKeyJavaRDD = writeRecords.map(HoodieRecord::getKey);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
+    List<HoodieKey> hoodieKeys = hoodieKeyJavaRDD.collect();
+    assertEquals(records.size(), recordLocations.collect().size());
+    assertEquals(records.size(), recordLocations.map(record -> record._1).distinct().count());
+    recordLocations.foreach(entry -> assertTrue(hoodieKeys.contains(entry._1), "Missing HoodieKey"));
+    recordLocations.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry._1.getRecordKey()), entry._1.getPartitionPath(), "PartitionPath mismatch"));
+
+    // Delete some of the keys
+    final int numDeletes = records.size() / 2;
+    List<HoodieKey> keysToDelete = records.stream().limit(numDeletes).map(r -> new HoodieKey(r.getRecordKey(), r.getPartitionPath())).collect(Collectors.toList());
+    String deleteCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    writeClient.startCommitWithTime(deleteCommitTime);
+    writeStatues = writeClient.delete(jsc.parallelize(keysToDelete, 1), deleteCommitTime);
+    assertNoWriteErrors(writeStatues.collect());
+    writeClient.commit(deleteCommitTime, writeStatues);
+
+    // Deleted records should not be found in the index
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    javaRDD = tagLocation(hoodieTable.getIndex(), jsc.parallelize(records.subList(0, numDeletes)), hoodieTable);
+    assertEquals(0, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
+    assertEquals(numDeletes, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
+
+    // Other records should be found
+    javaRDD = tagLocation(hoodieTable.getIndex(), jsc.parallelize(records.subList(numDeletes, records.size())), hoodieTable);
+    assertEquals(records.size() - numDeletes, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
+    assertEquals(records.size() - numDeletes, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
+  }
+
   private HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
