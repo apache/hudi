@@ -85,6 +85,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
@@ -131,7 +133,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           metaClient.getActiveTimeline().getCommitsTimeline(),
           cleanerPolicy,
           cleanerCommitsRetained,
-          latestCommit.isPresent()
+          latestCommit.isPresent() && (latestCommit.get().getTimestamp().length() == MILLIS_INSTANT_ID_LENGTH
+              ||  latestCommit.get().getTimestamp().length() == SECS_INSTANT_ID_LENGTH)
               ? HoodieActiveTimeline.parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
               : Instant.now(),
           cleanerHoursRetained,
