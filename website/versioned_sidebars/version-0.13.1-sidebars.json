@@ -89,7 +89,6 @@
         "cli",
         "metrics",
         "encryption",
-        "parquet_bloom",
         "troubleshooting",
         "tuning-guide",
         {

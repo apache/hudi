@@ -10,7 +10,7 @@ Since Hudi 0.14.0, for engines based on Parquet 1.12, parquet bloom filters feat
 
 ## Various bloom support in hudi
 
-From the almost the beginning hudi has supported dynamic bloom indexing on the record key, stored in the parquet footers - aka hudi blooms. 
+From almost the beginning hudi has supported dynamic bloom indexing on the record key, stored in the parquet footers - aka hudi blooms. 
 
 Since 0.11 Hudi, and the multimodal indexing feature, the hudi blooms can be stored in the metadata table. Also arbitrary columns can be indexed. Storing the blooms within the metadata allow to skip reading the footers, and increase performances in huge tables scenarios.
 
@@ -18,7 +18,7 @@ Until now, hudi blooms are used at write time only. They are leveraged during th
 
 In parallel parquet 1.12 came with it's own bloom filters - aka "parquet blooms". Those are also stored in the parquet footers, when enabled before writing the parquet files. Then at read time, if bloom matches the query predicates, the parquet engine will transparently use the blooms to skip reading data.
 
-Now hudi support both kind of blooms, which help in complementary contexts. All COW operations are supported, bulk_insert, insert, upsert, delete, clustering...
+Now hudi supports both kind of blooms, which help in complementary contexts. All COW operations are supported, bulk_insert, insert, upsert, delete, clustering...
 
 The current page describes how to enable parquet blooms in spark 3.x and starting from hudi 1.14.0, on a COW table.
 
