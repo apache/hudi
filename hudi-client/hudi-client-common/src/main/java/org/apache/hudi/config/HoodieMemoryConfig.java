@@ -29,7 +29,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * Memory related config.
@@ -140,7 +140,9 @@ public class HoodieMemoryConfig extends HoodieConfig {
 
   public static String getDefaultSpillableMapBasePath() {
     String[] localDirs = FileIOUtils.getConfiguredLocalDirs();
-    return (localDirs != null && localDirs.length > 0) ? localDirs[0] : "/tmp/";
+    List<String> localDirLists = Arrays.asList(localDirs);
+    Collections.shuffle(localDirLists);
+    return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
   }
 
   public static HoodieMemoryConfig.Builder newBuilder() {
