@@ -34,6 +34,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,6 +62,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
+  }
+
+  @AfterEach
+  public void after() {
+    conf = null;
   }
 
   /**
@@ -575,6 +581,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
     assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+    writeClient.close();
   }
 
   // -------------------------------------------------------------------------
