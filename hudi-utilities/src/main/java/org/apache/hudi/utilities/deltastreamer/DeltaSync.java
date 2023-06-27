@@ -639,7 +639,13 @@ public class DeltaSync implements Serializable, Closeable {
             BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
             List<HoodieRecord> avroRecords = new ArrayList<>();
             while (genericRecordIterator.hasNext()) {
-              GenericRecord genRec = genericRecordIterator.next();
+              GenericRecord genRec = null;
+              try {
+                genRec = genericRecordIterator.next();
+              } catch (IllegalArgumentException e) {
+                LOG.warn("Handling exception for transaction topic  -  " + e.getMessage());
+                break;
+              }
               HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
               GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
               HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
