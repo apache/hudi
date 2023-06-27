@@ -50,12 +50,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
   private final String baseFilePath;
   private final List<HoodieLogFile> logFilePaths;
   private final String latestInstantTime;
-  private final long maxCompactionMemoryInBytes;
   private final Schema readerSchema;
   private final JobConf jobConf;
-  private final long start;
-  private final long length;
-  private final String[] hosts;
   private final HoodieMergedLogRecordScanner logRecordScanner;
   private final HoodieFileReader baseFileReader;
   private final Map<String, HoodieRecord> logRecordMap;
@@ -65,7 +61,6 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
   public HoodieMergeOnReadSnapshotReader(String tableBasePath, String baseFilePath,
                                          List<HoodieLogFile> logFilePaths,
                                          String latestInstantTime,
-                                         long maxCompactionMemoryInBytes,
                                          Schema readerSchema,
                                          JobConf jobConf, long start, long length, String[] hosts) throws IOException {
     super(getRealtimeSplit(tableBasePath, baseFilePath, logFilePaths, latestInstantTime, start, length, hosts), jobConf);
@@ -73,12 +68,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     this.baseFilePath = baseFilePath;
     this.logFilePaths = logFilePaths;
     this.latestInstantTime = latestInstantTime;
-    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.readerSchema = readerSchema;
     this.jobConf = jobConf;
-    this.start = start;
-    this.length = length;
-    this.hosts = hosts;
     this.logRecordScanner = getMergedLogRecordScanner();
     this.baseFileReader = HoodieRealtimeRecordReaderUtils.getBaseFileReader(new Path(baseFilePath), jobConf);
     this.logRecordMap = logRecordScanner.getRecords();
@@ -89,7 +80,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
       HoodieRecord record = baseFileIterator.next();
       if (logRecordKeys.contains(record.getRecordKey())) {
         logRecordKeys.remove(record.getRecordKey());
-        Option<HoodieAvroIndexedRecord> mergedRecord = buildGenericRecordwithCustomPayload(logRecordMap.get(record.getRecordKey()));
+        Option<HoodieAvroIndexedRecord> mergedRecord = buildGenericRecordWithCustomPayload(logRecordMap.get(record.getRecordKey()));
         mergedRecord.ifPresent(mergedRecords::add);
       }
     }
@@ -144,7 +135,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         .build();
   }
 
-  private Option<HoodieAvroIndexedRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
+  private Option<HoodieAvroIndexedRecord> buildGenericRecordWithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
       return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
