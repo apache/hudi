@@ -373,17 +373,12 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
           final String partitionId = e.getKey();
           Path partitionPath = partitionIdToPathMap.get(partitionId);
 
-          if (partitionPath != null) {
-            HoodieMetadataPayload metadataPayload = e.getValue().getData();
-            checkForSpuriousDeletes(metadataPayload, partitionId);
+          HoodieMetadataPayload metadataPayload = e.getValue().getData();
+          checkForSpuriousDeletes(metadataPayload, partitionId);
 
-            FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
-            return Pair.of(partitionPath.toString(), files);
-          } else {
-            return null;
-          }
+          FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
+          return Pair.of(partitionPath.toString(), files);
         })
-        .filter(Objects::nonNull)
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));

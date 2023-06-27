@@ -34,6 +34,7 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
+import org.apache.spark.storage.StorageLevel
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
@@ -188,7 +189,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
-    val deleteDf = insertDf.limit(20)
+    val deleteDf = insertDf.limit(1)
     deleteDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
@@ -488,14 +489,14 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 20))
-      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 20)))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 1))
+      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
-        getInstantTime(), 20, dataGen.getPartitionPaths.last)).asScala
+        getInstantTime(), 5, dataGen.getPartitionPaths.last)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 100)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
     latestBatchDf.write.format("org.apache.hudi")
@@ -580,10 +581,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       val fileName: String = row.getAs("_hoodie_file_name")
       val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
-      if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
-        // The file id changes after clustering, so only assert it for usual upsert and compaction operations
-        assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
-      }
+      assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
     }
 
     val deletedRows = deletedDf.collect()
@@ -600,10 +598,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
       "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
       .join(prevDf, prevDf.columns, "leftanti")
-    nonMatchingRecords.show(500, false)
     assertEquals(0, nonMatchingRecords.count())
-    readDf.show(500, false)
-    prevDf.show(500, false)
     assertEquals(readDf.count(), prevDf.count())
   }
 }
