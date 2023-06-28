@@ -30,9 +30,11 @@ import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+import org.junit.platform.suite.api.IncludeTags
 
 import scala.collection.JavaConversions._
 
+@IncludeTags(Array("functional"))
 class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
   /**
@@ -581,9 +583,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       // so that it can also write out more than one cdc log file
       // and each of cdc log file has more that one data block as we expect.
       (256, 1024)
-    } else {
-      (2048, 5120)
-    }
+    } else (2048, 5120)
     val options = commonOpts ++ Map(
       HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
       "hoodie.logfile.data.block.max.size" -> blockSize.toString,
