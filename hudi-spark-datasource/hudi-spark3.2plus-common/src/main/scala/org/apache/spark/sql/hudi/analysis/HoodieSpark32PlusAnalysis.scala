@@ -131,9 +131,14 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
           catalogTable.location.toString))
         LogicalRelation(relation, catalogTable)
       }
-    case m@MergeIntoTable(targetTable, sourceTable, _, _, _)
-      if !m.resolved && targetTable.resolved && sourceTable.resolved =>
-
+    case mO@MergeIntoTable(targetTableO, sourceTableO, _, _, _)
+      ////// don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
+      if !mO.resolved =>
+      lazy val analyzer = spark.sessionState.analyzer
+      val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
+      val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
+      val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
+      ///////
       EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
           // Do not resolve the expression if the target table accepts any schema.
