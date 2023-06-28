@@ -197,7 +197,10 @@ Options useful for reading tables via `read.format.option(...)`
 
 ### Write Options {#Write-Options}
 
-You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
+Hudi supports [parquet modular encryption](/docs/encryption) and [parquet bloom filters](/docs/parquet_bloom) through hadoop configurations.
+
+In addition, you can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
+
 
 ```java
 inputDF.write()
