@@ -45,7 +45,7 @@ import java.util.Map;
 public class ParquetFileMetaToWriteStatusConvertor<T extends HoodieRecordPayload, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ParquetFileMetaToWriteStatusConvertor.class);
-  private final HoodieTable<T,I,K,O> hoodieTable;
+  private final HoodieTable<T, I, K, O> hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final FileSystem fs;
   public static final String PREV_COMMIT = "prevCommit";
