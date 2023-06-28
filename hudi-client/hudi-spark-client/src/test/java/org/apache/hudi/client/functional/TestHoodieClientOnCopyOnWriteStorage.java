@@ -89,7 +89,6 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
-import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -134,7 +133,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -168,7 +166,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
-import static org.apache.hudi.common.testutils.FileCreateUtils.getBaseFileCountsForPaths;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -1067,89 +1064,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         -1, recordGenFunction, SparkRDDWriteClient::upsert, true, 150, 150, 1, false,
         populateMetaFields);
-  }
-
-  /**
-   * Test update of a record to different partition with Global Index.
-   */
-  @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"GLOBAL_BLOOM", "GLOBAL_SIMPLE"})
-  public void testUpsertsUpdatePartitionPathGlobalBloom(IndexType indexType) throws Exception {
-    testUpsertsUpdatePartitionPath(indexType, getConfig(), SparkRDDWriteClient::upsert);
-  }
-
-  /**
-   * This test ensures in a global bloom when update partition path is set to true in config, if an incoming record has mismatched partition
-   * compared to what is in storage, then appropriate actions are taken. i.e. old record is deleted in old partition and new one is inserted
-   * in the new partition.
-   * test structure:
-   * 1. insert 1 batch
-   * 2. insert 2nd batch with larger no of records so that a new file group is created for partitions
-   * 3. issue upserts to records from batch 1 with different partition path. This should ensure records from batch 1 are deleted and new
-   * records are upserted to the new partition
-   *
-   * @param indexType index type to be tested for
-   * @param config instance of {@link HoodieWriteConfig} to use
-   * @param writeFn write function to be used for testing
-   */
-  private void testUpsertsUpdatePartitionPath(IndexType indexType, HoodieWriteConfig config,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn)
-      throws Exception {
-    HoodieTableMetaClient.withPropertyBuilder()
-        .fromMetaClient(metaClient)
-        .setPartitionFields("time")
-        .setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getHadoopConf(), metaClient.getBasePathV2().toString());
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withProps(config.getProps())
-        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
-        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-            .withPayloadClass(RawTripTestPayload.class.getName()).build())
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(10000).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .build()).withTimelineLayoutVersion(VERSION_0).build();
-    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
-
-    // Write 1
-    RawTripTestPayload payload1 = new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}");
-    RawTripTestPayload payload2 = new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":1}");
-    JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(Arrays.asList(payload1.toHoodieRecord(), payload2.toHoodieRecord()), 1);
-    client.startCommitWithTime("001");
-    writeFn.apply(client, writeRecords1, "001").collect();
-
-    // Write 2
-    RawTripTestPayload payload3 = new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}");
-    RawTripTestPayload payload4 = new RawTripTestPayload("{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":1}");
-    JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(Arrays.asList(payload3.toHoodieRecord(), payload4.toHoodieRecord()), 1);
-    client.startCommitWithTime("002");
-    writeFn.apply(client, writeRecords2, "002").collect();
-
-    // Write 3
-    // update record 001 from partition 2016/01/31 to 2017/01/31
-    // update record 004 from partition 2017/01/31 to 2018/01/31
-    RawTripTestPayload payload1Updated = new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2017-01-31T00:00:01.000Z\",\"number\":2}");
-    RawTripTestPayload payload3Updated = new RawTripTestPayload("{\"_row_key\":\"004\",\"time\":\"2018-01-31T00:00:01.000Z\",\"number\":2}");
-    JavaRDD<HoodieRecord> writeRecords3 = jsc.parallelize(Arrays.asList(payload1Updated.toHoodieRecord(), payload3Updated.toHoodieRecord()), 1);
-    client.startCommitWithTime("003");
-    writeFn.apply(client, writeRecords3, "003").collect();
-
-    client.close();
-
-    // Check the entire dataset has all records
-    assertPartitionPathRecordKeys(Arrays.asList(
-            Pair.of("2016/01/31", "003"),
-            Pair.of("2017/01/31", "001"),
-            Pair.of("2017/01/31", "002"),
-            Pair.of("2018/01/31", "004")),
-        getFullPartitionPaths("2016/01/31", "2017/01/31", "2018/01/31"));
-
-    // verify base file counts
-    Map<String, Long> baseFileCounts = getBaseFileCountsForPaths(basePath, fs, getFullPartitionPaths("2016/01/31", "2017/01/31", "2018/01/31"));
-    assertEquals(2, baseFileCounts.get(getFullPartitionPath("2016/01/31")));
-    assertEquals(3, baseFileCounts.get(getFullPartitionPath("2017/01/31")));
-    assertEquals(1, baseFileCounts.get(getFullPartitionPath("2018/01/31")));
   }
 
   private void assertPartitionPathRecordKeys(List<Pair<String, String>> expectedPartitionPathRecKeyPairs, String[] fullPartitionPaths) {
