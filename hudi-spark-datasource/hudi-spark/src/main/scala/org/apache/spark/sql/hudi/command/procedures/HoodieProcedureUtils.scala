@@ -50,8 +50,10 @@ object HoodieProcedureUtils {
 
   sealed trait Operation {
     def value: String
-    def isSchedule: Boolean = this != Execute
-    def isExecute: Boolean = this != Schedule
+
+    def isSchedule: Boolean
+
+    def isExecute: Boolean
   }
 
   /**
@@ -59,6 +61,10 @@ object HoodieProcedureUtils {
    */
   case object Schedule extends Operation {
     override def value: String = "schedule"
+
+    override def isSchedule: Boolean = true
+
+    override def isExecute: Boolean = false
   }
 
   /**
@@ -66,6 +72,10 @@ object HoodieProcedureUtils {
    */
   case object Execute extends Operation {
     override def value: String = "execute"
+
+    override def isSchedule: Boolean = false
+
+    override def isExecute: Boolean = true
   }
 
   /**
@@ -74,6 +84,10 @@ object HoodieProcedureUtils {
    */
   case object ScheduleAndExecute extends Operation {
     override def value: String = "scheduleandexecute"
+
+    override def isSchedule: Boolean = true
+
+    override def isExecute: Boolean = true
   }
 
   object Operation {
@@ -88,23 +102,14 @@ object HoodieProcedureUtils {
   def fileterPendingInstantsAndGetOperation(pendingInstants: Seq[String], specificInstants: Option[String], op: Option[String]): (Seq[String], Operation) = {
     specificInstants match {
       case Some(inst) =>
-        op match {
-          case Some(o) =>
-            if (!Execute.value.equalsIgnoreCase(o)) {
-              throw new HoodieException("specific instants only can be used in 'execute' op or not specific op")
-            }
-          case _ =>
-            // No op specified, set it as 'execute' with instants specified
+        if (op.exists(o => !Execute.value.equalsIgnoreCase(o))) {
+          throw new HoodieException("specific instants only can be used in 'execute' op or not specific op")
         }
+        // No op specified, set it as 'execute' with instants specified
         (HoodieProcedureUtils.checkAndFilterPendingInstants(pendingInstants, inst), Execute)
       case _ =>
-        op match {
-          case Some(o) =>
-            (pendingInstants, Operation.fromValue(o.toLowerCase))
-          case _ =>
-            // No op specified, set it as 'scheduleAndExecute' default
-            (pendingInstants, ScheduleAndExecute)
-        }
+        // No op specified, set it as 'scheduleAndExecute' default
+        (pendingInstants, op.map(o => Operation.fromValue(o.toLowerCase)).getOrElse(ScheduleAndExecute))
     }
   }
 

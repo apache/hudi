@@ -199,13 +199,9 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
-
+      spark.sql(s"update $tableName1 set name = 'a2' where id = 1")
+      spark.sql(s"update $tableName1 set name = 'a3' where id = 1")
+      spark.sql(s"update $tableName1 set name = 'a4' where id = 1")
       assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
     }
   }
@@ -231,8 +227,8 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
         val result1 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
@@ -242,7 +238,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           .collect()
         assertResult(0)(result1.length)
 
-        spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a4' where id = 1")
         val result2 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
              | hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,
@@ -275,7 +271,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
 
         spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
 
@@ -313,7 +309,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
 
         assertResult(0)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
 
@@ -321,7 +317,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
         assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
 
-        spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
         assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'scheduleAndExecute')").collect().length)
       }
