@@ -120,6 +120,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+    hudiSnapshotDF1.cache()
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
 
     // Second Operation:
@@ -135,6 +136,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+    hudiSnapshotDF2.cache()
     assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
     val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
     val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
@@ -150,6 +152,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit1Time)
       .load(basePath)
+    hudiIncDF1.cache()
     assertEquals(100, hudiIncDF1.count())
     assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
@@ -161,6 +164,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
       .load(basePath)
+    hudiIncDF2.cache()
     assertEquals(100, hudiIncDF2.count())
     assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
@@ -173,6 +177,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
       .load(basePath)
+    hudiIncDF3.cache()
     assertEquals(100, hudiIncDF3.count())
     // log file being load
     assertEquals(1, hudiIncDF3.select("_hoodie_commit_time").distinct().count())
@@ -193,6 +198,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+    hudiSnapshotSkipMergeDF2.cache
     assertEquals(200, hudiSnapshotSkipMergeDF2.count())
     assertEquals(100, hudiSnapshotSkipMergeDF2.select("_hoodie_record_key").distinct().count())
     assertEquals(200, hudiSnapshotSkipMergeDF2.join(hudiSnapshotDF2, Seq("_hoodie_record_key"), "left").count())
@@ -217,6 +223,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+    hudiSnapshotDF3.cache
     // still 100, because we only updated the existing records
     assertEquals(100, hudiSnapshotDF3.count())
 
@@ -242,6 +249,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
       .load(basePath)
+    hudiIncDF4SkipMerge.cache
     assertEquals(200, hudiIncDF4SkipMerge.count())
 
     // Fourth Operation:
@@ -260,6 +268,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+    hudiSnapshotDF4.cache
     // 200, because we insert 100 records to a new partition
     assertEquals(200, hudiSnapshotDF4.count())
     assertEquals(100,
