@@ -34,9 +34,9 @@ import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MarkerUtilsTest extends HoodieCommonTestHarness {
+class TestMarkerUtils extends HoodieCommonTestHarness {
 
-  protected FileSystem fs;
+  private FileSystem fs;
 
   @BeforeEach
   public void setup() {
@@ -54,25 +54,25 @@ class MarkerUtilsTest extends HoodieCommonTestHarness {
 
     try {
       // marker file does not exist
-      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir)
-              , "File does not exist, should be empty");
+      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir),
+          "File does not exist, should be empty");
 
       // HUDI-6440: Fallback to default Marker Type if the content of marker file is empty
       assertTrue(writeEmptyMarkerTypeToFile(fs, markerDir), "Failed to create empty marker type file");
-      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir)
-              , "File exists but empty, should be empty");
+      assertEquals(Option.empty(), MarkerUtils.readMarkerType(fs, markerDir),
+          "File exists but empty, should be empty");
 
       // marker type is DIRECT
       MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
       MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, fs, markerDir);
-      assertEquals(Option.of(MarkerType.DIRECT), MarkerUtils.readMarkerType(fs, markerDir)
-              , "File exists and contains DIRECT, should be DIRECT");
+      assertEquals(Option.of(MarkerType.DIRECT), MarkerUtils.readMarkerType(fs, markerDir),
+          "File exists and contains DIRECT, should be DIRECT");
 
       // marker type is TIMELINE_SERVER_BASED
       MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
       MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, fs, markerDir);
-      assertEquals(Option.of(MarkerType.TIMELINE_SERVER_BASED), MarkerUtils.readMarkerType(fs, markerDir)
-              , "File exists and contains TIMELINE_SERVER_BASED, should be TIMELINE_SERVER_BASED");
+      assertEquals(Option.of(MarkerType.TIMELINE_SERVER_BASED), MarkerUtils.readMarkerType(fs, markerDir),
+          "File exists and contains TIMELINE_SERVER_BASED, should be TIMELINE_SERVER_BASED");
     } finally {
       MarkerUtils.deleteMarkerTypeFile(fs, markerDir);
     }
@@ -83,9 +83,7 @@ class MarkerUtilsTest extends HoodieCommonTestHarness {
     try {
       return fileSystem.createNewFile(markerTypeFilePath);
     } catch (IOException e) {
-      throw new HoodieException("Failed to create marker type file " + markerTypeFilePath.toString()
-              + "; " + e.getMessage(), e);
+      throw new HoodieException("Failed to create marker type file " + markerTypeFilePath, e);
     }
   }
-
 }
