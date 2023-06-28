@@ -212,7 +212,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieRecordIndexInfo recordIndexMetadata;
   private boolean isDeletedRecord = false;
 
-  public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
+  public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
     this(Option.ofNullable(record));
   }
 
