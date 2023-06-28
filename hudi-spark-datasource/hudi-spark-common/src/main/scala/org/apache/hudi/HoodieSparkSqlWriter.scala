@@ -366,7 +366,7 @@ object HoodieSparkSqlWriter {
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
             val processedDataSchema = if (isPrepped) {
-              HoodieAvroUtils.removeMetadataFields(writerSchema)
+              HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
             }
