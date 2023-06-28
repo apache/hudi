@@ -262,7 +262,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
       heartbeat.setNumHeartbeats(heartbeat.getNumHeartbeats() + 1);
     } catch (IOException io) {
-      throw new HoodieHeartbeatException("Unable to generate heartbeat ", io);
+      throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);
     }
   }
 

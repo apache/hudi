@@ -177,6 +177,9 @@ jobs:
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.0'
             sparkRuntime: 'spark3.0.2'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark2.4'
+            sparkRuntime: 'spark2.4.8'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -200,6 +203,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
+        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
@@ -208,6 +212,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
+        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11

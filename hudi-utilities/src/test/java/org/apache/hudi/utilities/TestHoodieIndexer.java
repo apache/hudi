@@ -48,7 +48,6 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -145,7 +144,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -160,7 +158,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithWriterFinishingFirst() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
     // is inflight, while the regular writer is updating metadata table.
@@ -208,7 +205,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);
 
-    upsertToTable(metadataConfig, tableName);
+    HoodieMetadataConfig metadataConfigColStats = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(true).build();
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should not be rolled back
@@ -217,7 +215,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // Simulate heartbeat timeout
     heartbeatClient.stop(mdtCommitTime);
-    upsertToTable(metadataConfig, tableName);
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should be rolled back now
@@ -303,7 +301,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
   @ParameterizedTest
   @MethodSource("colStatsFileGroupCountParams")
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testColStatsFileGroupCount(int colStatsFileGroupCount) {
     TestHoodieIndexer.colStatsFileGroupCount = colStatsFileGroupCount;
     String tableName = "indexer_test";
@@ -332,7 +329,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
    * with regular writers.
    */
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerForExceptionWithNonFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client

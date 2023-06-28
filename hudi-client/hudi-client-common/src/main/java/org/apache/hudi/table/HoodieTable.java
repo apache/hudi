@@ -110,6 +110,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getMetadataPartitionsNeedingWriteStatusTracking;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -1049,6 +1050,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public HoodieTableMetadata getMetadataTable() {
     return this.metadata;
+  }
+
+  /**
+   * When {@link HoodieTableConfig#POPULATE_META_FIELDS} is enabled,
+   * we need to track written records within WriteStatus in two cases:
+   * <ol>
+   *   <li> When the HoodieIndex being used is not implicit with storage
+   *   <li> If any of the metadata table partitions (record index, etc) which require written record tracking are enabled
+   * </ol>
+   */
+  public boolean shouldTrackSuccessRecords() {
+    return config.populateMetaFields()
+        && (!getIndex().isImplicitWithStorage()
+        || getMetadataPartitionsNeedingWriteStatusTracking(config.getMetadataConfig(), getMetaClient()));
   }
 
   public Runnable getPreExecuteRunnable() {

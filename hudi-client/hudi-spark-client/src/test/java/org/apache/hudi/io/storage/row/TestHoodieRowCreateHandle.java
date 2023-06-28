@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -109,7 +109,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       }
 
       // issue writes
-      HoodieInternalWriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
+      WriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
 
       fileAbsPaths.add(basePath + "/" + writeStatus.getStat().getPath());
       fileNames.add(handle.getFileName());
@@ -161,7 +161,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       // expected
     }
     // close the create handle
-    HoodieInternalWriteStatus writeStatus = handle.close();
+    WriteStatus writeStatus = handle.close();
 
     List<String> fileNames = new ArrayList<>();
     fileNames.add(handle.getFileName());
@@ -203,7 +203,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     }
   }
 
-  private HoodieInternalWriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
+  private WriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
       throws Exception {
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
     // issue writes
@@ -214,10 +214,11 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     return handle.close();
   }
 
-  private void assertOutput(HoodieInternalWriteStatus writeStatus, int size, String fileId, String partitionPath,
+  private void assertOutput(WriteStatus writeStatus, int size, String fileId, String partitionPath,
                             String instantTime, Dataset<Row> inputRows, List<String> filenames, List<String> fileAbsPaths, boolean populateMetaFields) {
     assertEquals(writeStatus.getPartitionPath(), partitionPath);
     assertEquals(writeStatus.getTotalRecords(), size);
+    assertEquals(writeStatus.getTotalErrorRecords(), 0);
     assertEquals(writeStatus.getTotalErrorRecords(), 0);
     assertFalse(writeStatus.hasErrors());
     assertNull(writeStatus.getGlobalError());

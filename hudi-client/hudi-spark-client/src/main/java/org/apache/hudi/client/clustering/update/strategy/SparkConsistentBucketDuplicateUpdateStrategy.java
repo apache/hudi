@@ -20,7 +20,6 @@ package org.apache.hudi.client.clustering.update.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -40,6 +39,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import org.slf4j.Logger;
@@ -121,7 +121,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
                                                         Map<String, HoodieConsistentHashingMetadata> partitionToHashingMeta, Map<String, String> partitionToInstant) {
     for (HoodieClusteringGroup group : plan.getInputGroups()) {
       Map<String, String> groupMeta = group.getExtraMetadata();
-      String p = groupMeta.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
+      String p = groupMeta.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
       checkState(p != null, "Clustering plan does not has partition info, plan: " + plan);
       // Skip unrelated clustering group
       if (!recordPartitions.contains(p)) {
@@ -137,7 +137,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
       }
 
       try {
-        String nodeJson = group.getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
+        String nodeJson = group.getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
         List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(nodeJson);
         partitionToHashingMeta.get(p).getChildrenNodes().addAll(nodes);
       } catch (Exception e) {
@@ -146,5 +146,4 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
       }
     }
   }
-
 }

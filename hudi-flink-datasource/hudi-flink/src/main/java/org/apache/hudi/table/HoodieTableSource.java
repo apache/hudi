@@ -515,12 +515,18 @@ public class HoodieTableSource implements
         .map(HoodieBaseFile::getFileStatus)
         .map(FileStatus::getPath).toArray(Path[]::new);
 
+    if (paths.length == 0) {
+      return InputFormats.EMPTY_INPUT_FORMAT;
+    }
+
     return new CopyOnWriteInputFormat(
         FilePathUtils.toFlinkPaths(paths),
         this.schema.getColumnNames().toArray(new String[0]),
         this.schema.getColumnDataTypes().toArray(new DataType[0]),
         this.requiredPos,
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),

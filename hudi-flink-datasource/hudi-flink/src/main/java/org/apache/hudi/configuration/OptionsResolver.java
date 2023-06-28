@@ -140,6 +140,10 @@ public class OptionsResolver {
     return HoodieIndex.BucketIndexEngineType.valueOf(bucketEngineType);
   }
 
+  public static boolean isConsistentHashingBucketIndexType(Configuration conf) {
+    return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING);
+  }
+
   /**
    * Returns whether the source should emit changelog.
    *

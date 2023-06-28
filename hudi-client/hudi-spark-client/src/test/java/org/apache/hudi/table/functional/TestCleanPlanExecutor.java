@@ -41,7 +41,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.table.TestCleaner;
+import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests covering different clean plan policies/strategies.
  */
-public class TestCleanPlanExecutor extends TestCleaner {
+public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
   @Test
   public void testInvalidCleaningTriggerStrategy() {
@@ -278,7 +278,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
     testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, Arrays.asList(p0, p1),
         c1PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsOne = runCleanerWithInstantFormat(config, true);
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, 2, true);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
@@ -289,19 +289,19 @@ public class TestCleanPlanExecutor extends TestCleaner {
     Map<String, List<Pair<String, Integer>>> c2PartitionToFilesNameLengthMap = new HashMap<>();
     c2PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 101), Pair.of(file2P0C1, 100)));
     c2PartitionToFilesNameLengthMap.put(p1, Arrays.asList(Pair.of(file1P1C0, 201), Pair.of(file2P1C1, 200)));
-    testTable.doWriteOperation("00000000000002", WriteOperationType.UPSERT, Collections.emptyList(),
+    testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
         c2PartitionToFilesNameLengthMap, false, false);
 
     // enableBootstrapSourceClean would delete the bootstrap base file at the same time
-    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 1, true);
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 4, true);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsTwo, p0);
     assertEquals(1, cleanStat.getSuccessDeleteFiles().size()
         + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
         : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
 
     cleanStat = getCleanStat(hoodieCleanStatsTwo, p1);
-    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
-    assertTrue(testTable.baseFileExists(p1, "00000000000002", file2P1C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000003", file2P1C1));
     assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
     assertEquals(1, cleanStat.getSuccessDeleteFiles().size()
@@ -313,23 +313,23 @@ public class TestCleanPlanExecutor extends TestCleaner {
     Map<String, List<Pair<String, Integer>>> c3PartitionToFilesNameLengthMap = new HashMap<>();
     c3PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 102), Pair.of(file2P0C1, 101),
         Pair.of(file3P0C2, 100)));
-    testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
+    testTable.doWriteOperation("00000000000005", WriteOperationType.UPSERT, Collections.emptyList(),
         c3PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 3, true);
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 6, true);
     assertEquals(2,
         getCleanStat(hoodieCleanStatsThree, p0)
             .getSuccessDeleteFiles().size(), "Must clean two files");
-    assertFalse(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
-    assertFalse(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
-    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+    assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
 
     // No cleaning on partially written file, with no commit.
-    testTable.forCommit("00000000000004").withBaseFilesInPartition(p0, file3P0C2);
+    testTable.forCommit("00000000000007").withBaseFilesInPartition(p0, file3P0C2);
 
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
     assertEquals(0, hoodieCleanStatsFour.size(), "Must not clean any files");
-    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
   }
 
   @Test
@@ -360,7 +360,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
     testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, Arrays.asList(p0, p1),
         c1PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsOne = runCleanerWithInstantFormat(config, true);
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, 2, true);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
@@ -371,11 +371,11 @@ public class TestCleanPlanExecutor extends TestCleaner {
     Map<String, List<Pair<String, Integer>>> c2PartitionToFilesNameLengthMap = new HashMap<>();
     c2PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 101), Pair.of(file2P0C1, 100)));
     c2PartitionToFilesNameLengthMap.put(p1, Arrays.asList(Pair.of(file1P1C0, 201), Pair.of(file2P1C1, 200)));
-    testTable.doWriteOperation("00000000000002", WriteOperationType.UPSERT, Collections.emptyList(),
+    testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
         c2PartitionToFilesNameLengthMap, false, false);
 
     // should delete the bootstrap base file at the same time
-    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 1, true);
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 4, true);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsTwo, p0);
     assertEquals(2, cleanStat.getSuccessDeleteFiles().size()
         + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
@@ -391,8 +391,8 @@ public class TestCleanPlanExecutor extends TestCleaner {
         p0).get(0).getBootstrapFileStatus().getPath().getUri())));
 
     cleanStat = getCleanStat(hoodieCleanStatsTwo, p1);
-    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
-    assertTrue(testTable.baseFileExists(p1, "00000000000002", file2P1C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000003", file2P1C1));
     assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
     assertEquals(2, cleanStat.getSuccessDeleteFiles().size()
@@ -412,23 +412,23 @@ public class TestCleanPlanExecutor extends TestCleaner {
     Map<String, List<Pair<String, Integer>>> c3PartitionToFilesNameLengthMap = new HashMap<>();
     c3PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 102), Pair.of(file2P0C1, 101),
         Pair.of(file3P0C2, 100)));
-    testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
+    testTable.doWriteOperation("00000000000005", WriteOperationType.UPSERT, Collections.emptyList(),
         c3PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 3, true);
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 6, true);
     assertEquals(2,
         getCleanStat(hoodieCleanStatsThree, p0)
             .getSuccessDeleteFiles().size(), "Must clean two files");
-    assertFalse(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
-    assertFalse(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
-    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+    assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
 
     // No cleaning on partially written file, with no commit.
-    testTable.forCommit("00000000000004").withBaseFilesInPartition(p0, file3P0C2);
+    testTable.forCommit("00000000000007").withBaseFilesInPartition(p0, file3P0C2);
 
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
     assertEquals(0, hoodieCleanStatsFour.size(), "Must not clean any files");
-    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
   }
 
   /**
