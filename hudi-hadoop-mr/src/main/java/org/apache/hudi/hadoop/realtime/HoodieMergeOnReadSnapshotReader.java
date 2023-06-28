@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
@@ -35,6 +36,8 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,8 +46,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReader implements Iterator<HoodieRecord> {
+public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReader implements Iterator<HoodieRecord>, AutoCloseable {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeOnReadSnapshotReader.class);
 
   private final String tableBasePath;
   private final String baseFilePath;
@@ -70,20 +76,24 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     this.latestInstantTime = latestInstantTime;
     this.readerSchema = readerSchema;
     this.jobConf = jobConf;
+    HoodieTimer timer = new HoodieTimer().startTimer();
     this.logRecordScanner = getMergedLogRecordScanner();
-    this.baseFileReader = HoodieRealtimeRecordReaderUtils.getBaseFileReader(new Path(baseFilePath), jobConf);
+    LOG.debug("Time taken to scan log records: {}", timer.endTimer());
+    this.baseFileReader = HoodieRealtimeRecordReaderUtils.getBaseFileReader(new Path(this.baseFilePath), jobConf);
     this.logRecordMap = logRecordScanner.getRecords();
     this.logRecordKeys = new HashSet<>(this.logRecordMap.keySet());
     List<HoodieRecord> mergedRecords = new ArrayList<>();
-    ClosableIterator<HoodieRecord> baseFileIterator = baseFileReader.getRecordIterator(readerSchema);
+    ClosableIterator<String> baseFileIterator = baseFileReader.getRecordKeyIterator();
+    timer.startTimer();
     while (baseFileIterator.hasNext()) {
-      HoodieRecord record = baseFileIterator.next();
-      if (logRecordKeys.contains(record.getRecordKey())) {
-        logRecordKeys.remove(record.getRecordKey());
-        Option<HoodieAvroIndexedRecord> mergedRecord = buildGenericRecordWithCustomPayload(logRecordMap.get(record.getRecordKey()));
+      String key = baseFileIterator.next();
+      if (logRecordKeys.contains(key)) {
+        logRecordKeys.remove(key);
+        Option<HoodieAvroIndexedRecord> mergedRecord = buildGenericRecordWithCustomPayload(logRecordMap.get(key));
         mergedRecord.ifPresent(mergedRecords::add);
       }
     }
+    LOG.debug("Time taken to merge base file and log file records: {}", timer.endTimer());
     this.recordsIterator = mergedRecords.iterator();
   }
 
@@ -107,21 +117,18 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         tableBasePath,
         logFilePaths,
         latestInstantTime,
-        false,
+        false, // TODO: Fix this to support incremental queries
         Option.empty());
     return HoodieInputFormatUtils.createRealtimeFileSplit(realtimePath, start, length, hosts);
   }
 
   private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
-    // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
-    // but can return records for completed commits > the commit we are trying to read (if using
-    // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(FSUtils.getFs(split.getPath().toString(), jobConf))
-        .withBasePath(split.getBasePath())
-        .withLogFilePaths(split.getDeltaLogPaths())
-        .withReaderSchema(getLogScannerReaderSchema())
-        .withLatestInstantTime(split.getMaxCommitTime())
+        .withBasePath(tableBasePath)
+        .withLogFilePaths(logFilePaths.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withReaderSchema(readerSchema)
+        .withLatestInstantTime(latestInstantTime)
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
         .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
         .withReverseReader(false)
@@ -139,7 +146,17 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     if (usesCustomPayload) {
       return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
-      return record.toIndexedRecord(getReaderSchema(), payloadProps);
+      return record.toIndexedRecord(readerSchema, payloadProps);
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (baseFileReader != null) {
+      baseFileReader.close();
+    }
+    if (logRecordScanner != null) {
+      logRecordScanner.close();
     }
   }
 }
