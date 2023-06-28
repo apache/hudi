@@ -87,6 +87,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
+import static java.util.Collections.singletonMap;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
@@ -121,7 +122,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
-import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -263,7 +263,7 @@ public class HoodieTestTable {
     if (MERGE_ON_READ.equals(metaClient.getTableType()) && UPSERT.equals(operationType)) {
       writeStats.addAll(generateHoodieWriteStatForPartitionLogFiles(testTableState.getPartitionToLogFileInfoMap(commitTime), commitTime, bootstrap));
     }
-    Map<String, String> extraMetadata = createImmutableMap("test", "test");
+    Map<String, String> extraMetadata = singletonMap("test", "test");
     return buildMetadata(writeStats, partitionToReplaceFileIds, Option.of(extraMetadata), operationType, PHONY_TABLE_SCHEMA, action);
   }
 
@@ -414,7 +414,7 @@ public class HoodieTestTable {
       String fileId = UUID.randomUUID().toString();
       String logFileName = logFileName(instantTimeToDelete, fileId, 0);
       FileCreateUtils.createLogFile(basePath, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
-      rollbackPartitionMetadata.setRollbackLogFiles(createImmutableMap(logFileName, rollbackLogFileSize));
+      rollbackPartitionMetadata.setRollbackLogFiles(singletonMap(logFileName, rollbackLogFileSize));
       partitionMetadataMap.put(entry.getKey(), rollbackPartitionMetadata);
     }
     rollbackMetadata.setPartitionMetadata(partitionMetadataMap);
@@ -1023,7 +1023,7 @@ public class HoodieTestTable {
                                                Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
                                                boolean bootstrap, boolean createInflightCommit) throws Exception {
     if (partitionToFilesNameLengthMap.isEmpty()) {
-      partitionToFilesNameLengthMap = Collections.singletonMap(EMPTY_STRING, Collections.EMPTY_LIST);
+      partitionToFilesNameLengthMap = singletonMap(EMPTY_STRING, Collections.emptyList());
     }
     HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(operationType,
         metaClient.getTableType(), commitTime, partitionToFilesNameLengthMap);

@@ -235,7 +235,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
     // No cleaning on partially written file, with no commit.
     testTable.forCommit("00000000000011").withBaseFilesInPartition(p0, file3P0C2);
-    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000011", CollectionUtils.createImmutableMap(p0,
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000011", Collections.singletonMap(p0,
         CollectionUtils.createImmutableList(file3P0C2)));
     metaClient.getActiveTimeline().createNewInstant(
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
