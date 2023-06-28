@@ -155,6 +155,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
                 // The update value can access columns from both target and source tables.
                 resolveAssignments(assignments, m, resolveValuesWithSourceOnly = false))
             case UpdateStarAction(updateCondition) =>
+              //Hudi change: filter out meta fields
               val assignments = targetTable.output.filter(a => !isMetaField(a.name)).map { attr =>
                 Assignment(attr, UnresolvedAttribute(Seq(attr.name)))
               }
