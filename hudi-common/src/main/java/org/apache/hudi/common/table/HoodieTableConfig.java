@@ -771,6 +771,10 @@ public class HoodieTableConfig extends HoodieConfig {
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
   }
 
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {
+    setMetadataPartitionsInflight(metaClient, Arrays.stream(partitionTypes).collect(Collectors.toList()));
+  }
+
   /**
    * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
    * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.

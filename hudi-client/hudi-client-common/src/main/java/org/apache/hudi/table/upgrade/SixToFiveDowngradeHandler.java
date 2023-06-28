@@ -20,23 +20,26 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 
-import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTablePartition;
-import static org.apache.hudi.table.upgrade.FiveToSixUpgradeHandler.checkUncompletedInstants;
 
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 6 to 5.
@@ -49,11 +52,13 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
-    checkUncompletedInstants(table);
     removeRecordIndexIfNeeded(table, context);
     syncCompactionRequestedFileToAuxiliaryFolder(table);
 
-    return Collections.emptyMap();
+    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    return CollectionUtils.createHashMap(
+        Pair.of(TABLE_METADATA_PARTITIONS, tableConfig.getString(TABLE_METADATA_PARTITIONS)),
+        Pair.of(TABLE_METADATA_PARTITIONS_INFLIGHT, tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT)));
   }
 
   /**

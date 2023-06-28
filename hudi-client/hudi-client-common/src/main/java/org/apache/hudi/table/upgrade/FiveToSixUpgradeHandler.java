@@ -20,17 +20,13 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.compact.CompactHelpers;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -38,11 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 5 to 6.
@@ -58,8 +50,6 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
     deleteCompactionRequestedFileFromAuxiliaryFolder(table);
-    checkUncompletedInstants(table);
-    compactMetadataTableIfNeeded(table, context);
 
     return Collections.emptyMap();
   }
@@ -87,44 +77,4 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
     );
   }
 
-  /**
-   * When upgrading to {@link HoodieTableVersion#SIX}, it is required that pending actions in both
-   * data table and metadata table should be either completed or rollback.
-   * <p>
-   * Note: this will be invoked for both data and metadata tables during upgrade/downgrade.
-   *
-   * @see UpgradeDowngrade#run(HoodieTableVersion, String)
-   */
-  static void checkUncompletedInstants(HoodieTable table) {
-    try {
-      List<HoodieInstant> uncompletedInstants = table.getActiveTimeline().filterInflightsAndRequested().getInstants();
-      checkState(uncompletedInstants.isEmpty(), "Found uncompleted instants: "
-          + uncompletedInstants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.joining(",")));
-    } catch (Exception e) {
-      throw new HoodieUpgradeDowngradeException(
-          "There are uncompleted instants in the table's timeline at '"
-              + table.getConfig().getBasePath()
-              + "'. Please complete the operations or perform rollback before upgrade.", e);
-    }
-  }
-
-  private static void compactMetadataTableIfNeeded(HoodieTable table, HoodieEngineContext context) {
-    if (!table.isMetadataTable()) {
-      return;
-    }
-    Option<HoodieInstant> lastCommitInstantOpt = table.getActiveTimeline().getCommitsTimeline().lastInstant();
-    if (!lastCommitInstantOpt.isPresent()) {
-      return;
-    }
-    checkState(lastCommitInstantOpt.get().getState() == HoodieInstant.State.COMPLETED,
-        "Found uncompleted instants: " + lastCommitInstantOpt.get());
-    boolean shouldCompact = !lastCommitInstantOpt.get().getAction().equals(HoodieTimeline.COMMIT_ACTION);
-    if (shouldCompact) {
-      String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-      table.scheduleCompaction(context, compactionInstantTime, Option.empty());
-      HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) table
-          .compact(context, compactionInstantTime).getCommitMetadata().get();
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionInstantTime, commitMetadata);
-    }
-  }
 }
