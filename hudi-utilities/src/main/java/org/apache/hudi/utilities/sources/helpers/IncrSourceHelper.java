@@ -23,17 +23,21 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
 import java.util.Objects;
+import java.util.function.Function;
 
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 
@@ -54,6 +58,20 @@ public class IncrSourceHelper {
   }
 
   /**
+   * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
+   * unlike batch incremental query, we do not use {@link HollowCommitHandling#EXCEPTION} by default,
+   * instead we use {@link HollowCommitHandling#BLOCK} to block processing data from going beyond the
+   * hollow commits to avoid unintentional skip.
+   * <p>
+   * Users can set {@link DataSourceReadOptions#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT} to
+   * {@link HollowCommitHandling#USE_STATE_TRANSITION_TIME} to avoid the blocking behavior.
+   */
+  public static HollowCommitHandling getHollowCommitHandleMode(TypedProperties props) {
+    return HollowCommitHandling.valueOf(
+        props.getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), HollowCommitHandling.BLOCK.name()));
+  }
+
+  /**
    * Find begin and end instants to be set for the next fetch.
    *
    * @param jssc                            Java Spark Context
@@ -64,34 +82,21 @@ public class IncrSourceHelper {
    * @return begin and end instants along with query type.
    */
   public static Pair<String, Pair<String, String>> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
-                                                                                 int numInstantsPerFetch, Option<String> beginInstant,
-                                                                                MissingCheckpointStrategy missingCheckpointStrategy) {
+                                                                                int numInstantsPerFetch, Option<String> beginInstant,
+                                                                                MissingCheckpointStrategy missingCheckpointStrategy,
+                                                                                HollowCommitHandling handlingMode) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
-
-    // Find the earliest incomplete commit, deltacommit, or non-clustering replacecommit,
-    // so that the incremental pulls should be strictly before this instant.
-    // This is to guard around multi-writer scenarios where a commit starting later than
-    // another commit from a concurrent writer can finish earlier, leaving an inflight commit
-    // before a completed commit.
-    final Option<HoodieInstant> firstIncompleteCommit = srcMetaClient.getCommitsTimeline()
-        .filterInflightsAndRequested()
-        .filter(instant ->
-            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
-                || !ClusteringUtils.getClusteringPlan(srcMetaClient, instant).isPresent())
-        .firstInstant();
-    final HoodieTimeline completedCommitTimeline =
-        srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
-    final HoodieTimeline activeCommitTimeline = firstIncompleteCommit.map(
-        commit -> completedCommitTimeline.findInstantsBefore(commit.getTimestamp())
-    ).orElse(completedCommitTimeline);
-
+    HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
+    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME
+        ? instant.getStateTransitionTime() : instant.getTimestamp();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse(DEFAULT_BEGIN_TIMESTAMP);
+          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(timestampForLastInstant.apply(hoodieInstant))).orElse(DEFAULT_BEGIN_TIMESTAMP);
         } else {
           return DEFAULT_BEGIN_TIMESTAMP;
         }
@@ -108,7 +113,7 @@ public class IncrSourceHelper {
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-      return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, lastInstant.get().getTimestamp()));
+      return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, timestampForLastInstant.apply(lastInstant.get())));
     }
   }
 

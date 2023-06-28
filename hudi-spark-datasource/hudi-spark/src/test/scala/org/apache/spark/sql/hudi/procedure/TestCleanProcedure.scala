@@ -141,10 +141,13 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              | )
              |""".stripMargin)
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1004)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          //needs upsert because each commit will create a new filegroup so no cleaning will happen
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1004)")
+        }
 
         val result1 = spark.sql(s"call run_clean(table => '$tableName')")
           .collect()
@@ -178,11 +181,13 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              |   preCombineField = 'ts'
              | )
              |""".stripMargin)
-
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1004)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          //needs upsert because each commit will create a new filegroup so no cleaning will happen
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1001)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1002)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1003)")
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1004)")
+        }
 
         val result1 = spark.sql(
           s"""call run_clean(table => '$tableName', options => "

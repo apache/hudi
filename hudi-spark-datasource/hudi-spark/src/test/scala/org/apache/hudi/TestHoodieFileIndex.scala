@@ -483,8 +483,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     // Test getting partition paths in a subset of directories
     val metadata = HoodieTableMetadata.create(context,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
-      metaClient.getBasePathV2.toString,
-      metaClient.getBasePathV2.getParent.toString)
+      metaClient.getBasePathV2.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
       metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)

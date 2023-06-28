@@ -40,9 +40,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              | )
              | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
-
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-
         val metaClient1 = HoodieTableMetaClient.builder()
           .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
           .setConf(spark.sessionState.newHadoopConf())
@@ -50,8 +48,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
         val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
-
-        spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+        }
 
         checkAnswer(s"select id, name, price, ts from $tableName1")(
           Seq(1, "a2", 20.0, 2000)
@@ -280,8 +279,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
         val instant = metaClient.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
-        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
-
+        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+          spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+        }
         checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
           Seq(1, "a2", 20.0, 2000)
         )

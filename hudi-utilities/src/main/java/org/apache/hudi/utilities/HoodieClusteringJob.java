@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
@@ -87,7 +86,7 @@ public class HoodieClusteringJob {
     public int parallelism = 1;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
@@ -216,7 +215,8 @@ public class HoodieClusteringJob {
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
               + cfg.clusteringInstantTime);
         } else {
-          throw new HoodieClusteringException("There is no scheduled clustering in the table.");
+          LOG.info("There is no scheduled clustering in the table.");
+          return 0;
         }
       }
       Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime).getCommitMetadata();

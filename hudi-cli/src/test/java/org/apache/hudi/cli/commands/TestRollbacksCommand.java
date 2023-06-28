@@ -104,9 +104,9 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
             metaClient.getHadoopConf(), config, context))
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addInflightCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
 

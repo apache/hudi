@@ -184,8 +184,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
@@ -206,7 +205,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);
 
-    upsertToTable(metadataConfig, tableName);
+    HoodieMetadataConfig metadataConfigColStats = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(true).build();
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should not be rolled back
@@ -215,7 +215,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // Simulate heartbeat timeout
     heartbeatClient.stop(mdtCommitTime);
-    upsertToTable(metadataConfig, tableName);
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should be rolled back now
@@ -249,8 +249,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
         .filter(i -> i.getTimestamp().equals(commitTime))
@@ -455,7 +454,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     Option<HoodieInstant> indexInstantInTimeline = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
     assertTrue(indexInstantInTimeline.isPresent());
     assertEquals(REQUESTED, indexInstantInTimeline.get().getState());
-    assertTrue(metadataPartitionExists(basePath(), context(), COLUMN_STATS));
 
     // drop column_stats and validate indexing.requested is also removed from the timeline
     config.runningMode = DROP_INDEX;
@@ -514,7 +512,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     Option<HoodieInstant> columnStatsIndexInstant = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
     assertTrue(columnStatsIndexInstant.isPresent());
     assertEquals(REQUESTED, columnStatsIndexInstant.get().getState());
-    assertTrue(metadataPartitionExists(basePath(), context(), COLUMN_STATS));
 
     // drop column_stats and validate indexing.requested is also removed from the timeline
     // and completed indexing instant corresponding to bloom_filters index is still present
