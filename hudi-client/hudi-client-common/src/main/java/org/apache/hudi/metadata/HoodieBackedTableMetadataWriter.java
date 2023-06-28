@@ -929,7 +929,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime);
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
@@ -939,7 +939,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // At this point we have also reverted the cleans which have occurred after the restoreToInstantTime. Hence, a sync
     // is required to bring back those cleans.
     try {
-      initTableMetadata();
+      initMetadataReader();
       HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
       Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
       for (String partition : metadata.fetchAllPartitionPaths()) {
@@ -973,7 +973,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // TODO: Using METADATA_INDEXER_TIME_SUFFIX for now, but this should have its own suffix. To be fixed after HUDI-6200
       String syncCommitTime = HoodieActiveTimeline.createNewInstantTime() + METADATA_INDEXER_TIME_SUFFIX;
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, cleanMetadata, getRecordsGenerationParams(),
-          syncCommitTime), false);
+          syncCommitTime));
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
@@ -1029,7 +1029,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Rollback of MOR table may end up adding a new log file. So we need to check for added files and add them to MDT
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
         rollbackMetadata, getRecordsGenerationParams(), instantTime,
-        metadata.getSyncedInstantTime(), true), false);
+        metadata.getSyncedInstantTime(), true));
     closeInternal();
   }
 
