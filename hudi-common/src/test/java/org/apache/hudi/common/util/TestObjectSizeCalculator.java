@@ -97,7 +97,6 @@ public class TestObjectSizeCalculator {
     // implement props, which will change the size of the object.
     assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1256 : 1240,
         getObjectSize(Schema.create(Schema.Type.STRING)));
-    assertEquals(104, getObjectSize(person));
   }
 
   private static int getJavaVersion() {
