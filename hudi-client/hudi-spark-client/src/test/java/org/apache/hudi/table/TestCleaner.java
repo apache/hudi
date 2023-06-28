@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -257,6 +258,100 @@ public class TestCleaner extends HoodieCleanerTestBase {
           timeline.getInstantDetails(rollBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
       // Rollback of one of the failed writes should have deleted 3 files
       assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
+    }
+  }
+
+  /**
+   * Test earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testEarliestInstantToRetainForPendingCompaction() throws IOException {
+    HoodieWriteConfig writeConfig = getConfigBuilder().withPath(basePath)
+            .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+                    .withEnableBackupForRemoteFileSystemView(false)
+                    .build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                    .withAutoClean(false)
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .retainCommits(1)
+                    .build())
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                    .withInlineCompaction(false)
+                    .withMaxNumDeltaCommitsBeforeCompaction(1)
+                    .compactionSmallFileSize(1024 * 1024 * 1024)
+                    .build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+                    .withAutoArchive(false)
+                    .archiveCommitsWith(2,3)
+                    .build())
+            .withEmbeddedTimelineServerEnabled(false).build();
+
+    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+
+      final String partition1 = "2023/06/01";
+      final String partition2 = "2023/06/02";
+      String instantTime = "";
+      String earliestInstantToRetain = "";
+
+      for (int idx = 0; idx < 3; ++idx) {
+        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        if (idx == 2) {
+          earliestInstantToRetain = instantTime;
+        }
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
+        client.startCommitWithTime(instantTime);
+        client.insert(jsc.parallelize(records, 1), instantTime).collect();
+      }
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition1).size(), 1);
+      assertEquals(earliestInstantToRetain, cleanPlan.get().getEarliestInstantToRetain().getTimestamp(),
+              "clean until " + earliestInstantToRetain);
+      table.getMetaClient().reloadActiveTimeline();
+      table.clean(context, instantTime);
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
+      client.startCommitWithTime(instantTime);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      client.insert(recordsRDD, instantTime).collect();
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      earliestInstantToRetain = instantTime;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(instantTime, records);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context, writeConfig);
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
+      client.startCommitWithTime(instantTime);
+      client.upsertPreppedRecords(updatedTaggedRecordsRDD, instantTime).collect();
+
+      table.getMetaClient().reloadActiveTimeline();
+      // pending compaction
+      String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
+
+      for (int idx = 0; idx < 3; ++idx) {
+        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        records = dataGen.generateInsertsForPartition(instantTime, 1, partition2);
+        client.startCommitWithTime(instantTime);
+        client.insert(jsc.parallelize(records, 1), instantTime).collect();
+      }
+
+      // earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
+      table.getMetaClient().reloadActiveTimeline();
+      table.clean(context, instantTime);
+
     }
   }
 
