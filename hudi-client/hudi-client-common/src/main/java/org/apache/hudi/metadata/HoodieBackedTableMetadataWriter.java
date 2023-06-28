@@ -914,14 +914,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Since the restore has completed on the dataset, the latest write timeline instant is the one to which the
     // restore was performed. This should be always present.
     final String restoreToInstantTime = dataMetaClient.getActiveTimeline().getWriteTimeline()
-        .getReverseOrderedInstants().findFirst().get().getTimestamp();
+        .lastInstant().get().getTimestamp();
 
     // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
-    Option<HoodieInstant> lastCompaction = metadataMetaClient.getCommitTimeline().filterCompletedInstants().lastInstant();
-    if (lastCompaction.isPresent()) {
-      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(restoreToInstantTime, lastCompaction.get().getTimestamp())) {
-        String msg = String.format("Cannot restore MDT to %s because it is older than latest compaction at %s", restoreToInstantTime,
-            lastCompaction.get().getTimestamp()) + ". Please delete MDT and restore again";
+    Option<HoodieInstant> oldestCompaction = metadataMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
+    if (oldestCompaction.isPresent()) {
+      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(restoreToInstantTime, oldestCompaction.get().getTimestamp())) {
+        String msg = String.format("Cannot restore MDT to %s because it is before the oldest compaction at %s", restoreToInstantTime,
+            oldestCompaction.get().getTimestamp()) + ". Please delete MDT and restore again";
         LOG.error(msg);
         throw new HoodieMetadataException(msg);
       }
@@ -1016,7 +1016,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       }
     }
 
-    if (deltaCommitsInfo.get().getKey().containsInstant(deltaCommitInstant)) {
+    if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
       LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
       if (!getWriteClient().rollback(commitInstantTime, instantTime)) {
         throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitInstantTime);

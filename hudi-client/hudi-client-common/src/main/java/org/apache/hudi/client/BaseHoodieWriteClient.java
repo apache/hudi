@@ -74,6 +74,8 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -699,29 +701,29 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setConf(hadoopConf)
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
-        Option<HoodieInstant> latestMdtCompaction = mdtClient.getCommitTimeline().filterCompletedInstants().lastInstant();
+        Option<HoodieInstant> oldestMdtCompaction = mdtClient.getCommitTimeline().filterCompletedInstants().firstInstant();
         boolean deleteMDT = false;
-        if (latestMdtCompaction.isPresent()) {
-          if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(savepointTime, latestMdtCompaction.get().getTimestamp())) {
+        if (oldestMdtCompaction.isPresent()) {
+          if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().getTimestamp())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than oldest compaction %s on MDT",
-                savepointTime, latestMdtCompaction.get().getTimestamp()));
+                savepointTime, oldestMdtCompaction.get().getTimestamp()));
             deleteMDT = true;
           }
         }
 
-        HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
-        if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-          LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
-              savepointTime, mdtClient.getCommitsTimeline().firstInstant().get().getTimestamp()));
-          deleteMDT = true;
+        if (!deleteMDT) {
+          HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
+          if (mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+            LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
+                savepointTime, mdtClient.getCommitsTimeline().firstInstant().get().getTimestamp()));
+            deleteMDT = true;
+          }
         }
 
         if (deleteMDT) {
-          // TODO: this should use the correct API to delete from HoodieTableMetadataUtil so hoodie.properties is also updated
-          // To be fixed after HUDI-6200
-          mdtMetaClient.getFs().delete(new Path(metadataTableBasePathStr), true);
+          HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
           // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
           // so that we need to disable metadata initialized here.
           initializeMetadataTableIfNecessary = false;
