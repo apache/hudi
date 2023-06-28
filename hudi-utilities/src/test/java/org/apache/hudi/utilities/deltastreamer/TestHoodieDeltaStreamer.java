@@ -67,6 +67,7 @@ import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
@@ -138,6 +139,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -178,6 +180,8 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  private static final Random RANDOM = new Random(0xDEED);
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieDeltaStreamer.class);
 
@@ -703,6 +707,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // if we don't disable small file handling, log files may never get created and hence for MOR, compaction may not kick in.
+      cfg.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
+    }
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
@@ -1177,17 +1185,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testAsyncClusteringServiceWithCompaction(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/asyncClusteringCompaction";
+    String tableBasePath = basePath + "/asyncClusteringCompaction" + RANDOM.nextInt(1000);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 2000;
 
-    // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    // user upsert as operation type.
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(recordType, cfg.configs);
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
-    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", "true", "3"));
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", "true", "7"));
+    // if we don't disable small file handling, log files may never get created and hence for MOR, compaction may not kick in.
+    cfg.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
+    cfg.configs.add(String.format("%s=" + CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST.name(),
+        HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key()));
+    cfg.configs.add(String.format("%s=2", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key()));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    // dc1, dc2, dc3, c4.compac.req c4.comp.inf, dc5, dc6, c4.comp, dc7, rc8.req, rc8.inf, dc9, dc10, rc8, dc11.
+    // compaction and replace commits are async.
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtleastNCompactionCommits(2, tableBasePath, fs);
       TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, fs);
