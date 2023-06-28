@@ -66,9 +66,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       spark.sql(
         s"""
            |insert into $tableName2 values
-           |    (1, 'u1', 10, 100),
-           |    (3, 'u3', 30, 300),
-           |    (4, 'u4', 40, 400);
+           |    (1, 'u1', 10, 999),
+           |    (3, 'u3', 30, 9999),
+           |    (4, 'u4', 40, 99999);
            |""".stripMargin)
 
       spark.sql(

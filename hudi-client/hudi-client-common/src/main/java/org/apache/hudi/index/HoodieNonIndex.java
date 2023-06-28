@@ -43,7 +43,6 @@ public class HoodieNonIndex extends HoodieIndex<Object, Object> {
     return writeStatuses;
   }
 
-
   @Override
   public boolean rollbackCommit(String instantTime) {
     return false;

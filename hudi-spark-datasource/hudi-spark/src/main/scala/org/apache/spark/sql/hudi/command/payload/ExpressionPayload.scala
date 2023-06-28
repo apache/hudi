@@ -278,10 +278,10 @@ class ExpressionPayload(@transient record: GenericRecord,
     // TODO rebase onto JoinRecord
     val values = new Array[AnyRef](joinSchema.getFields.size())
     for (i <- 0 until joinSchema.getFields.size()) {
-      val value = if (i < leftSchema.getFields.size() - HoodieRecord.HOODIE_META_COLUMNS.size()) {
-        sourceRecord.get(i + HoodieRecord.HOODIE_META_COLUMNS.size())
+      val value = if (i < leftSchema.getFields.size()) {
+        sourceRecord.get(i)
       } else { // skip meta field
-        targetRecord.get(i - leftSchema.getFields.size() + 2*HoodieRecord.HOODIE_META_COLUMNS.size())
+        targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
       }
       values(i) = value
     }
@@ -464,9 +464,8 @@ object ExpressionPayload {
   private def getMergedSchema(source: Schema, target: Schema): Schema = {
     mergedSchemaCache.get((source, target), new Function[(Schema, Schema), Schema] {
       override def apply(t: (Schema, Schema)): Schema = {
-        val leftSchema = HoodieAvroUtils.removeMetadataFields(t._1)
         val rightSchema = HoodieAvroUtils.removeMetadataFields(t._2)
-        mergeSchema(leftSchema, rightSchema)
+        mergeSchema(t._1, rightSchema)
       }
     })
   }

@@ -114,7 +114,7 @@ object HoodieCreateRecordUtils {
 
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               isPrepped, isMITPrepped)
-            val avroRecWithoutMeta: GenericRecord = if (isPrepped) {
+            val avroRecWithoutMeta: GenericRecord = if (isPrepped || isMITPrepped) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
             } else {
               avroRec
