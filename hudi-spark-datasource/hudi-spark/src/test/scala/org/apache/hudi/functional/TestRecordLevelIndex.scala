@@ -25,16 +25,16 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{ActionType, HoodieBaseFile, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
-import org.apache.spark.storage.StorageLevel
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
@@ -403,12 +403,14 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
-    val lastCompactionInstant = compactionTimeline.filter(instant =>
-      HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
-        .getOperationType == WriteOperationType.COMPACT)
+    val lastCompactionInstant = compactionTimeline
+      .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+        HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
-      .filter(f => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)).findAny()
+      .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+      .findAny()
     assertTrue(compactionBaseFile.isPresent)
   }
 
@@ -431,7 +433,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     assertTrue(
-      metadataTableFSView.getTimeline.filter(instant => instant.getAction == ActionType.clean.name())
+      metadataTableFSView.getTimeline
+        .filter(JavaConversions.getPredicate(instant => instant.getAction == ActionType.clean.name()))
         .lastInstant()
         .isPresent)
   }
@@ -465,8 +468,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    metaClient.reloadActiveTimeline().filter(
-      s => Option(
+    metaClient.reloadActiveTimeline()
+      .filter(JavaConversions.getPredicate(s => Option(
         try {
           val commitMetadata = MetadataConversionUtils.getHoodieCommitMetadata(metaClient, s)
             .orElse(new HoodieCommitMetadata())
@@ -475,7 +478,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
           case _: Exception => new HoodieCommitMetadata()
         })
         .map(c => c.getOperationType == WriteOperationType.COMPACT)
-        .get)
+        .get))
       .lastInstant()
   }
 
@@ -527,7 +530,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
         prevDfOpt.get
       } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
         val overwrittenPartitions = latestBatchDf.select("partition")
-          .collectAsList().stream().map[String](r => r.getString(0)).collect(Collectors.toList[String])
+          .collectAsList().stream().map[String](JavaConversions.getFunction[Row, String](r => r.getString(0))).collect(Collectors.toList[String])
         val prevDf = prevDfOpt.get
         val latestSnapshot = prevDf
           .filter(not(col("partition").isInCollection(overwrittenPartitions)))
@@ -553,7 +556,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
     val props = new Properties()
-    props.putAll(JavaConverters.mapAsJavaMap(hudiOpts))
+    props.putAll(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
@@ -573,7 +576,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
     val recordIndexMap = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaList(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList))
+      JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
@@ -587,7 +590,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
     val deletedRows = deletedDf.collect()
     val recordIndexMapForDeletedRows = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaList(deletedRows.map(row => row.getAs("_row_key").toString).toList))
+      JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
