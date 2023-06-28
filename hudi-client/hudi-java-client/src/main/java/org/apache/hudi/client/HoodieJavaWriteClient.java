@@ -193,9 +193,9 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  protected List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
-                                        String instantTime,
-                                        HoodieTable hoodieTable) {
+  public List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
+                                     String instantTime,
+                                     HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
