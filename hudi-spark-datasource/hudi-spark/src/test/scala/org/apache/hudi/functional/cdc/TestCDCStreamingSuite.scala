@@ -28,7 +28,9 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.junit.platform.suite.api.IncludeTags
 
+@IncludeTags(Array("functional"))
 class TestCDCStreamingSuite extends HoodieCDCTestBase {
 
   /**
