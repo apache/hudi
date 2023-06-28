@@ -85,8 +85,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH;
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.NOT_PARSABLE_TIMESTAMPS;
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
@@ -120,29 +120,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-
-    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     HoodieTimeline completedCommitsTimeline = table.getCompletedCommitsTimeline();
     Option<HoodieInstant> latestCommit = completedCommitsTimeline.lastInstant();
     HoodieCleaningPolicy cleanerPolicy = config.getCleanerPolicy();
     int cleanerCommitsRetained = config.getCleanerCommitsRetained();
     int cleanerHoursRetained = config.getCleanerHoursRetained();
-
-    try {
-      earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
-          metaClient.getActiveTimeline().getCommitsTimeline(),
-          cleanerPolicy,
-          cleanerCommitsRetained,
-          latestCommit.isPresent() && (latestCommit.get().getTimestamp().length() == MILLIS_INSTANT_ID_LENGTH
-              ||  latestCommit.get().getTimestamp().length() == SECS_INSTANT_ID_LENGTH)
-              ? HoodieActiveTimeline.parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
-              : Instant.now(),
-          cleanerHoursRetained,
-          metaClient.getTableConfig().getTimelineTimezone());
-    } catch (ParseException e) {
-      LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());
-    }
-
+    Option<HoodieInstant> earliestCommitToRetain = getEarliestCommitToRetain(latestCommit, cleanerPolicy, cleanerCommitsRetained, cleanerHoursRetained);
     int configuredMinInstantsToKeep = config.getMinCommitsToKeep();
     int configuredMaxInstantsToKeep = config.getMaxCommitsToKeep();
     if (earliestCommitToRetain.isPresent()) {
@@ -183,6 +166,26 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       this.maxInstantsToKeep = configuredMaxInstantsToKeep;
       this.minInstantsToKeep = configuredMinInstantsToKeep;
     }
+  }
+
+  private Option<HoodieInstant> getEarliestCommitToRetain(Option<HoodieInstant> latestCommit, HoodieCleaningPolicy cleanerPolicy, int cleanerCommitsRetained, int cleanerHoursRetained) {
+    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+    try {
+      earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
+          metaClient.getActiveTimeline().getCommitsTimeline(),
+          cleanerPolicy,
+          cleanerCommitsRetained,
+          latestCommit.isPresent()
+              ? parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
+              : Instant.now(),
+          cleanerHoursRetained,
+          metaClient.getTableConfig().getTimelineTimezone());
+    } catch (ParseException e) {
+      if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getTimestamp().startsWith(ts))) {
+        LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());
+      }
+    }
+    return earliestCommitToRetain;
   }
 
   private Writer openWriter() {
