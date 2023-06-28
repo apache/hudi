@@ -37,29 +37,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.execution.ParquetFileMetaToWriteStatusConvertor.PREV_COMMIT;
+import static org.apache.hudi.execution.ParquetFileMetaToWriteStatusConvertor.TIME_TAKEN;
+
 /**
  * Write handle that is used to work on top of files rather than on individual records.
  */
-public class HoodieFileWriteHandler<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieFileWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileWriteHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileWriteHandle.class);
   private final Path path;
   private String prevCommit;
 
-  public HoodieFileWriteHandler(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                Path srcPath) {
+  public HoodieFileWriteHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                               String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                               Path oldFilePath) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
 
     // Output file path.
     this.path = makeNewPath(partitionPath);
-    this.prevCommit = srcPath.getName().split("_")[2].split("\\.")[0];
+    // Get the prev commit from existing or old file.
+    this.prevCommit = oldFilePath.getName().split("_")[2].split("\\.")[0];
 
     // Create inProgress marker file
     createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-    // TODO: Create inprogress marker here and remove above marker file creation, once the marker PR is landed.
+    // TODO: HUDI-6416 Create inprogress marker here and remove above marker file creation, once the marker PR is landed.
     // createInProgressMarkerFile(partitionPath,FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-    LOG.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
+    LOG.info("New HoodieFileWriteHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
   /**
@@ -71,21 +75,21 @@ public class HoodieFileWriteHandler<T extends HoodieRecordPayload, I, K, O> exte
     LOG.info("Closing the file " + this.fileId + " as we are done with the file.");
     try {
       Map<String, Object> executionConfigs = new HashMap<>();
-      executionConfigs.put("prevCommit", prevCommit);
-      executionConfigs.put("timeTaken", timer.endTimer());
+      executionConfigs.put(PREV_COMMIT, prevCommit);
+      executionConfigs.put(TIME_TAKEN, timer.endTimer());
 
       this.writeStatus = generateWriteStatus(path.toString(), partitionPath, executionConfigs);
 
-      // TODO: Create completed marker file here once the marker PR is landed.
+      // TODO: HUDI-6416 Create completed marker file here once the marker PR is landed.
       // createCompleteMarkerFile throws hoodieException, if marker directory is not present.
       // createCompletedMarkerFile(partitionPath);
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+      LOG.info(String.format("HoodieFileWriteHandle for partitionPath %s fileID %s, took %d ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
-      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
+      throw new HoodieInsertException("Failed to close the HoodieFileWriteHandle for path " + path, e);
     }
   }
 

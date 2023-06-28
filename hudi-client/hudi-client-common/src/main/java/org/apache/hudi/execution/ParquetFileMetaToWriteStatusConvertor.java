@@ -48,6 +48,8 @@ public class ParquetFileMetaToWriteStatusConvertor<T extends HoodieRecordPayload
   private final HoodieTable<T,I,K,O> hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final FileSystem fs;
+  public static final String PREV_COMMIT = "prevCommit";
+  public static final String TIME_TAKEN = "timeTaken";
 
   public ParquetFileMetaToWriteStatusConvertor(HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig writeConfig) {
     this.hoodieTable = hoodieTable;
@@ -87,7 +89,7 @@ public class ParquetFileMetaToWriteStatusConvertor<T extends HoodieRecordPayload
 
     // Set runtime stats
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
-    runtimeStats.setTotalCreateTime((long) executionConfigs.get("timeTaken"));
+    runtimeStats.setTotalCreateTime((long) executionConfigs.get(TIME_TAKEN));
     stat.setRuntimeStats(runtimeStats);
 
     // File size
@@ -100,7 +102,7 @@ public class ParquetFileMetaToWriteStatusConvertor<T extends HoodieRecordPayload
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setPath(new Path(writeConfig.getBasePath()), parquetFilePath);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-    stat.setPrevCommit(String.valueOf(executionConfigs.get("prevCommit")));
+    stat.setPrevCommit(String.valueOf(executionConfigs.get(PREV_COMMIT)));
 
     writeStatus.setStat(stat);
   }

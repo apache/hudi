@@ -43,11 +43,10 @@ public class ParquetToolsTestExecutionStrategy<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  protected void executeTools(Path srcFilePath, Path destFilePath) {
-
+  protected void executeTools(Path oldFilePath, Path newFilePath) {
     FileSystem fs = getHoodieTable().getMetaClient().getFs();
     try {
-      FileUtil.copy(fs, srcFilePath, fs, destFilePath, false, false, fs.getConf());
+      FileUtil.copy(fs, oldFilePath, fs, newFilePath, false, false, fs.getConf());
     } catch (IOException e) {
       throw new HoodieIOException("Exception in copying files.", e);
     }

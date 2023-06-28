@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.io.HoodieFileWriteHandler;
+import org.apache.hudi.io.HoodieFileWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,13 +67,13 @@ public abstract class ParquetToolsExecutionStrategy<T extends HoodieRecordPayloa
     ClusteringOperation clusteringOperation = clusteringOperations.get(0);
     String fileId = clusteringOperation.getFileId();
     String partitionPath = clusteringOperation.getPartitionPath();
-    String dataFilePath = clusteringOperation.getDataFilePath();
-    Path srcPath = new Path(dataFilePath);
-    HoodieFileWriteHandler writeHandler = new HoodieFileWriteHandler(getWriteConfig(), instantTime, getHoodieTable(),
-        partitionPath, fileId, taskContextSupplier, srcPath);
+    String dataFilePathStr = clusteringOperation.getDataFilePath();
+    Path oldFilePath = new Path(dataFilePathStr);
+    HoodieFileWriteHandle writeHandler = new HoodieFileWriteHandle(getWriteConfig(), instantTime, getHoodieTable(),
+        partitionPath, fileId, taskContextSupplier, oldFilePath);
 
     // Executes the parquet-tools command.
-    executeTools(srcPath, writeHandler.getPath());
+    executeTools(oldFilePath, writeHandler.getPath());
     return writeHandler.close().stream();
   }
 
@@ -82,7 +82,7 @@ public abstract class ParquetToolsExecutionStrategy<T extends HoodieRecordPayloa
    * In this method parquet-tools command can be created and executed.
    * Assuming that the parquet-tools command operate per file basis this interface allows command to run once per file.
    */
-  protected abstract void executeTools(Path srcFilePath, Path destFilePath);
+  protected abstract void executeTools(Path oldFilePath, Path newFilePath);
 
   /**
    * Since parquet-tools works at the file level, this method need not be used overridden.
@@ -92,6 +92,6 @@ public abstract class ParquetToolsExecutionStrategy<T extends HoodieRecordPayloa
       final Iterator<HoodieRecord<T>> records, final int numOutputGroups, final String instantTime,
       final Map<String, String> strategyParams, final Schema schema, final List<HoodieFileGroupId> fileGroupIdList,
       final boolean preserveHoodieMetadata, final TaskContextSupplier taskContextSupplier) {
-    return null;
+    throw new UnsupportedOperationException("Record iteration for parquet-tools is not supported.");
   }
 }
