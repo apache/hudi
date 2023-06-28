@@ -476,7 +476,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schemaIgnored, Properties propertiesIgnored) throws IOException {
-    if (key == null) {
+    if (key == null || this.isDeletedRecord) {
       return Option.empty();
     }
 
