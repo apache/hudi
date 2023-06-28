@@ -89,6 +89,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
@@ -423,6 +424,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return a unique timestamp for MDT
    */
   private String generateUniqueCommitInstantTime(String initializationTime) {
+    // if its initialized via Async indexer, we don't need to alter the init time
+    if (initializationTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()) {
+      return initializationTime;
+    }
     // Add suffix to initializationTime to find an unused instant time for the next index initialization.
     // This function would be called multiple times in a single application if multiple indexes are being
     // initialized one after the other.
