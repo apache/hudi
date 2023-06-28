@@ -247,7 +247,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
-    val df: DataFrame = joinedDataset
+    val df: DataFrame = sourceDataset
     //val df: DataFrame = sourceDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
@@ -263,6 +263,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
 
+  /*
   def joinData: LogicalPlan = {
     Join(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), JoinHint.NONE)
   }
@@ -273,6 +274,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val projectedData = Project(tablemetacols ++ incomingDataCols, joinData)
     Dataset.ofRows(sparkSession, projectedData)
   }
+   */
 
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
@@ -315,7 +317,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   def sourceDataset: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
-    val sourceTablePlan = mergeInto.sourceTable
+    val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+    val joinData = Join(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), JoinHint.NONE)
+    val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
+    val sourceTablePlan = Project(tablemetacols ++ incomingDataCols, joinData)
     val sourceTableOutput = sourceTablePlan.output
 
     val requiredAttributesMap = primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
@@ -543,8 +548,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    //sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
-    joinData.output.filterNot(a => isMetaField(a.name))
+    (sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
+    //joinData.output.filterNot(a => isMetaField(a.name))
   }
 
   private def resolvesToSourceAttribute(expr: Expression): Boolean = {

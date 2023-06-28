@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionBy
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases, NamedRelation, UnresolvedAttribute, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesByPath, HoodieTableChangesOptionsParser}
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
@@ -238,7 +238,6 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       case x: AnalysisException => throw x
     }
   }
-
 
 }
 
