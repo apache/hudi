@@ -26,15 +26,15 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -55,10 +55,13 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
     removeRecordIndexIfNeeded(table, context);
     syncCompactionRequestedFileToAuxiliaryFolder(table);
 
+    Map<ConfigProperty, String> updatedTableProps = new HashMap<>();
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    return CollectionUtils.createHashMap(
-        Pair.of(TABLE_METADATA_PARTITIONS, tableConfig.getString(TABLE_METADATA_PARTITIONS)),
-        Pair.of(TABLE_METADATA_PARTITIONS_INFLIGHT, tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT)));
+    Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS))
+        .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS, v));
+    Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))
+        .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS_INFLIGHT, v));
+    return updatedTableProps;
   }
 
   /**
