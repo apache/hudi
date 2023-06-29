@@ -502,6 +502,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       }
     }
 
+    // check preCombine field
+    StreamerUtil.checkPreCombineField(flinkConf, Arrays.asList(catalogTable.getSchema().getFieldNames()));
+
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);

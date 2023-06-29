@@ -318,6 +318,9 @@ public class HoodieCatalog extends AbstractCatalog {
     options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
     options.put(TableOptionProperties.PK_COLUMNS, pkColumns);
 
+    // check preCombine field
+    StreamerUtil.checkPreCombineField(conf, resolvedSchema);
+
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
       conf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);

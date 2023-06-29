@@ -19,6 +19,7 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -79,13 +80,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link HoodieHiveCatalog}.
  */
 public class TestHoodieHiveCatalog {
-  TableSchema.Builder builder = TableSchema.builder()
-      .field("uuid", DataTypes.INT().notNull())
-      .field("name", DataTypes.STRING())
-      .field("age", DataTypes.INT())
-      .field("par1", DataTypes.STRING())
-      .field("ts", DataTypes.BIGINT());
-  TableSchema schema = builder.primaryKey("uuid").build();
+  TableSchema schema =
+      TableSchema.builder()
+          .field("uuid", DataTypes.INT().notNull())
+          .field("name", DataTypes.STRING())
+          .field("age", DataTypes.INT())
+          .field("par1", DataTypes.STRING())
+          .field("ts", DataTypes.BIGINT())
+          .primaryKey("uuid")
+          .build();
   List<String> partitions = Collections.singletonList("par1");
   private static HoodieHiveCatalog hoodieCatalog;
   private final ObjectPath tablePath = new ObjectPath("default", "test");
@@ -211,10 +214,39 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
+  public void testCreateTableWithoutPreCombineField() {
+    Map<String, String> options1 = new HashMap<>();
+    options1.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    options1.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    Throwable throwable = assertThrows(HoodieCatalogException.class,
+        () -> hoodieCatalog.createTable(new ObjectPath("default", "tb1"),
+            new CatalogTableImpl(TableSchema.builder()
+                .field("uuid", DataTypes.INT().notNull())
+                .field("name", DataTypes.STRING())
+                .field("age", DataTypes.INT())
+                .field("par1", DataTypes.STRING())
+                .primaryKey("uuid").build(), options1, "hudi table"), true));
+    assertEquals("Option 'precombine.field' is required for payload class: org.apache.hudi.common.model.DefaultHoodieRecordPayload", throwable.getCause().getMessage());
+    Map<String, String> options2 = new HashMap<>();
+    options2.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    throwable = assertThrows(HoodieCatalogException.class,
+        () -> hoodieCatalog.createTable(new ObjectPath("default", "tb2"),
+            new CatalogTableImpl(schema, options2, "hudi table"), true));
+    assertEquals("Field not_exists does not exist in the table schema.Please check 'precombine.field' option.", throwable.getCause().getMessage());
+  }
+
+  @Test
   public void testCreateTableWithoutPrimaryKey() {
-    CatalogTable catalogTable = new CatalogTableImpl(builder.build(), Collections.emptyMap(), "hudi table");
-    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, catalogTable, true),
-        "Primary key definition is missing");
+    Throwable throwable = assertThrows(HoodieCatalogException.class,
+        () -> hoodieCatalog.createTable(tablePath,
+            new CatalogTableImpl(TableSchema.builder()
+                .field("uuid", DataTypes.INT().notNull())
+                .field("name", DataTypes.STRING())
+                .field("age", DataTypes.INT())
+                .field("par1", DataTypes.STRING())
+                .field("ts", DataTypes.BIGINT()).build(), Collections.singletonMap(FactoryUtil.CONNECTOR.key(), "hudi"), "hudi table"), true));
+    assertEquals("Primary key definition is missing", throwable.getCause().getMessage());
   }
 
   @ParameterizedTest

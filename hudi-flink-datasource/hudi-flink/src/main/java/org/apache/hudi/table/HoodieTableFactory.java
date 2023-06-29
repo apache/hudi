@@ -70,6 +70,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.util.StreamerUtil.checkPreCombineField;
 
 /**
  * Hoodie data source/sink factory.
@@ -167,7 +168,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
-      checkPreCombineKey(conf, schema);
+      checkPreCombineField(conf, schema);
     }
   }
 

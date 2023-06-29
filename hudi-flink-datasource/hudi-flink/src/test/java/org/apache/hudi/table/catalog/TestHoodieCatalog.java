@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -248,19 +250,49 @@ public class TestHoodieCatalog {
   }
 
   @Test
+  public void testCreateTableWithoutPreCombineField() {
+    Map<String, String> options1 = getDefaultCatalogOption();
+    options1.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    Throwable throwable = assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(new ObjectPath(TEST_DEFAULT_DATABASE, "tb1"),
+            new ResolvedCatalogTable(
+                CatalogTable.of(
+                    Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+                    "test",
+                    Collections.singletonList("partition"),
+                    options1),
+                CREATE_TABLE_SCHEMA
+            ), true));
+    assertEquals("Option 'precombine.field' is required for payload class: org.apache.hudi.common.model.DefaultHoodieRecordPayload", throwable.getMessage());
+    Map<String, String> options2 = getDefaultCatalogOption();
+    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    throwable = assertThrows(HoodieValidationException.class,
+        () -> catalog.createTable(new ObjectPath(TEST_DEFAULT_DATABASE, "tb2"),
+            new ResolvedCatalogTable(
+                CatalogTable.of(
+                    Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+                    "test",
+                    Collections.singletonList("partition"),
+                    options2),
+                CREATE_TABLE_SCHEMA
+            ), true));
+    assertEquals("Field not_exists does not exist in the table schema.Please check 'precombine.field' option.", throwable.getMessage());
+  }
+
+  @Test
   public void testCreateTableWithoutPrimaryKey() {
-    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
     ResolvedSchema resolvedSchema = ResolvedSchema.of(EXPECTED_TABLE_COLUMNS);
-    CatalogTable catalogTable = new ResolvedCatalogTable(
-        CatalogTable.of(
-            Schema.newBuilder().fromResolvedSchema(resolvedSchema).build(),
-            "test",
-            Collections.singletonList("partition"),
-            EXPECTED_OPTIONS),
-        resolvedSchema
-    );
-    assertThrows(CatalogException.class, () -> catalog.createTable(tablePath, catalogTable, true),
-        "Primary key definition is missing");
+    Throwable throwable = assertThrows(CatalogException.class,
+        () -> catalog.createTable(new ObjectPath(TEST_DEFAULT_DATABASE, "tb1"),
+            new ResolvedCatalogTable(
+                CatalogTable.of(
+                    Schema.newBuilder().fromResolvedSchema(resolvedSchema).build(),
+                    "test",
+                    Collections.singletonList("partition"),
+                    EXPECTED_OPTIONS),
+                resolvedSchema
+            ), true));
+    assertEquals("Primary key definition is missing", throwable.getMessage());
   }
 
   @Test
