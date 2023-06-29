@@ -20,6 +20,7 @@ hoodie.datasource.hive_sync.support_timestamp  false
 It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
 
 By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable.
+- [**Parquet Configs**](#PARQUET_CONFIG): These configs makes it possible to bring native parquet features
 - [**Spark Datasource Configs**](#SPARK_DATASOURCE): These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
 - [**Flink Sql Configs**](#FLINK_SQL): These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
 - [**Write Client Configs**](#WRITE_CLIENT): Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
@@ -45,6 +46,10 @@ hoodie.datasource.hive_sync.support_timestamp  false
 It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
 
 By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable.
+
+## Parquet Config {#PARQUET_CONFIG}
+
+Hudi supports [parquet modular encryption](/docs/encryption) and [parquet bloom filters](/docs/parquet_bloom) through hadoop configurations.
 
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
@@ -197,9 +202,7 @@ Options useful for reading tables via `read.format.option(...)`
 
 ### Write Options {#Write-Options}
 
-Hudi supports [parquet modular encryption](/docs/encryption) and [parquet bloom filters](/docs/parquet_bloom) through hadoop configurations.
-
-In addition, you can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
+You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
 
 
 ```java
