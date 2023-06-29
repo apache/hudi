@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -45,8 +44,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,20 +54,25 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getFs;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.hadoop.testutils.InputFormatTestUtil.writeDataBlockToLogFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieMergeOnReadSnapshotReader extends TestHoodieRealtimeRecordReader {
+public class TestHoodieMergeOnReadSnapshotReader {
 
-  private static final String PARTITION_COLUMN = "datestr";
+  private static final int TOTAL_RECORDS = 100;
   private static final String FILE_ID = "fileid0";
   private JobConf baseJobConf;
   private FileSystem fs;
   private Configuration hadoopConf;
+
+  @TempDir
+  public java.nio.file.Path basePath;
 
   @BeforeEach
   public void setUp() {
@@ -80,12 +84,22 @@ public class TestHoodieMergeOnReadSnapshotReader extends TestHoodieRealtimeRecor
     fs = getFs(basePath.toUri().toString(), baseJobConf);
   }
 
-  @TempDir
-  public java.nio.file.Path basePath;
+  @AfterEach
+  public void tearDown() throws Exception {
+    if (fs != null) {
+      fs.delete(new Path(basePath.toString()), true);
+      fs.close();
+    }
+  }
 
   @Test
   public void testSnapshotReader() throws Exception {
     testReaderInternal(false, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK);
+  }
+
+  @Test
+  public void testSnapshotReaderPartitioned() throws Exception {
+    testReaderInternal(true, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK);
   }
 
   private void testReaderInternal(boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
@@ -93,9 +107,9 @@ public class TestHoodieMergeOnReadSnapshotReader extends TestHoodieRealtimeRecor
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
-    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
+    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, TOTAL_RECORDS, baseInstant,
         HoodieTableType.MERGE_ON_READ)
-        : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant,
+        : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, TOTAL_RECORDS, baseInstant,
         HoodieTableType.MERGE_ON_READ);
 
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
@@ -125,46 +139,35 @@ public class TestHoodieMergeOnReadSnapshotReader extends TestHoodieRealtimeRecor
             action.equals(HoodieTimeline.ROLLBACK_ACTION) ? String.valueOf(baseInstantTs + logVersion - 2)
                 : instantTime;
 
-        HoodieLogFormat.Writer writer;
-        if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = InputFormatTestUtil.writeRollback(partitionDir, fs, FILE_ID, baseInstant, instantTime,
-              String.valueOf(baseInstantTs + logVersion - 1), logVersion);
-        } else {
-          writer =
-              InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, FILE_ID, baseInstant,
-                  instantTime, 120, 0, logVersion, logBlockType);
-        }
+        HoodieLogFormat.Writer writer = writeDataBlockToLogFile(
+            partitionDir,
+            fs,
+            schema,
+            FILE_ID,
+            baseInstant,
+            latestInstant,
+            120,
+            0,
+            logVersion,
+            logBlockType);
         long size = writer.getCurrentSize();
         writer.close();
         assertTrue(size > 0, "block - size should be > 0");
         FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
-
-        // create a split with baseFile (parquet file written earlier) and new log file(s)
         fileSlice.addLogFile(writer.getLogFile());
-        HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-            new FileSplit(new Path(baseFilePath), 0, 1, baseJobConf),
-            basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-            .collect(Collectors.toList()),
-            instantTime,
-            false,
-            Option.empty());
 
         HoodieMergeOnReadSnapshotReader snapshotReader = new HoodieMergeOnReadSnapshotReader(
             basePath.toString(),
             fileSlice.getBaseFile().get().getPath(),
             fileSlice.getLogFiles().collect(Collectors.toList()),
-            instantTime,
+            latestInstant,
             schema,
             baseJobConf,
             0,
-            1,
+            size,
             new String[0]);
-
-        List<HoodieRecord> records = new ArrayList<>();
-        while (snapshotReader.hasNext()) {
-          records.add(snapshotReader.next());
-        }
-        assertEquals(100, records.size());
+        Map<String, HoodieRecord> records = snapshotReader.getRecordsByKey();
+        assertEquals(TOTAL_RECORDS, records.size());
         snapshotReader.close();
       } catch (Exception ioe) {
         throw new HoodieException(ioe.getMessage(), ioe);
