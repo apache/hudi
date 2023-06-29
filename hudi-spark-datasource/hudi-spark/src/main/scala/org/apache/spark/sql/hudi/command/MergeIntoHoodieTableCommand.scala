@@ -35,7 +35,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeE
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, LessThanOrEqual, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
@@ -127,18 +127,68 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expression involving [[source]] column(s), we will have to add "phony" column matching the
    * primary-key one of the target table.
    */
-  private lazy val primaryKeyAttributeToConditionExpression: Seq[(Attribute, Expression)] = {
+  private lazy val recordKeyAttributeToConditionExpression: Seq[(Attribute, Expression)] = {
+    val primaryKeyFields = hoodieCatalogTable.tableConfig.getRecordKeyFields
     val conditions = splitConjunctivePredicates(mergeInto.mergeCondition)
-    if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
-      throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement " +
-        s"(provided ${mergeInto.mergeCondition.sql}")
+    if (primaryKeyFields.isPresent) {
+      //pkless tables can have more complex conditions
+      if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
+        throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on primary key table" +
+          s"(provided ${mergeInto.mergeCondition.sql}")
+      }
     }
-
     val resolver = sparkSession.sessionState.analyzer.resolver
-    val primaryKeyField = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp
+    val partitionPathFields = hoodieCatalogTable.tableConfig.getPartitionFields
+    //ensure all primary key fields are part of the merge condition
+    //allow partition path to be part of the merge condition but not required
+    val targetAttr2ConditionExpressions = doCasting(conditions, primaryKeyFields.isPresent)
+    val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions:_*)
+    var recordkeyFields: Seq[(String,String)] = Seq.empty
+    if (primaryKeyFields.isPresent) {
+     recordkeyFields = recordkeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
+    }
+    if (partitionPathFields.isPresent) {
+      recordkeyFields = recordkeyFields ++ partitionPathFields.get().map(pp => ("partitionPath", pp)).toSeq
+    }
+    val resolvedCols = recordkeyFields.map(rk => {
+      val resolving = expressionSet.collectFirst {
+        case (attr, expr) if resolver(attr.name, rk._2) =>
+          // NOTE: Here we validate that condition expression involving record-key column(s) is a simple
+          //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
+          //       statements like following
+          //
+          //         MERGE INTO ... AS t USING (
+          //            SELECT ... FROM ... AS s
+          //         )
+          //            ON t.id = s.id + 1
+          //            WHEN MATCHED THEN UPDATE *
+          //
+          //       Which (in the current design) could result in a primary key of the record being modified,
+          //       which is not allowed.
+          if (!resolvesToSourceAttribute(expr)) {
+            throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
+              s"primary-key and partition path column. Found `${attr.sql} = ${expr.sql}`")
+          }
+          expressionSet.remove((attr, expr))
+          (attr, expr)
+      }
+      if (resolving.isEmpty && rk._1.equals("primaryKey")) {
+        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found'")
+      }
+      resolving.get
+    })
 
+    if (expressionSet.nonEmpty && primaryKeyFields.isPresent) {
+      //if pkless additional expressions are allowed
+      throw new AnalysisException(s"Only simple conditions of the form `t.id = s.id` using primary key or partition path columns are allowed on tables with primary key. " +
+        s"(illegal column(s) used: `${expressionSet.map(x => x._1.name).mkString("`,`")}`")
+    }
+    resolvedCols
+  }
+
+
+  private def doCasting(conditions: Seq[Expression], pkTable: Boolean): Seq[(Attribute, Expression)] = {
     val targetAttrs = mergeInto.targetTable.outputSet
-
     val exprUtils = sparkAdapter.getCatalystExpressionUtils
     // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
     // in case both of them are casted to the same type (which might be result of either explicit casting
@@ -148,7 +198,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // as they are w/o the ability of transforming them w/ custom expressions (unlike in vanilla Spark flow).
     //
     // Check out HUDI-4861 for more details
-    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map(stripCasting)
+    val cleanedConditions = conditions.map(stripCasting)
 
     // Expressions of the following forms are supported:
     //    `target.id = <expr>` (or `<expr> = target.id`)
@@ -158,7 +208,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // target table side (since we're gonna be matching against primary-key column as is) expression
     // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
     // t/h "up-cast" (ie w/o any loss in precision)
-    val targetAttr2ConditionExpressions = cleanedConditions.map {
+    cleanedConditions.collect {
       case EqualTo(CoercedAttributeReference(attr), expr) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
         if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
           // NOTE: It's critical we reference output attribute here and not the one from condition
@@ -179,32 +229,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
         }
 
-      case expr =>
+      case expr if pkTable =>
         throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
           + "expected condition should be 'target.id = <source-column-expr>', e.g. "
           + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
-    }
-
-    targetAttr2ConditionExpressions.collect {
-      case (attr, expr) if resolver(attr.name, primaryKeyField) =>
-        // NOTE: Here we validate that condition expression involving primary-key column(s) is a simple
-        //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
-        //       statements like following
-        //
-        //         MERGE INTO ... AS t USING (
-        //            SELECT ... FROM ... AS s
-        //         )
-        //            ON t.id = s.id + 1
-        //            WHEN MATCHED THEN UPDATE *
-        //
-        //       Which (in the current design) could result in a primary key of the record being modified,
-        //       which is not allowed.
-        if (!resolvesToSourceAttribute(expr)) {
-          throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
-            s"primary-key column. Found `${attr.sql} = ${expr.sql}`")
-        }
-
-        (attr, expr)
     }
   }
 
@@ -247,12 +275,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
-    val df: DataFrame = sourceDataset
-    //val df: DataFrame = sourceDataset
+    val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     // Do the upsert
-    executeUpsert(df, props)
+    executeUpsert(sourceDF, props)
     // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
@@ -262,19 +289,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
-
-  /*
-  def joinData: LogicalPlan = {
-    Join(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), JoinHint.NONE)
-  }
-
-  def joinedDataset: DataFrame = {
-    val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedData = Project(tablemetacols ++ incomingDataCols, joinData)
-    Dataset.ofRows(sparkSession, projectedData)
-  }
-   */
 
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
@@ -323,12 +337,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val sourceTablePlan = Project(tablemetacols ++ incomingDataCols, joinData)
     val sourceTableOutput = sourceTablePlan.output
 
-    val requiredAttributesMap = primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
+    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => sourceTableOutput.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
+    assert(missingAttributesMap.isEmpty)
     // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
     //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
     //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
@@ -537,6 +552,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       check its corresponding java-doc for more details) we have to get up-to-date list
     //       of its output attributes
     val joinedExpectedOutputAttributes = joinedExpectedOutput
+
     bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false)
   }
 
@@ -549,7 +565,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
     (sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
-    //joinData.output.filterNot(a => isMetaField(a.name))
   }
 
   private def resolvesToSourceAttribute(expr: Expression): Boolean = {
@@ -595,7 +610,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val overridingOpts = Map(
       "path" -> path,
-      RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
+      RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
       PRECOMBINE_FIELD.key -> preCombineField,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
@@ -614,7 +629,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
-      DATASOURCE_WRITE_MIT_PREPPED_KEY -> "true",
 
         // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
@@ -686,7 +700,7 @@ object MergeIntoHoodieTableCommand {
     }
   }
 
-  def stripCasting(expr: EqualTo): EqualTo = expr match {
+  def stripCasting(expr: Expression): Expression = expr match {
     case EqualTo(MatchCast(leftExpr, leftTargetType, _, _), MatchCast(rightExpr, rightTargetType, _, _))
       if leftTargetType.sameType(rightTargetType) => EqualTo(leftExpr, rightExpr)
     case _ => expr

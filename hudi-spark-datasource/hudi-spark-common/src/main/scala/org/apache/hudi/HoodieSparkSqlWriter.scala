@@ -348,8 +348,8 @@ object HoodieSparkSqlWriter {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val isMITPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_MIT_PREPPED_KEY, false)
-            val processedDataSchema = if (isPrepped || isMITPrepped) {
+            val mergeIntoWrites = parameters.getOrDefault(SQL_MERGE_INTO_WRITES.key(), SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+            val processedDataSchema = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
@@ -365,13 +365,11 @@ object HoodieSparkSqlWriter {
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == HoodieTableType.MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
-//            if (isMITPrepped) {
-//              writeConfig.setValue("_hoodie.datasource.write.mergeInto.prepped", "true")
-//            }
             // Convert to RDD[HoodieRecord]
             val hoodieRecords =
-              HoodieCreateRecordUtils.createHoodieRecordRdd(df, writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                processedDataSchema, operation, instantTime, isPrepped, isMITPrepped)
+              HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(df,
+                writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
+                processedDataSchema, operation, instantTime, isPrepped, mergeIntoWrites))
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)

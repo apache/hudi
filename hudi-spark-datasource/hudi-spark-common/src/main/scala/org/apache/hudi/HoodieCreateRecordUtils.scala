@@ -46,17 +46,31 @@ import scala.collection.JavaConversions.mapAsJavaMap
 object HoodieCreateRecordUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
-  def createHoodieRecordRdd(df: DataFrame,
-                            config: HoodieWriteConfig,
-                            parameters: Map[String, String],
-                            recordName: String,
-                            recordNameSpace: String,
-                            writerSchema: Schema,
-                            dataFileSchema: Schema,
-                            operation: WriteOperationType,
-                            instantTime: String,
-                            isPrepped: Boolean,
-                            isMITPrepped: Boolean) = {
+  case class createHoodieRecordRddArgs(df: DataFrame,
+                                       config: HoodieWriteConfig,
+                                       parameters: Map[String, String],
+                                       recordName: String,
+                                       recordNameSpace: String,
+                                       writerSchema: Schema,
+                                       dataFileSchema: Schema,
+                                       operation: WriteOperationType,
+                                       instantTime: String,
+                                       isPrepped: Boolean,
+                                       mergeIntoWrites: Boolean)
+
+  def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
+    val df = args.df
+    val config = args.config
+    val parameters = args.parameters
+    val recordName = args.recordName
+    val recordNameSpace = args.recordNameSpace
+    val writerSchema = args.writerSchema
+    val dataFileSchema = args.dataFileSchema
+    val operation = args.operation
+    val instantTime = args.instantTime
+    val isPrepped = args.isPrepped
+    val mergeIntoWrites = args.mergeIntoWrites
+
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
     val autoGenerateRecordKeys: Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -113,8 +127,8 @@ object HoodieCreateRecordUtils {
             }
 
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
-              isPrepped, isMITPrepped)
-            val avroRecWithoutMeta: GenericRecord = if (isPrepped || isMITPrepped) {
+              isPrepped, mergeIntoWrites)
+            val avroRecWithoutMeta: GenericRecord = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
             } else {
               avroRec
@@ -171,7 +185,7 @@ object HoodieCreateRecordUtils {
               // Do validation only once.
               validatePreppedRecord = false
             }
-            val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped, isMITPrepped)
+            val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped, mergeIntoWrites)
 
             val targetRow = finalStructTypeRowWriter(sourceRow)
             var hoodieSparkRecord = new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
@@ -207,7 +221,7 @@ object HoodieCreateRecordUtils {
   }
 
   def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: Option[BaseKeyGenerator], avroRec: GenericRecord,
-                                                 isPrepped: Boolean, isMITPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                 isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     val recordKey = if (isPrepped) {
       avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
@@ -221,13 +235,13 @@ object HoodieCreateRecordUtils {
     }
 
     val hoodieKey = new HoodieKey(recordKey, partitionPath)
-    val instantTime: Option[String] = if (isPrepped || isMITPrepped) {
+    val instantTime: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(avroRec.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).map(_.toString)
     }
     else {
       None
     }
-    val fileName: Option[String] = if (isPrepped || isMITPrepped) {
+    val fileName: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(avroRec.get(HoodieRecord.FILENAME_METADATA_FIELD)).map(_.toString)
     }
     else {
@@ -244,7 +258,7 @@ object HoodieCreateRecordUtils {
 
   def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: Option[SparkKeyGeneratorInterface],
                                                   sourceRow: InternalRow, schema: StructType,
-                                                  isPrepped: Boolean, isMITPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                  isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     val recordKey = if (isPrepped) {
       sourceRow.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD)
     } else {
@@ -257,13 +271,13 @@ object HoodieCreateRecordUtils {
       sparkKeyGenerator.get.getPartitionPath(sourceRow, schema).toString
     }
 
-    val instantTime: Option[String] = if (isPrepped || isMITPrepped) {
+    val instantTime: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(sourceRow.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD))
     } else {
       None
     }
 
-    val fileName: Option[String] = if (isPrepped || isMITPrepped) {
+    val fileName: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(sourceRow.getString(HoodieRecord.FILENAME_META_FIELD_ORD))
     } else {
       None

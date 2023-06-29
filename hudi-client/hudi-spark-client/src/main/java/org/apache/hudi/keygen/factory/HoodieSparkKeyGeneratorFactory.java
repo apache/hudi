@@ -76,7 +76,7 @@ public class HoodieSparkKeyGeneratorFactory {
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = getKeyGeneratorClassName(props);
-    boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props);
+    boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props) && !props.getBoolean("hoodie.internal.sql.merge.into.writes",false);
     try {
       KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
       if (autoRecordKeyGen) {
