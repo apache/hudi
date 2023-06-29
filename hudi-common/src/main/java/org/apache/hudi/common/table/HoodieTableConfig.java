@@ -372,7 +372,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (found) {
       throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
     } else {
-      throw new HoodieIOException("Failed to read hoodie properties");
+      throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
   }
 
