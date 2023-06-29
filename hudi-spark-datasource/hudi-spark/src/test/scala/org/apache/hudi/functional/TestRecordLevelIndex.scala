@@ -23,13 +23,15 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
@@ -40,11 +42,15 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 import java.util.{Collections, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.language.postfixOps
 import scala.util.Using
 
 @Tag("functional")
@@ -461,6 +467,53 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
         .filter(JavaConversions.getPredicate(instant => instant.getAction == ActionType.clean.name()))
         .lastInstant()
         .isPresent)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithMultiWriter(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[IngestionPrimaryWriterBasedConflictResolutionStrategy].getName
+    )
+
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+
+    val executor = Executors.newFixedThreadPool(2)
+    implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+    val function = new Function0[Boolean] {
+      override def apply(): Boolean = {
+        try {
+          doWriteAndValidateDataAndRecordIndex(hudiOpts,
+            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+            saveMode = SaveMode.Append,
+            validate = false)
+          true
+        } catch {
+          case _: HoodieWriteConflictException => false
+          case e => throw new Exception("Multi write failed", e)
+        }
+      }
+    }
+    val f1 = Future[Boolean] {
+      function.apply()
+    }
+    val f2 = Future[Boolean] {
+      function.apply()
+    }
+
+    Await.result(f1, Duration("5 minutes"))
+    Await.result(f2, Duration("5 minutes"))
+
+    assertTrue(f1.value.get.get || f2.value.get.get)
+    executor.shutdownNow()
+    validateDataAndRecordIndices(hudiOpts)
   }
 
   private def rollbackLastInstant(hudiOpts: Map[String, String]): Unit = {
