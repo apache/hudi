@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -81,13 +82,15 @@ object HoodieCreateRecordUtils {
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
         ).toBoolean
-    } else if (!(isPrepped || mergeIntoWrites) && WriteOperationType.isUpsert(operation)) {
+    } else if (mergeIntoWrites && StringUtils.isNullOrEmpty(config.getString(PRECOMBINE_FIELD))) {
+      false
+    } else if (!isPrepped && WriteOperationType.isUpsert(operation)) {
       parameters.getOrElse(
         HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key(),
         HoodieWriteConfig.COMBINE_BEFORE_UPSERT.defaultValue()
       ).toBoolean
     } else {
-      !isPrepped || mergeIntoWrites
+      !isPrepped
     }
 
     // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework

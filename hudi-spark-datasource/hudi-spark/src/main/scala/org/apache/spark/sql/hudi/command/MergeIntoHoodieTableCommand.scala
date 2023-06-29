@@ -173,10 +173,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           (attr, expr)
       }
       if (resolving.isEmpty && rk._1.equals("primaryKey")) {
-        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found'")
+        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
       }
-      resolving.get
-    })
+      resolving
+    }).filter(_.nonEmpty).map(_.get)
 
     if (expressionSet.nonEmpty && primaryKeyFields.isPresent) {
       //if pkless additional expressions are allowed
@@ -232,7 +232,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case expr if pkTable =>
         throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
           + "expected condition should be 'target.id = <source-column-expr>', e.g. "
-          + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
+          + "`t.id = s.id` or `t.id = cast(s.id, ...)")
     }
   }
 
@@ -343,7 +343,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case (keyAttr, _) => sourceTableOutput.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
-    assert(missingAttributesMap.isEmpty)
+    // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
+    // we add an additional column that is an alias of "s0.s_id" named "id"
     // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
     //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
     //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
@@ -382,7 +383,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expressions to the ExpressionPayload#getInsertValue.
    */
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
-    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, "")) && updatingActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
@@ -517,7 +518,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
                 }
               case _ =>
                 throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
-                  s"(provided: `${assignments.map(_.sql).mkString(",")}`")
+                  s"(provided: `${assignments.map(_.sql).mkString(",")}`)")
             }
         }
       }
@@ -662,17 +663,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def checkInsertingActions(insertActions: Seq[InsertAction]): Unit = {
     insertActions.foreach(insert =>
       assert(insert.assignments.length <= targetTableSchema.length,
-        s"The number of insert assignments[${insert.assignments.length}] must less than or equal to the " +
+        s"The number of insert assignments[${insert.assignments.length}] must be less than or equal to the " +
           s"targetTable field size[${targetTableSchema.length}]"))
 
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction]): Unit = {
-
-    //updateActions.foreach(update =>
-    //  assert(update.assignments.length == targetTableSchema.length,
-    //    s"The number of update assignments[${update.assignments.length}] must equal to the " +
-    //      s"targetTable field size[${targetTableSchema.length}]"))
+    if (hoodieCatalogTable.preCombineKey.isEmpty && updateActions.nonEmpty) {
+      logWarning(s"Updates without precombine can have nondeterministic behavior")
+    }
+    updateActions.foreach(update =>
+      assert(update.assignments.length <= targetTableSchema.length,
+        s"The number of update assignments[${update.assignments.length}] must be less than or equalequal to the " +
+          s"targetTable field size[${targetTableSchema.length}]"))
 
     // For MOR table, the target table field cannot be the right-value in the update action.
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {

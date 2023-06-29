@@ -93,6 +93,32 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
            |when not matched then insert *
            |""".stripMargin)("Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
         "columns are allowed on tables with primary key. (illegal column(s) used: `price`")
+
+      //test with multiple pks
+      val tableName3 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName3 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName3'
+           | tblproperties (
+           |  primaryKey ='id,name',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      checkException(
+        s"""
+           |merge into $tableName3 as oldData
+           |using $tableName2
+           |on oldData.id = $tableName2.id
+           |when matched then update set oldData.name = $tableName2.name
+           |when not matched then insert *
+           |""".stripMargin)("Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found")
     }
   }
 

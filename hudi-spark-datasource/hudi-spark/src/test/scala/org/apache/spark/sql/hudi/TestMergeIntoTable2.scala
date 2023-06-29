@@ -634,7 +634,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as id1, 1 as id2, 'a1' as name, 11 as price, 110 as ts, '2022-08-19' as dt union all
            |  select 1 as id1, 2 as id2, 'a2' as name, 10 as price, 100 as ts, '2022-08-18' as dt
            | ) as s0
-           | on t0.id1 = s0.id1
+           | on t0.id1 = s0.id1 and t0.id2 = s0.id2
            | when not matched then insert *
          """.stripMargin
       )
@@ -884,10 +884,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
          """.stripMargin
           )
           checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a1", 10.1, 1000, "2021-03-21"),
             Seq(1, "a2", 10.2, 1002, "2021-03-21"),
-            Seq(3, "a3", 10.3, 1003, "2021-03-21"),
-            Seq(1, "a2", 10.2, 1002, "2021-03-21")
+            Seq(1, "a2", 10.2, 1002, "2021-03-21"),
+            Seq(3, "a3", 10.3, 1003, "2021-03-21")
           )
         }
       }
