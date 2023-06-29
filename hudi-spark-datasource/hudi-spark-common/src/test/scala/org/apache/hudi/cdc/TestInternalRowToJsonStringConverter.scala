@@ -41,34 +41,38 @@ class TestInternalRowToJsonStringConverter {
   def nonEmptyRow(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, UTF8String.fromString("foo")))
     val converted = converter.convertRowToJsonString(row)
-    assertEquals("{\"name\":\"foo\",\"uuid\":1}", converted.toString)
+    assertEquals("""{"name":"foo","uuid":1}""", converted.toString)
   }
 
   @Test
   def emptyString(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, UTF8String.EMPTY_UTF8))
     val converted = converter.convertRowToJsonString(row)
-    assertEquals("{\"name\":\"\",\"uuid\":1}", converted.toString)
+    assertEquals("""{"name":"","uuid":1}""", converted.toString)
   }
 
   @Test
   def nullString(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, null))
     val converted = converter.convertRowToJsonString(row)
-    assertEquals("{\"uuid\":1}", converted.toString)
+    assertEquals("""{"uuid":1}""", converted.toString)
   }
 
   private def hoodieTableSchema: HoodieTableSchema = {
     val structTypeSchema = new StructType(Array[StructField](
       StructField("uuid", DataTypes.IntegerType, nullable = false, Metadata.empty),
       StructField("name", DataTypes.StringType, nullable = true, Metadata.empty)))
-    val avroSchemaStr: String = "{\"type\": \"record\",\"name\": \"test\",\"fields\": [{\"name\": \"uuid\",\"type\": \"int\"},{\"name\": \"name\",\"type\": \"string\"}]}"
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "uuid", "type": "int"},
+        |{"name": "name", "type": "string"}
+        |]}""".stripMargin
     HoodieTableSchema(structTypeSchema, avroSchemaStr, Option.empty[InternalSchema])
   }
 
   private def emptyHoodieTableSchema: HoodieTableSchema = {
     val structTypeSchema = new StructType()
-    val avroSchemaStr = "{\"type\": \"record\",\"name\": \"test\",\"fields\": []}"
+    val avroSchemaStr = """{"type": "record", "name": "test", "fields": []}"""
     HoodieTableSchema(structTypeSchema, avroSchemaStr, Option.empty[InternalSchema])
   }
 }
