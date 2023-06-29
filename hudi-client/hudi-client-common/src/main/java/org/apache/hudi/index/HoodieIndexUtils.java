@@ -137,23 +137,34 @@ public class HoodieIndexUtils {
   /**
    * Get tagged record for the passed in {@link HoodieRecord}.
    *
-   * @param inputRecord instance of {@link HoodieRecord} for which tagging is requested
-   * @param location    {@link HoodieRecordLocation} for the passed in {@link HoodieRecord}
+   * @param record   instance of {@link HoodieRecord} for which tagging is requested
+   * @param location {@link HoodieRecordLocation} for the passed in {@link HoodieRecord}
    * @return the tagged {@link HoodieRecord}
    */
-  public static <R> HoodieRecord<R> getTaggedRecord(HoodieRecord<R> inputRecord, Option<HoodieRecordLocation> location) {
-    HoodieRecord<R> record = inputRecord;
+  public static <R> HoodieRecord<R> tagAsNewRecordIfNeeded(HoodieRecord<R> record, Option<HoodieRecordLocation> location) {
     if (location.isPresent()) {
       // When you have a record in multiple files in the same partition, then <row key, record> collection
       // will have 2 entries with the same exact in memory copy of the HoodieRecord and the 2
       // separate filenames that the record is found in. This will result in setting
       // currentLocation 2 times and it will fail the second time. So creating a new in memory
       // copy of the hoodie record.
-      record = inputRecord.newInstance();
-      record.unseal();
-      record.setCurrentLocation(location.get());
-      record.seal();
+      HoodieRecord<R> newRecord = record.newInstance();
+      newRecord.unseal();
+      newRecord.setCurrentLocation(location.get());
+      newRecord.seal();
+      return newRecord;
+    } else {
+      return record;
     }
+  }
+
+  /**
+   * Tag the record to an existing location. Not creating any new instance.
+   */
+  public static <R> HoodieRecord<R> tagRecord(HoodieRecord<R> record, HoodieRecordLocation location) {
+    record.unseal();
+    record.setCurrentLocation(location);
+    record.seal();
     return record;
   }
 
@@ -286,30 +297,28 @@ public class HoodieIndexUtils {
           Option<HoodieRecord<R>> existingOpt = entry.getRight();
           if (!existingOpt.isPresent()) {
             // existing record not found (e.g., due to delete log not merged to base file): tag as a new record
-            return Collections.singletonList(getTaggedRecord(incoming, Option.empty())).iterator();
+            return Collections.singletonList(incoming).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
           Schema writeSchema = new Schema.Parser().parse(config.getWriteSchema());
           if (incoming.isDelete(writeSchema, config.getProps())) {
             // incoming is a delete: force tag the incoming to the old partition
-            return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();
+            return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
 
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config, recordMerger);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
-            return Collections.singletonList(getTaggedRecord(incoming.newInstance(existing.getKey()), Option.of(existing.getCurrentLocation()))).iterator();
+            return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
           HoodieRecord<R> merged = mergedOpt.get();
           if (Objects.equals(merged.getPartitionPath(), existing.getPartitionPath())) {
             // merged record has the same partition: route the merged result to the current location as an update
-            return Collections.singletonList(getTaggedRecord(merged, Option.of(existing.getCurrentLocation()))).iterator();
+            return Collections.singletonList(tagRecord(merged, existing.getCurrentLocation())).iterator();
           } else {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
             HoodieRecord<R> deleteRecord = createDeleteRecord(config, existing.getKey());
-            deleteRecord.setCurrentLocation(existing.getCurrentLocation());
-            deleteRecord.seal();
-            return Arrays.asList(deleteRecord, getTaggedRecord(merged, Option.empty())).iterator();
+            return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
           }
         });
     return taggedUpdatingRecords.union(taggedNewRecords);
@@ -335,9 +344,11 @@ public class HoodieIndexUtils {
           Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
-            boolean shouldPerformMergedLookUp = mayContainDuplicateLookup
+            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup
                 || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath());
-            if (shouldUpdatePartitionPath && shouldPerformMergedLookUp) {
+            if (shouldUpdatePartitionPath && shouldDoMergedLookUpThenTag) {
+              // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
+              // at a later stage.
               return Pair.of(incomingRecord, currentLocOpt);
             } else {
               // - When update partition path is set to false,
@@ -345,12 +356,10 @@ public class HoodieIndexUtils {
               // - When update partition path is set to true,
               //   the incoming record will be tagged to the existing record's partition
               //   when partition is not updated and the look-up won't have duplicates (e.g. COW, or using RLI).
-              return Pair.of((HoodieRecord<R>) getTaggedRecord(
-                      createNewHoodieRecord(incomingRecord, currentLoc, merger), Option.of(currentLoc)),
-                  Option.empty());
+              return Pair.of(createNewTaggedHoodieRecord(incomingRecord, currentLoc, merger.getRecordType()), Option.empty());
             }
           } else {
-            return Pair.of(getTaggedRecord(incomingRecord, Option.empty()), Option.empty());
+            return Pair.of(incomingRecord, Option.empty());
           }
         });
     return shouldUpdatePartitionPath
@@ -358,10 +367,15 @@ public class HoodieIndexUtils {
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 
-  public static HoodieRecord createNewHoodieRecord(HoodieRecord oldRecord, HoodieRecordGlobalLocation location, HoodieRecordMerger merger) {
-    HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
-    return merger.getRecordType() == HoodieRecordType.AVRO
-        ? new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData())
-        : oldRecord.newInstance();
+  public static <R> HoodieRecord<R> createNewTaggedHoodieRecord(HoodieRecord<R> oldRecord, HoodieRecordGlobalLocation location, HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
+        return tagRecord(new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData()), location);
+      case SPARK:
+        return tagRecord(oldRecord.newInstance(), location);
+      default:
+        throw new HoodieIndexException("Unsupported record type: " + recordType);
+    }
   }
 }
