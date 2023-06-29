@@ -134,7 +134,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
-    this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getWriteTimeline();
+    this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline
+        .getWriteTimeline()
+        .filterCompletedAndCompactionInstants();
   }
 
   /**
