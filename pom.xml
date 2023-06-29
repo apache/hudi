@@ -1707,8 +1707,9 @@
   </dependencyManagement>
   <repositories>
     <repository>
-      <id>github</id>
-      <url>https://maven.pkg.github.com/scoremedia/hudi</url>
+      <id>Maven Central</id>
+      <name>Maven Repository</name>
+      <url>https://repo.maven.apache.org/maven2</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -1716,8 +1717,28 @@
         <enabled>false</enabled>
       </snapshots>
     </repository>
+    <repository>
+      <id>cloudera-repo-releases</id>
+      <url>https://repository.cloudera.com/artifactory/public/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
   </repositories>
-
+  <distributionManagement>
+   <repository>
+     <id>github</id>
+     <name>GitHub scoremedia Apache Maven Packages</name>
+     <url>https://maven.pkg.github.com/scoremedia/hudi</url>
+   </repository>
+</distributionManagement>
   <profiles>
     <profile>
       <id>release</id>
