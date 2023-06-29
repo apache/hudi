@@ -290,7 +290,7 @@ public class HoodieFlinkCompactor {
       table.getMetaClient().reloadActiveTimeline();
 
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-      env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+      env.addSource(new CompactionPlanSourceFunction(compactionPlans, conf))
           .name("compaction_source")
           .uid("uid_compaction_source")
           .rebalance()

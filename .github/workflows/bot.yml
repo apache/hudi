@@ -71,6 +71,10 @@ jobs:
             sparkProfile: "spark3.3"
             sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
 
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -153,6 +157,9 @@ jobs:
       matrix:
         include:
           - flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.4'
+            sparkRuntime: 'spark3.4.0'
+          - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.16'
@@ -170,6 +177,9 @@ jobs:
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.0'
             sparkRuntime: 'spark3.0.2'
+          - flinkProfile: 'flink1.13'
+            sparkProfile: 'spark2.4'
+            sparkRuntime: 'spark2.4.8'
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -193,6 +203,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
+        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
@@ -201,6 +212,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
+        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
@@ -210,7 +222,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
           SCALA_PROFILE: 'scala-2.12'
-        if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
+        if: ${{ env.SPARK_PROFILE >= 'spark3.3' }} # Only Spark 3.3 and above support Java 17
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17

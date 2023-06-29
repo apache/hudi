@@ -457,6 +457,12 @@
       <version>${hive.version}</version>
       <scope>test</scope>
       <classifier>${hive.exec.classifier}</classifier>
+      <exclusions>
+        <exclusion>
+          <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
   </dependencies>
 </project>

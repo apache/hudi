@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -203,7 +204,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                   String instantTime, WriteOperationType operation) throws HoodieException {
+                                                   String instantTime, WriteOperationType operation, Boolean isPrepped) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -212,6 +213,10 @@ public class DataSourceUtils {
       case INSERT:
         return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
       case UPSERT:
+        if (isPrepped) {
+          return new HoodieWriteResult(client.upsertPreppedRecords(hoodieRecords, instantTime));
+        }
+
         return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime));
       case INSERT_OVERWRITE:
         return client.insertOverwrite(hoodieRecords, instantTime);
@@ -233,15 +238,23 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass) throws IOException {
+      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    return new HoodieAvroRecord<>(hKey, payload);
+    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
+    }
+    return record;
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
+                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    return new HoodieAvroRecord<>(hKey, payload);
+    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
+    }
+    return record;
   }
 
   /**

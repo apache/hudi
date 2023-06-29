@@ -21,8 +21,9 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -45,6 +46,9 @@ import scala.collection.convert.Wrappers.JConcurrentMapWrapper
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
+
+  // JsonUtils for Support Spark Version >= 3.3
+  if (HoodieSparkUtils.gteqSpark3_3) JsonUtils.registerModules()
 
   private val cache = JConcurrentMapWrapper(
     new ConcurrentHashMap[ZoneId, DateFormatter](1))

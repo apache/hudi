@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -450,8 +449,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       HoodieMetadataConfig metadataConfig,
       Path basePath
   ) {
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(), true);
     return newTableMetadata;
   }
 

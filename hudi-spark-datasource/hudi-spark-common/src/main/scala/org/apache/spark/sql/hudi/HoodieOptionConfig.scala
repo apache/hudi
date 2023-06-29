@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.model.HoodieRecordMerger
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.ValidationUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
@@ -192,7 +192,6 @@ object HoodieOptionConfig {
   // validate primaryKey, preCombineField and type options
   def validateTable(spark: SparkSession, schema: StructType, sqlOptions: Map[String, String]): Unit = {
     val resolver = spark.sessionState.conf.resolver
-
     // validate primary key
     val primaryKeys = sqlOptions.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
       .map(_.split(",").filter(_.length > 0))
@@ -221,6 +220,19 @@ object HoodieOptionConfig {
 
   def buildConf[T](): HoodieSQLOptionBuilder[T] = {
     new HoodieSQLOptionBuilder[T]
+  }
+
+  def makeOptionsCaseInsensitive(sqlOptions: Map[String, String]): Map[String, String] = {
+    // Make Keys Case Insensitive
+    val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_PRECOMBINE_FIELD,
+    SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGER_STRATEGY).map(key => key.sqlKeyName)
+
+    sqlOptions.map(option => {
+      standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {
+        case Some(standardKey) => (standardKey, option._2)
+        case None => (option._1, option._2)
+      }
+    })
   }
 }
 

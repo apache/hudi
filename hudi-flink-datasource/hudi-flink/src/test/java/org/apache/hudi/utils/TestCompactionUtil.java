@@ -84,7 +84,7 @@ public class TestCompactionUtil {
     // initialize the metadata table path
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
       FlinkHoodieBackedTableMetadataWriter.create(table.getHadoopConf(), table.getConfig(),
-          table.getContext(), Option.empty(), Option.empty());
+          table.getContext(), Option.empty());
     }
   }
 

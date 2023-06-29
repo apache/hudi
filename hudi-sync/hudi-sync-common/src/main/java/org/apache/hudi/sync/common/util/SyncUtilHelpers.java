@@ -43,6 +43,9 @@ public class SyncUtilHelpers {
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
    *
+   * <p>IMPORTANT: make this method class level thread safe to avoid concurrent modification of the same underneath meta storage.
+   * Meta store such as Hive may encounter {@code ConcurrentModificationException} for #alter_table.
+   *
    * @param syncToolClassName   Class name of the {@link HoodieSyncTool} implementation.
    * @param props               property map.
    * @param hadoopConfig        Hadoop confs.
@@ -50,7 +53,7 @@ public class SyncUtilHelpers {
    * @param targetBasePath      The target base path that contains the hoodie table.
    * @param baseFileFormat      The file format used by the hoodie table (defaults to PARQUET).
    */
-  public static void runHoodieMetaSync(String syncToolClassName,
+  public static synchronized void runHoodieMetaSync(String syncToolClassName,
                                        TypedProperties props,
                                        Configuration hadoopConfig,
                                        FileSystem fs,

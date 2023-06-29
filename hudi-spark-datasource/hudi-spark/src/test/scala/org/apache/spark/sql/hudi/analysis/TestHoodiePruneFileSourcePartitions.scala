@@ -76,14 +76,20 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |)
          |LOCATION '$basePath/$tableName'
          """.stripMargin)
-
-    spark.sql(
-      s"""
-         |INSERT INTO $tableName VALUES
-         |  (1, 'a1', 10, 1000, "2021-01-05"),
-         |  (2, 'a2', 20, 2000, "2021-01-06"),
-         |  (3, 'a3', 30, 3000, "2021-01-07")
-         """.stripMargin)
+    try {
+      //needs to be upsert because bulk insert is creating 3 files in nonpartitioned, even when bulk insert parallelism
+      //is 1 and df is repartitioned
+      spark.conf.set("hoodie.sql.insert.mode", "upsert")
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  (1, 'a1', 10, 1000, "2021-01-05"),
+           |  (2, 'a2', 20, 2000, "2021-01-06"),
+           |  (3, 'a3', 30, 3000, "2021-01-07")
+           """.stripMargin)
+    } finally {
+      spark.conf.unset("hoodie.sql.insert.mode")
+    }
 
     Seq("eager", "lazy").foreach { listingModeOverride =>
       // We need to refresh the table to make sure Spark is re-processing the query every time

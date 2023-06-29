@@ -694,6 +694,41 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling 1 commit from 100, should get us the 10 files committed at 100", files, "100", 10);
   }
 
+  /**
+   * Test scenario where inflight commit is between completed commits.
+   */
+  @Test
+  public void testSnapshotPreCommitValidateWithInflights() throws IOException {
+    // Create commit and data files with commit 000
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 5, "000");
+    createCommitFile(basePath, "000", "2016/05/01");
+
+    // create inflight commit add more files with same file_id.
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "100");
+    FileCreateUtils.createInflightCommit(basePath.toString(), "100");
+
+    // Create another commit without datafiles.
+    createCommitFile(basePath, "200", "2016/05/01");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    // Now, the original data files with commit time 000 should be returned.
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(5, files.length, "Snapshot read must return all files in partition");
+    ensureFilesInCommit("Should return base files from commit 000, inflight data files with "
+        + "greater timestamp should be filtered", files, "000", 5);
+
+    // Create data files with same file_id for commit 200.
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "200");
+
+    // This time data files from commit time 200 will be returned.
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(5, files.length, "Snapshot read must return all files in partition");
+    ensureFilesInCommit("Only completed commits files should be returned.",
+        files, "200", 5);
+  }
+
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
       int totalExpected) throws IOException {
     int actualCount = 0;

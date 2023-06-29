@@ -44,7 +44,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -717,7 +716,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
-  private HoodieMetaserverConfig metastoreConfig;
+  private HoodieMetaserverConfig metaserverConfig;
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
@@ -1111,7 +1110,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
-    this.metastoreConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
+    this.metaserverConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
@@ -1414,6 +1413,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * compaction properties.
    */
 
+  public boolean isLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ENABLE_LOG_COMPACTION);
+  }
+
   public int getLogCompactionBlocksThreshold() {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
   }
@@ -1629,6 +1632,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public String getClusteringPlanStrategyClass() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
+  }
+
+  public int getClusteringMaxParallelism() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_MAX_PARALLELISM);
   }
 
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
@@ -1956,6 +1963,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getBucketIndexHashFieldWithDefault() {
     return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+  }
+
+  public boolean getRecordIndexUseCaching() {
+    return getBoolean(HoodieIndexConfig.RECORD_INDEX_USE_CACHING);
   }
 
   /**
@@ -2335,6 +2346,34 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
 
+  public int getMetadataLogCompactBlocksThreshold() {
+    return getInt(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD);
+  }
+
+  public boolean isLogCompactionEnabledOnMetadata() {
+    return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
+  }
+
+  public boolean isRecordIndexEnabled() {
+    return metadataConfig.enableRecordIndex();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public int getRecordIndexMaxFileGroupSizeBytes() {
+    return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
+  }
+
   /**
    * Hoodie Client Lock Configs.
    *
@@ -2478,25 +2517,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Metastore configs.
+   * Metaserver configs.
    */
   public boolean isMetaserverEnabled() {
-    return metastoreConfig.isMetaserverEnabled();
-  }
-
-  /**
-   * CDC supplemental logging mode.
-   */
-  public HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode() {
-    return HoodieCDCSupplementalLoggingMode.valueOf(
-        getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
-  }
-
-  /**
-   * Table Service Manager configs.
-   */
-  public boolean isTableServiceManagerEnabled() {
-    return tableServiceManagerConfig.isTableServiceManagerEnabled();
+    return metaserverConfig.isMetaserverEnabled();
   }
 
   public boolean shouldBackupRollbacks() {
@@ -3107,12 +3131,13 @@ public class HoodieWriteConfig extends HoodieConfig {
                 "Increase %s=%d to be greater than %s=%d.",
                 HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep,
                 HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep));
-        checkArgument(minInstantsToKeep > cleanerCommitsRetained,
-            String.format(
-                "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
-                    + "missing data from few instants.",
-                HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
-                HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+        if (minInstantsToKeep <= cleanerCommitsRetained) {
+          LOG.warn("Increase {}={} to be greater than {}={} (there is risk of incremental pull "
+                  + "missing data from few instants based on the current configuration). "
+                  + "The Hudi archiver will automatically adjust the configuration regardless.",
+              HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
+              HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
+        }
       }
 
       boolean inlineCompact = writeConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
