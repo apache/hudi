@@ -81,13 +81,13 @@ object HoodieCreateRecordUtils {
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
         ).toBoolean
-    } else if (!isPrepped && WriteOperationType.isUpsert(operation)) {
+    } else if (!(isPrepped || mergeIntoWrites) && WriteOperationType.isUpsert(operation)) {
       parameters.getOrElse(
         HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key(),
         HoodieWriteConfig.COMBINE_BEFORE_UPSERT.defaultValue()
       ).toBoolean
     } else {
-      !isPrepped
+      !isPrepped || mergeIntoWrites
     }
 
     // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework

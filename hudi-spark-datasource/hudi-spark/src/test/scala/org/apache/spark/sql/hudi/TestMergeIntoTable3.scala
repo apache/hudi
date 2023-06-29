@@ -169,6 +169,59 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
     })
   }
 
+  test("Test pkless multiple source match") {
+    for (withPrecombine <- Seq(true, false)) {
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = true")
+        val tableName = generateTableName
+
+        val prekstr = if (withPrecombine) "tblproperties (preCombineField = 'ts')" else ""
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | $prekstr
+         """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |    (1, 'a1', 10, 100)
+             |""".stripMargin)
+
+        // First merge with a extra input field 'flag' (insert a new record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 20 as price, 200 as ts
+             |  union all
+             |  select 2 as id, 'a1' as name, 30 as price, 100 as ts
+             | ) s0
+             | on $tableName.name = s0.name
+             | when matched then update set price = s0.price
+             | when not matched then insert *
+         """.stripMargin)
+        if (withPrecombine) {
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 20.0, 100)
+          )
+        } else {
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 30.0, 100)
+          )
+        }
+      })
+    }
+
+  }
+
   test("Test MergeInto Basic pkless") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
