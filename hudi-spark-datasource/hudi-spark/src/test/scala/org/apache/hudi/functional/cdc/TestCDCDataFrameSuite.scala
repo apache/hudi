@@ -28,13 +28,13 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
-import org.junit.platform.suite.api.IncludeTags
 
 import scala.collection.JavaConversions._
 
-@IncludeTags(Array("functional"))
+@Tag("functional")
 class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
   /**
