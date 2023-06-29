@@ -167,6 +167,10 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       } else {
         String indexUptoInstant = fileIndexPartitionInfo.getIndexUptoInstant();
         // save index commit metadata and update table config
+        // instantiation of metadata writer will automatically instantiate the partitions.
+        table.getIndexingMetadataWriter(instantTime)
+            .orElseThrow(() -> new HoodieIndexException(String.format(
+                "Could not get metadata writer to run index action for instant: %s", instantTime)));
         finalIndexPartitionInfos = Collections.singletonList(fileIndexPartitionInfo).stream()
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),

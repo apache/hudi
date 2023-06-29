@@ -118,7 +118,11 @@ public class MarkerUtils {
         return Option.empty();
       }
       fsDataInputStream = fileSystem.open(markerTypeFilePath);
-      content = Option.of(MarkerType.valueOf(FileIOUtils.readAsUTFString(fsDataInputStream)));
+      String markerType = FileIOUtils.readAsUTFString(fsDataInputStream);
+      if (StringUtils.isNullOrEmpty(markerType)) {
+        return Option.empty();
+      }
+      content = Option.of(MarkerType.valueOf(markerType));
     } catch (IOException e) {
       throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath.toString()
           + "; " + e.getMessage(), e);

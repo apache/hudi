@@ -193,6 +193,14 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  protected def withTable(tableName: String)(f: String => Unit): Unit = {
+    try {
+      f(tableName)
+    } finally {
+      spark.sql(s"drop table if exists $tableName")
+    }
+  }
+
   protected def withRecordType(recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>

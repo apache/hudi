@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedPropertie
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
@@ -121,21 +121,23 @@ trait ProvidesHoodieConfig extends Logging {
     (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
       case (true, _, _, _, false, _) =>
         throw new IllegalArgumentException(s"Table with primaryKey can only use bulk insert in non-strict mode.")
-      case (true, true, _, _, _, true) =>
-        throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
       case (true, _, _, true, _, _) =>
         throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
           s" Please disable $INSERT_DROP_DUPS and try again.")
-      // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-      case (true, false, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
+      // Bulk insert with overwrite table
+      case (true, false, true, _, _, _) =>
+        BULK_INSERT_OPERATION_OPT_VAL
+      // Bulk insert with overwrite table partition
+      case (true, true, false, _, _, true) =>
+        BULK_INSERT_OPERATION_OPT_VAL
       // insert overwrite table
       case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
       // insert overwrite partition
-      case (_, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+      case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
       // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
       case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-      case (true, _, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+      case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
       // for the rest case, use the insert operation
       case _ => INSERT_OPERATION_OPT_VAL
     }
@@ -234,6 +236,17 @@ trait ProvidesHoodieConfig extends Logging {
       null
     }
 
+    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
+      if (isOverwriteTable) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+      } else if (isOverwritePartition) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
+      } else {
+        Map()
+      }
+    } else {
+      Map()
+    }
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
@@ -244,7 +257,7 @@ trait ProvidesHoodieConfig extends Logging {
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
-    )
+    ) ++ overwriteTableOpts
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)

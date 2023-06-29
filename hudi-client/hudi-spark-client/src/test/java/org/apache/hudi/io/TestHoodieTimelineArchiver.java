@@ -323,7 +323,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     }
   }
 
-  @Disabled("HUDI-6385")
+  // @Disabled("HUDI-6385")
   @ParameterizedTest
   @ValueSource(strings = {"KEEP_LATEST_BY_HOURS", "KEEP_LATEST_COMMITS"})
   public void testArchivalWithAutoAdjustmentBasedOnCleanConfigs(String cleaningPolicy) throws Exception {
@@ -334,7 +334,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).withMaxNumDeltaCommitsBeforeCompaction(5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanerPolicy(HoodieCleaningPolicy.valueOf(cleaningPolicy))
@@ -421,12 +421,12 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       commitMeta = generateCommitMetadata(instantTime, partToFileIds);
       metadataWriter.performTableServices(Option.of(instantTime));
       metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
+      metaClient.getActiveTimeline().saveAsComplete(
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
+          Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } else {
       commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
     }
-    metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-        Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return new HoodieInstant(
         isComplete ? State.COMPLETED : State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime);

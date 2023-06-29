@@ -35,10 +35,10 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -89,6 +89,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
@@ -423,6 +424,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return a unique timestamp for MDT
    */
   private String generateUniqueCommitInstantTime(String initializationTime) {
+    // if its initialized via Async indexer, we don't need to alter the init time
+    if (initializationTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()) {
+      return initializationTime;
+    }
     // Add suffix to initializationTime to find an unused instant time for the next index initialization.
     // This function would be called multiple times in a single application if multiple indexes are being
     // initialized one after the other.
@@ -1161,20 +1166,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     return writeStatuses.flatMap(writeStatus -> {
       List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieRecord writtenRecord : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(writtenRecord.getKey())) {
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
+        if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
           HoodieRecord hoodieRecord;
-          HoodieKey key = writtenRecord.getKey();
-          Option<HoodieRecordLocation> newLocation = writtenRecord.getNewLocation();
+          Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
-            if (writtenRecord.getCurrentLocation() != null) {
+            if (recordDelegate.getCurrentLocation().isPresent()) {
               // This is an update, no need to update index if the location has not changed
               // newLocation should have the same fileID as currentLocation. The instantTimes differ as newLocation's
               // instantTime refers to the current commit which was completed.
-              if (!writtenRecord.getCurrentLocation().getFileId().equals(newLocation.get().getFileId())) {
+              if (!recordDelegate.getCurrentLocation().get().getFileId().equals(newLocation.get().getFileId())) {
                 final String msg = String.format("Detected update in location of record with key %s from %s "
                         + " to %s. The fileID should not change.",
-                    writtenRecord.getKey(), writtenRecord.getCurrentLocation(), newLocation.get());
+                    recordDelegate, recordDelegate.getCurrentLocation().get(), newLocation.get());
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               } else {
@@ -1183,11 +1187,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               }
             }
 
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(key.getRecordKey(), key.getPartitionPath(),
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
+                recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
                 newLocation.get().getFileId(), newLocation.get().getInstantTime());
           } else {
             // Delete existing index for a deleted record
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(key.getRecordKey());
+            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
           }
 
           recordList.add(hoodieRecord);

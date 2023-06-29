@@ -491,7 +491,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> rollbackInstants = new ArrayList<>();
     rollbackInstants.add(new HoodieInstant(false, commitTs, actionType));
     HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(commitTs, 200, rollbackInstants,
-        CollectionUtils.createImmutableMap(commitTs, rollbackM));
+        Collections.singletonMap(commitTs, rollbackM));
     return TimelineMetadataUtils.serializeRestoreMetadata(metadata).get();
   }
 
