@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional.cdc
+package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
