@@ -97,7 +97,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.enable")
-      .defaultValue("false")
+      .defaultValue("true")
       .sinceVersion("0.14")
       .withDocumentation("This configs enables logcompaction for the metadata table.");
 
