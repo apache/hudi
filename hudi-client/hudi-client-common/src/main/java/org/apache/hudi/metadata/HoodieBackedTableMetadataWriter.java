@@ -958,7 +958,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           if (!filesDeleted.isEmpty()) {
             LOG.info("Found deleted files in partition " + partition + ": " + filesDeleted);
             HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partition, "", filesDeleted, filesDeleted,
-                Collections.EMPTY_LIST, false);
+                Collections.emptyList(), false);
             partitionMetadata.put(partition, cleanPartitionMetadata);
           }
         }

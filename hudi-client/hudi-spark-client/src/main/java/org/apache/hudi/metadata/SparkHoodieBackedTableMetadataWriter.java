@@ -37,8 +37,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.table.BulkInsertPartitioner;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,8 +123,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   protected void bulkCommit(
-          String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
-          int fileGroupCount) {
+      String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
+      int fileGroupCount) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
     commitInternal(instantTime, Collections.singletonMap(partitionType, records), Option.of(partitioner));
   }
@@ -138,7 +139,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     try (SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient()) {
       // rollback partially failed writes if any.
       if (dataWriteConfig.getFailedWritesCleanPolicy().isEager()
-              && writeClient.rollbackFailedWrites()) {
+          && writeClient.rollbackFailedWrites()) {
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
       }
 
@@ -179,11 +180,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
-  }
-
-  @Override
-  protected BaseHoodieWriteClient getWriteClient() {
-    return new SparkRDDWriteClient(engineContext, metadataWriteConfig);
   }
 
   @Override

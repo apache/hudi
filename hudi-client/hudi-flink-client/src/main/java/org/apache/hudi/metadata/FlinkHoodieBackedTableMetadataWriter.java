@@ -173,11 +173,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected BaseHoodieWriteClient getWriteClient() {
-    return new HoodieFlinkWriteClient(engineContext, metadataWriteConfig);
-  }
-
-  @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
   }
