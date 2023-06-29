@@ -46,7 +46,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -408,8 +407,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public HoodieMetadataPayload preCombine(HoodieMetadataPayload previousRecord) {
-    // Handling of deletes with same key added again
-    ValidationUtils.checkState(!(previousRecord.isDeletedRecord && this.isDeletedRecord), "Cannot combine two deleted records");
     if (this.isDeletedRecord) {
       // This happens when a record has been deleted. The previous version of the record should be ignored.
       return this;
