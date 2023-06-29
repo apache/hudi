@@ -459,11 +459,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
         dataMetaClient.getActiveTimeline(), metadata);
 
-    // MOR tables are not supported
-    if (!dataMetaClient.getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
-      throw new HoodieMetadataException("Only COW tables are supported with record index");
-    }
-
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
