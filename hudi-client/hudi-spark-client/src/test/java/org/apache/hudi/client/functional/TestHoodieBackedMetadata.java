@@ -2030,7 +2030,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withAutoCommit(false)
-        .withClusteringConfig(clusteringConfig).build();
+        .withClusteringConfig(clusteringConfig)
+        .withRollbackUsingMarkers(false)
+        .build();
 
     // trigger clustering
     SparkRDDWriteClient newClient = getHoodieWriteClient(newWriteConfig);
