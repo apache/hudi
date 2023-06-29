@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1M
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -159,9 +160,30 @@ public class CompactionUtils {
       HoodieTableMetaClient metaClient, Function<HoodieTableMetaClient, HoodieTimeline> filteredTimelineSupplier,
       Function<String, HoodieInstant> requestedInstantWrapper) {
     List<HoodieInstant> filteredInstants = filteredTimelineSupplier.apply(metaClient).getInstants();
+
     return filteredInstants.stream()
-        .map(instant -> Pair.of(instant, getCompactionPlan(metaClient, requestedInstantWrapper.apply(instant.getTimestamp()))))
-        .collect(Collectors.toList());
+          .map(instant ->  {
+            HoodieCompactionPlan compactionPlan = null;
+            try {
+              compactionPlan = getCompactionPlan(metaClient, requestedInstantWrapper.apply(instant.getTimestamp()));
+            } catch (HoodieException e) {
+              if (e.getCause() instanceof IOException && e.getCause().getMessage().contains("Not an Avro data file")) {
+                // try reloading metaclient so that compaction plan could have been fully serialized.
+                try {
+                  Thread.sleep(5);
+                } catch (InterruptedException ex) {
+                  throw new HoodieIOException("Interrupted Exception while parsing compaction plan for " + instant.getTimestamp());
+                }
+                compactionPlan = getCompactionPlan(HoodieTableMetaClient.reload(metaClient), requestedInstantWrapper.apply(instant.getTimestamp()));
+                System.out.println("Reloading succeeded ");
+              } else {
+                throw e;
+              }
+            }
+            return Pair.of(instant, compactionPlan);
+          }
+          )
+          .collect(Collectors.toList());
   }
 
   /**
