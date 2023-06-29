@@ -35,12 +35,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
+@Tag("functional")
 abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
