@@ -18,8 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.avro.model.HoodieCleanMetadata
-import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
@@ -191,6 +190,14 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         case (key, Some(value)) => conf.setConfString(key, value)
         case (key, None) => conf.unsetConf(key)
       }
+    }
+  }
+
+  protected def withTable(tableName: String)(f: String => Unit): Unit = {
+    try {
+      f(tableName)
+    } finally {
+      spark.sql(s"drop table if exists $tableName")
     }
   }
 

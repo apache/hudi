@@ -112,12 +112,16 @@ object HoodieUnsafeRowUtils {
               case _ =>
                 // In case we've stumbled upon something other than the [[StructType]] means that
                 // provided nested field reference is invalid. In that case we simply return null
+                // scalastyle:off return
                 return None
+                // scalastyle:on return
             }
           }
 
         // In case, field is not found we return null
+        // scalastyle:off return
         case None => return None
+        // scalastyle:on return
       }
       idx += 1
     }

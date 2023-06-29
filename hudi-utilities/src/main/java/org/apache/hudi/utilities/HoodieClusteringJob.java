@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
@@ -62,6 +62,8 @@ public class HoodieClusteringJob {
     this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
+    // Disable async cleaning, will trigger synchronous cleaning manually.
+    this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
   }
 
@@ -84,7 +86,7 @@ public class HoodieClusteringJob {
     public int parallelism = 1;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
@@ -116,6 +118,25 @@ public class HoodieClusteringJob {
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
+
+    @Override
+    public String toString() {
+      return "HoodieClusteringJobConfig{\n"
+          + "   --base-path " + basePath + ", \n"
+          + "   --table-name " + tableName + ", \n"
+          + "   --instant-time " + clusteringInstantTime + ", \n"
+          + "   --parallelism " + parallelism + ", \n"
+          + "   --spark-master " + sparkMaster + ", \n"
+          + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --retry " + retry + ", \n"
+          + "   --schedule " + runSchedule + ", \n"
+          + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
+          + "   --modee " + runningMode + ", \n"
+          + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
+          + "   --props " + propsFilePath + ", \n"
+          + "   --hoodie-conf " + configs + ", \n"
+          + "\n}";
+    }
   }
 
   public static void main(String[] args) {
@@ -194,11 +215,12 @@ public class HoodieClusteringJob {
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
               + cfg.clusteringInstantTime);
         } else {
-          throw new HoodieClusteringException("There is no scheduled clustering in the table.");
+          LOG.info("There is no scheduled clustering in the table.");
+          return 0;
         }
       }
       Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime).getCommitMetadata();
-
+      clean(client);
       return UtilHelpers.handleErrors(commitMetadata.get(), cfg.clusteringInstantTime);
     }
   }
@@ -256,7 +278,14 @@ public class HoodieClusteringJob {
       LOG.info("The schedule instant time is " + instantTime.get());
       LOG.info("Step 2: Do cluster");
       Option<HoodieCommitMetadata> metadata = client.cluster(instantTime.get()).getCommitMetadata();
+      clean(client);
       return UtilHelpers.handleErrors(metadata.get(), instantTime.get());
+    }
+  }
+
+  private void clean(SparkRDDWriteClient<?> client) {
+    if (client.getConfig().isAutoClean()) {
+      client.clean();
     }
   }
 }

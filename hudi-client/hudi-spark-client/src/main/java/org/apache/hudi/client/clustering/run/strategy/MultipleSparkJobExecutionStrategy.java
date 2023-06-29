@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -38,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -54,7 +53,6 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -72,8 +70,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
-import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.BaseRelation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,9 +83,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.utils.SparkPartitionUtils.getPartitionFieldVals;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -109,30 +108,39 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
-    // execute clustering for each group async and collect WriteStatus
-    Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
-            clusteringPlan.getInputGroups().stream()
-                .map(inputGroup -> {
-                  if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
-                    return runClusteringForGroupAsyncAsRow(inputGroup,
+    ExecutorService clusteringExecutorService = Executors.newFixedThreadPool(
+        Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
+        new CustomizedThreadFactory("clustering-job-group", true));
+    try {
+      // execute clustering for each group async and collect WriteStatus
+      Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
+              clusteringPlan.getInputGroups().stream()
+                  .map(inputGroup -> {
+                    if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
+                      return runClusteringForGroupAsyncAsRow(inputGroup,
+                          clusteringPlan.getStrategy().getStrategyParams(),
+                          shouldPreserveMetadata,
+                          instantTime,
+                          clusteringExecutorService);
+                    }
+                    return runClusteringForGroupAsync(inputGroup,
                         clusteringPlan.getStrategy().getStrategyParams(),
                         shouldPreserveMetadata,
-                        instantTime);
-                  }
-                  return runClusteringForGroupAsync(inputGroup,
-                      clusteringPlan.getStrategy().getStrategyParams(),
-                      shouldPreserveMetadata,
-                      instantTime);
-                })
-                .collect(Collectors.toList()))
-        .join()
-        .stream();
-    JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusesStream.map(HoodieJavaRDD::getJavaRDD));
-    JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
+                        instantTime,
+                        clusteringExecutorService);
+                  })
+                  .collect(Collectors.toList()))
+          .join()
+          .stream();
+      JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusesStream.map(HoodieJavaRDD::getJavaRDD));
+      JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
-    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
-    return writeMetadata;
+      HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
+      writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
+      return writeMetadata;
+    } finally {
+      clusteringExecutorService.shutdown();
+    }
   }
 
   /**
@@ -206,9 +214,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
         case LINEAR:
           return isRowPartitioner
-              ? new RowCustomColumnsSortPartitioner(orderByColumns)
-              : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-              getWriteConfig().isConsistentLogicalTimestampEnabled());
+              ? new RowCustomColumnsSortPartitioner(orderByColumns, getWriteConfig())
+              : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema), getWriteConfig());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
@@ -221,7 +228,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
    * Submit job to execute clustering for the group using Avro/HoodieRecord representation.
    */
   private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
-                                                                                boolean preserveHoodieMetadata, String instantTime) {
+                                                                                boolean preserveHoodieMetadata, String instantTime,
+                                                                                ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
@@ -234,7 +242,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           .collect(Collectors.toList());
       return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata,
           clusteringGroup.getExtraMetadata());
-    });
+    }, clusteringExecutorService);
   }
 
   /**
@@ -243,7 +251,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncAsRow(HoodieClusteringGroup clusteringGroup,
                                                                                      Map<String, String> strategyParams,
                                                                                      boolean shouldPreserveHoodieMetadata,
-                                                                                     String instantTime) {
+                                                                                     String instantTime,
+                                                                                     ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime);
@@ -253,7 +262,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           .collect(Collectors.toList());
       return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata,
           clusteringGroup.getExtraMetadata());
-    });
+    }, clusteringExecutorService);
   }
 
   /**
@@ -379,16 +388,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       if (partitionFields.isPresent()) {
         int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
         String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
-        CachingPath bootstrapCachingPath = new CachingPath(bootstrapBasePath);
-        SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
-        partitionValues = HoodieSparkUtils.parsePartitionColumnValues(
-            partitionFields.get(),
-            partitionFilePath,
-            bootstrapCachingPath,
-            AvroConversionUtils.convertAvroSchemaToStructType(baseFileReader.getSchema()),
-            hadoopConf.get().get("timeZone", SQLConf.get().sessionLocalTimeZone()),
-            sparkParsePartitionUtil,
-            hadoopConf.get().getBoolean("spark.sql.sources.validatePartitionColumns", true));
+        partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(), hadoopConf.get());
       }
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,

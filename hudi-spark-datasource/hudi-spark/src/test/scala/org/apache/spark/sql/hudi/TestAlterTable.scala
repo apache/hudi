@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -172,6 +173,41 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000, "2021-07-25", null),
           Seq(2, "a2", 10.0, 1000, "2021-07-25", 1.0)
         )
+
+        val tableName2 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName2 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName2'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  `hoodie.index.type`='BUCKET',
+             |  `hoodie.index.bucket.engine`='SIMPLE',
+             |  `hoodie.bucket.index.num.buckets`='2',
+             |  `hoodie.bucket.index.hash.field`='id',
+             |  `hoodie.storage.layout.type`='BUCKET',
+             |  `hoodie.storage.layout.partitioner.class`='org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName2 values(1, 'a1', 10, 1000)")
+        spark.sql(s"alter table $tableName2 add columns(dt string comment 'data time')")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
+          Seq(1, "a1", 10.0, 1000, null)
+        )
+
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+            spark.sql(s"alter table $tableName2 add columns(hh string comment 'hour time')")
+            Seq(1, "a1", 10.0, 1000, null, null)
+          }
+        }
       }
     }
   }

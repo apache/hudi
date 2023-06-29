@@ -42,13 +42,16 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
       // insert data to table, will generate 5 active commits and 2 archived commits
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
-      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
-      spark.sql(s"insert into $tableName select 5, 'a5', 50, 3000")
-      spark.sql(s"insert into $tableName select 6, 'a6', 60, 3500")
-      spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        //use upsert so records are in same filegroup
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+        spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+        spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+        spark.sql(s"insert into $tableName select 5, 'a5', 50, 3000")
+        spark.sql(s"insert into $tableName select 6, 'a6', 60, 3500")
+        spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
+      }
 
       // Check required fields
       checkExceptionContain(s"""call show_archived_commits(limit => 10)""")(
@@ -56,14 +59,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(5) {
+      assertResult(4) {
         commits.length
       }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(2) {
+      assertResult(3) {
         archivedCommits.length
       }
     }
@@ -92,13 +95,16 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
       // insert data to table, will generate 5 active commits and 2 archived commits
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
-      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
-      spark.sql(s"insert into $tableName select 5, 'a5', 50, 3000")
-      spark.sql(s"insert into $tableName select 6, 'a6', 60, 3500")
-      spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        //use upsert so records are in same filegroup
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+        spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+        spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+        spark.sql(s"insert into $tableName select 5, 'a5', 50, 3000")
+        spark.sql(s"insert into $tableName select 6, 'a6', 60, 3500")
+        spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
+      }
 
       // Check required fields
       checkExceptionContain(s"""call show_archived_commits_metadata(limit => 10)""")(
@@ -106,14 +112,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(5) {
+      assertResult(4) {
         commits.length
       }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(2) {
+      assertResult(3) {
         archivedCommits.length
       }
     }

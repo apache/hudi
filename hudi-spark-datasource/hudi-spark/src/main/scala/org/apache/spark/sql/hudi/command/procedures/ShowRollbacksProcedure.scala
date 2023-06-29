@@ -35,14 +35,14 @@ import scala.collection.JavaConverters._
 
 class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val ROLLBACKS_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val ROLLBACK_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
   )
 
   private val ROLLBACKS_OUTPUT_TYPE = new StructType(Array[StructField](

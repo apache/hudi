@@ -28,7 +28,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
@@ -53,6 +52,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -219,6 +221,9 @@ public class TestHoodieTableFactory {
     tableConf.setString(FlinkOptions.TABLE_NAME, "t2");
     tableConf.setString(FlinkOptions.RECORD_KEY_FIELD, "f0,f1");
     tableConf.setString(FlinkOptions.PRECOMBINE_FIELD, "f2");
+    tableConf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    tableConf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, "my_payload");
+    tableConf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
 
     StreamerUtil.initTableIfNotExists(tableConf);
 
@@ -244,6 +249,14 @@ public class TestHoodieTableFactory {
         source1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
     assertThat("pre-combine key not provided, fallback to table config",
         sink1.getConf().get(FlinkOptions.PRECOMBINE_FIELD), is("f2"));
+    assertThat("table type not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.TABLE_TYPE), is(FlinkOptions.TABLE_TYPE_MERGE_ON_READ));
+    assertThat("table type not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.TABLE_TYPE), is(FlinkOptions.TABLE_TYPE_MERGE_ON_READ));
+    assertThat("payload class not provided, fallback to table config",
+        source1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
+    assertThat("payload class not provided, fallback to table config",
+        sink1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
 
     // write config always has higher priority
     // set up a different primary key and pre_combine key with table config options
@@ -639,11 +652,11 @@ public class TestHoodieTableFactory {
     final Configuration conf1 = tableSource1.getConf();
     assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
     assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is(TimestampBasedAvroKeyGenerator.class.getName()));
-    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP, "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_TYPE_FIELD.key(), "dummy"),
         is("EPOCHMILLISECONDS"));
-    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), "dummy"),
         is(FlinkOptions.PARTITION_FORMAT_HOUR));
-    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, "dummy"),
+    assertThat(conf1.getString(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), "dummy"),
         is("UTC"));
   }
 
@@ -653,6 +666,9 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSink1.getConf();
     assertThat(conf1.get(FlinkOptions.PRE_COMBINE), is(true));
+    // check setup database name and table name automatically
+    assertThat(conf1.get(FlinkOptions.TABLE_NAME), is("t1"));
+    assertThat(conf1.get(FlinkOptions.DATABASE_NAME), is("db1"));
 
     // set up operation as 'insert'
     this.conf.setString(FlinkOptions.OPERATION, "insert");

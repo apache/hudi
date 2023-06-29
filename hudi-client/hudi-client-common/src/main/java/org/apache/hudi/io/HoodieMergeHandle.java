@@ -116,6 +116,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
 
+  protected Option<String[]> partitionFields = Option.empty();
+  protected Object[] partitionValues = new Object[0];
+
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
@@ -404,6 +407,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
@@ -413,10 +422,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       keyToNewRecords = null;
       writtenRecordKeys = null;
 
-      if (fileWriter != null) {
-        fileWriter.close();
-        fileWriter = null;
-      }
+      fileWriter.close();
+      fileWriter = null;
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
       HoodieWriteStat stat = writeStatus.getStat();
@@ -449,7 +456,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);
@@ -475,5 +482,21 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public HoodieBaseFile baseFileForMerge() {
     return baseFileToMerge;
+  }
+
+  public void setPartitionFields(Option<String[]> partitionFields) {
+    this.partitionFields = partitionFields;
+  }
+
+  public Option<String[]> getPartitionFields() {
+    return this.partitionFields;
+  }
+
+  public void setPartitionValues(Object[] partitionValues) {
+    this.partitionValues = partitionValues;
+  }
+
+  public Object[] getPartitionValues() {
+    return this.partitionValues;
   }
 }

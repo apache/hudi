@@ -64,6 +64,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**

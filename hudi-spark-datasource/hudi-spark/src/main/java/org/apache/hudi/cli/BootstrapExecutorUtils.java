@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -263,10 +262,9 @@ public class BootstrapExecutorUtils implements Serializable {
 
   private Pair<String, String> genKeyGenClassAndPartitionColumns() {
     String keyGenClass;
-    if (StringUtils.nonEmpty(props.getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), null))) {
-      keyGenClass = props.getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key());
-    } else if (StringUtils.nonEmpty(props.getString(HoodieBootstrapConfig.KEYGEN_TYPE.key(), null))) {
-      props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), props.getString(HoodieBootstrapConfig.KEYGEN_TYPE.key()));
+    if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null))) {
+      keyGenClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key());
+    } else if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null))) {
       keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
     } else {
       keyGenClass = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());

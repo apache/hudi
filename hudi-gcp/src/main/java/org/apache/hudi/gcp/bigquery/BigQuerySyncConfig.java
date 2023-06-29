@@ -78,6 +78,14 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .markAdvanced()
       .withDocumentation("Name of the target table in BigQuery");
 
+  public static final ConfigProperty<Boolean> BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE = ConfigProperty
+      .key("hoodie.gcp.bigquery.sync.use_bq_manifest_file")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("If true, generate a manifest file with data file absolute paths and use BigQuery manifest file support to "
+          + "directly create one external table over the Hudi table. If false (default), generate a manifest file with data file "
+          + "names and create two external tables and one view in BigQuery. Query the view for the same results as querying the Hudi table");
+
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.source_uri")
       .noDefaultValue()
@@ -136,9 +144,14 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     public String datasetName;
     @Parameter(names = {"--dataset-location"}, description = "Location of the target dataset in BigQuery", required = true)
     public String datasetLocation;
+    @Parameter(names = {"--use-bq-manifest-file"}, description = "If true, generate a manifest file with data file absolute paths and use "
+        + " BigQuery manifest file support to directly create one external table over the Hudi table. If false (default), generate a manifest "
+        + " file with data file names and create two external tables and one view in BigQuery. Query the view for the same results as querying "
+        + "the Hudi table")
+    public Boolean useBqManifestFile;
     @Parameter(names = {"--source-uri"}, description = "Name of the source uri gcs path of the table", required = true)
     public String sourceUri;
-    @Parameter(names = {"--source-uri-prefix"}, description = "Name of the source uri gcs path prefix of the table", required = true)
+    @Parameter(names = {"--source-uri-prefix"}, description = "Name of the source uri gcs path prefix of the table", required = false)
     public String sourceUriPrefix;
 
     public boolean isHelp() {
@@ -151,6 +164,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_NAME.key(), datasetName);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_LOCATION.key(), datasetLocation);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_TABLE_NAME.key(), hoodieSyncConfigParams.tableName);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE.key(), useBqManifestFile);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI.key(), sourceUri);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI_PREFIX.key(), sourceUriPrefix);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);

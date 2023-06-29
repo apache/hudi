@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
-import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery.parseOptions
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesByPath, HoodieTableChangesOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
@@ -54,12 +54,12 @@ case class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Ru
 
     // NOTE: Unfortunately, [[InsertIntoStatement]] is implemented in a way that doesn't expose
     //       target relation as a child (even though there's no good reason for that)
-    case iis @ InsertIntoStatement(rv2 @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _) =>
+    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _) =>
       iis.copy(table = convertToV1(rv2, v2Table))
 
     case _ =>
       plan.resolveOperatorsDown {
-        case rv2 @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _) => convertToV1(rv2, v2Table)
+        case rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _) => convertToV1(rv2, v2Table)
       }
   }
 
@@ -101,8 +101,8 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
 
       LogicalRelation(relation, table)
 
-    case q: HoodieQuery =>
-      val (tableName, opts) = parseOptions(q.args)
+    case HoodieQuery(args) =>
+      val (tableName, opts) = HoodieQuery.parseOptions(args)
 
       val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
       val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
@@ -112,6 +112,22 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
         catalogTable.location.toString))
 
       LogicalRelation(relation, catalogTable)
+
+    case HoodieTableChanges(args) =>
+      val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
+      val hoodieDataSource = new DefaultSource
+      if (tablePath.contains(Path.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
   }
 }
 

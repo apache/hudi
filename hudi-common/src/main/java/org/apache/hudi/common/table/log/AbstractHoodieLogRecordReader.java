@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -60,7 +59,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -167,7 +165,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
-    TypedProperties props = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(new Properties());
+    TypedProperties props = new TypedProperties();
     if (this.preCombineField != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
@@ -499,6 +497,8 @@ public abstract class AbstractHoodieLogRecordReader {
               String targetInstantForCommandBlock =
                   logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
               targetRollbackInstants.add(targetInstantForCommandBlock);
+              orderedInstantsList.remove(targetInstantForCommandBlock);
+              instantToBlocksMap.remove(targetInstantForCommandBlock);
             } else {
               throw new UnsupportedOperationException("Command type not yet supported.");
             }
@@ -527,13 +527,6 @@ public abstract class AbstractHoodieLogRecordReader {
        */
       for (int i = orderedInstantsList.size() - 1; i >= 0; i--) {
         String instantTime = orderedInstantsList.get(i);
-
-        // Exclude the blocks which are included in targetRollbackInstants set.
-        // Here, rollback can include instants affiliated to deltacommits or log compaction commits.
-        if (targetRollbackInstants.contains(instantTime)) {
-          numBlocksRolledBack += instantToBlocksMap.get(instantTime).size();
-          continue;
-        }
         List<HoodieLogBlock> instantsBlocks = instantToBlocksMap.get(instantTime);
         if (instantsBlocks.size() == 0) {
           throw new HoodieException("Data corrupted while writing. Found zero blocks for an instant " + instantTime);
@@ -635,7 +628,8 @@ public abstract class AbstractHoodieLogRecordReader {
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
                 this.partitionNameOverrideOpt,
-                populateMetaFields);
+                populateMetaFields,
+                Option.empty());
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
       }

@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,16 +28,13 @@ import java.util.List;
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-"),
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-");
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-"),
+  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-");
 
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
-  // Total file groups
-  // TODO fix: enum should not have any mutable aspect as this compromises whole idea
-  //      of the enum being static, immutable entity
-  private int fileGroupCount = 1;
 
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {
     this.partitionPath = partitionPath;
@@ -51,14 +49,6 @@ public enum MetadataPartitionType {
     return fileIdPrefix;
   }
 
-  public void setFileGroupCount(final int fileGroupCount) {
-    this.fileGroupCount = fileGroupCount;
-  }
-
-  public int getFileGroupCount() {
-    return this.fileGroupCount;
-  }
-
   public static List<String> allPaths() {
     return Arrays.asList(
         FILES.getPartitionPath(),
@@ -67,12 +57,20 @@ public enum MetadataPartitionType {
     );
   }
 
+  /**
+   * Returns the list of metadata table partitions which require WriteStatus to track written records.
+   * <p>
+   * These partitions need the list of written records so that they can update their metadata.
+   */
+  public static List<MetadataPartitionType> getMetadataPartitionsNeedingWriteStatusTracking() {
+    return Collections.singletonList(MetadataPartitionType.RECORD_INDEX);
+  }
+
   @Override
   public String toString() {
     return "Metadata partition {"
         + "name: " + getPartitionPath()
         + ", prefix: " + getFileIdPrefix()
-        + ", groups: " + getFileGroupCount()
         + "}";
   }
 }

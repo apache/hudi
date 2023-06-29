@@ -128,7 +128,9 @@ object HoodieSpark2Analysis {
                                          trimAlias: Boolean = false): Expression = {
 
       def innerResolve(e: Expression, isTopLevel: Boolean): Expression = {
+        // scalastyle:off return
         if (e.resolved) return e
+        // scalastyle:on return
         e match {
           case f: LambdaFunction if !f.bound => f
           case u@UnresolvedAttribute(nameParts) =>
@@ -166,7 +168,9 @@ object HoodieSpark2Analysis {
     private def resolveLiteralFunction(nameParts: Seq[String],
                                        attribute: UnresolvedAttribute,
                                        plan: LogicalPlan): Option[Expression] = {
+      // scalastyle:off return
       if (nameParts.length != 1) return None
+      // scalastyle:on return
       val isNamedExpression = plan match {
         case Aggregate(_, aggregateExpressions, _) => aggregateExpressions.contains(attribute)
         case Project(projectList, _) => projectList.contains(attribute)

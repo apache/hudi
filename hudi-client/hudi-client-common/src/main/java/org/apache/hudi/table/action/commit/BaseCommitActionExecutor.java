@@ -230,10 +230,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     return config.getSchema();
   }
 
-  protected boolean isWorkloadProfileNeeded() {
-    return true;
-  }
-
   protected abstract Iterator<List<WriteStatus>> handleInsert(String idPfx,
       Iterator<HoodieRecord<T>> recordItr) throws Exception;
 

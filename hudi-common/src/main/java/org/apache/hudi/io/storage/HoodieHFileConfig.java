@@ -46,8 +46,9 @@ public class HoodieHFileConfig {
   private final String keyFieldName;
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, String keyFieldName, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
-                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter, CellComparator hfileComparator) {
+                           long maxFileSize, String keyFieldName,
+                           boolean prefetchBlocksOnOpen, boolean cacheDataInL1, boolean dropBehindCacheCompaction,
+                           BloomFilter bloomFilter, CellComparator hfileComparator) {
     this.hadoopConf = hadoopConf;
     this.compressionAlgorithm = compressionAlgorithm;
     this.blockSize = blockSize;
@@ -103,4 +104,5 @@ public class HoodieHFileConfig {
   public String getKeyFieldName() {
     return keyFieldName;
   }
+
 }

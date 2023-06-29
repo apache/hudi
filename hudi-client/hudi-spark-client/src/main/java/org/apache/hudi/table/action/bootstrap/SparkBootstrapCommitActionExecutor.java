@@ -251,7 +251,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
 
-    writeTableMetadata(metadata, actionType);
+    writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
@@ -326,6 +326,8 @@ public class SparkBootstrapCommitActionExecutor<T>
       if (!(selector instanceof FullRecordBootstrapModeSelector)) {
         FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
         result.putAll(fullRecordBootstrapModeSelector.select(folders));
+      } else {
+        result.putAll(selector.select(folders));
       }
     } else {
       result = selector.select(folders);
@@ -357,8 +359,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
     }
 
-    BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
-        config.getBootstrapPartitionPathTranslatorClass(), properties);
+    BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()
         .flatMap(p -> {

@@ -23,11 +23,12 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -40,7 +41,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{ByteType, DataType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import javax.annotation.concurrent.NotThreadSafe
@@ -83,10 +84,18 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * Get the schema of the table.
    */
-  lazy val schema: StructType = schemaSpec.getOrElse({
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-  })
+  lazy val schema: StructType = if (shouldFastBootstrap) {
+      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+    } else {
+      rawSchema
+    }
+
+  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
+      val schemaUtil = new TableSchemaResolver(metaClient)
+      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    })
+
+  protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 
@@ -110,7 +119,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           .map(column => nameFieldMap.apply(column))
 
         if (partitionFields.size != partitionColumns.get().size) {
-          val isBootstrapTable = BootstrapIndex.getBootstrapIndex(metaClient).useIndex()
+          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
           if (isBootstrapTable) {
             // For bootstrapped tables its possible the schema does not contain partition field when source table
             // is hive style partitioned. In this case we would like to treat the table as non-partitioned
@@ -338,72 +347,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    if (partitionColumns.length == 0) {
-      // This is a non-partitioned table
-      Array.empty
-    } else {
-      val partitionFragments = partitionPath.split("/")
-      if (partitionFragments.length != partitionColumns.length) {
-        if (partitionColumns.length == 1) {
-          // If the partition column size is not equal to the partition fragment size
-          // and the partition column size is 1, we map the whole partition path
-          // to the partition column which can benefit from the partition prune.
-          val prefix = s"${partitionColumns.head}="
-          val partitionValue = if (partitionPath.startsWith(prefix)) {
-            // support hive style partition path
-            partitionPath.substring(prefix.length)
-          } else {
-            partitionPath
-          }
-          Array(UTF8String.fromString(partitionValue))
-        } else {
-          // If the partition column size is not equal to the partition fragments size
-          // and the partition column size > 1, we do not know how to map the partition
-          // fragments to the partition columns and therefore return an empty tuple. We don't
-          // fail outright so that in some cases we can fallback to reading the table as non-partitioned
-          // one
-          logWarning(s"Failed to parse partition values: found partition fragments" +
-            s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
-            s" (${partitionColumns.mkString(",")})")
-          Array.empty
-        }
-      } else {
-        // If partitionSeqs.length == partitionSchema.fields.length
-        // Append partition name to the partition value if the
-        // HIVE_STYLE_PARTITIONING is disable.
-        // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
-        val partitionWithName =
-        partitionFragments.zip(partitionColumns).map {
-          case (partition, columnName) =>
-            if (partition.indexOf("=") == -1) {
-              s"${columnName}=$partition"
-            } else {
-              partition
-            }
-        }.mkString("/")
-
-        val pathWithPartitionName = new CachingPath(getBasePath, createRelativePathUnsafe(partitionWithName))
-        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
-        val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
-
-        partitionValues.map(_.asInstanceOf[Object]).toArray
-      }
-    }
-  }
-
-  private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType): Seq[Any] = {
-    val timeZoneId = configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone)
-    val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
-
-    sparkParsePartitionUtil.parsePartition(
-      partitionPath,
-      typeInference = false,
-      Set(getBasePath),
-      partitionDataTypes,
-      DateTimeUtils.getTimeZone(timeZoneId),
-      validatePartitionValues = shouldValidatePartitionColumns(spark)
-    )
-      .toSeq(partitionSchema)
+    HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
+      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
+      sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =

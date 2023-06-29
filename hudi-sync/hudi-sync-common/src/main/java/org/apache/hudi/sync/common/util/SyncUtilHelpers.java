@@ -22,6 +22,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 
@@ -30,7 +31,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -42,6 +43,9 @@ public class SyncUtilHelpers {
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
    *
+   * <p>IMPORTANT: make this method class level thread safe to avoid concurrent modification of the same underneath meta storage.
+   * Meta store such as Hive may encounter {@code ConcurrentModificationException} for #alter_table.
+   *
    * @param syncToolClassName   Class name of the {@link HoodieSyncTool} implementation.
    * @param props               property map.
    * @param hadoopConfig        Hadoop confs.
@@ -49,7 +53,7 @@ public class SyncUtilHelpers {
    * @param targetBasePath      The target base path that contains the hoodie table.
    * @param baseFileFormat      The file format used by the hoodie table (defaults to PARQUET).
    */
-  public static void runHoodieMetaSync(String syncToolClassName,
+  public static synchronized void runHoodieMetaSync(String syncToolClassName,
                                        TypedProperties props,
                                        Configuration hadoopConfig,
                                        FileSystem fs,
@@ -58,7 +62,7 @@ public class SyncUtilHelpers {
     try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat)) {
       syncTool.syncHoodieTable();
     } catch (Throwable e) {
-      throw new HoodieException("Could not sync using the meta sync class " + syncToolClassName, e);
+      throw new HoodieMetaSyncException("Could not sync using the meta sync class " + syncToolClassName, e);
     }
   }
 
@@ -106,16 +110,18 @@ public class SyncUtilHelpers {
     }
   }
 
-  public static HoodieException getExceptionFromList(Collection<HoodieException> exceptions) {
-    if (exceptions.size() == 1) {
-      return exceptions.stream().findFirst().get();
+  public static HoodieException getHoodieMetaSyncException(Map<String,HoodieException> failedMetaSyncs) {
+    if (failedMetaSyncs.size() == 1) {
+      return failedMetaSyncs.values().stream().findFirst().get();
     }
     StringBuilder sb = new StringBuilder();
-    sb.append("Multiple exceptions during meta sync:\n");
-    exceptions.forEach(e -> {
-      sb.append(e.getMessage());
+    sb.append("MetaSyncs failed: {");
+    sb.append(String.join(",", failedMetaSyncs.keySet()));
+    sb.append("}\n");
+    for (String impl : failedMetaSyncs.keySet()) {
+      sb.append(failedMetaSyncs.get(impl).getMessage());
       sb.append("\n");
-    });
-    return new HoodieException(sb.toString());
+    }
+    return new HoodieMetaSyncException(sb.toString(),failedMetaSyncs);
   }
 }

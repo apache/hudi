@@ -55,7 +55,7 @@ public class HoodieInstantTimeGenerator {
   // The default number of milliseconds that we add if they are not present
   // We prefer the max timestamp as it mimics the current behavior with second granularity
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
-  private static final String DEFAULT_MILLIS_EXT = "999";
+  public static final String DEFAULT_MILLIS_EXT = "999";
 
   private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
 

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -68,9 +69,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 
 public class HoodieInputFormatUtils {
 
@@ -107,6 +110,16 @@ public class HoodieInputFormatUtils {
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
+  }
+
+  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
+    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && usePreApacheFormat) {
+      // Parquet input format had an InputFormat class visible under the old naming scheme.
+      return realtime
+          ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
+          : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
+    }
+    return getInputFormatClassName(baseFileFormat, realtime);
   }
 
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime) {
@@ -273,7 +286,14 @@ public class HoodieInputFormatUtils {
     } else {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
-    return Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants());
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(job.getConfiguration()
+        .get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
+    HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(
+        baseTimeline.getCommitsTimeline().filterCompletedInstants(),
+        tableMetaClient,
+        handlingMode);
+
+    return Option.of(filteredTimeline);
   }
 
   /**

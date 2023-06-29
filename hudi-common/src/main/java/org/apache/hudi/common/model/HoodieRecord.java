@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
@@ -223,6 +225,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
+  @Nullable
   public HoodieRecordLocation getCurrentLocation() {
     return currentLocation;
   }
@@ -237,8 +240,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
-  public Option<HoodieRecordLocation> getNewLocation() {
-    return Option.ofNullable(this.newLocation);
+  @Nullable
+  public HoodieRecordLocation getNewLocation() {
+    return this.newLocation;
   }
 
   public boolean isCurrentLocationKnown() {

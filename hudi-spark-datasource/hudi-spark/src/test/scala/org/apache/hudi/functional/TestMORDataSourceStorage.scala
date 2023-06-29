@@ -35,29 +35,12 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 
 
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
-
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSourceStorage])
-
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
-
-  val verificationCol: String = "driver"
-  val updatedVerificationVal: String = "driver_update"
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
@@ -68,7 +51,20 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,",
     "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String) {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String): Unit = {
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    val verificationCol: String = "driver"
+    val updatedVerificationVal: String = "driver_update"
+
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
     if (!StringUtils.isNullOrEmpty(preCombineField)) {

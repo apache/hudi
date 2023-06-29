@@ -27,7 +27,7 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
@@ -424,7 +424,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
 
       // drop ro and rt table, and recreate them
       val roTableName1 = tableName1 + "_ro"
@@ -490,8 +492,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
-
+      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
       val roTableName1 = tableName1 + "_ro"
       checkExceptionContain(
         s"""
@@ -1081,5 +1084,52 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
     }
     assertTrue(exception.getMessage.contains(s"""$tableName is not a Hudi table"""))
+  }
+
+  test("Test hoodie table schema consistency for non-Avro data types") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id tinyint,
+         |  name varchar(10),
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    val hoodieCatalogTable = new HoodieCatalogTable(spark, table)
+    val hoodieSchema = HoodieSqlCommonUtils.getTableSqlSchema(hoodieCatalogTable.metaClient, true)
+    assertResult(hoodieSchema.get)(table.schema)
+  }
+
+  test("Test Create Hoodie Table With Options in different case") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   PRIMARYKEY = 'id',
+         |   precombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert'
+         | )
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    assertResult(table.properties("type"))("cow")
+    assertResult(table.properties("primaryKey"))("id")
+    assertResult(table.properties("preCombineField"))("ts")
   }
 }

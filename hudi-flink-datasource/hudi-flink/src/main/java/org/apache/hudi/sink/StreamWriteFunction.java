@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -186,6 +187,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         this.writeFunction = (records, instantTime) -> this.writeClient.insert(records, instantTime);
         break;
       case UPSERT:
+      case DELETE: // shares the code path with UPSERT
         this.writeFunction = (records, instantTime) -> this.writeClient.upsert(records, instantTime);
         break;
       case INSERT_OVERWRITE:
@@ -200,7 +202,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void initMergeClass() {
-    recordMerger = writeClient.getConfig().getRecordMerger();
+    recordMerger = HoodieRecordUtils.mergerToPreCombineMode(writeClient.getConfig().getRecordMerger());
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 

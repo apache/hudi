@@ -22,6 +22,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -29,6 +30,8 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
 
 /**
  * A partitioner that does sorting based on specified column values for Java client.
@@ -42,10 +45,10 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final Schema schema;
   private final boolean consistentLogicalTimestampEnabled;
 
-  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
-    this.sortColumnNames = columnNames;
+  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
+    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
     this.schema = schema;
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
   @Override

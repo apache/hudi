@@ -81,7 +81,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+  public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     MetadataChangeProposalWrapper propertiesChangeProposal = MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
             .entityUrn(datasetUrn)
@@ -93,6 +93,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
     try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(propertiesChangeProposal, responseLogger).get();
+      return true;
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": "
               + tableProperties, e);

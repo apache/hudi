@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -98,6 +99,16 @@ public class StreamerUtil {
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
+  public static TypedProperties buildProperties(List<String> props) {
+    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
+    props.forEach(x -> {
+      String[] kv = x.split("=");
+      ValidationUtils.checkArgument(kv.length == 2);
+      properties.setProperty(kv[0], kv[1]);
+    });
+    return properties;
+  }
+
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
@@ -149,6 +160,7 @@ public class StreamerUtil {
         .withBucketNum(String.valueOf(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
         .withRecordKeyField(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
         .withIndexKeyField(OptionsResolver.getIndexKeyField(conf))
+        .withBucketIndexEngineType(OptionsResolver.getBucketEngineType(conf))
         .withEngineType(EngineType.FLINK)
         .build();
   }
@@ -446,6 +458,19 @@ public class StreamerUtil {
     } catch (IOException e) {
       throw new HoodieException("Exception while checking file " + path + " existence", e);
     }
+  }
+
+  /**
+   * Returns whether the given instant is a data writing commit.
+   *
+   * @param tableType The table type
+   * @param instant   The instant
+   * @param timeline  The timeline
+   */
+  public static boolean isWriteCommit(HoodieTableType tableType, HoodieInstant instant, HoodieTimeline timeline) {
+    return tableType == HoodieTableType.MERGE_ON_READ
+        ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
+        : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
   }
 
   /**
