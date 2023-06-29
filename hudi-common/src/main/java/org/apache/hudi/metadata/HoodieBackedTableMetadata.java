@@ -536,6 +536,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return metadataMetaClient;
   }
 
+  public HoodieTableFileSystemView getMetadataFileSystemView() {
+    return metadataFileSystemView;
+  }
+
   public Map<String, String> stats() {
     return metrics.map(m -> m.getStats(true, metadataMetaClient, this)).orElse(new HashMap<>());
   }
