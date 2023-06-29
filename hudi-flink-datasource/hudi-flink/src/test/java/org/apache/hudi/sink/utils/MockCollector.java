@@ -16,28 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bucket;
+package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.sink.common.AbstractWriteOperator;
-import org.apache.hudi.sink.common.WriteOperatorFactory;
-
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.util.Collector;
 
 /**
- * Operator for {@link BucketStreamWriteFunction}.
- *
- * @param <I> The input type
+ * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
-public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+class MockCollector<T> implements Collector<T> {
+  private T val;
 
-  public BucketStreamWriteOperator(Configuration conf) {
-    super(OptionsResolver.isConsistentHashingBucketIndexType(conf)
-        ? new ConsistentBucketStreamWriteFunction<>(conf)
-        : new BucketStreamWriteFunction<>(conf));
+  public static <T> MockCollector<T> getInstance() {
+    return new MockCollector<>();
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
-    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf));
+  @Override
+  public void collect(T t) {
+    this.val = t;
+  }
+
+  @Override
+  public void close() {
+    this.val = null;
+  }
+
+  public T getVal() {
+    return val;
   }
 }

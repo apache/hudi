@@ -25,6 +25,9 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -34,6 +37,7 @@ import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
@@ -45,12 +49,13 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
  * The function to tag each incoming record with a location of a file based on consistent bucket index.
  */
-public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord, HoodieRecord> {
+public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord, HoodieRecord> implements CheckpointListener {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketAssignFunction.class);
 
@@ -59,6 +64,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   private final int bucketNum;
   private transient HoodieFlinkWriteClient writeClient;
   private transient Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+  private transient String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
   private final int maxRetries = 10;
   private final long maxWaitTimeInMs = 1000;
 
@@ -123,5 +129,20 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
       ValidationUtils.checkState(metadata != null);
       return new ConsistentBucketIdentifier(metadata);
     });
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long checkpointId) throws Exception {
+    HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
+    if (!timeline.empty()) {
+      for (HoodieInstant instant : timeline.getInstants()) {
+        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        Set<String> affectedPartitions = commitMetadata.getPartitionToReplaceFileIds().keySet();
+        LOG.info("Clear up cached hashing metadata because find a new replace commit.\n Instant: {}.\n Effected Partitions: {}.",  lastRefreshInstant, affectedPartitions);
+        affectedPartitions.forEach(this.partitionToIdentifier::remove);
+      }
+      this.lastRefreshInstant = timeline.lastInstant().get().getTimestamp();
+    }
   }
 }

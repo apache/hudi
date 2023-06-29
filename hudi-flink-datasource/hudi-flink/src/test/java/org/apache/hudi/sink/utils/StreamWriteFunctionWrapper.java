@@ -146,7 +146,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
       bootstrapOperator.setup(streamTask, streamConfig, output);
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
-      Collector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
+      Collector<HoodieRecord<?>> collector = MockCollector.getInstance();
       for (HoodieRecord<?> bootstrapRecord : output.getRecords()) {
         bucketAssignerFunction.processElement(bootstrapRecord, null, collector);
         bucketAssignFunctionContext.setCurrentKey(bootstrapRecord.getRecordKey());
@@ -164,7 +164,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void invoke(I record) throws Exception {
     HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
-    ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
+    MockCollector<HoodieRecord<?>> collector = MockCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
     writeFunction.processElement(collector.getVal(), null, null);
@@ -288,28 +288,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     public boolean isKeyInState(String key) {
       return this.updateKeys.contains(key);
-    }
-  }
-
-  private static class ScalaCollector<T> implements Collector<T> {
-    private T val;
-
-    public static <T> ScalaCollector<T> getInstance() {
-      return new ScalaCollector<>();
-    }
-
-    @Override
-    public void collect(T t) {
-      this.val = t;
-    }
-
-    @Override
-    public void close() {
-      this.val = null;
-    }
-
-    public T getVal() {
-      return val;
     }
   }
 }

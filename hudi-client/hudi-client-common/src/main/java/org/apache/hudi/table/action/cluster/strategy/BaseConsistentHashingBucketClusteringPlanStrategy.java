@@ -85,7 +85,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
     HoodieTimeline timeline = getHoodieTable().getActiveTimeline().getDeltaCommitTimeline().filterInflightsAndRequested();
     if (!timeline.empty()) {
       LOG.warn("When using consistent bucket, clustering cannot be scheduled async if there are concurrent writers. "
-          + "Writer instant: " + timeline.getInstants());
+          + "Writer instant: {}.", timeline.getInstants());
       return false;
     }
     return true;
@@ -161,7 +161,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
     TableFileSystemView fileSystemView = getHoodieTable().getFileSystemView();
     boolean isPartitionInClustering = fileSystemView.getFileGroupsInPendingClustering().anyMatch(p -> p.getLeft().getPartitionPath().equals(partition));
     if (isPartitionInClustering) {
-      LOG.info("Partition: " + partition + " is already in clustering, skip");
+      LOG.info("Partition {} is already in clustering, skip.", partition);
       return Stream.empty();
     }
 

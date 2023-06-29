@@ -53,9 +53,10 @@ public class ClusteringUtil {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:
-          throw new UnsupportedOperationException("Clustering is not supported for simple bucket index.");
+          throw new HoodieNotSupportedException("Clustering is not supported for simple bucket index.");
         case CONSISTENT_HASHING:
-          if (!conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS).equalsIgnoreCase(FlinkConsistentBucketClusteringPlanStrategy.class.getName())) {
+          String clusteringPlanStrategyClass = conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, OptionsResolver.getDefaultPlanStrategyClassName(conf));
+          if (!clusteringPlanStrategyClass.equalsIgnoreCase(FlinkConsistentBucketClusteringPlanStrategy.class.getName())) {
             throw new HoodieNotSupportedException(
                 "CLUSTERING_PLAN_STRATEGY_CLASS should be set to " + FlinkConsistentBucketClusteringPlanStrategy.class.getName() + " in order to work with Consistent Hashing Bucket Index.");
           }

@@ -366,7 +366,7 @@ public class Pipelines {
               .transform(
                   opName("consistent_bucket_write", conf),
                   TypeInformation.of(Object.class),
-                  StreamWriteOperator.getFactory(conf))
+                  BucketStreamWriteOperator.getFactory(conf))
               .uid(opUID("consistent_bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
         default:
