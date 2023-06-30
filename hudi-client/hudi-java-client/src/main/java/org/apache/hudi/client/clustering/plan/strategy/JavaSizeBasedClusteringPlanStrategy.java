@@ -60,41 +60,52 @@ public class JavaSizeBasedClusteringPlanStrategy<T>
 
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
+
+    // Sort fileSlices before dividing, which makes dividing more compact
+    List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
+    sortedFileSlices.sort((o1, o2) -> (int)
+        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
+            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+
     long totalSizeSoFar = 0;
-    HoodieWriteConfig writeConfig = getWriteConfig();
-    for (FileSlice currentSlice : fileSlices) {
-      // assume each filegroup size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+
+    for (FileSlice currentSlice : sortedFileSlices) {
+      long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
       // check if max size is reached and create new group, if needed.
-      if (totalSizeSoFar >= writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+      if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-                + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
+
+      // Add to the current file-group
       currentGroup.add(currentSlice);
-      // totalSizeSoFar could be 0 when new group was created in the previous conditional block.
-      // reset to the size of current slice, otherwise the number of output file group will become 0 even though current slice is present.
-      if (totalSizeSoFar == 0) {
-        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      // assume each file group size is ~= parquet.max.file.size
+      totalSizeSoFar += currentSize;
+    }
+
+    if (!currentGroup.isEmpty()) {
+      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+        LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
       }
     }
-    if (!currentGroup.isEmpty()) {
-      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-      LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-              + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
-      fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-    }
-    
-    return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
-        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
-        .setNumOutputFileGroups(fileSliceGroup.getRight())
-        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-        .build());
+
+    return fileSliceGroups.stream().map(fileSliceGroup ->
+        HoodieClusteringGroup.newBuilder()
+            .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+            .setNumOutputFileGroups(fileSliceGroup.getRight())
+            .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+            .build());
   }
 
   @Override
