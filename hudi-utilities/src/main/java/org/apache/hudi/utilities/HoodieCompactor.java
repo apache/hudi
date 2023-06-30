@@ -293,9 +293,6 @@ public class HoodieCompactor {
 
   private String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run compaction without any completed commits");
-    }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
   }
