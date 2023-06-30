@@ -118,8 +118,6 @@ public class HoodieTableMetaClient implements Serializable {
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
-  // Tracks the status of the last incremental file sync
-  private boolean isLastIncrementalSyncSuccessful;
 
   /**
    *
@@ -365,14 +363,6 @@ public class HoodieTableMetaClient implements Serializable {
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
     activeTimeline = new HoodieActiveTimeline(this);
     return activeTimeline;
-  }
-
-  public boolean isLastIncrementalSyncSuccessful() {
-    return isLastIncrementalSyncSuccessful;
-  }
-
-  public void setLastIncrementalSyncSuccessful(boolean lastIncrementalSyncSuccessful) {
-    isLastIncrementalSyncSuccessful = lastIncrementalSyncSuccessful;
   }
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
