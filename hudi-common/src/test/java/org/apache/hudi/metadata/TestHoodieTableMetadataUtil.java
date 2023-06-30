@@ -18,9 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -31,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -321,5 +326,64 @@ class TestHoodieTableMetadataUtil {
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(stringSchema),
         "Should return false for string");
+  }
+
+  @Test
+  void testFailedDeletesAreExcludedFromCleanMetadataRecords() {
+    String instantTime = "20230418021926507";
+    String partition1 = "2023/04/18";
+    String partition2 = "2023/04/19";
+
+    List<String> deletedFiles = new ArrayList<>();
+    deletedFiles.add("file1.parquet");
+    deletedFiles.add("file2.parquet");
+    deletedFiles.add("file3.parquet");
+
+    List<String> failedDeletes = new ArrayList<>();
+    failedDeletes.add("file2.parquet");
+
+    Map<String, HoodieCleanPartitionMetadata> partitionToFilesCleaned = new HashMap<>();
+    HoodieCleanPartitionMetadata partitionMetadata1 = HoodieCleanPartitionMetadata.newBuilder()
+        .setPartitionPath(partition1)
+        .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+        .setFailedDeleteFiles(failedDeletes)
+        .setDeletePathPatterns(deletedFiles)
+        .setSuccessDeleteFiles(deletedFiles)
+        .setIsPartitionDeleted(false)
+        .build();
+    HoodieCleanPartitionMetadata partitionMetadata2 = HoodieCleanPartitionMetadata.newBuilder()
+        .setPartitionPath(partition2)
+        .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+        .setFailedDeleteFiles(Collections.emptyList())
+        .setDeletePathPatterns(Collections.emptyList())
+        .setSuccessDeleteFiles(Collections.emptyList())
+        .setIsPartitionDeleted(false)
+        .build();
+
+    partitionToFilesCleaned.put(partition1, partitionMetadata1);
+    partitionToFilesCleaned.put(partition2, partitionMetadata2);
+    HoodieCleanMetadata cleanMetadata = HoodieCleanMetadata.newBuilder()
+        .setVersion(1)
+        .setTimeTakenInMillis(100)
+        .setTotalFilesDeleted(2)
+        .setStartCleanTime(instantTime)
+        .setEarliestCommitToRetain(instantTime)
+        .setPartitionMetadata(partitionToFilesCleaned).build();
+
+    List<HoodieRecord> hoodieRecords = HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime);
+    assertEquals(2, hoodieRecords.size());
+
+    // Find the record for partition1 and verify failed deletes are excluded
+    for (HoodieRecord record : hoodieRecords) {
+      if (record.getRecordKey().equals(partition1)) {
+        HoodieMetadataPayload payload = (HoodieMetadataPayload) record.getData();
+        // file2.parquet should be excluded as it's a failed delete
+        assertEquals(2, payload.getDeletions().size());
+        assertTrue(payload.getDeletions().contains("file1.parquet"));
+        assertTrue(payload.getDeletions().contains("file3.parquet"));
+        assertFalse(payload.getDeletions().contains("file2.parquet"),
+            "Failed delete file should be excluded from MDT update");
+      }
+    }
   }
 }

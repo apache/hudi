@@ -734,6 +734,15 @@ public class HoodieTableMetadataUtil {
       boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      if (deletedFiles == null) {
+        deletedFiles = new ArrayList<>();
+      }
+      // remove files for which deletion failed, so that they can be retried.
+      List<String> failedDeletes = partitionMetadata.getFailedDeleteFiles();
+      if (failedDeletes != null && !failedDeletes.isEmpty()) {
+        deletedFiles = new ArrayList<>(deletedFiles);
+        deletedFiles.removeIf(f -> failedDeletes.contains(f));
+      }
       records.add(HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
           deletedFiles, isPartitionDeleted));
       fileDeleteCount[0] += deletedFiles.size();

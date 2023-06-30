@@ -83,8 +83,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
       return deleteResult;
     } catch (FileNotFoundException fio) {
-      // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice
-      return false;
+      // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice if a file to be
+      // deleted is not found, treat it as a success.  In other words, there is nothing else to be cleaned up on the
+      // FileSystem, except for updating the MDT.  By returning success, we would remove the entry from MDT.
+      return true;
     } catch (IOException e) {
       try {
         if (storage.exists(deletePath)) {
