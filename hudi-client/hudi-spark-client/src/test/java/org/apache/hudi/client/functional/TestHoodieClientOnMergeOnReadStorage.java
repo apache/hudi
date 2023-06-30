@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.IncrementalTimelineSyncFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -460,7 +461,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   private void validateIncrementalSync(SyncableFileSystemView view) throws IOException {
     this.metaClient.reloadActiveTimeline();
     view.sync();
-    assertTrue(this.metaClient.isLastIncrementalSyncSuccessful());
+    IncrementalTimelineSyncFileSystemView incrementalView =
+        (IncrementalTimelineSyncFileSystemView) view;
+    assertTrue(incrementalView.isLastIncrementalSyncSuccessful());
     SyncableFileSystemView newView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), true);
 
     // Check for filegroups in pending compaction
