@@ -36,7 +36,7 @@ class InternalRowToJsonStringConverter(originTableSchema: HoodieTableSchema) {
     _mapper
   }
 
-  def convertRowToJsonString(record: InternalRow): UTF8String = {
+  def convert(record: InternalRow): UTF8String = {
     val map = scala.collection.mutable.Map.empty[String, Any]
     originTableSchema.structTypeSchema.zipWithIndex.foreach {
       case (field, idx) =>

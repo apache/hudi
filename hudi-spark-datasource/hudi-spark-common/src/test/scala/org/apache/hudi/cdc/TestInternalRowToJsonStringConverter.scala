@@ -33,28 +33,28 @@ class TestInternalRowToJsonStringConverter {
   def emptyRow(): Unit = {
     val converter = new InternalRowToJsonStringConverter(emptyHoodieTableSchema)
     val row = InternalRow.empty
-    val converted = converter.convertRowToJsonString(row)
+    val converted = converter.convert(row)
     assertEquals("{}", converted.toString)
   }
 
   @Test
   def nonEmptyRow(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, UTF8String.fromString("foo")))
-    val converted = converter.convertRowToJsonString(row)
+    val converted = converter.convert(row)
     assertEquals("""{"name":"foo","uuid":1}""", converted.toString)
   }
 
   @Test
   def emptyString(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, UTF8String.EMPTY_UTF8))
-    val converted = converter.convertRowToJsonString(row)
+    val converted = converter.convert(row)
     assertEquals("""{"name":"","uuid":1}""", converted.toString)
   }
 
   @Test
   def nullString(): Unit = {
     val row = InternalRow.fromSeq(Seq(1, null))
-    val converted = converter.convertRowToJsonString(row)
+    val converted = converter.convert(row)
     assertEquals("""{"uuid":1}""", converted.toString)
   }
 
