@@ -37,8 +37,10 @@ import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.util.FlinkWriteClients;
 
-import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
@@ -55,7 +57,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * The function to tag each incoming record with a location of a file based on consistent bucket index.
  */
-public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord, HoodieRecord> implements CheckpointListener {
+public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord, HoodieRecord> implements CheckpointedFunction {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketAssignFunction.class);
 
@@ -132,7 +134,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   }
 
   @Override
-  public void notifyCheckpointComplete(long checkpointId) throws Exception {
+  public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
     HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
     if (!timeline.empty()) {
       for (HoodieInstant instant : timeline.getInstants()) {
@@ -144,5 +146,10 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
       }
       this.lastRefreshInstant = timeline.lastInstant().get().getTimestamp();
     }
+  }
+
+  @Override
+  public void initializeState(FunctionInitializationContext functionInitializationContext) throws Exception {
+    // no operation
   }
 }

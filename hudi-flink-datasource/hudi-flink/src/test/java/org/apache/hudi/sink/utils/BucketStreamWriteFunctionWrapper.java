@@ -65,8 +65,8 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   protected final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
-  private final MockStateInitializationContext stateInitializationContext;
+  protected final StreamWriteOperatorCoordinator coordinator;
+  protected final MockStateInitializationContext stateInitializationContext;
 
   /**
    * Function that converts row data to HoodieRecord.

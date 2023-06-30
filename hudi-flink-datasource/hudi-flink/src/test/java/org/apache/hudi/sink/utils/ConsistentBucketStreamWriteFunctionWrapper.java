@@ -19,15 +19,18 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketStreamWriteFunction;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A wrapper class to manipulate the {@link ConsistentBucketStreamWriteFunction} instance for testing.
@@ -63,17 +66,17 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
   }
 
   @Override
-  public void checkpointComplete(long checkpointId) {
-    super.checkpointComplete(checkpointId);
-    try {
-      this.assignFunction.notifyCheckpointComplete(checkpointId);
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
+  protected StreamWriteFunction<HoodieRecord<?>> createWriteFunction() {
+    return new ConsistentBucketStreamWriteFunction<>(conf);
   }
 
   @Override
-  protected StreamWriteFunction<HoodieRecord<?>> createWriteFunction() {
-    return new ConsistentBucketStreamWriteFunction<>(conf);
+  public void checkpointFunction(long checkpointId) throws Exception {
+    // checkpoint the coordinator first
+    FunctionSnapshotContext functionSnapshotContext = new MockFunctionSnapshotContext(checkpointId);
+    this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
+    writeFunction.snapshotState(functionSnapshotContext);
+    assignFunction.snapshotState(functionSnapshotContext);
+    stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 }
