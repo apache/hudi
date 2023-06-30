@@ -245,7 +245,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testRLIWithCleaning(tableType: HoodieTableType): Unit = {
+  def testRLIWithDTCleaning(tableType: HoodieTableType): Unit = {
     var hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
@@ -275,9 +275,11 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.lastInstant().get().getTimestamp
       .compareTo(lastCleanInstant.get().getTimestamp) > 0)
 
-    assertEquals(ActionType.clean.name(), metaClient.getActiveTimeline.lastInstant().get().getAction)
-    // Rolling back a clean instant in DT
-    rollbackLastInstant(hudiOpts)
+    var rollbackedInstant: Option[HoodieInstant] = Option.empty
+    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
+      // rollback clean instant
+      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
+    }
     validateDataAndRecordIndices(hudiOpts)
   }
 
@@ -516,17 +518,24 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     validateDataAndRecordIndices(hudiOpts)
   }
 
-  private def rollbackLastInstant(hudiOpts: Map[String, String]): Unit = {
-    if (getLatestCompactionInstant() != metaClient.getCommitsAndCompactionTimeline.lastInstant()
-      && getLatestClusteringInstant() != metaClient.getActiveTimeline.lastInstant()) {
+  private def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
+    val lastInstant = metaClient.reloadActiveTimeline()
+      .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
+      .lastInstant().get()
+    if (getLatestCompactionInstant() != metaClient.reloadActiveTimeline().lastInstant()
+      && lastInstant.getAction != ActionType.replacecommit.name()
+      && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
     val writeConfig = getWriteConfig(hudiOpts)
     Using(new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) { client =>
-      val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant()
-      client.rollback(lastInstant.get().getTimestamp)
+      client.rollback(lastInstant.getTimestamp)
     }
-    assertEquals(ActionType.rollback.name(), getMetadataMetaClient(hudiOpts).getActiveTimeline.lastInstant().get().getAction)
+
+    if (lastInstant.getAction != ActionType.clean.name()) {
+      assertEquals(ActionType.rollback.name(), getMetadataMetaClient(hudiOpts).reloadActiveTimeline().lastInstant().get().getAction)
+    }
+    lastInstant
   }
 
   private def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
@@ -566,7 +575,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
+    metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.lastInstant()
   }
 
   private def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
