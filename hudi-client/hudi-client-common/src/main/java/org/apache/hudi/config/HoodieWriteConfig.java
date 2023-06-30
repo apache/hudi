@@ -1913,7 +1913,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
 
-  public boolean getBloomIndexUpdatePartitionPath() {
+  public boolean getGlobalBloomIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
@@ -1967,6 +1967,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getRecordIndexUseCaching() {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_USE_CACHING);
+  }
+
+  public boolean getRecordIndexUpdatePartitionPath() {
+    return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
   /**

@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.index.HoodieIndexUtils.getTaggedRecord;
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Update strategy for (consistent hashing) bucket index
@@ -109,8 +109,8 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
     List<String> indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       ConsistentHashingNode node = partitionToIdentifier.get(r.getPartitionPath()).getBucket(r.getKey(), indexKeyFields);
-      return getTaggedRecord(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),
-          Option.ofNullable(new HoodieRecordLocation(partitionToInstant.get(r.getPartitionPath()), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
+      return tagAsNewRecordIfNeeded(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),
+          Option.of(new HoodieRecordLocation(partitionToInstant.get(r.getPartitionPath()), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
     });
 
     // Return combined iterator (the original and records with new location)
