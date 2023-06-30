@@ -170,7 +170,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
-    System.gc();
   }
 
   protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
