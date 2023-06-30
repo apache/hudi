@@ -26,11 +26,12 @@ import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.platform.suite.api.IncludeTags
 
-@IncludeTags(Array("functional"))
+@Tag("functional")
 class TestCDCStreamingSuite extends HoodieCDCTestBase {
 
   /**
