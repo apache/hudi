@@ -341,7 +341,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         long beginTs = System.currentTimeMillis();
         // Not loaded yet
         try {
-          LOG.info("Building file system view for partitions " + partitionSet);
+          if (partitionSet.size() < 100) {
+            LOG.info("Building file system view for partitions: " + partitionSet);
+          } else {
+            LOG.info("Building file system view for " + partitionSet.size() + " partitions");
+          }
 
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, Path>> absolutePartitionPathList = partitionSet.stream()

@@ -2365,10 +2365,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
   }
 
-  public int getMetadataInsertParallelism() {
-    return getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
-  }
-
   public int getMetadataCompactDeltaCommitMax() {
     return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
   }

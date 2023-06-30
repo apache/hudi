@@ -55,7 +55,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -383,7 +382,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
+    LOG.info("Listed files in " + partitionPaths.size() + " partitions from metadata");
 
     return partitionPathToFilesMap;
   }

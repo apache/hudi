@@ -160,7 +160,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
+    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
   }
 
   /**

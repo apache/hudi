@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -71,21 +72,22 @@ public class HoodieMetadataMetrics implements Serializable {
     this.metricsRegistry = metricsRegistry;
   }
 
-  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata) {
+  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
     try {
       metaClient.reloadActiveTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      return getStats(fsView, detailed, metadata);
+      return getStats(fsView, detailed, metadata, metadataPartitions);
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
   }
 
-  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata) throws IOException {
+  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
+      throws IOException {
     Map<String, String> stats = new HashMap<>();
 
-    // Total size of the metadata and count of base/log files
-    for (String metadataPartition : MetadataPartitionType.allPaths()) {
+    // Total size of the metadata and count of base/log files for enabled partitions
+    for (String metadataPartition : metadataPartitions) {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
 
       // Total size of the metadata and count of base/log files
@@ -131,10 +133,10 @@ public class HoodieMetadataMetrics implements Serializable {
     incrementMetric(durationKey, durationInMs);
   }
 
-  public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata) {
-    Map<String, String> stats = getStats(false, metaClient, metadata);
+  public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata, Set<String> metadataPartitions) {
+    Map<String, String> stats = getStats(false, metaClient, metadata, metadataPartitions);
     for (Map.Entry<String, String> e : stats.entrySet()) {
-      incrementMetric(e.getKey(), Long.parseLong(e.getValue()));
+      setMetric(e.getKey(), Long.parseLong(e.getValue()));
     }
   }
 
