@@ -439,7 +439,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                                        Set<HoodieFileGroupId> newlyWrittenPendingFgIds) throws IOException {
     metaClient.reloadActiveTimeline();
     view.sync();
-    assertTrue(metaClient.isLastIncrementalSyncSuccessful());
+    IncrementalTimelineSyncFileSystemView incrementalView =
+        (IncrementalTimelineSyncFileSystemView) view;
+    assertTrue(incrementalView.isLastIncrementalSyncSuccessful());
     SyncableFileSystemView newView = getFileSystemView(metaClient);
     areViewsConsistent(view, newView, numberOfFileSlicesExpected, newlyWrittenPendingFgIds);
   }

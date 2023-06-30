@@ -69,6 +69,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   // This is the visible active timeline used only for incremental view syncing
   private HoodieTimeline visibleActiveTimeline;
 
+  // Tracks the status of the last incremental file sync
+  private boolean isLastIncrementalSyncSuccessful;
+
   protected IncrementalTimelineSyncFileSystemView(boolean enableIncrementalTimelineSync) {
     this.incrementalTimelineSyncEnabled = enableIncrementalTimelineSync;
   }
@@ -101,13 +104,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           LOG.info("Finished incremental sync");
           // Reset timeline to latest
           refreshTimeline(newTimeline);
-          this.metaClient.setLastIncrementalSyncSuccessful(true);
+          this.isLastIncrementalSyncSuccessful = true;
           return;
         }
       }
     } catch (Exception ioe) {
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
-      this.metaClient.setLastIncrementalSyncSuccessful(false);
+      this.isLastIncrementalSyncSuccessful = false;
     }
     clear();
     // Initialize with new Hoodie timeline.
@@ -516,5 +519,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   @Override
   public HoodieTimeline getTimeline() {
     return visibleActiveTimeline;
+  }
+
+  public boolean isLastIncrementalSyncSuccessful() {
+    return isLastIncrementalSyncSuccessful;
   }
 }
