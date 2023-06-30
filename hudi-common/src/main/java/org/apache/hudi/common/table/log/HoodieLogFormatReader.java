@@ -101,7 +101,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     } else if (logFiles.size() > 0) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
-        // First close previous reader only if readBlockLazily is true
+        // First close previous reader only if readBlockLazily is false
         if (!readBlocksLazily) {
           this.currentReader.close();
         } else {
