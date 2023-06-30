@@ -86,6 +86,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
@@ -1332,16 +1333,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         validateMetadata(testTable);
         ++numRollbacks;
       } catch (HoodieMetadataException e) {
-        exceptionRaised = true;
+        // This is expected since we are rolling back commits that are older than the latest compaction on the MDT
         break;
       }
     }
-
-    assertFalse(exceptionRaised, "Metadata table should not archive instants that are in dataset active timeline");
     // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
     // instants present before rollback started.
-    assertTrue(numRollbacks >= minArchiveCommitsDataset / 2,
-        "Rollbacks of non archived instants should work");
+    assertTrue(numRollbacks >= minArchiveCommitsDataset / 2, "Rollbacks of non archived instants should work");
   }
 
   /**
@@ -1591,11 +1589,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     extraFiles.put("p1", Collections.singletonList("f10"));
     extraFiles.put("p2", Collections.singletonList("f12"));
     testTable.doRollbackWithExtraFiles("0000004", "0000005", extraFiles);
-    if (!ignoreSpuriousDeletes) {
-      assertThrows(HoodieMetadataException.class, () -> validateMetadata(testTable));
-    } else {
-      validateMetadata(testTable);
-    }
+    validateMetadata(testTable);
   }
 
   /**
@@ -1873,7 +1867,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Restore
-      client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled());
+      if (metaClient.getTableType() == COPY_ON_WRITE) {
+        assertThrows(HoodieRestoreException.class, () -> client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled()));
+      } else {
+        client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled());
+      }
       validateMetadata(client);
     }
   }
@@ -2353,10 +2351,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(oldStatus.getModificationTime() < newStatus.getModificationTime());
 
     // Test downgrade by running the downgrader
-    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.TWO, null);
-
-    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.TWO.versionCode());
+    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.TWO, null);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.TWO.versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
     assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
   }
 
@@ -2522,6 +2519,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
 
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     // Insert/upsert third batch of records
     client = getHoodieWriteClient(cfg);
     commitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -3390,6 +3388,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   private void changeTableVersion(HoodieTableVersion version) throws IOException {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     metaClient.getTableConfig().setTableVersion(version);
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {

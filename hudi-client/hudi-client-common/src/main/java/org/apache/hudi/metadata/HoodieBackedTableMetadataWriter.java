@@ -984,52 +984,46 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    // The commit which is being rolled back on the dataset
-    final String commitInstantTime = rollbackMetadata.getCommitsRollback().get(0);
-    // Find the deltacommits since the last compaction
-    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
-    if (!deltaCommitsInfo.isPresent()) {
-      LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no deltacommits on MDT", commitInstantTime, instantTime));
-      return;
-    }
-
-    // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
-    HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
-    HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
-
-    // The deltacommit that will be rolled back
-    HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitInstantTime);
-
-    // The commit being rolled back should not be older than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
-    // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-    if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-      final String compactionInstantTime = compactionInstant.getTimestamp();
-      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitInstantTime, compactionInstantTime)) {
-        throw new HoodieMetadataException(String.format("Commit being rolled back %s is older than the latest compaction %s. "
-                + "There are %d deltacommits after this compaction: %s", commitInstantTime, compactionInstantTime,
-            deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+    if (initialized && metadata != null) {
+      // The commit which is being rolled back on the dataset
+      final String commitInstantTime = rollbackMetadata.getCommitsRollback().get(0);
+      // Find the deltacommits since the last compaction
+      Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+          CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
+      if (!deltaCommitsInfo.isPresent() || deltaCommitsInfo.get().getKey().empty()) {
+        LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no deltacommits on MDT", commitInstantTime, instantTime));
+        return;
       }
-    }
 
-    if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
-      LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
-      if (!getWriteClient().rollback(commitInstantTime, instantTime)) {
-        throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitInstantTime);
+      // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
+      HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
+      HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
+
+      // The deltacommit that will be rolled back
+      HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitInstantTime);
+
+      // The commit being rolled back should not be older than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+        final String compactionInstantTime = compactionInstant.getTimestamp();
+        if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitInstantTime, compactionInstantTime)) {
+          throw new HoodieMetadataException(String.format("Commit being rolled back %s is older than the latest compaction %s. "
+                  + "There are %d deltacommits after this compaction: %s", commitInstantTime, compactionInstantTime,
+              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+        }
       }
-    } else {
-      LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no corresponding deltacommits on MDT",
-          commitInstantTime, instantTime));
-    }
 
-    // Rollback of MOR table may end up adding a new log file. So we need to check for added files and add them to MDT
-    if (dataMetaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      String syncCommitTime = HoodieTableMetadataUtil.createRollbackTimestamp(HoodieActiveTimeline.createNewInstantTime());
-      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
-          rollbackMetadata, getRecordsGenerationParams(), syncCommitTime,
-          metadata.getSyncedInstantTime(), true));
+      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+        LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
+        if (!getWriteClient().rollback(commitInstantTime, instantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitInstantTime);
+        }
+      } else {
+        LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no corresponding deltacommits on MDT",
+            commitInstantTime, instantTime));
+      }
+      closeInternal();
     }
-    closeInternal();
   }
 
   @Override

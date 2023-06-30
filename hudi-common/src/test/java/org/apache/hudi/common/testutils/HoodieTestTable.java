@@ -386,7 +386,7 @@ public class HoodieTestTable {
     return this;
   }
 
-  public HoodieRollbackMetadata getRollbackMetadata(String instantTimeToDelete, Map<String, List<String>> partitionToFilesMeta) throws Exception {
+  public HoodieRollbackMetadata getRollbackMetadata(String instantTimeToDelete, Map<String, List<String>> partitionToFilesMeta, boolean shouldAddRollbackLogFile) throws Exception {
     HoodieRollbackMetadata rollbackMetadata = new HoodieRollbackMetadata();
     rollbackMetadata.setCommitsRollback(Collections.singletonList(instantTimeToDelete));
     rollbackMetadata.setStartRollbackTime(instantTimeToDelete);
@@ -396,11 +396,13 @@ public class HoodieTestTable {
       rollbackPartitionMetadata.setPartitionPath(entry.getKey());
       rollbackPartitionMetadata.setSuccessDeleteFiles(entry.getValue());
       rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-      long rollbackLogFileSize = 50 + RANDOM.nextInt(500);
-      String fileId = UUID.randomUUID().toString();
-      String logFileName = logFileName(instantTimeToDelete, fileId, 0);
-      FileCreateUtils.createLogFile(basePath, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
-      rollbackPartitionMetadata.setRollbackLogFiles(singletonMap(logFileName, rollbackLogFileSize));
+      if (shouldAddRollbackLogFile) {
+        long rollbackLogFileSize = 50 + RANDOM.nextInt(500);
+        String fileId = UUID.randomUUID().toString();
+        String logFileName = logFileName(instantTimeToDelete, fileId, 0);
+        FileCreateUtils.createLogFile(basePath, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
+        rollbackPartitionMetadata.setRollbackLogFiles(singletonMap(logFileName, rollbackLogFileSize));
+      }
       partitionMetadataMap.put(entry.getKey(), rollbackPartitionMetadata);
     }
     rollbackMetadata.setPartitionMetadata(partitionMetadataMap);
@@ -819,7 +821,7 @@ public class HoodieTestTable {
       throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
     }
     Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
-    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
+    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles, false);
     for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
@@ -841,7 +843,7 @@ public class HoodieTestTable {
         partitionFiles.get(entry.getKey()).addAll(entry.getValue());
       }
     }
-    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
+    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles, false);
     return addRollback(commitTime, rollbackMetadata);
   }
 
@@ -857,7 +859,7 @@ public class HoodieTestTable {
       }
       Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
       rollbackMetadataMap.put(commitInstantToRollback.getTimestamp(),
-          Collections.singletonList(getRollbackMetadata(commitInstantToRollback.getTimestamp(), partitionFiles)));
+          Collections.singletonList(getRollbackMetadata(commitInstantToRollback.getTimestamp(), partitionFiles, false)));
       for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
         deleteFilesInPartition(entry.getKey(), entry.getValue());
       }
