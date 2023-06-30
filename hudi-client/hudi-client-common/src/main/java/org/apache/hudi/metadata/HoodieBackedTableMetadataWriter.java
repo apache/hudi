@@ -100,13 +100,11 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
@@ -436,7 +434,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private String generateUniqueCommitInstantTime(String initializationTime) {
     // if its initialized via Async indexer, we don't need to alter the init time
-    if (initializationTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()) {
+    if (HoodieTableMetadataUtil.isIndexingCommit(initializationTime)) {
       return initializationTime;
     }
     // Add suffix to initializationTime to find an unused instant time for the next index initialization.
@@ -862,7 +860,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     dataMetaClient.getTableConfig().setMetadataPartitionsInflight(dataMetaClient, partitionTypes);
 
     // initialize partitions
-    initializeFromFilesystem(indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX, partitionTypes, Option.empty());
+    initializeFromFilesystem(HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime), partitionTypes, Option.empty());
   }
 
   /**
@@ -969,9 +967,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // We cannot create a deltaCommit at instantTime now because a future block (rollback) has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
-      // String syncCommitTime = HoodieTableMetadataUtil.createIndexInitTimestamp(HoodieActiveTimeline.createNewInstantTime());
-      // TODO: Using METADATA_INDEXER_TIME_SUFFIX for now, but this should have its own suffix. To be fixed after HUDI-6200
-      String syncCommitTime = HoodieActiveTimeline.createNewInstantTime() + METADATA_INDEXER_TIME_SUFFIX;
+      String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, cleanMetadata, getRecordsGenerationParams(),
           syncCommitTime));
       closeInternal();
@@ -1027,9 +1023,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // Rollback of MOR table may end up adding a new log file. So we need to check for added files and add them to MDT
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
-        rollbackMetadata, getRecordsGenerationParams(), instantTime,
-        metadata.getSyncedInstantTime(), true));
+    if (dataMetaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
+      String syncCommitTime = HoodieTableMetadataUtil.createRollbackTimestamp(HoodieActiveTimeline.createNewInstantTime());
+      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
+          rollbackMetadata, getRecordsGenerationParams(), syncCommitTime,
+          metadata.getSyncedInstantTime(), true));
+    }
     closeInternal();
   }
 

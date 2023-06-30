@@ -78,6 +78,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -117,24 +118,35 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
 
-  // Suffix to use for compaction
-  private static final String COMPACTION_TIMESTAMP_SUFFIX = "001";
+  // Suffix to use for various operations on MDT
+  private enum OperationSuffix {
+    COMPACTION("001"),
+    CLEAN("002"),
+    RESTORE("003"),
+    METADATA_INDEXER("004"),
+    LOG_COMPACTION("005"),
+    ROLLBACK("006");
 
+    static final Set<String> ALL_SUFFIXES = Arrays.stream(OperationSuffix.values()).map(o -> o.getSuffix()).collect(Collectors.toSet());
 
-  // Suffix to use for clean
-  private static final String CLEAN_TIMESTAMP_SUFFIX = "002";
+    private final String suffix;
 
-  // This suffix used by the delta commits from async indexer (`HoodieIndexer`),
-  // when the `indexUptoInstantTime` already exists in the metadata table,
-  // to avoid collision.
-  public static final String METADATA_INDEXER_TIME_SUFFIX = "004";
+    OperationSuffix(String suffix) {
+      this.suffix = suffix;
+    }
 
-  // Suffix to use for log compaction
-  private static final String LOG_COMPACTION_TIMESTAMP_SUFFIX = "005";
+    String getSuffix() {
+      return suffix;
+    }
+
+    static boolean isValidSuffix(String suffix) {
+      return ALL_SUFFIXES.contains(suffix);
+    }
+  }
 
   // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
   // are reserved for future operations on the MDT.
-  public static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
+  private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
 
   /**
    * Returns whether the files partition of metadata table is ready for read.
@@ -1343,8 +1355,7 @@ public class HoodieTableMetadataUtil {
     // have corresponding completed instant in the data table
     validInstantTimestamps.addAll(
         metadataMetaClient.getActiveTimeline()
-            .filter(instant -> instant.isCompleted()
-                && (isIndexingCommit(instant.getTimestamp()) || isLogCompactionInstant(instant)))
+            .filter(instant -> instant.isCompleted() && isValidInstant(instant))
             .getInstantsAsStream()
             .map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList()));
@@ -1365,6 +1376,38 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Checks if the Instant is a delta commit and has a valid suffix for operations on MDT.
+   *
+   * @param instant {@code HoodieInstant} to check.
+   * @return {@code true} if the instant is valid.
+   */
+  public static boolean isValidInstant(HoodieInstant instant) {
+    // Should be a deltacommit
+    if (!instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+      return false;
+    }
+
+    // Check correct length. The timestamp should have a suffix over the timeline's timestamp format.
+    final String instantTime = instant.getTimestamp();
+    if (!(instantTime.length() == MILLIS_INSTANT_ID_LENGTH + OperationSuffix.METADATA_INDEXER.getSuffix().length())) {
+      return false;
+    }
+
+    // Is this a fixed operations suffix
+    final String suffix = instantTime.substring(instantTime.length() - 3);
+    if (OperationSuffix.isValidSuffix(suffix)) {
+      return true;
+    }
+
+    // Is this a index init suffix?
+    if (suffix.compareTo(String.format("%03d", PARTITION_INITIALIZATION_TIME_SUFFIX)) >= 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Checks if a delta commit in metadata table is written by async indexer.
    * <p>
    * TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
@@ -1374,20 +1417,8 @@ public class HoodieTableMetadataUtil {
    * @return {@code true} if from async indexer; {@code false} otherwise.
    */
   public static boolean isIndexingCommit(String instantTime) {
-    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + METADATA_INDEXER_TIME_SUFFIX.length()
-            && instantTime.endsWith(METADATA_INDEXER_TIME_SUFFIX);
-  }
-
-  /**
-   * This method returns true if the instant provided belongs to Log compaction instant.
-   * For metadata table, log compaction instant are created with Suffix "004" provided in LOG_COMPACTION_TIMESTAMP_SUFFIX.
-   * @param instant Hoodie completed instant.
-   * @return true for logcompaction instants flase otherwise.
-   */
-  public static boolean isLogCompactionInstant(HoodieInstant instant) {
-    return instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
-        && instant.getTimestamp().length() == MILLIS_INSTANT_ID_LENGTH + LOG_COMPACTION_TIMESTAMP_SUFFIX.length()
-        && instant.getTimestamp().endsWith(LOG_COMPACTION_TIMESTAMP_SUFFIX);
+    return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + OperationSuffix.METADATA_INDEXER.getSuffix().length()
+            && instantTime.endsWith(OperationSuffix.METADATA_INDEXER.getSuffix());
   }
 
   /**
@@ -1589,14 +1620,26 @@ public class HoodieTableMetadataUtil {
    * Create the timestamp for a clean operation on the metadata table.
    */
   public static String createCleanTimestamp(String timestamp) {
-    return timestamp + CLEAN_TIMESTAMP_SUFFIX;
+    return timestamp + OperationSuffix.CLEAN.getSuffix();
+  }
+
+  public static String createRollbackTimestamp(String timestamp) {
+    return timestamp + OperationSuffix.ROLLBACK.getSuffix();
+  }
+
+  public static String createRestoreTimestamp(String timestamp) {
+    return timestamp + OperationSuffix.RESTORE.getSuffix();
+  }
+
+  public static String createAsyncIndexerTimestamp(String timestamp) {
+    return timestamp + OperationSuffix.METADATA_INDEXER.getSuffix();
   }
 
   /**
    * Create the timestamp for a compaction operation on the metadata table.
    */
   public static String createCompactionTimestamp(String timestamp) {
-    return timestamp + COMPACTION_TIMESTAMP_SUFFIX;
+    return timestamp + OperationSuffix.COMPACTION.getSuffix();
   }
 
   /**
@@ -1613,7 +1656,7 @@ public class HoodieTableMetadataUtil {
    * Create the timestamp for a compaction operation on the metadata table.
    */
   public static String createLogCompactionTimestamp(String timestamp) {
-    return timestamp + LOG_COMPACTION_TIMESTAMP_SUFFIX;
+    return timestamp + OperationSuffix.LOG_COMPACTION.getSuffix();
   }
 
   /**
