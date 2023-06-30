@@ -25,8 +25,8 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{ActionType, HoodieBaseFile, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -198,6 +198,23 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
     validateDataAndRecordIndices(hudiOpts)
+  }
+
+  @Disabled("needs delete support")
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDeletePartition(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
+      val commitTime = client.startCommit
+      client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
+      val partitionList = Collections.singletonList(dataGen.getPartitionPaths.last)
+      client.deletePartitions(partitionList, commitTime)
+    }
   }
 
   @ParameterizedTest

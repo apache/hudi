@@ -845,11 +845,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
-      if (!writeStatus.isEmpty()) {
-        HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpdates(writeStatus);
-        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpdates(updatesFromWriteStatuses, commitMetadata);
-        partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
-      }
+      HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpdates(writeStatus);
+      HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpdates(updatesFromWriteStatuses, commitMetadata);
+      partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
 
       return partitionToRecordMap;
     });
@@ -1231,6 +1229,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .values()
               .filter(p -> !p.getRight().isPresent())
               .map(Pair::getLeft);
+    } else if (operationType == WriteOperationType.DELETE_PARTITION) {
+      return getRecordIndexReplacedRecords((HoodieReplaceCommitMetadata) commitMetadata);
     } else {
       return engineContext.emptyHoodieData();
     }
