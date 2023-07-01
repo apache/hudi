@@ -33,7 +33,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
 import scala.collection.JavaConverters._
@@ -329,6 +329,41 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     assertTrue(commitNum > 1)
   }
 
+  @Test
+  def testMergeOnReadIncrementalRelationWithFilter(): Unit = {
+    val tablePath = s"$basePath/mor-with-logs-incr"
+    val targetRecordsCount = 100
+
+    bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true, inlineCompact = true)
+
+    println(s"Running test for $tablePath / incremental")
+    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build()
+    val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
+    val startUnarchivedCommitTs = (completedCommits.nthInstant(1).get().getTimestamp.toLong - 1L).toString
+    val endUnarchivedCommitTs = completedCommits.nthInstant(3).get().getTimestamp //commit
+
+    val readOpts = defaultWriteOpts ++ Map(
+      "path" -> tablePath,
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startUnarchivedCommitTs,
+      DataSourceReadOptions.END_INSTANTTIME.key -> endUnarchivedCommitTs
+    )
+
+    val inputDf = spark.read.format("hudi")
+      .options(readOpts)
+      .load()
+    // Make sure the filter is not applied at the row group level
+    spark.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "false")
+    try {
+      val rows = inputDf.select("_hoodie_commit_time").distinct().sort("_hoodie_commit_time").collect()
+      assertTrue(rows.length == 2)
+      assertFalse(rows.exists(_.getString(0) < startUnarchivedCommitTs))
+      assertFalse(rows.exists(_.getString(0) > endUnarchivedCommitTs))
+    } finally {
+      spark.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
+    }
+  }
+
   // Test routine
   private def runTest(tableState: TableState,
                       queryType: String,
@@ -440,7 +475,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
                                 recordCount: Int,
                                 opts: Map[String, String],
                                 populateMetaFields: Boolean,
-                                dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], Schema) = {
+                                dataGenOpt: Option[HoodieTestDataGenerator] = None,
+                                inlineCompact: Boolean = false): (List[HoodieRecord[_]], Schema) = {
     val dataGen = dataGenOpt.getOrElse(new HoodieTestDataGenerator(0x12345))
 
     // Step 1: Bootstrap table w/ N records (t/h bulk-insert)
@@ -454,10 +490,14 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       // Step 2: Update M records out of those (t/h update)
       val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.AVRO_SCHEMA)
 
+      val compactScheduleInline = if (inlineCompact) "false" else "true"
+      val compactInline = if (inlineCompact) "true" else "false"
+
       inputDF.write.format("org.apache.hudi")
         .options(opts)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-        .option(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key, "true")
+        .option(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key, compactScheduleInline)
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key, compactInline)
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key, "false")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "3")
         .option(HoodieTableConfig.POPULATE_META_FIELDS.key, populateMetaFields.toString)
