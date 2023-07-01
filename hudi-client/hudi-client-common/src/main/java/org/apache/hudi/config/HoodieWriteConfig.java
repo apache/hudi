@@ -698,14 +698,24 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
-          .key("hoodie.rollback.instant.backup.enabled")
-          .defaultValue(false)
-          .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
+      .key("hoodie.rollback.instant.backup.enabled")
+      .defaultValue(false)
+      .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
 
   public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
-          .key("hoodie.rollback.instant.backup.dir")
-          .defaultValue(".rollback_backup")
-          .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+      .key("hoodie.rollback.instant.backup.dir")
+      .defaultValue(".rollback_backup")
+      .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+
+  public static final ConfigProperty<String> CLIENT_INIT_CALLBACK_CLASS_NAMES = ConfigProperty
+      .key("hoodie.client.init.callback.classes")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Fully-qualified class names of the Hudi client init callbacks to run "
+          + "at the initialization of the Hudi client.  The class names are separated by `,`. "
+          + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
+          + "By default, no Hudi client init callback is executed.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2535,6 +2545,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(ROLLBACK_INSTANT_BACKUP_DIRECTORY);
   }
 
+  public String getClientInitCallbackClassNames() {
+    return getString(CLIENT_INIT_CALLBACK_CLASS_NAMES);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3014,6 +3028,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withRollbackBackupDirectory(String backupDir) {
       writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_DIRECTORY, backupDir);
+      return this;
+    }
+
+    public Builder withClientInitCallbackClassNames(String classNames) {
+      writeConfig.setValue(CLIENT_INIT_CALLBACK_CLASS_NAMES, classNames);
       return this;
     }
 
