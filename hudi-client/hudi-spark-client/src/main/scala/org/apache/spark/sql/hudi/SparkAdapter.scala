@@ -208,7 +208,7 @@ trait SparkAdapter extends Serializable {
    * Calls fail analysis on
    *
    */
-  def failAnalysisForMIT(a: Attribute, cols: String): Unit
+  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
 
   def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 }

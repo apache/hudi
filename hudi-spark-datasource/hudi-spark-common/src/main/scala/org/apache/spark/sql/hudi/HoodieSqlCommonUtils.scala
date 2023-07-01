@@ -153,10 +153,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     attrs.filterNot(attr => isMetaField(attr.name))
   }
 
-  def removeNonMetaFields[T <: Attribute](attrs: Seq[T]): Seq[T] = {
-    attrs.filter(attr => isMetaField(attr.name))
-  }
-
   /**
    * Get the table location.
    * @param tableId

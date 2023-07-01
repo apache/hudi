@@ -49,7 +49,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // update data
-        spark.sql(s"update $tableName set price = 20 where name = 'a1'")
+        spark.sql(s"update $tableName set price = 20 where id = 1")
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 20.0, 1000)
         )
