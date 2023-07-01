@@ -18,29 +18,31 @@
 package org.apache.spark.sql.catalyst.analysis
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolveLambdaVariables, UnresolvedAttribute, UnresolvedExtractValue, caseInsensitiveResolution, withPosition}
 import org.apache.spark.sql.catalyst.expressions.{Alias, CurrentDate, CurrentTimestamp, Expression, ExtractValue, GetStructField, LambdaFunction}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Assignment, DeleteAction, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, Window}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.toPrettySQL
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 /**
- * NOTE: This code is borrowed from Spark 3.1.3
- *       This code is borrowed, so that we can have some advanced Spark SQL functionality (like Merge Into, for ex)
- *       in Spark 2.x
+ * NOTE: Taken from HoodieSpark2Analysis and modified to resolve source and target tables if not already resolved
  *
  *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-object HoodieSpark2Analysis {
+object HoodieSpark31Analysis {
 
   case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan] {
 
     private val resolver = spark.sessionState.conf.resolver
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
-      case m @ MergeIntoTable(targetTable, sourceTable, _, _, _)
-        if (!m.resolved || containsUnresolvedStarAssignments(m)) && targetTable.resolved && sourceTable.resolved =>
-
+      case mO @ MergeIntoTable(targetTableO, sourceTableO, _, _, _)
+        if !mO.resolved || containsUnresolvedStarAssignments(mO) =>
+        lazy val analyzer = spark.sessionState.analyzer
+        val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
+        val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
+        val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
             val newMatchedActions = m.matchedActions.map {

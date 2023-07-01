@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
 
 class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -66,7 +66,7 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
            |insert into $tableName2 values
            |    (1, 'u1', 10, 999),
            |    (3, 'u3', 30, 9999),
-           |    (4, 'u4', 40, 99999);
+           |    (4, 'u4', 40, 99999)
            |""".stripMargin)
 
       spark.sql(
@@ -84,6 +84,14 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
         Seq(2, "a2", 20.0, 200)
       )
 
+      val errorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+        "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
+          "columns are allowed on tables with primary key. (illegal column(s) used: `price`"
+      } else {
+        "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
+          "columns are allowed on tables with primary key. (illegal column(s) used: `price`;"
+      }
+
       checkException(
         s"""
            |merge into $tableName as oldData
@@ -91,8 +99,7 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
            |on oldData.id = $tableName2.id and oldData.price = $tableName2.price
            |when matched then update set oldData.name = $tableName2.name
            |when not matched then insert *
-           |""".stripMargin)("Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
-        "columns are allowed on tables with primary key. (illegal column(s) used: `price`")
+           |""".stripMargin)(errorMessage)
 
       //test with multiple pks
       val tableName3 = generateTableName
@@ -111,6 +118,12 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
            | )
        """.stripMargin)
 
+      val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_1) {
+        "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
+      } else {
+        "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
+      }
+
       checkException(
         s"""
            |merge into $tableName3 as oldData
@@ -118,7 +131,7 @@ class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupp
            |on oldData.id = $tableName2.id
            |when matched then update set oldData.name = $tableName2.name
            |when not matched then insert *
-           |""".stripMargin)("Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found")
+           |""".stripMargin)(errorMessage2)
     }
   }
 

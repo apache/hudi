@@ -131,13 +131,13 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
           catalogTable.location.toString))
         LogicalRelation(relation, catalogTable)
       }
-    case mO@MergeIntoTable(targetTableO, sourceTableO, _, _, _)
+    case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)
       ////// don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
       if !mO.resolved =>
       lazy val analyzer = spark.sessionState.analyzer
       val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
-      val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
+      val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
       ///////
       EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
@@ -231,12 +231,17 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
         // Note: This will throw error only on unresolved attribute issues,
         // not other resolution errors like mismatched data types.
         val cols = p.inputSet.toSeq.map(_.sql).mkString(", ")
-        a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
+        sparkAdapter.failAnalysisForMIT(a, cols)
       }
       resolved
     } catch {
       case x: AnalysisException => throw x
     }
+  }
+
+  private[sql] object MatchMergeIntoTable {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyMergeIntoTable(plan)
   }
 
 }

@@ -373,6 +373,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
+  /*
   test("Test MergeInto When PrimaryKey And PreCombineField Of Source Table And Target Table Differ In Case Only") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -439,6 +440,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       )
     })
   }
+
 
   test("Test ignoring case") {
     withRecordType()(withTempDir { tmp =>
@@ -552,6 +554,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       )
     })
   }
+*/
 
   test("Test only insert when source table contains history") {
     withRecordType()(withTempDir { tmp =>

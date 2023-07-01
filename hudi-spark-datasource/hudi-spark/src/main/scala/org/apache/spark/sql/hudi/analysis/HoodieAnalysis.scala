@@ -48,18 +48,23 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // TODO limit adapters to only Spark < 3.2
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
-    if (HoodieSparkUtils.isSpark2) {
-      val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
-      val spark2ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-
+    if (!HoodieSparkUtils.gteqSpark3_2) {
+      val resolveReferencesClass = if (HoodieSparkUtils.isSpark2) {
+        "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
+      } else if (HoodieSparkUtils.isSpark3_0) {
+        "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
+      } else if (HoodieSparkUtils.isSpark3_1) {
+        "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
+      } else {
+        throw new IllegalStateException("Impossible to be here")
+      }
+      val sparkResolveReferences: RuleBuilder =
+        session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
       // TODO elaborate on the ordering
-      rules += (adaptIngestionTargetLogicalRelations, spark2ResolveReferences)
+      rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+
     } else {
       rules += adaptIngestionTargetLogicalRelations
-    }
-
-    if (HoodieSparkUtils.gteqSpark3_2) {
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)

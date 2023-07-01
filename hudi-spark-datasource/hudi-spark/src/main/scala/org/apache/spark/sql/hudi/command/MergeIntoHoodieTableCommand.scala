@@ -30,7 +30,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -275,6 +275,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
+    if (HoodieSparkUtils.isSpark2) {
+      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
+    }
+
     val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
@@ -332,7 +336,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val resolver = sparkSession.sessionState.analyzer.resolver
 
     val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = Join(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), JoinHint.NONE)
+    val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
     val sourceTablePlan = Project(tablemetacols ++ incomingDataCols, joinData)
     val sourceTableOutput = sourceTablePlan.output
