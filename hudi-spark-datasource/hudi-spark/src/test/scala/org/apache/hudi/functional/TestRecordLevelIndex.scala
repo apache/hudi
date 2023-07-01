@@ -108,7 +108,6 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Append)
   }
 
-  @Disabled("needs delete support")
   @ParameterizedTest
   @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
   def testRLIBulkInsertThenInsertOverwrite(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
@@ -200,7 +199,6 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     validateDataAndRecordIndices(hudiOpts)
   }
 
-  @Disabled("needs delete support")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithDeletePartition(tableType: HoodieTableType): Unit = {
@@ -520,12 +518,14 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
+    deletedDf.cache()
     if (validate) {
       validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
