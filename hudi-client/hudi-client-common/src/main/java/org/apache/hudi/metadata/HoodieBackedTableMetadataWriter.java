@@ -910,11 +910,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     dataMetaClient.reloadActiveTimeline();
 
     // Since the restore has completed on the dataset, the latest write timeline instant is the one to which the
-    // restore was performed. This should be always present.
-    final String restoreToInstantTime = dataMetaClient.getActiveTimeline().getWriteTimeline()
-        .lastInstant().get().getTimestamp();
+    // restore was performed. If this is not present, then the restore was performed to the earliest commit. This
+    // could happen in case of bootstrap followed by rollback e.g. TestBootstrap#testFullBootstrapWithRegexModeWithUpdatesMOR.
+    Option<HoodieInstant> restoreInstant = dataMetaClient.getActiveTimeline().getWriteTimeline().lastInstant();
+    final String restoreToInstantTime;
+    if (restoreInstant.isPresent()) {
+      restoreToInstantTime = restoreInstant.get().getTimestamp();
+    } else {
+      restoreToInstantTime = metadataMetaClient.getActiveTimeline().filterCompletedInstants().firstInstant().get().getTimestamp();
+    }
 
-    // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
+    // We cannot restore to before the oldest compaction on MDT as we don't have the base files before that time.
     Option<HoodieInstant> oldestCompaction = metadataMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
     if (oldestCompaction.isPresent()) {
       if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(restoreToInstantTime, oldestCompaction.get().getTimestamp())) {

@@ -86,7 +86,6 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
@@ -672,6 +671,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMetadataIndexBloomFilterFileGroups(4)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexBloomFilterFileGroups(2)
+            .withMaxNumDeltaCommitsBeforeCompaction(12) // cannot restore to before the oldest compaction on MDT as there are no base files before that time
             .build())
         .build();
     init(tableType, writeConfig);
@@ -1867,11 +1867,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Restore
-      if (metaClient.getTableType() == COPY_ON_WRITE) {
-        assertThrows(HoodieRestoreException.class, () -> client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled()));
-      } else {
-        client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled());
-      }
+      client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled());
       validateMetadata(client);
     }
   }
@@ -2826,7 +2822,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Test duplicate operation with same instant timestamp.
-   *
+   * <p>
    * This can happen if the commit on the MDT succeeds but fails on the dataset. For some table services like clean,
    * compaction, replace commit, the operation will be retried with the same timestamp (taken from inflight). Hence,
    * metadata table will see an additional commit with the same timestamp as a previously completed deltacommit.
