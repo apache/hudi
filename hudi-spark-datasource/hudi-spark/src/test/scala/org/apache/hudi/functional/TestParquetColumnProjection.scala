@@ -331,7 +331,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
   @Test
   def testMergeOnReadIncrementalRelationWithFilter(): Unit = {
-    val tablePath = s"$basePath/mor-with-logs-incr"
+    val tablePath = s"$basePath/mor-with-logs-incr-filter"
     val targetRecordsCount = 100
 
     bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true, inlineCompact = true)
