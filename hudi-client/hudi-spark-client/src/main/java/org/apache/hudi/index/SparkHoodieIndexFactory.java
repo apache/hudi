@@ -42,10 +42,12 @@ import java.io.IOException;
  * A factory to generate Spark {@link HoodieIndex}.
  */
 public final class SparkHoodieIndexFactory {
+
+  public static String MERGE_INTO_WRITES = "hoodie.internal.sql.merge.into.writes";
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
-    Boolean mergeIntoWrites = config.getProps().getBoolean("hoodie.internal.sql.merge.into.writes",false);
+    Boolean mergeIntoWrites = config.getProps().getBoolean(MERGE_INTO_WRITES,false);
     if (mergeIntoWrites) {
-      return new HoodieNonIndex(config);
+      return new HoodieInternalProxyIndex(config);
     }
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
