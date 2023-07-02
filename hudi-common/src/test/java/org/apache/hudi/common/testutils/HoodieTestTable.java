@@ -36,6 +36,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -140,14 +141,20 @@ public class HoodieTestTable {
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
   private boolean isNonPartitioned = false;
+  protected Option<HoodieEngineContext> context;
 
   protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
+    this(basePath, fs, metaClient, Option.empty());
+  }
+
+  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;
     this.fs = fs;
     this.metaClient = metaClient;
     testTableState = HoodieTestTableState.of();
+    this.context = context;
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
