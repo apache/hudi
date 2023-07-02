@@ -55,7 +55,6 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
   }
 
   override protected def timeline: HoodieTimeline = {
