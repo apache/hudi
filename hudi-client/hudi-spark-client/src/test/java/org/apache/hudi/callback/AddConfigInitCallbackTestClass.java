@@ -22,25 +22,16 @@ package org.apache.hudi.callback;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.avro.Schema;
-
-import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
-
 /**
- * A test {@link HoodieClientInitCallback} implementation to add the property
- * `user.defined.key2=value2` to the write schema.
+ * A test {@link HoodieClientInitCallback} implementation to add `user.defined.key1` config.
  */
-public class TestChangeConfigInitCallback implements HoodieClientInitCallback {
-  public static final String CUSTOM_CONFIG_KEY2 = "user.defined.key2";
-  public static final String CUSTOM_CONFIG_VALUE2 = "value2";
+public class AddConfigInitCallbackTestClass implements HoodieClientInitCallback {
+  public static final String CUSTOM_CONFIG_KEY1 = "user.defined.key1";
+  public static final String CUSTOM_CONFIG_VALUE1 = "value1";
 
   @Override
   public void call(BaseHoodieClient hoodieClient) {
     HoodieWriteConfig config = hoodieClient.getConfig();
-    Schema schema = new Schema.Parser().parse(config.getWriteSchema());
-    if (!schema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2)) {
-      schema.addProp(CUSTOM_CONFIG_KEY2, CUSTOM_CONFIG_VALUE2);
-    }
-    config.getProps().setProperty(WRITE_SCHEMA_OVERRIDE.key(), schema.toString());
+    config.setValue(CUSTOM_CONFIG_KEY1, CUSTOM_CONFIG_VALUE1);
   }
 }

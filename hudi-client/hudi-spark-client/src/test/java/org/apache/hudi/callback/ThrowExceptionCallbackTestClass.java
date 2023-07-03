@@ -25,7 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 /**
  * A test {@link HoodieClientInitCallback} implementation to throw an exception.
  */
-public class TestThrowExceptionCallback implements HoodieClientInitCallback {
+public class ThrowExceptionCallbackTestClass implements HoodieClientInitCallback {
   @Override
   public void call(BaseHoodieClient hoodieClient) {
     throw new HoodieIOException("Throwing exception during client initialization.");

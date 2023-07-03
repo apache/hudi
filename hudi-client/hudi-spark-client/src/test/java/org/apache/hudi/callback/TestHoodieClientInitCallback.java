@@ -43,10 +43,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.callback.TestAddConfigInitCallback.CUSTOM_CONFIG_KEY1;
-import static org.apache.hudi.callback.TestAddConfigInitCallback.CUSTOM_CONFIG_VALUE1;
-import static org.apache.hudi.callback.TestChangeConfigInitCallback.CUSTOM_CONFIG_KEY2;
-import static org.apache.hudi.callback.TestChangeConfigInitCallback.CUSTOM_CONFIG_VALUE2;
+import static org.apache.hudi.callback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY1;
+import static org.apache.hudi.callback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE1;
+import static org.apache.hudi.callback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY2;
+import static org.apache.hudi.callback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE2;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -91,7 +91,7 @@ public class TestHoodieClientInitCallback {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
-        .withClientInitCallbackClassNames(TestChangeConfigInitCallback.class.getCanonicalName())
+        .withClientInitCallbackClassNames(ChangeConfigInitCallbackTestClass.class.getCanonicalName())
         .withProps(Collections.singletonMap(
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
@@ -120,8 +120,8 @@ public class TestHoodieClientInitCallback {
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withClientInitCallbackClassNames(
-            TestChangeConfigInitCallback.class.getCanonicalName() + ","
-                + TestAddConfigInitCallback.class.getCanonicalName())
+            ChangeConfigInitCallbackTestClass.class.getCanonicalName() + ","
+                + AddConfigInitCallbackTestClass.class.getCanonicalName())
         .withProps(Collections.singletonMap(
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
@@ -152,8 +152,8 @@ public class TestHoodieClientInitCallback {
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withClientInitCallbackClassNames(
-            TestAddConfigInitCallback.class.getCanonicalName() + ","
-                + TestThrowExceptionCallback.class.getCanonicalName())
+            AddConfigInitCallbackTestClass.class.getCanonicalName() + ","
+                + ThrowExceptionCallbackTestClass.class.getCanonicalName())
         .build(false);
     HoodieIOException exception = assertThrows(
         HoodieIOException.class,
@@ -184,9 +184,7 @@ public class TestHoodieClientInitCallback {
         {HoodieWriteCommitHttpCallback.class.getCanonicalName(),
             "Could not load class " + HoodieWriteCommitHttpCallback.class.getCanonicalName()},
         {NonSortPartitionerWithRows.class.getCanonicalName(),
-            NonSortPartitionerWithRows.class.getCanonicalName()
-              + " is not a subclass of "
-              + HoodieClientInitCallback.class.getSimpleName()}
+            NonSortPartitionerWithRows.class.getCanonicalName() + " is not a subclass of " + HoodieClientInitCallback.class.getSimpleName()}
     }).map(Arguments::of);
   }
 }
