@@ -683,10 +683,17 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
+  @Test
+  public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
+    testArchivalWithMultiWriters(false);
+  }
+
   @Disabled("HUDI-6386")
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
+  public void testArchivalWithMultiWriters() throws Exception {
+    testArchivalWithMultiWriters(true);
+  }
+
+  private void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
         HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
