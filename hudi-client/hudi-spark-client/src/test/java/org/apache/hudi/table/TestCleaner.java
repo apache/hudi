@@ -872,16 +872,17 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).withAsyncClean(isAsync).retainCommits(2).build())
         .build();
+
     // Deletions:
-    // . FileId Base Logs Total Retained Commits
-    // FileId7 5 10 15 009, 011
-    // FileId6 5 10 15 009
-    // FileId5 3 6 9 005
-    // FileId4 2 4 6 003
-    // FileId3 1 2 3 001
-    // FileId2 0 0 0 000
-    // FileId1 0 0 0 000
-    testPendingCompactions(config, 48, 18, false);
+    // . FileId   Base  Logs  Total Retained_Commits  Under_Compaction
+    //   FileId7  1     2     3     001,003           false
+    //   FileId6  1     2     3     001,003           false
+    //   FileId5  1     2     3     001,003           true
+    //   FileId4  1     2     3     001,003           true
+    //   FileId3  1     2     3     001               true
+    //   FileId2  0     0     0     000               true
+    //   FileId1  0     0     0     000               false
+    testPendingCompactions(config, 15, 9, false);
   }
 
   /**
@@ -896,15 +897,16 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
+
     // Deletions:
-    // . FileId Base Logs Total Retained Commits
-    // FileId7 5 10 15 009, 011
-    // FileId6 4 8 12 007, 009
-    // FileId5 2 4 6 003 005
-    // FileId4 1 2 3 001, 003
-    // FileId3 0 0 0 000, 001
-    // FileId2 0 0 0 000
-    // FileId1 0 0 0 000
+    // . FileId   Base  Logs  Total Retained_Commits  Under_Compaction
+    //   FileId7  5     10    15    009,013           false
+    //   FileId6  4     8     12    007,009           false
+    //   FileId5  2     4     6     003,005           true
+    //   FileId4  1     2     3     001,003           true
+    //   FileId3  0     0     0     000,001           true
+    //   FileId2  0     0     0     000               true
+    //   FileId1  0     0     0     000               false
     testPendingCompactions(config, 36, 9, retryFailure);
   }
 
