@@ -152,7 +152,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       Object callback = ReflectionUtils.loadClass(callbackClass);
       if (!(callback instanceof HoodieClientInitCallback)) {
         throw new HoodieException(callbackClass + " is not a subclass of "
-            + HoodieClientInitCallback.class.getSimpleName());
+            + HoodieClientInitCallback.class.getName());
       }
       ((HoodieClientInitCallback) callback).call(this);
     });

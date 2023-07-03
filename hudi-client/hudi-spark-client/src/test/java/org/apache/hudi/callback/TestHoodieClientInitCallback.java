@@ -20,6 +20,7 @@
 package org.apache.hudi.callback;
 
 import org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback;
+import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -43,10 +44,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.callback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY1;
-import static org.apache.hudi.callback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE1;
-import static org.apache.hudi.callback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY2;
-import static org.apache.hudi.callback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE2;
+import static org.apache.hudi.callback.TestHoodieClientInitCallback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY1;
+import static org.apache.hudi.callback.TestHoodieClientInitCallback.AddConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE1;
+import static org.apache.hudi.callback.TestHoodieClientInitCallback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY2;
+import static org.apache.hudi.callback.TestHoodieClientInitCallback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE2;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -91,7 +92,7 @@ public class TestHoodieClientInitCallback {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
-        .withClientInitCallbackClassNames(ChangeConfigInitCallbackTestClass.class.getCanonicalName())
+        .withClientInitCallbackClassNames(ChangeConfigInitCallbackTestClass.class.getName())
         .withProps(Collections.singletonMap(
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
@@ -120,8 +121,8 @@ public class TestHoodieClientInitCallback {
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withClientInitCallbackClassNames(
-            ChangeConfigInitCallbackTestClass.class.getCanonicalName() + ","
-                + AddConfigInitCallbackTestClass.class.getCanonicalName())
+            ChangeConfigInitCallbackTestClass.class.getName() + ","
+                + AddConfigInitCallbackTestClass.class.getName())
         .withProps(Collections.singletonMap(
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
@@ -152,8 +153,8 @@ public class TestHoodieClientInitCallback {
         .withPath(tmpDir.toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withClientInitCallbackClassNames(
-            AddConfigInitCallbackTestClass.class.getCanonicalName() + ","
-                + ThrowExceptionCallbackTestClass.class.getCanonicalName())
+            AddConfigInitCallbackTestClass.class.getName() + ","
+                + ThrowExceptionCallbackTestClass.class.getName())
         .build(false);
     HoodieIOException exception = assertThrows(
         HoodieIOException.class,
@@ -181,10 +182,53 @@ public class TestHoodieClientInitCallback {
 
   private static Stream<Arguments> testArgsForNonCallbackClass() {
     return Arrays.stream(new String[][] {
-        {HoodieWriteCommitHttpCallback.class.getCanonicalName(),
-            "Could not load class " + HoodieWriteCommitHttpCallback.class.getCanonicalName()},
-        {NonSortPartitionerWithRows.class.getCanonicalName(),
-            NonSortPartitionerWithRows.class.getCanonicalName() + " is not a subclass of " + HoodieClientInitCallback.class.getSimpleName()}
+        {HoodieWriteCommitHttpCallback.class.getName(),
+            "Could not load class " + HoodieWriteCommitHttpCallback.class.getName()},
+        {NonSortPartitionerWithRows.class.getName(),
+            NonSortPartitionerWithRows.class.getName() + " is not a subclass of " + HoodieClientInitCallback.class.getName()}
     }).map(Arguments::of);
+  }
+
+  /**
+   * A test {@link HoodieClientInitCallback} implementation to add `user.defined.key1` config.
+   */
+  public static class AddConfigInitCallbackTestClass implements HoodieClientInitCallback {
+    public static final String CUSTOM_CONFIG_KEY1 = "user.defined.key1";
+    public static final String CUSTOM_CONFIG_VALUE1 = "value1";
+
+    @Override
+    public void call(BaseHoodieClient hoodieClient) {
+      HoodieWriteConfig config = hoodieClient.getConfig();
+      config.setValue(CUSTOM_CONFIG_KEY1, CUSTOM_CONFIG_VALUE1);
+    }
+  }
+
+  /**
+   * A test {@link HoodieClientInitCallback} implementation to add the property
+   * `user.defined.key2=value2` to the write schema.
+   */
+  public static class ChangeConfigInitCallbackTestClass implements HoodieClientInitCallback {
+    public static final String CUSTOM_CONFIG_KEY2 = "user.defined.key2";
+    public static final String CUSTOM_CONFIG_VALUE2 = "value2";
+
+    @Override
+    public void call(BaseHoodieClient hoodieClient) {
+      HoodieWriteConfig config = hoodieClient.getConfig();
+      Schema schema = new Schema.Parser().parse(config.getWriteSchema());
+      if (!schema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2)) {
+        schema.addProp(CUSTOM_CONFIG_KEY2, CUSTOM_CONFIG_VALUE2);
+      }
+      config.getProps().setProperty(WRITE_SCHEMA_OVERRIDE.key(), schema.toString());
+    }
+  }
+
+  /**
+   * A test {@link HoodieClientInitCallback} implementation to throw an exception.
+   */
+  public static class ThrowExceptionCallbackTestClass implements HoodieClientInitCallback {
+    @Override
+    public void call(BaseHoodieClient hoodieClient) {
+      throw new HoodieIOException("Throwing exception during client initialization.");
+    }
   }
 }
