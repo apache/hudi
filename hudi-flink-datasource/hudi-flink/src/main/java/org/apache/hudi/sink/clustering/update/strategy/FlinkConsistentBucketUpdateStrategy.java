@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -71,14 +71,15 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
       return;
     }
     HoodieFlinkTable table = writeClient.getHoodieTable();
-    Option<HoodieInstant> latestPendingReplaceInstant = table.getActiveTimeline().filterPendingReplaceTimeline().lastInstant();
-    if (latestPendingReplaceInstant.isPresent() && latestPendingReplaceInstant.get().getTimestamp().compareTo(lastRefreshInstant) > 0) {
+    List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
+    if (!instants.isEmpty()) {
+      HoodieInstant latestPendingReplaceInstant = instants.get(instants.size() - 1);
       LOG.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
       this.table = table;
       this.fileGroupsInPendingClustering = table.getFileSystemView().getFileGroupsInPendingClustering()
           .map(Pair::getKey).collect(Collectors.toSet());
       // TODO throw exception if exists bucket merge plan
-      this.lastRefreshInstant = latestPendingReplaceInstant.get().getTimestamp();
+      this.lastRefreshInstant = latestPendingReplaceInstant.getTimestamp();
       this.partitionToIdentifier.clear();
     }
     this.initialized = true;

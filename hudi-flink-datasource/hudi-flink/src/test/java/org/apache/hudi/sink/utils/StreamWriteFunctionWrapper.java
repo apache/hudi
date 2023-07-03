@@ -146,7 +146,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
       bootstrapOperator.setup(streamTask, streamConfig, output);
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
-      Collector<HoodieRecord<?>> collector = MockCollector.getInstance();
+      Collector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
       for (HoodieRecord<?> bootstrapRecord : output.getRecords()) {
         bucketAssignerFunction.processElement(bootstrapRecord, null, collector);
         bucketAssignFunctionContext.setCurrentKey(bootstrapRecord.getRecordKey());
@@ -164,7 +164,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void invoke(I record) throws Exception {
     HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
-    MockCollector<HoodieRecord<?>> collector = MockCollector.getInstance();
+    ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
     writeFunction.processElement(collector.getVal(), null, null);

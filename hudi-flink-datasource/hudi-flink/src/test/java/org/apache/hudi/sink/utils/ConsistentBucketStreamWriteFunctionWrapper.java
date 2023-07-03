@@ -60,7 +60,7 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
   @Override
   public void invoke(I record) throws Exception {
     HoodieRecord hoodieRecord = toHoodieFunction.map((RowData) record);
-    Collector<HoodieRecord> collector = MockCollector.getInstance();
+    Collector<HoodieRecord> collector = ScalaCollector.getInstance();
     assignFunction.processElement(hoodieRecord, null, collector);
     writeFunction.processElement(hoodieRecord, null, null);
   }

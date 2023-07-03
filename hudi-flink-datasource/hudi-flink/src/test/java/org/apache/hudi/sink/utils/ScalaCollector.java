@@ -23,11 +23,11 @@ import org.apache.flink.util.Collector;
 /**
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
-class MockCollector<T> implements Collector<T> {
+class ScalaCollector<T> implements Collector<T> {
   private T val;
 
-  public static <T> MockCollector<T> getInstance() {
-    return new MockCollector<>();
+  public static <T> ScalaCollector<T> getInstance() {
+    return new ScalaCollector<>();
   }
 
   @Override

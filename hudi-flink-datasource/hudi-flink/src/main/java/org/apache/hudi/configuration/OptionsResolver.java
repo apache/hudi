@@ -209,8 +209,9 @@ public class OptionsResolver {
     if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
       // Write pipelines for table with consistent bucket index would detect whether clustering service occurs,
       // and automatically adjust the partitioner and write function if clustering service happens.
-      // So it could handle UPSERT and INSERT case.
-      return operationType == WriteOperationType.INSERT || operationType == WriteOperationType.UPSERT;
+      // So it could handle UPSERT.
+      // But it could not handle INSERT case, because insert write would not take index into consideration currently.
+      return operationType == WriteOperationType.UPSERT;
     } else {
       return operationType == WriteOperationType.INSERT;
     }
