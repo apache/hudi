@@ -82,8 +82,6 @@ object HoodieCreateRecordUtils {
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
           HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()
         ).toBoolean
-    } else if (mergeIntoWrites && StringUtils.isNullOrEmpty(config.getString(PRECOMBINE_FIELD))) {
-      false
     } else if (!isPrepped && WriteOperationType.isUpsert(operation)) {
       parameters.getOrElse(
         HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key(),
@@ -225,6 +223,8 @@ object HoodieCreateRecordUtils {
 
   def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: Option[BaseKeyGenerator], avroRec: GenericRecord,
                                                  isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    //use keygen for mergeIntoWrites recordKey and partitionPath because the keygenerator handles
+    //fetching from the meta fields if they are populated and otherwise doing keygen
     val recordKey = if (isPrepped) {
       avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
@@ -262,6 +262,8 @@ object HoodieCreateRecordUtils {
   def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: Option[SparkKeyGeneratorInterface],
                                                   sourceRow: InternalRow, schema: StructType,
                                                   isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    //use keygen for mergeIntoWrites recordKey and partitionPath because the keygenerator handles
+    //fetching from the meta fields if they are populated and otherwise doing keygen
     val recordKey = if (isPrepped) {
       sourceRow.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD)
     } else {

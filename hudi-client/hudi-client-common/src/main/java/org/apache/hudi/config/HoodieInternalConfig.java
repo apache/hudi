@@ -46,6 +46,13 @@ public class HoodieInternalConfig extends HoodieConfig {
       .withDocumentation("For SQL operations, if enables bulk_insert operation, "
           + "this configure will take effect to decide overwrite whole table or partitions specified");
 
+  public static final ConfigProperty<String> SQL_MERGE_INTO_WRITES = ConfigProperty
+      .key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("For merge into from spark-sql, we need some special handling. for eg, schema "
+          + "validation should be disabled for writes from merge into. As well as reuse of meta cols for keygen and skip tagging");
+
   /**
    * Returns if partition records are sorted or not.
    *

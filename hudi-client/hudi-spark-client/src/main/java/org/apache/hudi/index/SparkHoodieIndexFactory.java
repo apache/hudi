@@ -21,6 +21,7 @@ package org.apache.hudi.index;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -42,10 +43,8 @@ import java.io.IOException;
  * A factory to generate Spark {@link HoodieIndex}.
  */
 public final class SparkHoodieIndexFactory {
-
-  public static String MERGE_INTO_WRITES = "hoodie.internal.sql.merge.into.writes";
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
-    Boolean mergeIntoWrites = config.getProps().getBoolean(MERGE_INTO_WRITES,false);
+    boolean mergeIntoWrites = config.getProps().getBoolean(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(), false);
     if (mergeIntoWrites) {
       return new HoodieInternalProxyIndex(config);
     }

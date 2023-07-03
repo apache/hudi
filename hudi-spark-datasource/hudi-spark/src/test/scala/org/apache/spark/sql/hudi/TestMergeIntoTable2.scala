@@ -373,7 +373,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
-  /*
+  /* TODO [HUDI-6472]
   test("Test MergeInto When PrimaryKey And PreCombineField Of Source Table And Target Table Differ In Case Only") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -879,7 +879,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                | using (
                |  select 3 as id, 'a3' as name, 10.3 as price, 1003 as ts, '2021-03-21' as dt
                |  union all
-               |  select 1 as id, 'a2' as name, 10.2 as price, 1002 as ts, '2021-03-21' as dt
+               |  select 1 as id, 'a2' as name, 10.4 as price, 1004 as ts, '2021-03-21' as dt
                | ) as s0
                | on t0.id = s0.id
                | when matched then update set *
@@ -887,8 +887,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
          """.stripMargin
           )
           checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a2", 10.2, 1002, "2021-03-21"),
-            Seq(1, "a2", 10.2, 1002, "2021-03-21"),
+            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
             Seq(3, "a3", 10.3, 1003, "2021-03-21")
           )
         }

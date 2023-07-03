@@ -89,14 +89,6 @@ object HoodieSparkSqlWriter {
       .defaultValue(true)
 
   /**
-   * For merge into from spark-sql, we need some special handling. for eg, schema validation should be disabled
-   * for writes from merge into. This config is used for internal purposes.
-   */
-  val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
-      .defaultValue(false)
-
-  /**
    * For spark streaming use-cases, holds the batch Id.
    */
   val SPARK_STREAMING_BATCH_ID = "hoodie.internal.spark.streaming.batch.id"
@@ -337,7 +329,8 @@ object HoodieSparkSqlWriter {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val mergeIntoWrites = parameters.getOrDefault(SQL_MERGE_INTO_WRITES.key(), SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+            val mergeIntoWrites = parameters.getOrDefault(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(),
+              HoodieInternalConfig.SQL_MERGE_INTO_WRITES.defaultValue).toBoolean
             val processedDataSchema = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
@@ -440,8 +433,8 @@ object HoodieSparkSqlWriter {
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
           CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
-        val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
-          SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+        val mergeIntoWrites = opts.getOrDefault(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(),
+          HoodieInternalConfig.SQL_MERGE_INTO_WRITES.defaultValue).toBoolean
 
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
           canonicalizeSchema(sourceSchema, latestTableSchema)

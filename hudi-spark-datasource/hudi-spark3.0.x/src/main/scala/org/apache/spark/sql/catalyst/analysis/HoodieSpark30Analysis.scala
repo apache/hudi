@@ -38,11 +38,15 @@ object HoodieSpark30Analysis {
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case mO @ MergeIntoTable(targetTableO, sourceTableO, _, _, _)
+        //// Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
+        //
         if !mO.resolved || containsUnresolvedStarAssignments(mO) =>
         lazy val analyzer = spark.sessionState.analyzer
         val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
         val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
         val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
+        //
+        ////
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
             val newMatchedActions = m.matchedActions.map {
@@ -79,7 +83,11 @@ object HoodieSpark30Analysis {
                                    mergeInto: MergeIntoTable,
                                    resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
       if (assignments.isEmpty) {
+        ////Hudi change: filter out meta fields
+        //
         val expandedColumns = HoodieSqlCommonUtils.removeMetaFields(mergeInto.targetTable.output)
+        //
+        ////
         val expandedValues = mergeInto.sourceTable.output
         expandedColumns.zip(expandedValues).map(kv => Assignment(kv._1, kv._2))
       } else {
