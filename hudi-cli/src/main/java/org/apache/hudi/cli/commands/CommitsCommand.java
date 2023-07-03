@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.util.HoodieInflightCommitsUtil;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -358,6 +359,28 @@ public class CommitsCommand {
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
         limit, headerOnly, rows, exportTableName);
+  }
+
+  @ShellMethod(key = "commits show_infights", value = "Show inflight instants that are left longer than a certain duration")
+  public String showInflightCommits(
+      @ShellOption(value = {"durationInMins"}, help = "Commit to show", defaultValue = "0") final long durationInMins) {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    // Fetch inflight commits.
+    List<HoodieInstant> inflightInstants = HoodieInflightCommitsUtil
+        .inflightWriteCommitsOlderThan(metaClient, durationInMins, true);
+
+    // Create a table out of inflight commits.
+    List<String[]> data = new ArrayList<>();
+    inflightInstants.forEach(instant ->
+        data.add(new String[]{instant.requestedTime(), instant.getAction(), instant.getState().name()}));
+    String[] header = new String[]{HoodieTableHeaderFields.HEADER_COMMIT_TIME,
+        HoodieTableHeaderFields.HEADER_ACTION, HoodieTableHeaderFields.HEADER_STATE};
+    if (data.isEmpty()) {
+      return "No inflight instants are found.";
+    } else {
+      return HoodiePrintHelper.print(header, data.toArray(new String[0][]));
+    }
   }
 
   @ShellMethod(key = "commits compare", value = "Compare commits with another Hoodie table")
