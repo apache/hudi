@@ -65,7 +65,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -323,7 +322,6 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     }
   }
 
-  // @Disabled("HUDI-6385")
   @ParameterizedTest
   @ValueSource(strings = {"KEEP_LATEST_BY_HOURS", "KEEP_LATEST_COMMITS"})
   public void testArchivalWithAutoAdjustmentBasedOnCleanConfigs(String cleaningPolicy) throws Exception {
@@ -683,9 +681,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
-  @Disabled("HUDI-6386")
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {false, true})
   public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
@@ -703,16 +700,16 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         } catch (InterruptedException e) {
           throw new HoodieException("Should not have thrown InterruptedException ", e);
         }
-        metaClient.reloadActiveTimeline();
-        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
-            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
+        table.getMetaClient().reloadActiveTimeline();
+        while (!table.getMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
+            || table.getMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
           try {
             HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
             archiver.archiveIfRequired(context, true);
             // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
             // to complete the write operation when metadata table is enabled.
             if (enableMetadata) {
-              Thread.sleep(2);
+              Thread.sleep(50);
             }
           } catch (IOException e) {
             throw new HoodieException("IOException thrown while archiving ", e);
