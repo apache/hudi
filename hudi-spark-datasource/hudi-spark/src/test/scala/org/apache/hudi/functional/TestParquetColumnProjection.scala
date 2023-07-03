@@ -336,7 +336,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
     bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true, inlineCompact = true)
 
-    println(s"Running test for $tablePath / incremental")
     val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build()
     val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
     val startUnarchivedCommitTs = (completedCommits.nthInstant(1).get().getTimestamp.toLong - 1L).toString

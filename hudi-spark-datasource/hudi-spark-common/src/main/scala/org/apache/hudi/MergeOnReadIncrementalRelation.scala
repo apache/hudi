@@ -53,10 +53,6 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
-  override def imbueConfigs(sqlContext: SQLContext): Unit = {
-    super.imbueConfigs(sqlContext)
-  }
-
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
       metaClient.getCommitsAndCompactionTimeline
