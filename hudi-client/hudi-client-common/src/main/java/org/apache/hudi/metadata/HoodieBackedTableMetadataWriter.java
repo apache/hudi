@@ -1163,7 +1163,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
     // 1. List<HoodieRecordDelegate>
     // 2. Reduce by key: accept keys only when new location is not
-    return writeStatuses.map(writeStatus -> writeStatus.getWrittenRecordDelegates().stream().map(recordDelegate -> Pair.of(writeStatus, recordDelegate)))
+    return writeStatuses.map(writeStatus -> writeStatus.getWrittenRecordDelegates().stream()
+            .map(recordDelegate -> Pair.of(recordDelegate.getRecordKey(), recordDelegate)))
         .flatMapToPair(Stream::iterator)
         .reduceByKey((recordDelegate1, recordDelegate2) -> {
           if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
@@ -1180,11 +1181,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           }
         }, 1)
         .map(writeStatusRecordDelegate -> {
-          WriteStatus writeStatus = writeStatusRecordDelegate.getKey();
           HoodieRecordDelegate recordDelegate = writeStatusRecordDelegate.getValue();
-          if (recordDelegate == null || writeStatus.isErrored(recordDelegate.getHoodieKey())) {
-            return null;
-          }
           HoodieRecord hoodieRecord;
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
