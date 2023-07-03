@@ -217,7 +217,7 @@ public class HoodieJavaWriteClient<T> extends
     // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
     // if it didn't exist before
     // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
-    initializeMetadataTable(instantTime);
+    initializeMetadataTable(instantTime, metaClient);
   }
 
   /**
@@ -226,7 +226,7 @@ public class HoodieJavaWriteClient<T> extends
    *
    * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
    */
-  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp, HoodieTableMetaClient metaClient) {
     if (!config.isMetadataTableEnabled()) {
       return;
     }
@@ -234,6 +234,9 @@ public class HoodieJavaWriteClient<T> extends
     try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(
         context.getStorageConf(), config, context, inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
+        if (writer.isPartitionsStateChanged()) {
+          metaClient.reloadTableConfig();
+        }
         writer.performTableServices(inFlightInstantTimestamp);
       }
     } catch (Exception e) {
