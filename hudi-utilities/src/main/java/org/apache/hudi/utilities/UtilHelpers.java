@@ -589,9 +589,6 @@ public class UtilHelpers {
 
   public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run clustering without any completed commits");
-    }
     Schema schema = schemaResolver.getTableAvroSchema(false);
     return schema.toString();
   }

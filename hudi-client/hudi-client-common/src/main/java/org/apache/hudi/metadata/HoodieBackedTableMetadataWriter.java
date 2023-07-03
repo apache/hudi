@@ -459,11 +459,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
         dataMetaClient.getActiveTimeline(), metadata);
 
-    // MOR tables are not supported
-    if (!dataMetaClient.getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
-      throw new HoodieMetadataException("Only COW tables are supported with record index");
-    }
-
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
@@ -826,7 +821,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       return partitionsToUpdate;
     }
     // fallback to all enabled partitions if table config returned no partitions
-    LOG.warn("There are no partitions to update according to table config. Falling back to enabled partition types in the write config.");
+    LOG.debug("There are no partitions to update according to table config. Falling back to enabled partition types in the write config.");
     return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 

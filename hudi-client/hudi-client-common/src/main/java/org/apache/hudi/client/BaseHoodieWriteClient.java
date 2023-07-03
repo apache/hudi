@@ -523,7 +523,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param hoodieTable Hoodie Table
    * @return Write Status
    */
-  protected abstract O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable);
+  public abstract O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable);
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing

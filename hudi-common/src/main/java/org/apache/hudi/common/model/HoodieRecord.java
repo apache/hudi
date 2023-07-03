@@ -233,11 +233,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Sets the new currentLocation of the record, after being written. This again should happen exactly-once.
    */
-  public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+  public void setNewLocation(HoodieRecordLocation location) {
     checkState();
     assert newLocation == null;
     this.newLocation = location;
-    return this;
   }
 
   @Nullable
@@ -310,6 +309,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
 
   protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  /**
+   * Clears the new currentLocation of the record. 
+   *
+   * This is required in the delete path so that Index can track that this record was deleted.
+   */
+  public void clearNewLocation() {
+    checkState();
+    this.newLocation = null;
+  }
 
   /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore

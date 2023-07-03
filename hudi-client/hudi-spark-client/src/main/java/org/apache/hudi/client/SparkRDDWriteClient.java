@@ -265,9 +265,9 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
-                                           String instantTime,
-                                           HoodieTable hoodieTable) {
+  public JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
+                                        String instantTime,
+                                        HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }

@@ -59,6 +59,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -2143,7 +2144,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         try {
           fs.delete(entry.getPath());
         } catch (IOException e) {
-          e.printStackTrace();
+          LOG.warn("Failed to delete " + entry.getPath().toString(), e);
         }
       });
     }
@@ -2159,7 +2160,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
       TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     } else {
-      assertThrows(org.apache.hudi.exception.HoodieIOException.class, () -> new HoodieDeltaStreamer(
+      assertThrows(HoodieIOException.class, () -> new HoodieDeltaStreamer(
           TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
               null, PROPS_FILENAME_TEST_PARQUET, false,
               useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc));
