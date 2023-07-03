@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -71,6 +72,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
+  protected HoodieRecordLocation newRecordLocation;
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
@@ -95,12 +97,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = HoodieTimer.start();
-    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+    this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
+    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
   }
 
   /**
@@ -211,7 +214,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   public HoodieTableMetaClient getHoodieTableMetaClient() {
     return hoodieTable.getMetaClient();
   }
-  
+
   public String getFileId() {
     return this.fileId;
   }
@@ -294,9 +297,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     @Override
     public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-      // we use create rather than createIfNotExists because create method can trigger marker-based early conflict detection.
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+      return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
           config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
 

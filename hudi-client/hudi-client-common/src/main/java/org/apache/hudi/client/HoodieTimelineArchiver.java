@@ -47,7 +47,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -75,11 +75,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.text.ParseException;
 import java.time.Instant;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,11 +85,18 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.NOT_PARSABLE_TIMESTAMPS;
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
+import static org.apache.hudi.config.HoodieArchivalConfig.MAX_COMMITS_TO_KEEP;
+import static org.apache.hudi.config.HoodieArchivalConfig.MIN_COMMITS_TO_KEEP;
+import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_COMMITS_RETAINED;
+import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED;
+import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_HOURS_RETAINED;
+import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -114,9 +119,73 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    this.maxInstantsToKeep = config.getMaxCommitsToKeep();
-    this.minInstantsToKeep = config.getMinCommitsToKeep();
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    HoodieTimeline completedCommitsTimeline = table.getCompletedCommitsTimeline();
+    Option<HoodieInstant> latestCommit = completedCommitsTimeline.lastInstant();
+    HoodieCleaningPolicy cleanerPolicy = config.getCleanerPolicy();
+    int cleanerCommitsRetained = config.getCleanerCommitsRetained();
+    int cleanerHoursRetained = config.getCleanerHoursRetained();
+    Option<HoodieInstant> earliestCommitToRetain = getEarliestCommitToRetain(latestCommit, cleanerPolicy, cleanerCommitsRetained, cleanerHoursRetained);
+    int configuredMinInstantsToKeep = config.getMinCommitsToKeep();
+    int configuredMaxInstantsToKeep = config.getMaxCommitsToKeep();
+    if (earliestCommitToRetain.isPresent()) {
+      int minInstantsToKeepBasedOnCleaning =
+          completedCommitsTimeline.findInstantsAfter(earliestCommitToRetain.get().getTimestamp())
+              .countInstants() + 2;
+      if (configuredMinInstantsToKeep < minInstantsToKeepBasedOnCleaning) {
+        this.maxInstantsToKeep = minInstantsToKeepBasedOnCleaning
+            + configuredMaxInstantsToKeep - configuredMinInstantsToKeep;
+        this.minInstantsToKeep = minInstantsToKeepBasedOnCleaning;
+        LOG.warn("The configured archival configs {}={} is more aggressive than the cleaning "
+                + "configs as the earliest commit to retain is {}. Adjusted the archival configs "
+                + "to be {}={} and {}={}",
+            MIN_COMMITS_TO_KEEP.key(), configuredMinInstantsToKeep, earliestCommitToRetain.get(),
+            MIN_COMMITS_TO_KEEP.key(), this.minInstantsToKeep,
+            MAX_COMMITS_TO_KEEP.key(), this.maxInstantsToKeep);
+        switch (cleanerPolicy) {
+          case KEEP_LATEST_COMMITS:
+            LOG.warn("Cleaning configs: {}=KEEP_LATEST_COMMITS {}={}", CLEANER_POLICY.key(),
+                CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
+            break;
+          case KEEP_LATEST_BY_HOURS:
+            LOG.warn("Cleaning configs: {}=KEEP_LATEST_BY_HOURS {}={}", CLEANER_POLICY.key(),
+                CLEANER_HOURS_RETAINED.key(), cleanerHoursRetained);
+            break;
+          case KEEP_LATEST_FILE_VERSIONS:
+            LOG.warn("Cleaning configs: {}=CLEANER_FILE_VERSIONS_RETAINED {}={}", CLEANER_POLICY.key(),
+                CLEANER_FILE_VERSIONS_RETAINED.key(), config.getCleanerFileVersionsRetained());
+            break;
+          default:
+            break;
+        }
+      } else {
+        this.maxInstantsToKeep = configuredMaxInstantsToKeep;
+        this.minInstantsToKeep = configuredMinInstantsToKeep;
+      }
+    } else {
+      this.maxInstantsToKeep = configuredMaxInstantsToKeep;
+      this.minInstantsToKeep = configuredMinInstantsToKeep;
+    }
+  }
+
+  private Option<HoodieInstant> getEarliestCommitToRetain(Option<HoodieInstant> latestCommit, HoodieCleaningPolicy cleanerPolicy, int cleanerCommitsRetained, int cleanerHoursRetained) {
+    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+    try {
+      earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
+          metaClient.getActiveTimeline().getCommitsTimeline(),
+          cleanerPolicy,
+          cleanerCommitsRetained,
+          latestCommit.isPresent()
+              ? parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
+              : Instant.now(),
+          cleanerHoursRetained,
+          metaClient.getTableConfig().getTimelineTimezone());
+    } catch (ParseException e) {
+      if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getTimestamp().startsWith(ts))) {
+        LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());
+      }
+    }
+    return earliestCommitToRetain;
   }
 
   private Writer openWriter() {
@@ -492,24 +561,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
                       HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
           );
-      List<HoodieInstant> instantsToArchive = instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep).collect(Collectors.toList());
-      // If cleaner is based on hours, lets ensure hudi does not archive commits yet to cleaned by the cleaner.
-      if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS && !instantsToArchive.isEmpty()) {
-        String latestCommitToArchive = instantsToArchive.get(instantsToArchive.size() - 1).getTimestamp();
-        try {
-          Instant latestCommitInstant = HoodieActiveTimeline.parseDateFromInstantTime(commitTimeline.lastInstant().get().getTimestamp()).toInstant();
-          ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(latestCommitInstant, metaClient.getTableConfig().getTimelineTimezone().getZoneId());
-          String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(config.getCleanerHoursRetained()).toInstant()));
-          if (HoodieTimeline.compareTimestamps(latestCommitToArchive, GREATER_THAN_OR_EQUALS, earliestTimeToRetain)) {
-            throw new HoodieIOException("Please align your archival configs based on cleaner configs. 'hoodie.keep.min.commits' : "
-                + config.getMinCommitsToKeep() + " + should be greater than "
-                + " 'hoodie.cleaner.hours.retained' : " + config.getCleanerHoursRetained());
-          }
-        } catch (ParseException e) {
-          throw new HoodieIOException("Failed to parse latest commit instant time " + commitTimeline.lastInstant().get().getTimestamp() + e.getMessage());
-        }
-      }
-      return instantsToArchive.stream();
+      return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();
     }
@@ -529,9 +581,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
-    if (table.getMetaClient().getTableConfig().isMetadataTableEnabled()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
-          config.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
+    if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
@@ -97,6 +99,7 @@ import static org.apache.hudi.hive.testutils.HiveTestUtil.basePath;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncConfig;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -269,6 +272,39 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testDropUpperCasePartitionWithHMS() throws Exception {
+    hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS.key(), "DATESTR");
+    // Create and write some partition
+    HiveTestUtil.createCOWTable("100", 1, true);
+    HiveTestUtil.addCOWPartition("2010/02/01", true, true, "101");
+    HiveTestUtil.addCOWPartition("2010/02/02", true, true, "102");
+    HiveTestUtil.addCOWPartition("2010/02/03", true, true, "103");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
+    // Drop partition with HMSDDLExecutor
+    try (HMSDDLExecutor hmsExecutor =
+            new HMSDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()))) {
+      hmsExecutor.dropPartitionsToTable(HiveTestUtil.TABLE_NAME, Collections.singletonList("2010/02/03"));
+    }
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(3, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
+
+    // Drop partition with QueryBasedDDLExecutor
+    ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
+        + "` DROP PARTITION (`datestr`='2010-02-02')");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "Table partitions should match the number of partitions we wrote");
+  }
+
+  @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
@@ -390,6 +426,41 @@ public class TestHiveSyncTool {
     tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(Option.of("300"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
     assertEquals(7, tablePartitions.size());
+
+    // Add the following instants to the active timeline and sync: "400" (rollback), "500" (commit)
+    // Last commit time sync is "500" after Hive sync
+    HiveTestUtil.addRollbackInstantToTable("400", "350");
+    HiveTestUtil.commitToTable("500", 7, useSchemaFromCommitMetadata);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(Option.of("500"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
+    assertEquals(8, tablePartitions.size());
+
+    // Add more instants with adding a partition and simulate the case where the commit adding
+    // the new partition is archived.
+    // Before simulated archival: "300", "400" (rollback), "500", "600" (adding new partition), "700", "800"
+    // After simulated archival: "400" (rollback), "700", "800"
+    // In this case, listing all partitions should be triggered to catch up.
+    HiveTestUtil.commitToTable("600", 8, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable("700", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable("800", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.removeCommitFromActiveTimeline("300", COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline("500", COMMIT_ACTION);
+    HiveTestUtil.removeCommitFromActiveTimeline("600", COMMIT_ACTION);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(hiveClient.config.getHadoopConf()).setBasePath(basePath).build();
+    assertEquals(
+        Arrays.asList("400", "700", "800"),
+        metaClient.getActiveTimeline().getInstants().stream()
+            .map(HoodieInstant::getTimestamp).sorted()
+            .collect(Collectors.toList()));
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(Option.of("800"), hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME));
+    assertEquals(9, tablePartitions.size());
   }
 
   @ParameterizedTest

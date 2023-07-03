@@ -29,23 +29,21 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
-
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -67,42 +65,38 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * @param conf
    * @param writeConfig
    * @param context
-   * @param actionMetadata
    * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
    *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inflightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, actionMetadata, inflightInstantTimestamp);
+        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inflightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, actionMetadata, inflightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty(), Option.empty());
+    return create(conf, writeConfig, context, Option.empty());
   }
 
-  <T extends SpecificRecordBase> SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
-                                                                      HoodieWriteConfig writeConfig,
-                                                                      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                      HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata,
-                                                                      Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, actionMetadata, inflightInstantTimestamp);
+  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
   @Override
@@ -130,10 +124,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void bulkCommit(
           String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
           int fileGroupCount) {
-    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
-    partitionRecordsMap.put(partitionType, records);
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, partitionRecordsMap, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), Option.of(partitioner));
   }
 
   private void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
@@ -152,27 +144,29 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
-        writeClient.startCommitWithTime(instantTime);
+        LOG.info("New commit at " + instantTime + " being applied to MDT.");
       } else {
-        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
-        if (alreadyCompletedInstant.isPresent()) {
-          // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
-          // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-          // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-          // are upserts to metadata table and so only a new delta commit will be created.
-          // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
-          // already part of completed commit. So, we have to manually remove the completed instant and proceed.
-          // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-          HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant.get());
-          metadataMetaClient.reloadActiveTimeline();
+        // this code path refers to a re-attempted commit that:
+        //   1. got committed to metadata table, but failed in datatable.
+        //   2. failed while committing to metadata table
+        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+        // are upserts to metadata table and so only a new delta commit will be created.
+        // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
+        // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+            .lastInstant();
+        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
+            alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
+
+        // Rollback the previous commit
+        if (!writeClient.rollback(instantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
         }
-        // If the alreadyCompletedInstant is empty, that means there is a requested or inflight
-        // instant with the same instant time.  This happens for data table clean action which
-        // reuses the same instant time without rollback first.  It is a no-op here as the
-        // clean plan is the same, so we don't need to delete the requested and inflight instant
-        // files in the active timeline.
+        metadataMetaClient.reloadActiveTimeline();
       }
 
+      writeClient.startCommitWithTime(instantTime);
       if (bulkInsertPartitioner.isPresent()) {
         writeClient.bulkInsertPreppedRecords(preppedRecordRDD, instantTime, bulkInsertPartitioner).collect();
       } else {

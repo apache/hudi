@@ -21,7 +21,8 @@ import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -55,11 +56,12 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
-      metaClient.getCommitsAndCompactionTimeline
-    } else if (useStateTransitionTime) {
+      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
+    } else if (hollowCommitHandling == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
-      metaClient.getCommitsAndCompactionTimeline.findInstantsInRange(startTimestamp, endTimestamp)
+      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
+        .findInstantsInRange(startTimestamp, endTimestamp)
     }
   }
 
@@ -131,18 +133,20 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   // Validate this Incremental implementation is properly configured
   validate()
 
-  protected val useStateTransitionTime: Boolean =
-    optParams.get(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key)
-      .map(_.toBoolean)
-      .getOrElse(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.defaultValue)
+  protected val hollowCommitHandling: HollowCommitHandling =
+    optParams.get(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
+      .map(HollowCommitHandling.valueOf)
+      .getOrElse(HollowCommitHandling.valueOf(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
+
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
-    if (useStateTransitionTime) super.timeline.lastInstant().get.getStateTransitionTime
+    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) super.timeline.lastInstant().get.getStateTransitionTime
     else super.timeline.lastInstant().get.getTimestamp)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
+
   protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
 
   // Fallback to full table scan if any of the following conditions matches:
@@ -160,7 +164,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (!startInstantArchived || !endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
-      if (useStateTransitionTime) {
+      if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
         super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
       } else {
         super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
@@ -220,7 +224,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
     }
 
-    if (useStateTransitionTime && fullTableScan) {
+    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME && fullTableScan) {
       throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
     }
   }

@@ -147,13 +147,10 @@ object HoodieDatasetBulkInsertHelper
                  instantTime: String,
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
-                 partitioner: BulkInsertPartitioner[Dataset[Row]],
-                 parallelism: Int,
+                 arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val repartitionedDataset = partitioner.repartitionRecords(dataset, parallelism)
-    val arePartitionRecordsSorted = partitioner.arePartitionRecordsSorted
     val schema = dataset.schema
-    val writeStatuses = repartitionedDataset.queryExecution.toRdd.mapPartitions(iter => {
+    val writeStatuses = dataset.queryExecution.toRdd.mapPartitions(iter => {
       val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
       val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
       val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
@@ -180,7 +177,7 @@ object HoodieDatasetBulkInsertHelper
         writer.close()
       }
 
-      writer.getWriteStatuses.asScala.map(_.toWriteStatus).iterator
+      writer.getWriteStatuses.asScala.iterator
     }).collect()
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }

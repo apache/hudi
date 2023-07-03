@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -152,7 +151,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         // Update the new location of record, so we know where to find it next
         record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
+        record.setNewLocation(newRecordLocation);
         record.seal();
 
         recordsWritten++;

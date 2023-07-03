@@ -23,8 +23,8 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -40,6 +40,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -163,7 +164,7 @@ public class FlinkWriteClients {
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
-                    .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS))
+                    .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, getDefaultPlanStrategyClassName(conf)))
                     .withClusteringPlanPartitionFilterMode(
                         ClusteringPlanPartitionFilterMode.valueOf(conf.getString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME)))
                     .withClusteringTargetPartitions(conf.getInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS))
@@ -244,5 +245,10 @@ public class FlinkWriteClients {
       writeConfig.setViewStorageConfig(viewStorageConfig);
     }
     return writeConfig;
+  }
+
+  private static String getDefaultPlanStrategyClassName(Configuration conf) {
+    return OptionsResolver.isConsistentHashingBucketIndexType(conf) ? FlinkConsistentBucketClusteringPlanStrategy.class.getName() :
+        FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS.defaultValue();
   }
 }

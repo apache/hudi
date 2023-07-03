@@ -104,7 +104,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
                     metaClient.getHadoopConf(), config, context))
             .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
             .addCommit("100")
-            .withBaseFilesInPartitions(partitionAndFileId)
+            .withBaseFilesInPartitions(partitionAndFileId).getLeft()
             .addCommit("101");
 
     hoodieTestTable.addCommit("102").withBaseFilesInPartitions(partitionAndFileId);

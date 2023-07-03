@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -73,6 +74,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 
 /**
  * Test consistent hashing index
@@ -277,7 +279,8 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     }
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      boolean success = writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      boolean success = writeClient.commitStats(commitTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+          Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(success);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

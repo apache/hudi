@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -49,8 +50,10 @@ import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
+import java.time.{Instant, ZoneId}
+import java.util.{Collections, Date, TimeZone, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -1287,6 +1290,52 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Overwrite).save(tablePath1)
     }
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
+  }
+
+  /*
+   * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
+   * related to HUDI-5978
+   */
+  @Test
+  def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
+    val defaultTimezone = TimeZone.getDefault
+    try {
+      val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
+        .updated(HoodieTableConfig.TIMELINE_TIMEZONE.key, "UTC") // utc timezone
+
+      // generate the inserts
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val records = DataSourceTestUtils.generateRandomRows(100)
+      val recordsSeq = convertRowListToSeq(records)
+      val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+
+      // get UTC instant before write
+      val beforeWriteInstant = Instant.now()
+
+      // set local timezone to America/Los_Angeles(UTC-7)
+      TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+
+      // write to Hudi
+      val (success, writeInstantTimeOpt, _, _, _, hoodieTableConfig) = HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+      assertTrue(success)
+      val hoodieTableTimelineTimezone = HoodieTimelineTimeZone.valueOf(hoodieTableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))
+      assertEquals(hoodieTableTimelineTimezone, HoodieTimelineTimeZone.UTC)
+
+      val utcFormatter = new DateTimeFormatterBuilder()
+        .appendPattern(HoodieInstantTimeGenerator.SECS_INSTANT_TIMESTAMP_FORMAT)
+        .appendValue(ChronoField.MILLI_OF_SECOND, 3)
+        .toFormatter
+        .withZone(ZoneId.of("UTC"))
+      // instant parsed by UTC timezone
+      val writeInstant = Instant.from(utcFormatter.parse(writeInstantTimeOpt.get()))
+
+      assertTrue(beforeWriteInstant.toEpochMilli < writeInstant.toEpochMilli,
+        s"writeInstant(${writeInstant.toEpochMilli}) must always be greater than beforeWriteInstant(${beforeWriteInstant.toEpochMilli}) if writeInstant was generated with UTC timezone")
+    } finally {
+      TimeZone.setDefault(defaultTimezone)
+    }
   }
 
   private def fetchActualSchema(): Schema = {

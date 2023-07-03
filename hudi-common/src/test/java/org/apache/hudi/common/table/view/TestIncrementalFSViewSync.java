@@ -44,7 +44,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -655,7 +654,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
       rollbackM.add(rollbackMetadata);
       HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(rollbackInstant,
-          100, Collections.singletonList(instant), CollectionUtils.createImmutableMap(rollbackInstant, rollbackM));
+          100, Collections.singletonList(instant), Collections.singletonMap(rollbackInstant, rollbackM));
 
       HoodieInstant restoreInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);

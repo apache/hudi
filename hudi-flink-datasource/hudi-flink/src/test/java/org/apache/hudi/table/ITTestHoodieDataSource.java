@@ -305,6 +305,23 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testStreamWriteBatchReadOptimizedWithoutCompaction() {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    final String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+    execInsertSql(streamTableEnv, insertInto);
+
+    List<Row> rows = CollectionUtil.iterableToList(
+        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertTrue(rows.isEmpty());
+  }
+
+  @Test
   void testStreamWriteReadSkippingCompaction() throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source", 4);

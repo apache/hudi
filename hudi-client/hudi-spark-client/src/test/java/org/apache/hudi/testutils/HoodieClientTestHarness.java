@@ -334,20 +334,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     return timelineServicePort;
   }
 
-  protected Properties getPropertiesForKeyGen() {
-    return getPropertiesForKeyGen(false);
-  }
-
-  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    return properties;
-  }
-
   protected Properties getPropertiesForMetadataTable() {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -359,7 +345,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
     if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen()))
+      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : HoodieClientTestUtils.getPropertiesForKeyGen()))
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
   }
@@ -511,7 +497,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
       return;
     }
 
-    if (!tableMetadata.getSyncedInstantTime().isPresent() || tableMetadata instanceof FileSystemBackedTableMetadata) {
+    if (tableMetadata instanceof FileSystemBackedTableMetadata || !tableMetadata.getSyncedInstantTime().isPresent()) {
       throw new IllegalStateException("Metadata should have synced some commits or tableMetadata should not be an instance "
           + "of FileSystemBackedTableMetadata");
     }
@@ -524,7 +510,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
     fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
-    if (fsPartitions.isEmpty()) {
+    if (fsPartitions.isEmpty() && testTable.isNonPartitioned()) {
       fsPartitions.add("");
     }
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
@@ -575,8 +561,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   }
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath());
+    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,

@@ -19,7 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -85,12 +85,12 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
     return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
-  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size,
+  protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size,
                                      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
     assertWriteStatuses(writeStatuses, batches, size, false, fileAbsPaths, fileNames, false);
   }
 
-  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
+  protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
                                      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames, boolean isHiveStylePartitioning) {
     if (areRecordsSorted) {
       assertEquals(batches, writeStatuses.size());
@@ -112,7 +112,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
     }
 
     int counter = 0;
-    for (HoodieInternalWriteStatus writeStatus : writeStatuses) {
+    for (WriteStatus writeStatus : writeStatuses) {
       // verify write status
       String actualPartitionPathFormat = isHiveStylePartitioning ? SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME + "=%s" : "%s";
       assertEquals(String.format(actualPartitionPathFormat, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStatus.getPartitionPath());
@@ -122,6 +122,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
         assertEquals(writeStatus.getTotalRecords(), sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]));
       }
       assertNull(writeStatus.getGlobalError());
+      assertEquals(writeStatus.getTotalErrorRecords(), 0);
       assertEquals(writeStatus.getTotalErrorRecords(), 0);
       assertFalse(writeStatus.hasErrors());
       assertNotNull(writeStatus.getFileId());

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
@@ -113,18 +114,20 @@ object DataSourceReadOptions {
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily " +
-      "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. " +
-      "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily "
+      + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
+      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to limit incrementally fetched data to. " +
-      "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Instant time to limit incrementally fetched data to. "
+      + "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
+      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -204,8 +207,7 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
-  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
-
+  val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -304,6 +306,11 @@ object DataSourceWriteOptions {
     .withValidValues(COW_TABLE_TYPE_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL)
     .withAlternatives("hoodie.datasource.write.storage.type")
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
+
+  /**
+   * Config key with boolean value that indicates whether record being written is already prepped.
+   */
+  val DATASOURCE_WRITE_PREPPED_KEY = "_hoodie.datasource.write.prepped";
 
   /**
     * May be derive partition path from incoming df if not explicitly set.
@@ -448,7 +455,7 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.write.insert.drop.duplicates")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("If set to true, filters out all duplicate records from incoming dataframe, during insert operations.")
+    .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation.")
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
