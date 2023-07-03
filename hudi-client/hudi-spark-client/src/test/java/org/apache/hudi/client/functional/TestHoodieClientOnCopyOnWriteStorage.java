@@ -656,8 +656,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     newCommitTime = "005";
     numRecords = 50;
 
-    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, SparkRDDWriteClient::delete, isPrepped, true,
+    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields());
 
     // Now simulate an upgrade and perform a restore operation
@@ -688,7 +687,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     numRecords = 50;
 
     deleteBatch(newConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, SparkRDDWriteClient::delete, isPrepped, true,
+        initCommitTime, numRecords, isPrepped, true,
         0, 150);
 
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -798,7 +797,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     numRecords = 50;
 
     deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, SparkRDDWriteClient::delete, false, true,
+        initCommitTime, numRecords, false, true,
         0, 150, config.populateMetaFields());
 
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
