@@ -50,7 +50,7 @@ public class HoodieInternalProxyIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public boolean rollbackCommit(String instantTime) {
-    return false;
+    return true;
   }
 
   @Override
