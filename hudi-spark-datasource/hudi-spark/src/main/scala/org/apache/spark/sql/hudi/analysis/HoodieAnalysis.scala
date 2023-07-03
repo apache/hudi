@@ -43,12 +43,13 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
     // NOTE: This rule adjusts [[LogicalRelation]]s resolving into Hudi tables such that
-    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark.
+    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark (Except in the
+    //       case of MergeInto. We leave the meta columns on the target table, and use other means to ensure resolution)
     //       For more details please check out the scala-doc of the rule
-    // TODO limit adapters to only Spark < 3.2
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     if (!HoodieSparkUtils.gteqSpark3_2) {
+      //Add or correct resolution of MergeInto
       val resolveReferencesClass = if (HoodieSparkUtils.isSpark2) {
         "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
       } else if (HoodieSparkUtils.isSpark3_0) {
@@ -197,8 +198,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case mit@MatchMergeIntoTable(targetTable, query, _) =>
             val updatedTargetTable = targetTable match {
-              // In the receiving side of the MIT, we can't project meta-field attributes out,
-              // and instead have to explicitly remove them
+              //Do not remove the meta cols here anymore
               case ResolvesToHudiTable(_) => Some(targetTable)
               case _ => None
             }

@@ -26,6 +26,14 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
 
+/**
+ * NOTE TO USERS: YOU SHOULD NOT SET THIS AS YOUR KEYGENERATOR
+ *
+ * Keygenerator that is meant to be used internally for the spark sql merge into command
+ * It will attempt to get the partition path and recordkey from the metafields, but will
+ * fallback to the sql keygenerator if the meta field is not populated
+ *
+ */
 class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(props) {
 
   override def getRecordKey(record: GenericRecord): String = {
