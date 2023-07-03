@@ -336,6 +336,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   def projectedJoinedDataset: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
+    // We want to join the source and target tables.
+    // Then we want to project the output so that we have the meta columns from the target table
+    // followed by the data columns of the source table
     val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
