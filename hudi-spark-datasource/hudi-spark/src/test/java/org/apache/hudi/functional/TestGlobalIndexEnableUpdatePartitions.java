@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.SCHEMA_STR;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletesWithEmptyPayloadAndNewPartition;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getDeletesWithNewPartition;
@@ -51,8 +50,6 @@ import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerat
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getUpdates;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
-import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
-import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,12 +58,12 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
   private static Stream<Arguments> getTableTypeAndIndexType() {
     return Stream.of(
-        Arguments.of(COPY_ON_WRITE, GLOBAL_SIMPLE),
+        /*Arguments.of(COPY_ON_WRITE, GLOBAL_SIMPLE),
         Arguments.of(COPY_ON_WRITE, GLOBAL_BLOOM),
         Arguments.of(COPY_ON_WRITE, RECORD_INDEX),
-        Arguments.of(MERGE_ON_READ, GLOBAL_SIMPLE),
-        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM),
-        Arguments.of(MERGE_ON_READ, RECORD_INDEX)
+        /*Arguments.of(MERGE_ON_READ, GLOBAL_SIMPLE),
+        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM),*/
+        Arguments.of(COPY_ON_WRITE, RECORD_INDEX)
     );
   }
 

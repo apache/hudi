@@ -289,8 +289,12 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
-    result.forEach((key, record) -> recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation()));
-
+    result.forEach((key, record) -> {
+      /*if (!record.getData().isDeleted()) {
+        recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
+      }*/
+      recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
+    });
     return recordKeyToLocation;
   }
 
