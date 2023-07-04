@@ -101,11 +101,6 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   override def canPruneRelationSchema: Boolean =
     super.canPruneRelationSchema && isProjectionCompatible(tableState)
 
-  override def imbueConfigs(sqlContext: SQLContext): Unit = {
-    super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
-  }
-
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
