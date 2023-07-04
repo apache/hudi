@@ -85,7 +85,7 @@
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
-    <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
+    <!-- <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version> -->
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
@@ -360,6 +360,7 @@
           <goals>deploy</goals>
         </configuration>
       </plugin>
+<!--
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-deploy-plugin</artifactId>
@@ -374,6 +375,7 @@
           </execution>
         </executions>
       </plugin>
+-->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
@@ -1738,7 +1740,7 @@
      <name>GitHub scoremedia Apache Maven Packages</name>
      <url>https://maven.pkg.github.com/scoremedia/hudi</url>
    </repository>
-</distributionManagement>
+  </distributionManagement>
   <profiles>
     <profile>
       <id>release</id>
