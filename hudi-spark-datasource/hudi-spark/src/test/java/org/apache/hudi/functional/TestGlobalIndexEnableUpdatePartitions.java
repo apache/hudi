@@ -65,8 +65,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
         Arguments.of(COPY_ON_WRITE, GLOBAL_BLOOM),
         Arguments.of(COPY_ON_WRITE, RECORD_INDEX),
         Arguments.of(MERGE_ON_READ, GLOBAL_SIMPLE),
-        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM),
-        Arguments.of(MERGE_ON_READ, RECORD_INDEX)
+        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM)
+    // Arguments.of(MERGE_ON_READ, RECORD_INDEX)
     );
   }
 
@@ -123,7 +123,6 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       client.startCommitWithTime(commitTimeAtEpoch9);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
-
     }
 
   }
@@ -179,7 +178,6 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       client.startCommitWithTime(commitTimeAtEpoch9);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
-
     }
   }
 

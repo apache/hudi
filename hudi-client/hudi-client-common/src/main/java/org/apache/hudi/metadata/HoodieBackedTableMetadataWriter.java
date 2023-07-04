@@ -82,9 +82,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -299,7 +301,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       exists = false;
     }
 
-    return  exists;
+    return exists;
   }
 
   /**
@@ -489,7 +491,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Read the record keys from base files in partitions and return records.
    */
   private HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
-      List<Pair<String, String>> partitionBaseFilePairs) {
+                                                               List<Pair<String, String>> partitionBaseFilePairs) {
     if (partitionBaseFilePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -1101,7 +1103,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .getCommitTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
         && metadataMetaClient.getActiveTimeline().filterCompletedInstants()
-            .findInstantsAfter(lastCompletedCompactionInstant.get().getTimestamp()).countInstants() < 3) {
+        .findInstantsAfter(lastCompletedCompactionInstant.get().getTimestamp()).countInstants() < 3) {
       // do not clean the log files immediately after compaction to give some buffer time for metadata table reader,
       // because there is case that the reader has prepared for the log file readers already before the compaction completes
       // while before/during the reading of the log files, the cleaning triggers and delete the reading files,
@@ -1159,10 +1161,27 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeStatuses {@code WriteStatus} from the write operation
    */
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
-    return writeStatuses.flatMap(writeStatus -> {
-      List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
-        if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
+    // 1. List<HoodieRecordDelegate>
+    // 2. Reduce by key: accept keys only when new location is not
+    return writeStatuses.map(writeStatus -> writeStatus.getWrittenRecordDelegates().stream()
+            .map(recordDelegate -> Pair.of(recordDelegate.getRecordKey(), recordDelegate)))
+        .flatMapToPair(Stream::iterator)
+        .reduceByKey((recordDelegate1, recordDelegate2) -> {
+          if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
+            if (recordDelegate1.getNewLocation().isPresent() && recordDelegate1.getNewLocation().get().getFileId() != null) {
+              return recordDelegate1;
+            } else if (recordDelegate2.getNewLocation().isPresent() && recordDelegate2.getNewLocation().get().getFileId() != null) {
+              return recordDelegate2;
+            } else {
+              // should not come here, one of the above must have a new location set
+              return null;
+            }
+          } else {
+            return recordDelegate1;
+          }
+        }, 1)
+        .map(writeStatusRecordDelegate -> {
+          HoodieRecordDelegate recordDelegate = writeStatusRecordDelegate.getValue();
           HoodieRecord hoodieRecord;
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
@@ -1176,9 +1195,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
                     recordDelegate, recordDelegate.getCurrentLocation().get(), newLocation.get());
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
-              } else {
-                // TODO: This may be required for clustering use-cases where record location changes
-                continue;
               }
             }
 
@@ -1189,13 +1205,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
           }
-
-          recordList.add(hoodieRecord);
-        }
-      }
-
-      return recordList.iterator();
-    });
+          return hoodieRecord;
+        })
+        .filter(Objects::nonNull);
   }
 
   protected void closeInternal() {
