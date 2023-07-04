@@ -48,8 +48,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Update strategy for consistent hashing bucket index. If updates to file groups that are under clustering are identified, then the current batch of records will route to both old and new file groups
- * (i.e., dual write)
+ * Update strategy for consistent hashing bucket index. If updates to file groups that are under clustering are identified,
+ * then the current batch of records will route to both old and new file groups
+ * (i.e., dual write).
  */
 public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> extends UpdateStrategy<T, List<Pair<List<HoodieRecord>, String>>> {
 
@@ -74,13 +75,15 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
     List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
     if (!instants.isEmpty()) {
       HoodieInstant latestPendingReplaceInstant = instants.get(instants.size() - 1);
-      LOG.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
-      this.table = table;
-      this.fileGroupsInPendingClustering = table.getFileSystemView().getFileGroupsInPendingClustering()
-          .map(Pair::getKey).collect(Collectors.toSet());
-      // TODO throw exception if exists bucket merge plan
-      this.lastRefreshInstant = latestPendingReplaceInstant.getTimestamp();
-      this.partitionToIdentifier.clear();
+      if (latestPendingReplaceInstant.getTimestamp().compareTo(lastRefreshInstant) > 0) {
+        LOG.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
+        this.table = table;
+        this.fileGroupsInPendingClustering = table.getFileSystemView().getFileGroupsInPendingClustering()
+            .map(Pair::getKey).collect(Collectors.toSet());
+        // TODO throw exception if exists bucket merge plan
+        this.lastRefreshInstant = latestPendingReplaceInstant.getTimestamp();
+        this.partitionToIdentifier.clear();
+      }
     }
     this.initialized = true;
   }

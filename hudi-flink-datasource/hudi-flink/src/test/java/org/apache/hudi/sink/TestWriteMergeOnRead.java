@@ -164,8 +164,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setString(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS.key(), "8");
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    conf.set(FlinkOptions.CHANGELOG_ENABLED, false);
     // Enable inline resize scheduling
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     // Manually set the max commits to trigger clustering quickly
@@ -174,8 +172,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
     conf.setString(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD.key(), String.valueOf(1 / 1024.0 / 1024.0));
     conf.set(FlinkOptions.PRE_COMBINE, true);
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, "ts");
-    conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     HashMap<String, String> mergedExpected = new HashMap<>(EXPECTED1);
     mergedExpected.put("par1", "[id1,par1,id1,Danny,22,4,par1, id2,par1,id2,Stephen,33,2,par1]");
     TestHarness.instance().preparePipeline(tempFile, conf)

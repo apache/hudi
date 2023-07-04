@@ -28,7 +28,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.util.Collector;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -60,9 +59,9 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
   @Override
   public void invoke(I record) throws Exception {
     HoodieRecord hoodieRecord = toHoodieFunction.map((RowData) record);
-    Collector<HoodieRecord> collector = ScalaCollector.getInstance();
+    ScalaCollector<HoodieRecord> collector = ScalaCollector.getInstance();
     assignFunction.processElement(hoodieRecord, null, collector);
-    writeFunction.processElement(hoodieRecord, null, null);
+    writeFunction.processElement(collector.getVal(), null, null);
   }
 
   @Override
