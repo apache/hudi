@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieInternalConfig
+import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
@@ -146,7 +147,7 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               rawDf: DataFrame): BaseRelation = {
     val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY,
-      optParams.getOrDefault(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(), "false"))
+      optParams.getOrDefault(SQL_MERGE_INTO_WRITES.key(), SQL_MERGE_INTO_WRITES.defaultValue().toString))
       .equalsIgnoreCase("true")) {
       rawDf // Don't remove meta columns for prepped write.
     } else {

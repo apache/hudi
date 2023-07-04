@@ -143,14 +143,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //allow partition path to be part of the merge condition but not required
     val targetAttr2ConditionExpressions = doCasting(conditions, primaryKeyFields.isPresent)
     val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions:_*)
-    var recordkeyFields: Seq[(String,String)] = Seq.empty
+    var partitionAndKeyFields: Seq[(String,String)] = Seq.empty
     if (primaryKeyFields.isPresent) {
-     recordkeyFields = recordkeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
+     partitionAndKeyFields = partitionAndKeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
     }
     if (partitionPathFields.isPresent) {
-      recordkeyFields = recordkeyFields ++ partitionPathFields.get().map(pp => ("partitionPath", pp)).toSeq
+      partitionAndKeyFields = partitionAndKeyFields ++ partitionPathFields.get().map(pp => ("partitionPath", pp)).toSeq
     }
-    val resolvedCols = recordkeyFields.map(rk => {
+    val resolvedCols = partitionAndKeyFields.map(rk => {
       val resolving = expressionSet.collectFirst {
         case (attr, expr) if resolver(attr.name, rk._2) =>
           // NOTE: Here we validate that condition expression involving record-key column(s) is a simple
@@ -339,10 +339,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // We want to join the source and target tables.
     // Then we want to project the output so that we have the meta columns from the target table
     // followed by the data columns of the source table
-    val tablemetacols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+    val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedJoinPlan = Project(tablemetacols ++ incomingDataCols, joinData)
+    val projectedJoinPlan = Project(tableMetaCols ++ incomingDataCols, joinData)
     val projectedJoinOutput = projectedJoinPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression

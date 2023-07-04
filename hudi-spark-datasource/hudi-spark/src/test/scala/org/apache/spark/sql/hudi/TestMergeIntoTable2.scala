@@ -441,7 +441,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
-
   test("Test ignoring case") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")

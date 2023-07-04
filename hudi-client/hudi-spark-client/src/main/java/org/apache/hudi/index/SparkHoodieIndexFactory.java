@@ -44,7 +44,8 @@ import java.io.IOException;
  */
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
-    boolean mergeIntoWrites = config.getProps().getBoolean(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(), false);
+    boolean mergeIntoWrites = config.getProps().getBoolean(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(),
+        HoodieInternalConfig.SQL_MERGE_INTO_WRITES.defaultValue());
     if (mergeIntoWrites) {
       return new HoodieInternalProxyIndex(config);
     }

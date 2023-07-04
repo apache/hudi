@@ -19,7 +19,8 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.HoodieRecord.{RECORD_KEY_META_FIELD_ORD, PARTITION_PATH_META_FIELD_ORD}
+import org.apache.hudi.common.model.HoodieRecord.{PARTITION_PATH_META_FIELD_ORD, RECORD_KEY_META_FIELD_ORD}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
@@ -46,9 +47,9 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
   }
 
   override def getRecordKey(row: Row): String = {
-    val recordKey = row.get(RECORD_KEY_META_FIELD_ORD)
-    if (recordKey != null) {
-      recordKey.toString
+    val recordKey = row.getString(RECORD_KEY_META_FIELD_ORD)
+    if (!StringUtils.isNullOrEmpty(recordKey)) {
+      recordKey
     } else {
       super.getRecordKey(row)
     }
@@ -73,9 +74,9 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
   }
 
   override def getPartitionPath(row: Row): String = {
-    val partitionPath = row.get(PARTITION_PATH_META_FIELD_ORD)
-    if (partitionPath != null) {
-      partitionPath.toString
+    val partitionPath = row.getString(PARTITION_PATH_META_FIELD_ORD)
+    if (!StringUtils.isNullOrEmpty(partitionPath)) {
+      partitionPath
     } else {
       super.getPartitionPath(row)
     }

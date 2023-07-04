@@ -80,7 +80,7 @@ public class HoodieSparkKeyGeneratorFactory {
     boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props)
         //Need to prevent overwriting the keygen for spark sql merge into because we need to extract
         //the recordkey from the meta cols if it exists. Sql keygen will use pkless keygen if needed.
-        && !props.getBoolean(SQL_MERGE_INTO_WRITES.key(), false);
+        && !props.getBoolean(SQL_MERGE_INTO_WRITES.key(), SQL_MERGE_INTO_WRITES.defaultValue());
     try {
       KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
       if (autoRecordKeyGen) {
