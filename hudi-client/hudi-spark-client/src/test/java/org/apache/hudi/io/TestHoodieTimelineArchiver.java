@@ -138,8 +138,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
+      // reload because table configs could have been updated
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
-      testTable.updateFilesPartitionInTableConfig();
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -1484,6 +1485,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   /**
    * Test archival functionality when there are inflights files.
    * Archive should hold on to the greatest completed commit that is less than the oldes inflight commit.
+   *
    * @throws Exception
    */
   @Test

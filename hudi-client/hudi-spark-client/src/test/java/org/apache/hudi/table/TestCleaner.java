@@ -925,8 +925,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withPath(basePath)
         .build();
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    // reload because table configs could have been updated
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
-    testTable.updateFilesPartitionInTableConfig();
 
     String p1 = "part_1";
     String p2 = "part_2";
@@ -1028,6 +1029,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // multiple versions with pending compaction. File Slices (6 - 7) have multiple file-slices but not under
     // compactions
     // FileIds 2-5 will be under compaction
+    // reload because table configs could have been updated
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
     testTable.withPartitionMetaFiles(partition);
@@ -1094,7 +1097,6 @@ public class TestCleaner extends HoodieCleanerTestBase {
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file7P1));
     commitWithMdt("013", part1ToFileId, testTable, metadataWriter, true, true);
-    testTable.updateFilesPartitionInTableConfig();
 
     // Clean now
     metaClient = HoodieTableMetaClient.reload(metaClient);
