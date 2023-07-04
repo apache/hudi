@@ -235,11 +235,12 @@ public class DataSourceUtils {
       String instantTime, boolean isPrepped) {
 
     if (isPrepped) {
+      HoodieRecord.HoodieRecordType recordType = client.getConfig().getRecordMerger().getRecordType();
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
-        HoodieRecord record = client.getConfig().getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
-            ? new HoodieAvroRecord(tuple._1(), new EmptyHoodieRecordPayload())
-            : new HoodieSparkRecord(tuple._1(), null, false);
-        record.setCurrentLocation(tuple._2().get());
+        HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
+            ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())
+            : new HoodieSparkRecord(tuple._1, null, false);
+        record.setCurrentLocation(tuple._2.get());
         return record;
       });
       return new HoodieWriteResult(client.deletePrepped(records, instantTime));
