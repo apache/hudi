@@ -32,7 +32,7 @@ import java.io.Serializable;
  * Handle all database / table related requests.
  */
 public class TableService implements Serializable {
-  private MetaserverStorage store;
+  private final MetaserverStorage store;
 
   public TableService(MetaserverStorage metaserverStorage) {
     this.store = metaserverStorage;
