@@ -27,7 +27,8 @@ jobs:
         with:
           java-version: '8'
           distribution: 'adopt'
+          server-id: github
       - name: Publish package
-        run: mvn --batch-mode clean package -DskipTests
+        run: mvn --batch-mode deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
