@@ -28,8 +28,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -56,6 +58,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -78,6 +81,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -1161,25 +1165,36 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param writeStatuses {@code WriteStatus} from the write operation
    */
   private HoodieData<HoodieRecord> getRecordIndexUpdates(HoodieData<WriteStatus> writeStatuses) {
-    // 1. List<HoodieRecordDelegate>
-    // 2. Reduce by key: accept keys only when new location is not
-    return writeStatuses.map(writeStatus -> writeStatus.getWrittenRecordDelegates().stream()
-            .map(recordDelegate -> Pair.of(recordDelegate.getRecordKey(), recordDelegate)))
-        .flatMapToPair(Stream::iterator)
-        .reduceByKey((recordDelegate1, recordDelegate2) -> {
-          if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
-            if (recordDelegate1.getNewLocation().isPresent() && recordDelegate1.getNewLocation().get().getFileId() != null) {
-              return recordDelegate1;
-            } else if (recordDelegate2.getNewLocation().isPresent() && recordDelegate2.getNewLocation().get().getFileId() != null) {
-              return recordDelegate2;
+    HoodiePairData<String, HoodieRecordDelegate> recordKeyDelegatePairs = null;
+    // if update partition path is true, chances that we might get two records (1 delete in older partition and 1 insert to new partition)
+    // and hence we might have to do reduce By key before ingesting to RLI partition.
+    if (dataWriteConfig.getRecordIndexUpdatePartitionPath()) {
+      recordKeyDelegatePairs = writeStatuses.map(writeStatus -> writeStatus.getWrittenRecordDelegates().stream()
+              .map(recordDelegate -> Pair.of(recordDelegate.getRecordKey(), recordDelegate)))
+          .flatMapToPair(Stream::iterator)
+          .reduceByKey((recordDelegate1, recordDelegate2) -> {
+            if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
+              if (recordDelegate1.getNewLocation().isPresent() && recordDelegate2.getNewLocation().isPresent()) {
+                throw new HoodieIOException("Both version of records does not have location set. Record V1 " + recordDelegate1.toString()
+                    + ", Record V2 " + recordDelegate2.toString());
+              }
+              if (recordDelegate1.getNewLocation().isPresent()) {
+                return recordDelegate1;
+              } else {
+                // if record delegate 1 does not have location set, record delegate 2 should have location set.
+                return recordDelegate2;
+              }
             } else {
-              // should not come here, one of the above must have a new location set
-              return null;
+              return recordDelegate1;
             }
-          } else {
-            return recordDelegate1;
-          }
-        }, 1)
+          }, Math.max(1, writeStatuses.getNumPartitions()));
+    } else {
+      // if update partition path = false, we should get only one entry per record key.
+      recordKeyDelegatePairs = writeStatuses.flatMapToPair(
+          (SerializableFunction<WriteStatus, Iterator<? extends Pair<String, HoodieRecordDelegate>>>) writeStatus
+              -> writeStatus.getWrittenRecordDelegates().stream().map(rec -> Pair.of(rec.getRecordKey(), rec)).iterator());
+    }
+    return recordKeyDelegatePairs
         .map(writeStatusRecordDelegate -> {
           HoodieRecordDelegate recordDelegate = writeStatusRecordDelegate.getValue();
           HoodieRecord hoodieRecord;
