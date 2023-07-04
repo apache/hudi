@@ -349,9 +349,6 @@ public class TestCleaner extends HoodieCleanerTestBase {
       instantTime = HoodieActiveTimeline.createNewInstantTime();
       cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
-      table.getMetaClient().reloadActiveTimeline();
-      table.clean(context, instantTime);
-
     }
   }
 
@@ -1102,23 +1099,24 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
 
     final String partition = "2016/03/15";
+    String timePrefix = "00000000000";
     Map<String, String> expFileIdToPendingCompaction = new HashMap<String, String>() {
       {
-        put("fileId2", "004");
-        put("fileId3", "006");
-        put("fileId4", "008");
-        put("fileId5", "010");
+        put("fileId2", timePrefix + "004");
+        put("fileId3", timePrefix + "006");
+        put("fileId4", timePrefix + "008");
+        put("fileId5", timePrefix + "010");
       }
     };
     Map<String, String> fileIdToLatestInstantBeforeCompaction = new HashMap<String, String>() {
       {
-        put("fileId1", "000");
-        put("fileId2", "000");
-        put("fileId3", "001");
-        put("fileId4", "003");
-        put("fileId5", "005");
-        put("fileId6", "009");
-        put("fileId7", "011");
+        put("fileId1", timePrefix + "000");
+        put("fileId2", timePrefix + "000");
+        put("fileId3", timePrefix + "001");
+        put("fileId4", timePrefix + "003");
+        put("fileId5", timePrefix + "005");
+        put("fileId6", timePrefix + "009");
+        put("fileId7", timePrefix + "013");
       }
     };
 
@@ -1144,60 +1142,60 @@ public class TestCleaner extends HoodieCleanerTestBase {
     Map<String, List<String>> part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file1P1, file2P1, file3P1, file4P1, file5P1, file6P1, file7P1));
     // all 7 fileIds
-    commitWithMdt("000", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "000", part1ToFileId, testTable, metadataWriter, true, true);
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file3P1, file4P1, file5P1, file6P1, file7P1));
     // fileIds 3 to 7
-    commitWithMdt("001", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "001", part1ToFileId, testTable, metadataWriter, true, true);
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file4P1, file5P1, file6P1, file7P1));
     // fileIds 4 to 7
-    commitWithMdt("003", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "003", part1ToFileId, testTable, metadataWriter, true, true);
 
     // add compaction
-    testTable.addRequestedCompaction("004", new FileSlice(partition, "000", file2P1));
+    testTable.addRequestedCompaction(timePrefix + "004", new FileSlice(partition, timePrefix + "000", file2P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file2P1));
-    commitWithMdt("005", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "005", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file5P1, file6P1, file7P1));
-    commitWithMdt("0055", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0055", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("006", new FileSlice(partition, "001", file3P1));
+    testTable.addRequestedCompaction(timePrefix + "006", new FileSlice(partition, timePrefix + "001", file3P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file3P1));
-    commitWithMdt("007", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "007", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file6P1, file7P1));
-    commitWithMdt("0075", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0075", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("008", new FileSlice(partition, "003", file4P1));
+    testTable.addRequestedCompaction(timePrefix + "008", new FileSlice(partition, timePrefix + "003", file4P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file4P1));
-    commitWithMdt("009", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "009", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file6P1, file7P1));
-    commitWithMdt("0095", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0095", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("010", new FileSlice(partition, "005", file5P1));
+    testTable.addRequestedCompaction(timePrefix + "010", new FileSlice(partition, timePrefix + "005", file5P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file5P1));
-    commitWithMdt("011", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "011", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file7P1));
-    commitWithMdt("013", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "013", part1ToFileId, testTable, metadataWriter, true, true);
 
     // Clean now
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config, retryFailure);
+    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config, 14, true);
 
     // Test for safety
     final HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.reload(metaClient);
