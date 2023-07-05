@@ -21,17 +21,17 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>bet.thescore</groupId>
-    <artifactId>thescore</artifactId>
+    <groupId>org.apache</groupId>
+    <artifactId>apache</artifactId>
     <version>21</version>
   </parent>
 
-  <groupId>bet.thescore.datalake</groupId>
+  <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
   <version>0.14.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
-  <url>https://github.com/scoremedia/hudi</url>
+  <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
 
   <modules>
@@ -364,10 +364,16 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-deploy-plugin</artifactId>
         <version>${maven-deploy-plugin.version}</version>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
         <executions>
           <execution>
             <id>default-deploy</id>
-            <phase>none</phase>
+            <phase>deploy</phase>
+            <goals>
+              <goal>deploy</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
