@@ -55,9 +55,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
 
@@ -81,7 +83,7 @@ public class DataSourceUtils {
       }
     }
 
-    throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
+    throw new TableNotFoundException(Arrays.stream(userProvidedPaths).map(Path::toString).collect(Collectors.joining(",")));
   }
 
   /**
