@@ -31,6 +31,7 @@
 
     <properties>
         <dynamodb-local.version>1.15.0</dynamodb-local.version>
+        <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     </properties>
 
     <dependencies>
@@ -156,6 +157,14 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>${maven-deploy-plugin.version}</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
