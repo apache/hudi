@@ -19,19 +19,18 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.0-SNAPSHOT</version>
+        <version>0.14.1-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-aws</artifactId>
-    <version>0.14.0-SNAPSHOT</version>
+    <version>0.14.1-SNAPSHOT</version>
 
     <name>hudi-aws</name>
     <packaging>jar</packaging>
 
     <properties>
         <dynamodb-local.version>1.15.0</dynamodb-local.version>
-        <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     </properties>
 
     <dependencies>
@@ -157,14 +156,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>${maven-deploy-plugin.version}</version>
-                <configuration>
-                    <skip>true</skip>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
