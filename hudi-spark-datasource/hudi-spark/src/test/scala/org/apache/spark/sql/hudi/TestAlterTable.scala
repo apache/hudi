@@ -380,7 +380,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Alter Table With Sql Conf") {
+  test("Test Alter Table With Spark Sql Conf") {
     withTempDir { tmp =>
       Seq(true, false).foreach { cleanEnable =>
         val tableName = generateTableName
