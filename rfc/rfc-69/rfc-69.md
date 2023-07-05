@@ -141,37 +141,50 @@ In short, we propose Hudi 1.0 try and achieve the following.
 All changes should be backward compatible and not require rewriting of base/parquet files in existing tables. However, full compaction of the logs or planned downtime to rewrite the 
 timeline or rebuilding the metadata table may be necessary when moving from 0.x to 1.0 release. 
 
-Following table details the concrete changes along with JIRAs tracking each of these proposed changes for the first release. Also, we indicate what changes 
-are preferable to land in 0.X/master branch before we cut a 1.0 feature branch and fork off using the `Pre Branching` column. (value yes indicates this change
+Following table details the JIRAs tracking each of these proposed changes for the first release, in sequential order (i.e we will go about working on these in that order).
+Also, we indicate what changes are preferable to land in 0.X/master branch before we cut a 1.0 feature branch and fork off using the `Pre Branching` column. (value yes indicates this change
 could be landed to ease the process of cherry-picking changes from 0.x -> 1.x for the next few months). Such epics are marking with both `1.0.0` and `0.14.0`/`0.15.0` as fix-versions.
 
 JIRA Issues Filter for 1.0: [link](https://issues.apache.org/jira/issues/?filter=12352767)
 
-| Change | Impact | Pre Branching? | JIRAs/RFCs |
-|--------|--------|----------------|------------|
-|        |        |                |            |
-|        |        |                |            |
+| Change                                    | Impact                                                                                                                                              | Pre Branching? | JIRAs/RFCs                                                                                                                                                                              |
+|-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.X Storage Format                        | New storage format changes to timeline, log files, file naming, metadata, table properties to unlock features below.                                |                | [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242)                                                                                                                            |
+| APIs/Abstractions, Record mergers         | Internal APIs and abstractions needed to provide clear layering of functionality across txn, engine integrations.                                   | yes            | [HUDI-6243](https://issues.apache.org/jira/browse/HUDI-6243), [HUDI-3217](https://issues.apache.org/jira/browse/HUDI-3217)                                                              |
+| Dev hygiene/Test stability                | Get the house in order in terms of code formatting, build etc before branching off                                                                  | yes            | [HUDI-2261](https://issues.apache.org/jira/browse/HUDI-2261),[HUDI-1574](https://issues.apache.org/jira/browse/HUDI-1574)                                                               |
+| Bundling           | Thin down the bundles more, ease integration into different engines further.                                                                        | yes            | [HUDI-2261](https://issues.apache.org/jira/browse/HUDI-3529)                                                               |
+| Non-blocking Concurrency Control Protocol | Design of new concurrency scheme on top of 1.X format, with focus on Spark and Flink writers                                                        |                | [HUDI-1456](https://issues.apache.org/jira/browse/HUDI-1456), [HUDI-5672](https://issues.apache.org/jira/browse/HUDI-5672)                                                              |
+| Table Format APIs                         | External APIs to read/write data/metadata.                                                                                                          |                | [HUDI-4141](https://issues.apache.org/jira/browse/HUDI-4141)                                                                                                                            |
+| Cloud Optimized storage layout            | Support for decoupling layout of files on cloud storage suffering from throttling issues.                                                           |                | [HUDI-3625](https://issues.apache.org/jira/browse/HUDI-3625)                                                                                                                            |
+| Logical partitioning via indexing         | Making partitioning just a logical construct and allow different partitioning schemes on same table as coarse indexes.                              |                | [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)                                                                                                                              |
+| Snapshot management                       | Use new timeline to implement easy, and long-living snapshots/savepoints.                                                                           |                | [HUDI-4677](https://issues.apache.org/jira/browse/HUDI-4677)                                                                                                                            |
+| Streaming CDC/Incremental reads           | Rework and streamline CDC/Incremental queries on top of new format.                                                                                 |                | [HUDI-2749](https://issues.apache.org/jira/browse/HUDI-2749)                                                                                                                            |
+| Writer performance improvements           | Implement various optimizations to write path, like logging updates as deletes + inserts for overwrite scenarios, improvements to table services,.. |                | [HUDI-3249](https://issues.apache.org/jira/browse/HUDI-3249)                                                                                                                            |
+| Secondary Indexes                         | Support for few secondary indexes - creation, maintenance, and integration via Spark/Flink SQL                                                      |                | [HUDI-3907](https://issues.apache.org/jira/browse/HUDI-3907)                                                                                                                            |
+| Presto/Trino queries                      | Change Presto/Trino connectors to work with new format, integrate fully with metadata                                                               |                | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394),[HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
+
 
 ## Follow-on/1.1 Release
 
 The RFC feedback process has generated some awesome new ideas, and we propose to have the following be taken up post 1.0 release, 
 for easy sequencing of these projects. However, contributors can feel free to drive these JIRAs/designs as they see fit.
 
-JIRA release: [link](https://issues.apache.org/jira/projects/HUDI/versions/12353261)
+JIRA release: [link](https://issues.apache.org/jira/projects/HUDI/versions/12353261); Notable JIRAs/EPICs below.
 
-| Change | Impact | JIRAs/RFCs |
-|--------|--------|------------|
-|        |        |            |
-|        |        |            |
-
+| Change                                | Impact                                                                                    | JIRAs/RFCs                                        |
+|---------------------------------------|-------------------------------------------------------------------------------------------|---------------------------------------------------|
+| Caching service                       | Lightning fast queries by reading out a pre-materialized, mutable, transactional cache.   | https://issues.apache.org/jira/browse/HUDI-6489   |
+| Additional Indexing techniques        | Geospatial, bitmaps, .. and more.                                                         | https://issues.apache.org/jira/browse/HUDI-6493   |
+| Metaserver + Table Management service | Provide a scalable metadata service, along with unburdening writers from table management | https://issues.apache.org/jira/browse/HUDI-3345, https://issues.apache.org/jira/browse/HUDI-4147 |
+|                                       |                                                                                           |                                                   |
 
 ## Rollout/Adoption Plan
 
 We propose 1.0 execution be done in a series of three releases below.
 
-1. **alpha (July 2023)**: All format changes are landed, internal code layering/abstraction work, major outstanding PRs are landed safely. 0.X tables can be upgraded seamlessly and core Hudi write/query flows are certified.
-2. **beta (August 2023)**: new APIs are added, code paths are changes to use the new APIs, index integrations with performance/functional qualifications.
-3. **Generally available (September 2023):** Scale testing, stress testing and production hardening by the community before general release.
+1. **alpha (August 2023)**: All format changes are landed, internal code layering/abstraction work, major outstanding PRs are landed safely. 0.X tables can be upgraded seamlessly and core Hudi write/query flows are certified.
+2. **beta (September 2023)**: new APIs are added, code paths are changes to use the new APIs, index integrations with performance/functional qualifications.
+3. **Generally available (October 2023):** Scale testing, stress testing and production hardening by the community before general release.
 
 
 ## Test Plan
