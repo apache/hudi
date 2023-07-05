@@ -252,7 +252,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       hudiOpts = hudiOpts ++ Map(
         HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2"
+        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15"
       )
     }
 
@@ -302,18 +303,19 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
 
-    val lastCompactionInstant = getLatestCompactionInstant()
+    var lastCompactionInstant = getLatestCompactionInstant()
     assertTrue(lastCompactionInstant.isPresent)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     assertTrue(getLatestCompactionInstant().get().getTimestamp.compareTo(lastCompactionInstant.get().getTimestamp) > 0)
+    lastCompactionInstant = getLatestCompactionInstant()
 
-    val writeConfig = getWriteConfig(hudiOpts)
-    Using(new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) { client =>
-      val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant()
-      client.rollback(lastInstant.get().getTimestamp)
+    var rollbackedInstant: Option[HoodieInstant] = Option.empty
+    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getTimestamp != lastCompactionInstant.get().getTimestamp) {
+      // rollback compaction instant
+      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
     }
     validateDataAndRecordIndices(hudiOpts)
   }
@@ -528,9 +530,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
     val writeConfig = getWriteConfig(hudiOpts)
-    Using(new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) { client =>
-      client.rollback(lastInstant.getTimestamp)
-    }
+    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      .rollback(lastInstant.getTimestamp)
 
     if (lastInstant.getAction != ActionType.clean.name()) {
       assertEquals(ActionType.rollback.name(), getMetadataMetaClient(hudiOpts).reloadActiveTimeline().lastInstant().get().getAction)
