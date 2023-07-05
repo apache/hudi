@@ -34,8 +34,9 @@ jobs:
 
     - name: Publish to GitHub Packages Apache Maven
       run: |
-        # mkdir ~/.m2
-        echo "<settings><servers><server><id>github</id><username>scoremedia</username><password>${GITHUB_TOKEN}</password></server></servers></settings>" > ~/.m2/settings.xml
-        mvn deploy
+          mkdir -p ~/.m2
+          echo "<settings><servers><server><id>gh</id><username>$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $1}')</username><password>\${env.GITHUB_TOKEN}</password></server></servers></settings>" > ~/.m2/settings.xml
+          REPO="gh::default::https://maven.pkg.github.com/${GITHUB_REPOSITORY}"
+          mvn deploy -DaltReleaseDeploymentRepository="${REPO}" -DaltSnapshotDeploymentRepository="${REPO}"
       env:
         GITHUB_TOKEN: ${{ github.token }} # GITHUB_TOKEN is the default env for the password
