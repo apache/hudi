@@ -52,6 +52,11 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath, boolean includePending) {
+    return viewManager.getFileSystemView(basePath).getAllFileSlices(partitionPath, includePending).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
+  }
+
   public List<FileSliceDTO> getLatestFileSliceInRange(String basePath, List<String> instantsToReturn) {
     return viewManager.getFileSystemView(basePath).getLatestFileSliceInRange(instantsToReturn)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());

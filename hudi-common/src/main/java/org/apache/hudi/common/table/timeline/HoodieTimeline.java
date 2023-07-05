@@ -335,9 +335,17 @@ public interface HoodieTimeline extends Serializable {
   boolean containsInstant(HoodieInstant instant);
 
   /**
-   * @return true if the passed instant is present as a completed instant on the timeline
+   * @return true if the passed instant is present on the timeline
    */
   boolean containsInstant(String ts);
+
+  /**
+   * This method checks if the timestamp provided is present on the timeline or not.
+   * The check is performed based on includePending value.
+   * If includePending is passed as false then it only checks the completed timeline,
+   * if it is true then contains check is performed on the entire timeline.
+   */
+  boolean containsInstant(String ts, boolean includePending);
 
   /**
    * @return true if the passed instant is present as a completed instant on the timeline or if the instant is before

@@ -218,6 +218,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending) {
+    return execute(partitionPath, (partition) -> preferredView.getAllFileSlices(partition, includePending),
+        partition -> secondaryView.getAllFileSlices(partition, includePending));
+  }
+
+  @Override
   public Stream<HoodieFileGroup> getAllFileGroups(String partitionPath) {
     return execute(partitionPath, preferredView::getAllFileGroups, secondaryView::getAllFileGroups);
   }

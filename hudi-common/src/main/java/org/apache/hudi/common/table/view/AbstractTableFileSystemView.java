@@ -969,6 +969,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  @Override
+  public final Stream<FileSlice> getAllFileSlices(String partitionStr, boolean includePending) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      return fetchAllFileSlices(partition, includePending).filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())).map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   /**
    * Ensure there is consistency in handling trailing slash in partition-path. Always trim it which is what is done in
    * other places.
@@ -1275,6 +1287,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Default implementation for fetching all file-slices for a partition-path.
+   *
+   * @param partitionPath Partition path
+   * @return file-slice stream
+   */
+  Stream<FileSlice> fetchAllFileSlices(String partitionPath, boolean includePending) {
+    List<HoodieFileGroup> fileGroups = fetchAllStoredFileGroups(partitionPath).map(this::addBootstrapBaseFileIfPresent)
+        .collect(Collectors.toList());
+    return fileGroups.stream()
+        .flatMap(fileGroup -> fileGroup.getAllFileSlices(includePending));
+  }
+
+  /**
    * Default implementation for fetching latest base-files for the partition-path.
    */
   public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
@@ -1478,7 +1503,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void sync() {
     try {
       writeLock.lock();
-      HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+      HoodieTimeline newTimeline = metaClient.reloadActiveTimeline();
       clear();
       // Initialize with new Hoodie timeline.
       init(metaClient, newTimeline);

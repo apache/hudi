@@ -207,7 +207,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(rollBackRequests, rollBackRequestsUpdated);
   }
 
-
   // Verify that rollback works with replacecommit
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
