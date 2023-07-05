@@ -53,6 +53,7 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * Timeline, based on which all getter work.
+   * This should be a write timeline that contains either completed instants or pending compaction instants.
    */
   private final HoodieTimeline timeline;
 
@@ -144,9 +145,20 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Provides a stream of committed file slices, sorted reverse base commit time.
+   * Provides a stream of committed file slices, sorted in reverse order of base commit time.
    */
   public Stream<FileSlice> getAllFileSlices() {
+    return getAllFileSlices(false);
+  }
+
+  /**
+   * This API takes boolean arg includePending, based on the value passed it will return either committed files slices
+   * or all fileslices sorted in reverse order of base commit time.
+   */
+  public Stream<FileSlice> getAllFileSlices(boolean includePending) {
+    if (includePending) {
+      return fileSlices.values().stream();
+    }
     if (!timeline.empty()) {
       return fileSlices.values().stream().filter(this::isFileSliceCommitted);
     }
@@ -164,7 +176,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Option<FileSlice> getLatestFileSlice() {
     // there should always be one
-    return Option.fromJavaOptional(getAllFileSlices().findFirst());
+    return Option.fromJavaOptional(getAllFileSlices(false).findFirst());
   }
 
   /**
@@ -193,6 +205,9 @@ public class HoodieFileGroup implements Serializable {
         .findFirst());
   }
 
+  /**
+   * Fetches latest file slice in range.
+   */
   public Option<FileSlice> getLatestFileSliceInRange(List<String> commitRange) {
     return Option.fromJavaOptional(
         getAllFileSlices().filter(slice -> commitRange.contains(slice.getBaseInstantTime())).findFirst());
@@ -202,7 +217,7 @@ public class HoodieFileGroup implements Serializable {
    * Stream of committed data files, sorted reverse commit time.
    */
   public Stream<HoodieBaseFile> getAllBaseFiles() {
-    return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
+    return getAllFileSlices(false).filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
   @Override

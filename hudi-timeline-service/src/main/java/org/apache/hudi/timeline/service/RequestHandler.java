@@ -346,7 +346,8 @@ public class RequestHandler {
       metricsRegistry.add("ALL_SLICES", 1);
       List<FileSliceDTO> dtos = sliceHandler.getAllFileSlices(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
-          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INCLUDE_PENDING_FILE_SLICES, Boolean.class).getOrDefault(false));
       writeValueAsString(ctx, dtos);
     }, true));
 
