@@ -528,8 +528,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         @Override
         public HoodieRecord next() {
           return forDelete
-                  ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-                  : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime);
+              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime);
         }
       };
     });
@@ -872,7 +872,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
-              HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -889,7 +889,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Update from {@code HoodieCleanMetadata}.
    *
    * @param cleanMetadata {@code HoodieCleanMetadata}
-   * @param instantTime Timestamp at which the clean was completed
+   * @param instantTime   Timestamp at which the clean was completed
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
@@ -902,7 +902,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Update from {@code HoodieRestoreMetadata}.
    *
    * @param restoreMetadata {@code HoodieRestoreMetadata}
-   * @param instantTime Timestamp at which the restore was performed
+   * @param instantTime     Timestamp at which the restore was performed
    */
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
@@ -916,7 +916,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Update from {@code HoodieRollbackMetadata}.
    *
    * @param rollbackMetadata {@code HoodieRollbackMetadata}
-   * @param instantTime Timestamp at which the rollback was performed
+   * @param instantTime      Timestamp at which the rollback was performed
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
@@ -1220,24 +1220,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                    newLocation.get().getFileId(), newLocation.get().getInstantTime());
+                newLocation.get().getFileId(), newLocation.get().getInstantTime());
           } else {
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
           }
           return hoodieRecord;
         })
-            .filter(Objects::nonNull);
+        .filter(Objects::nonNull);
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
-            dataMetaClient.getActiveTimeline(), metadata);
+        dataMetaClient.getActiveTimeline(), metadata);
     List<Pair<String, String>> partitionBaseFilePairs = replaceCommitMetadata
-            .getPartitionToReplaceFileIds()
-            .keySet().stream().flatMap(partition
-                    -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f.getFileName())))
-            .collect(Collectors.toList());
+        .getPartitionToReplaceFileIds()
+        .keySet().stream().flatMap(partition
+            -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f.getFileName())))
+        .collect(Collectors.toList());
 
     return readRecordKeysFromBaseFiles(engineContext, partitionBaseFilePairs, true);
   }
