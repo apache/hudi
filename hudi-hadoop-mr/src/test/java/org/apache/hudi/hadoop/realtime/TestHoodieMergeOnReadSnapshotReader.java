@@ -164,8 +164,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
             schema,
             baseJobConf,
             0,
-            size,
-            new String[0]);
+            size);
         Map<String, HoodieRecord> records = snapshotReader.getRecordsByKey();
         assertEquals(TOTAL_RECORDS, records.size());
         snapshotReader.close();

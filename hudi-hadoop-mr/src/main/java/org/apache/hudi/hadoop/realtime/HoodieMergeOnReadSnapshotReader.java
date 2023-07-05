@@ -59,6 +59,14 @@ import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getBa
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes;
 import static org.apache.hudi.internal.schema.InternalSchema.getEmptyInternalSchema;
 
+/**
+ * An implementation of {@link AbstractRealtimeRecordReader} that reads from base parquet files and log files,
+ * and merges the records on the fly. It differs from {@link HoodieRealtimeRecordReader} in that it does not
+ * implement Hadoop's RecordReader interface, and instead implements Iterator interface that returns an iterator
+ * of {@link HoodieRecord}s which are {@link HoodieAvroIndexedRecord}s. This can be used by query engines like
+ * Trino that do not use Hadoop's RecordReader interface. However, the engine must support reading from iterators
+ * and also support Avro (de)serialization.
+ */
 public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReader implements Iterator<HoodieRecord>, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeOnReadSnapshotReader.class);
@@ -74,12 +82,28 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
   private final Iterator<HoodieRecord> recordsIterator;
   private final ExternalSpillableMap<String, HoodieRecord> mergedRecordsByKey;
 
-  public HoodieMergeOnReadSnapshotReader(String tableBasePath, String baseFilePath,
+  /**
+   * In order to instantiate this record reader, one needs to provide following parameters.
+   * An example usage is demonstrated in TestHoodieMergeOnReadSnapshotReader.
+   *
+   * @param tableBasePath     Base path of the Hudi table
+   * @param baseFilePath      Path of the base file as of the latest instant time for the split being processed
+   * @param logFilePaths      Paths of the log files as of the latest file slices pertaining to file group id of the base file
+   * @param latestInstantTime Latest instant time
+   * @param readerSchema      Schema of the reader
+   * @param jobConf           Any job configuration
+   * @param start             Start offset
+   * @param length            Length of the split
+   */
+  public HoodieMergeOnReadSnapshotReader(String tableBasePath,
+                                         String baseFilePath,
                                          List<HoodieLogFile> logFilePaths,
                                          String latestInstantTime,
                                          Schema readerSchema,
-                                         JobConf jobConf, long start, long length, String[] hosts) throws IOException {
-    super(getRealtimeSplit(tableBasePath, baseFilePath, logFilePaths, latestInstantTime, start, length, hosts), jobConf);
+                                         JobConf jobConf,
+                                         long start,
+                                         long length) throws IOException {
+    super(getRealtimeSplit(tableBasePath, baseFilePath, logFilePaths, latestInstantTime, start, length, new String[0]), jobConf);
     this.tableBasePath = tableBasePath;
     this.logFilePaths = logFilePaths;
     this.latestInstantTime = latestInstantTime;
