@@ -203,15 +203,19 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithDeletePartition(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+    val latestSnapshot = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
 
     Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
       val commitTime = client.startCommit
       client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
-      val partitionList = Collections.singletonList(dataGen.getPartitionPaths.last)
+      val deletingPartition = dataGen.getPartitionPaths.last
+      val partitionList = Collections.singletonList(deletingPartition)
       client.deletePartitions(partitionList, commitTime)
+
+      val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
+      validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
   }
 
@@ -529,6 +533,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     if (validate) {
       validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
+    deletedDf.unpersist()
     latestBatchDf
   }
 
