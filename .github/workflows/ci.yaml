@@ -29,10 +29,13 @@ jobs:
         distribution: 'temurin'
         java-version: '8'
 
-    - name: Build with Maven
-      run: mvn -B package --file pom.xml -DskipTests
+    #- name: Build with Maven
+    #  run: mvn -B package --file pom.xml -DskipTests
 
     - name: Publish to GitHub Packages Apache Maven
-      run: mvn deploy
+      run: |
+        mkdir ~/.m2
+        echo "<settings><servers><server><id>github</id><username>scoremedia</username><password>${GITHUB_TOKEN}</password></server></servers></settings>" > ~/.m2/settings.xml
+        mvn deploy
       env:
         GITHUB_TOKEN: ${{ github.token }} # GITHUB_TOKEN is the default env for the password
