@@ -68,7 +68,6 @@ function useWindowSize() {
 
 function useMobileSidebar() {
   const { width } = useWindowSize(); // Mobile sidebar not visible on hydration: can avoid SSR rendering
-  console.log('width', width);
   const breakPoint = 1320;
   const shouldRender = width <= breakPoint; // || windowSize === 'ssr';
 
