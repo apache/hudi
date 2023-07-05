@@ -49,6 +49,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
@@ -295,7 +296,7 @@ public class HoodieFlinkWriteClient<T> extends
    * should be called before the Driver starts a new transaction.
    */
   public void preTxn(HoodieTableMetaClient metaClient) {
-    if (txnManager.isLockRequired()) {
+    if (txnManager.isLockRequired() && !FlinkClientUtil.isLocklessMultiWriter(config)) {
       // refresh the meta client which is reused
       metaClient.reloadActiveTimeline();
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
@@ -353,10 +354,16 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    if (FlinkClientUtil.isLocklessMultiWriter(config)) {
+      // no need to do the conflict resolution.
+      return;
+    }
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+      // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+      HoodieTable table = createTable(config, hadoopConf);
+      resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    }
   }
 
   @Override

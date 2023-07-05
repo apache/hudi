@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -43,7 +44,7 @@ import java.util.List;
  * then closes the file writer. The subsequent mini-batches are appended to the same file
  * through a different append handle with same write file name.
  *
- * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
+ * <p>The back-up writer may roll over on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
 public class FlinkAppendHandle<T, I, K, O>
@@ -125,5 +126,16 @@ public class FlinkAppendHandle<T, I, K, O>
   @Override
   public Path getWritePath() {
     return writer.getLogFile().getPath();
+  }
+
+  @Override
+  protected String makeWriteToken() {
+    final String writeToken = super.makeWriteToken();
+    if (FlinkClientUtil.isLocklessMultiWriter(config)) {
+      // for lockless concurrent write, add the instant time as suffix to avoid file handle name conflicts.
+      return writeToken + "-" + instantTime;
+    } else {
+      return writeToken;
+    }
   }
 }

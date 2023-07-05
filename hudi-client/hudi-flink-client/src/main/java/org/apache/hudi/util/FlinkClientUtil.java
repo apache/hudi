@@ -18,7 +18,9 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
 import org.apache.flink.configuration.Configuration;
@@ -86,5 +88,14 @@ public class FlinkClientUtil {
       return hadoopConfiguration;
     }
     return null;
+  }
+
+  /**
+   * Returns whether this is lockless multi writer ingestion.
+   */
+  public static boolean isLocklessMultiWriter(HoodieWriteConfig config) {
+    return config.getTableType().equals(HoodieTableType.MERGE_ON_READ)
+        && config.isSimpleBucketIndex()
+        && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 }

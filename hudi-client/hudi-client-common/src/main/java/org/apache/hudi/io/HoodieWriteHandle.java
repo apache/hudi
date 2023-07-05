@@ -109,7 +109,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   /**
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
-  private String makeWriteToken() {
+  protected String makeWriteToken() {
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 

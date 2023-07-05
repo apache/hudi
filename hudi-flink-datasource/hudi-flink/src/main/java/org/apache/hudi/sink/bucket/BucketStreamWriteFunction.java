@@ -58,6 +58,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private String indexKeyFields;
 
+  private boolean isLocklessMultiWriter;
+
   /**
    * BucketID to file group mapping in each partition.
    * Map(partition -> Map(bucketId, fileID)).
@@ -85,6 +87,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     super.open(parameters);
     this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.isLocklessMultiWriter = OptionsResolver.isLocklessMultiWriter(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
@@ -119,7 +122,9 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
+      String newFileId = isLocklessMultiWriter
+          ? BucketIdentifier.newBucketFileIdFixedSuffix(bucketNum)
+          : BucketIdentifier.newBucketFileIdPrefix(bucketNum);
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);

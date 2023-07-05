@@ -1713,6 +1713,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     return !StringUtils.isNullOrEmpty(getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS));
   }
 
+  public boolean isSimpleBucketIndex() {
+    return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
+        && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
+  }
+
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
     return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
         getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
