@@ -29,8 +29,8 @@ jobs:
         distribution: 'temurin'
         java-version: '8'
 
-    #- name: Build with Maven
-    #  run: mvn -B package --file pom.xml -DskipTests
+    - name: Build with Maven
+      run: mvn -B package --file pom.xml -DskipTests
 
     - name: Publish to GitHub Packages Apache Maven
       run: |
