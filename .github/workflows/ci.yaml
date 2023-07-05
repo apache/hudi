@@ -37,6 +37,6 @@ jobs:
           mkdir -p ~/.m2
           echo "<settings><servers><server><id>gh</id><username>$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $1}')</username><password>\${env.GITHUB_TOKEN}</password></server></servers></settings>" > ~/.m2/settings.xml
           REPO="gh::default::https://maven.pkg.github.com/${GITHUB_REPOSITORY}"
-          mvn deploy -pl org.apache.hudi:hudi -DaltReleaseDeploymentRepository="${REPO}" -DaltSnapshotDeploymentRepository="${REPO}" -DskipTests
+          mvn deploy -pl org.apache.hudi:hudi-utilities-bundle_2.12 -DaltReleaseDeploymentRepository="${REPO}" -DaltSnapshotDeploymentRepository="${REPO}" -DskipTests
       env:
         GITHUB_TOKEN: ${{ github.token }} # GITHUB_TOKEN is the default env for the password
