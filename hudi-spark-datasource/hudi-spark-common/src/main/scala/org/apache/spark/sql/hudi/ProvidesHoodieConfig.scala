@@ -132,7 +132,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = hoodieCatalogTable.preCombineKey.nonEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
 
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
@@ -141,21 +141,21 @@ trait ProvidesHoodieConfig extends Logging {
       (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, true, _, _, _, true) =>
-          throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
         case (true, _, _, true, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
         // Bulk insert with overwrite table
-        case (true, false, true, _, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, false, true, _, _, _) =>
+          BULK_INSERT_OPERATION_OPT_VAL
         // Bulk insert with overwrite table partition
-        case (true, true, false, _, _, true) => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, true, false, _, _, true) =>
+          BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
         case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
         // insert overwrite partition
         case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
         // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, false, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
+        case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
         case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
@@ -181,7 +181,7 @@ trait ProvidesHoodieConfig extends Logging {
       PAYLOAD_CLASS_NAME.key -> payloadClassName,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
-      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
       KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
       SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL,
@@ -348,10 +348,10 @@ object ProvidesHoodieConfig {
   //      overridden by any source)s
   //
   def combineOptions(catalogTable: HoodieCatalogTable,
-                             tableConfig: HoodieTableConfig,
-                             sqlConf: SQLConf,
-                             defaultOpts: Map[String, String],
-                             overridingOpts: Map[String, String] = Map.empty): Map[String, String] = {
+                     tableConfig: HoodieTableConfig,
+                     sqlConf: SQLConf,
+                     defaultOpts: Map[String, String],
+                     overridingOpts: Map[String, String] = Map.empty): Map[String, String] = {
     // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
     //       lowest, which is inverse to the ordering in the code):
     //          1. (Extra) Option overrides
