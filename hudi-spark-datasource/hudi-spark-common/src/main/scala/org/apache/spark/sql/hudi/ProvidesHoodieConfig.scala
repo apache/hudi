@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, config}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -85,6 +85,68 @@ trait ProvidesHoodieConfig extends Logging {
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
+
+  private def deducePayloadClassNameLegacy(operation: String, tableType: String, insertMode: InsertMode): String = {
+    if (operation == UPSERT_OPERATION_OPT_VAL &&
+      tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
+      // Validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
+      // on reading.
+      // TODO use HoodieSparkValidateDuplicateKeyRecordMerger when SparkRecordMerger is default
+      classOf[ValidateDuplicateKeyPayload].getCanonicalName
+    } else if (operation == INSERT_OPERATION_OPT_VAL && tableType == COW_TABLE_TYPE_OPT_VAL &&
+      insertMode == InsertMode.STRICT){
+      // Validate duplicate key for inserts to COW table when using strict insert mode.
+      classOf[ValidateDuplicateKeyPayload].getCanonicalName
+    } else {
+      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
+    }
+  }
+
+  /**
+   * Deduce the sql write operation for INSERT_INTO
+   */
+  private def deduceSqlWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
+                                      sqlWriteOperation: String): String = {
+    if (isOverwriteTable) {
+      WriteOperationType.INSERT_OVERWRITE_TABLE.name()
+    } else if (isOverwritePartition) {
+      WriteOperationType.INSERT_OVERWRITE.name()
+    } else {
+      sqlWriteOperation
+    }
+  }
+
+  /**
+   * Deduce the insert operation
+   */
+  private def deduceOperation(enableBulkInsert: Boolean, isOverwritePartition: Boolean, isOverwriteTable: Boolean,
+                              dropDuplicate: Boolean, isNonStrictMode: Boolean, isPartitionedTable: Boolean,
+                              hasPrecombineColumn: Boolean): String = {
+    (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
+      case (true, _, _, _, false, _) =>
+        throw new IllegalArgumentException(s"Table with primaryKey can only use bulk insert in non-strict mode.")
+      case (true, _, _, true, _, _) =>
+        throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
+          s" Please disable $INSERT_DROP_DUPS and try again.")
+      // Bulk insert with overwrite table
+      case (true, false, true, _, _, _) =>
+        BULK_INSERT_OPERATION_OPT_VAL
+      // Bulk insert with overwrite table partition
+      case (true, true, false, _, _, true) =>
+        BULK_INSERT_OPERATION_OPT_VAL
+      // insert overwrite table
+      case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+      // insert overwrite partition
+      case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+      // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+      case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
+      // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
+      case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+      // for the rest case, use the insert operation
+      case _ => INSERT_OPERATION_OPT_VAL
+    }
+  }
+
   /**
    * Build the default config for insert.
    *
@@ -130,10 +192,16 @@ trait ProvidesHoodieConfig extends Logging {
 
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
+    val insertModeSet = combinedOpts.contains(SQL_INSERT_MODE.key)
+    val sqlWriteOperationOpt = combinedOpts.get(SQL_WRITE_OPERATION.key())
+    val sqlWriteOperationSet = sqlWriteOperationOpt.nonEmpty
+    val sqlWriteOperation = sqlWriteOperationOpt.getOrElse(SQL_WRITE_OPERATION.defaultValue())
+    val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val combineBeforeInsert = hoodieCatalogTable.preCombineKey.nonEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
 
+/*<<<<<<< HEAD
     // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
     //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
     val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
@@ -162,19 +230,33 @@ trait ProvidesHoodieConfig extends Logging {
         case _ => INSERT_OPERATION_OPT_VAL
       }
     }
+=======*/
+    // try to use sql write operation instead of legacy insert mode. If only insert mode is explicitly specified, we will uze
+    // o
+    val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
+    val operation = combinedOpts.getOrElse(OPERATION.key,
+      if (useLegacyInsertModeFlow) {
+        // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
+        //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
 
-    val payloadClassName = if (operation == UPSERT_OPERATION_OPT_VAL &&
-      tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
-      // Validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
-      // on reading.
-      // TODO use HoodieSparkValidateDuplicateKeyRecordMerger when SparkRecordMerger is default
-      classOf[ValidateDuplicateKeyPayload].getCanonicalName
-    } else if (operation == INSERT_OPERATION_OPT_VAL && tableType == COW_TABLE_TYPE_OPT_VAL &&
-      insertMode == InsertMode.STRICT){
-      // Validate duplicate key for inserts to COW table when using strict insert mode.
-      classOf[ValidateDuplicateKeyPayload].getCanonicalName
+      /*deduceWriteOperationForInsertInfo(isPartitionedTable, isOverwritePartition, isOverwriteTable, insertModeSet, dropDuplicate,
+        enableBulkInsert, isInsertInto, isNonStrictMode, combineBeforeInsert)*/
+        deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
+          isNonStrictMode, isPartitionedTable, combineBeforeInsert)
+      } else {
+        deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
+      }
+    )
+
+    val payloadClassName =  if (useLegacyInsertModeFlow) {
+      deducePayloadClassNameLegacy(operation, tableType, insertMode)
     } else {
-      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
+      // should we also consider old way of doing things.
+      if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
+        classOf[ValidateDuplicateKeyPayload].getCanonicalName
+      } else {
+        classOf[OverwriteWithLatestAvroPayload].getCanonicalName
+      }
     }
 
     val defaultOpts = Map(
@@ -222,10 +304,26 @@ trait ProvidesHoodieConfig extends Logging {
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
-    ) ++ overwriteTableOpts
+    ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts)
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
+  }
+
+  def getDropDupsConfig(useLegacyInsertModeFlow: Boolean, incomingParams : Map[String, String]): Map[String, String] = {
+    if (!useLegacyInsertModeFlow) {
+      Map(DataSourceWriteOptions.INSERT_DUP_POLICY.key() -> incomingParams.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key(),
+        DataSourceWriteOptions.INSERT_DUP_POLICY.defaultValue()),
+        if (incomingParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) &&
+          incomingParams(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) == DROP_INSERT_DUP_POLICY) {
+          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "true"
+        } else {
+          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false"
+        }
+      )
+    } else {
+      Map()
+    }
   }
 
   def buildHoodieDropPartitionsConfig(sparkSession: SparkSession,

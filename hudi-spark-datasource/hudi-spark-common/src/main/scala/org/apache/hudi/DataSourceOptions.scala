@@ -433,19 +433,23 @@ object DataSourceWriteOptions {
   /**
    * Enable the bulk insert for sql insert statement.
    */
+  @Deprecated
   val SQL_ENABLE_BULK_INSERT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.bulk.insert.enable")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("When set to true, the sql insert statement will use bulk insert.")
+    .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
+      "This config is deprecated as of 0.14.0. Please use " + SQL_WRITE_OPERATION.key() + " instead.")
 
+  @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.insert.mode")
     .defaultValue("upsert")
     .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
-      "While for non-strict mode, hudi just do the insert operation for the pk-table.")
+      "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use "
+      + SQL_WRITE_OPERATION.key() + " and " + INSERT_DUP_POLICY.key() + " as you see fit.")
 
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
@@ -454,11 +458,13 @@ object DataSourceWriteOptions {
     .withDocumentation("Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. " +
       "This is useful to store checkpointing information, in a consistent way with the hudi timeline")
 
+  @Deprecated
   val INSERT_DROP_DUPS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.insert.drop.duplicates")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation.")
+    .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
+    "This config is deprecated as of 0.14.0. Please use " + INSERT_DUP_POLICY.key() + " instead.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -516,6 +522,29 @@ object DataSourceWriteOptions {
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
+
+  val SQL_WRITE_OPERATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.write.operation")
+    .defaultValue("insert")
+    .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
+      "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
+      "do small file managmeent. If you prefer hudi to automatically managee small files, then you can go with \"insert\". There is no precombine " +
+      "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
+      "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
+      "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
+
+  val NONE_INSERT_DUP_POLICY = "none"
+  val DROP_INSERT_DUP_POLICY = "drop"
+  val FAIL_INSERT_DUP_POLICY = "fail"
+
+  val INSERT_DUP_POLICY: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.insert.dup.policy")
+    .defaultValue(NONE_INSERT_DUP_POLICY)
+    .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
+      + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
+    " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
+      "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
+      "can be ingested only once to the target table of interest.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
