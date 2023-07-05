@@ -21,8 +21,8 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>org.apache</groupId>
-    <artifactId>apache</artifactId>
+    <groupId>bet.thescore</groupId>
+    <artifactId>thescore</artifactId>
     <version>21</version>
   </parent>
 
