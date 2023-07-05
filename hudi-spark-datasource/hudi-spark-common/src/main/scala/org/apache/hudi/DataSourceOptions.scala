@@ -605,6 +605,18 @@ object DataSourceWriteOptions {
 
   val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
+  val ENABLE_OPTIMIZED_UPDATE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.enable.spark.sql.optimized.update")
+    .defaultValue("true")
+    .markAdvanced()
+    .withDocumentation("Controls whether spark sql optimized update is enabled.")
+
+  val ENABLE_OPTIMIZED_DELETE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.enable.spark.sql.optimized.delete")
+    .defaultValue("true")
+    .markAdvanced()
+    .withDocumentation("Controls whether spark sql optimized delete is enabled.")
+
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key()

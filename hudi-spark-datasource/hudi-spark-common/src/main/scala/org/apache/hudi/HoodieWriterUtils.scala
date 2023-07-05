@@ -82,6 +82,8 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
+    hoodieConfig.setDefaultValue(ENABLE_OPTIMIZED_UPDATE)
+    hoodieConfig.setDefaultValue(ENABLE_OPTIMIZED_DELETE)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
