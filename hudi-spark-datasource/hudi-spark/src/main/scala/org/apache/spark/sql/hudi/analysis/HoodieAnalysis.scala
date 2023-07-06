@@ -50,19 +50,29 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (!HoodieSparkUtils.gteqSpark3_2) {
       //Add or correct resolution of MergeInto
-      val resolveReferencesClass = if (HoodieSparkUtils.isSpark2) {
-        "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
+      // the way we load the class via reflection is diff across spark2 and spark3 and hence had to split it out.
+      if (HoodieSparkUtils.isSpark2) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
       } else if (HoodieSparkUtils.isSpark3_0) {
-        "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder = {
+          session => instantiateKlass(resolveReferencesClass, session)
+        }
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
       } else if (HoodieSparkUtils.isSpark3_1) {
-        "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => instantiateKlass(resolveReferencesClass, session)
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
       } else {
         throw new IllegalStateException("Impossible to be here")
       }
-      val sparkResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-      // TODO elaborate on the ordering
-      rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
 
     } else {
       rules += adaptIngestionTargetLogicalRelations
