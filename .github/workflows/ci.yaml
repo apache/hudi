@@ -14,10 +14,10 @@
 
 
 name: Publish package to GitHub Packages
-on:
-  push:
-    tags:
-      - '**'
+on: [push]
+#  push:
+#    tags:
+#      - '**'
 
 jobs:
   publish:
