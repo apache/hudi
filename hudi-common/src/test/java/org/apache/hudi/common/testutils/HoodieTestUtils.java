@@ -218,4 +218,17 @@ public class HoodieTestUtils {
     HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
     HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
   }
+
+  public static int getJavaVersion() {
+    String version = System.getProperty("java.version");
+    if (version.startsWith("1.")) {
+      version = version.substring(2, 3);
+    } else {
+      int dot = version.indexOf(".");
+      if (dot != -1) {
+        version = version.substring(0, dot);
+      }
+    }
+    return Integer.parseInt(version);
+  }
 }

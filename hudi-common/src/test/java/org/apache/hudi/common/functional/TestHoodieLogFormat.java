@@ -73,6 +73,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
+
+import org.junit.Assume;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -104,6 +106,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -132,6 +135,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
@@ -139,6 +145,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @AfterAll
   public static void tearDownClass() {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+
     hdfsTestService.stop();
   }
 

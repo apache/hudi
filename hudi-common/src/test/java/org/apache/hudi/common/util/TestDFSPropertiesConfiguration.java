@@ -28,6 +28,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+
+import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
@@ -39,6 +41,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,6 +63,9 @@ public class TestDFSPropertiesConfiguration {
 
   @BeforeAll
   public static void initClass() throws Exception {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
     // Create a temp folder as the base path

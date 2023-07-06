@@ -38,6 +38,8 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
+
+import org.junit.Assume;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -63,6 +66,9 @@ public class TestHoodieLogFormatAppendFailure {
 
   @BeforeAll
   public static void setUpClass() throws IOException {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+
     // NOTE : The MiniClusterDFS leaves behind the directory under which the cluster was created
     baseDir = new File("/tmp/" + UUID.randomUUID());
     FileUtil.fullyDelete(baseDir);
@@ -78,6 +84,9 @@ public class TestHoodieLogFormatAppendFailure {
 
   @AfterAll
   public static void tearDownClass() {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+
     cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created
     FileUtil.fullyDelete(baseDir);
@@ -145,5 +154,4 @@ public class TestHoodieLogFormatAppendFailure {
     assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
     writer.close();
   }
-
 }
