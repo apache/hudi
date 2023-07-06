@@ -194,7 +194,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackMetadata.setPartitionMetadata(partitionMetadataMap);
     rollbackMetadata.setInstantsRollback(Arrays.asList(new HoodieInstantInfo("1", HoodieTimeline.COMMIT_ACTION)));
     HoodieTestTable.of(metaClient)
-        .addRollback(instantTime, rollbackMetadata);
+        .addRollback(instantTime, rollbackMetadata, null);
+    HoodieTestTable.of(metaClient)
+        .addRollbackCompleted(instantTime, rollbackMetadata, false);
   }
 
   private void createCommitMetadata(String instantTime) throws Exception {

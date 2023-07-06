@@ -105,6 +105,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInfli
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.createRollbackTimestamp;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
@@ -996,10 +997,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // Find the deltacommits since the last compaction
       Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
           CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
-      if (!deltaCommitsInfo.isPresent() || deltaCommitsInfo.get().getKey().empty()) {
-        LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no deltacommits on MDT", commitInstantTime, instantTime));
-        return;
-      }
 
       // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
       HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
@@ -1019,14 +1016,23 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         }
       }
 
+      // lets apply a delta commit with DT's rb instant containing following records:
+      // a. any log files as part of RB commit metadata that was added
+      // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
+      // both above list should only be added to FILES partition.
+
+      String rollbackInstantTime = createRollbackTimestamp(instantTime);
+      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
+              dataMetaClient, rollbackMetadata, rollbackInstantTime));
+
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
-        if (!getWriteClient().rollback(commitInstantTime, instantTime)) {
+        if (!getWriteClient().rollback(commitInstantTime, rollbackInstantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitInstantTime);
         }
       } else {
         LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no corresponding deltacommits on MDT",
-            commitInstantTime, instantTime));
+            commitInstantTime, rollbackInstantTime));
       }
       closeInternal();
     }

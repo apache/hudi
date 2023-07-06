@@ -601,51 +601,6 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Convert restore action metadata to metadata table records.
-   */
-  public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
-      HoodieEngineContext engineContext, HoodieActiveTimeline metadataTableTimeline, HoodieRestoreMetadata restoreMetadata,
-      MetadataRecordsGenerationParams recordsGenerationParams, String instantTime, Option<String> lastSyncTs) {
-    final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
-    final Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
-    final Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
-
-    processRestoreMetadata(metadataTableTimeline, restoreMetadata, partitionToAppendedFiles, partitionToDeletedFiles, lastSyncTs);
-    final HoodieData<HoodieRecord> filesPartitionRecordsRDD =
-        engineContext.parallelize(convertFilesToFilesPartitionRecords(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Restore"), 1);
-    partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecordsRDD);
-
-    if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
-      final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
-          convertFilesToBloomFilterRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams, instantTime);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecordsRDD);
-    }
-
-    if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
-          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
-    }
-    return partitionToRecordsMap;
-  }
-
-  /**
-   * Aggregates all files deleted and appended to from all rollbacks associated with a restore operation then
-   * creates metadata table records for them.
-   *
-   * @param restoreMetadata - Restore action metadata
-   * @return a list of metadata table records
-   */
-  private static void processRestoreMetadata(HoodieActiveTimeline metadataTableTimeline,
-                                             HoodieRestoreMetadata restoreMetadata,
-                                             Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                             Map<String, List<String>> partitionToDeletedFiles,
-                                             Option<String> lastSyncTs) {
-    restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> rms.forEach(rm -> processRollbackMetadata(metadataTableTimeline, rm,
-        partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs)));
-  }
-
-  /**
    * Convert rollback action metadata to metadata table records.
    * <p>
    * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
@@ -653,37 +608,57 @@ public class HoodieTableMetadataUtil {
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext engineContext, HoodieActiveTimeline metadataTableTimeline,
-      HoodieRollbackMetadata rollbackMetadata, MetadataRecordsGenerationParams recordsGenerationParams,
-      String instantTime, Option<String> lastSyncTs, boolean wasSynced) {
+      HoodieTableMetaClient dataTableMetaClient,
+      HoodieRollbackMetadata rollbackMetadata, String instantTime) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
-    Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
-    Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
 
-    List<HoodieRecord> filesPartitionRecords =
-        convertMetadataToRollbackRecords(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles, instantTime, lastSyncTs, wasSynced);
+    List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime);
+
+    List<HoodieRecord> reAddedRecords = getHoodieRecordsForLogFilesFromRollbackPlan(dataTableMetaClient, instantTime);
+    filesPartitionRecords.addAll(reAddedRecords);
     final HoodieData<HoodieRecord> rollbackRecordsRDD = engineContext.parallelize(filesPartitionRecords, 1);
+
     partitionToRecordsMap.put(MetadataPartitionType.FILES, rollbackRecordsRDD);
 
     return partitionToRecordsMap;
   }
 
+  private static List<HoodieRecord> getHoodieRecordsForLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime) {
+    /*List<HoodieInstant> instants = dataTableMetaClient.reloadActiveTimeline().filterRequestedRollbackTimeline()
+        .filter(instant -> instant.getTimestamp().equals(instantTime) && instant.isRequested()).getInstants();*/
+
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instantTime);
+
+    // HoodieInstant rollbackInstant = instants.get(0);
+    HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
+    try {
+      HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
+          dataTableMetaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
+
+      Map<String, Map<String, Long>> partitionToLogFilesMap = new HashMap<>();
+
+      rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
+        partitionToLogFilesMap.computeIfAbsent(rollbackRequest.getPartitionPath(), s -> new HashMap<>());
+        // fetch only log files that are expected to be RB'd in DT as part of this rollback. these log files will not be deleted, but rendered
+        // invalid once rollback is complete.
+        partitionToLogFilesMap.get(rollbackRequest.getPartitionPath()).putAll(rollbackRequest.getLogBlocksToBeDeleted());
+      });
+
+      return convertFilesToFilesPartitionRecords(partitionToLogFilesMap, "Rollback");
+    } catch (IOException e) {
+      throw new HoodieMetadataException("Parsing rollback plan for " + rollbackInstant.toString() + " failed ");
+    }
+  }
+
   /**
    * Convert rollback action metadata to files partition records.
+   * Consider only new log files added.
    */
-  private static List<HoodieRecord> convertMetadataToRollbackRecords(HoodieActiveTimeline metadataTableTimeline,
-                                                                     HoodieRollbackMetadata rollbackMetadata,
-                                                                     Map<String, List<String>> partitionToDeletedFiles,
-                                                                     Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                     String instantTime,
-                                                                     Option<String> lastSyncTs, boolean wasSynced) {
-    processRollbackMetadata(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles,
-        partitionToAppendedFiles, lastSyncTs);
-    if (!wasSynced) {
-      // Since the instant-being-rolled-back was never committed to the metadata table, the files added there
-      // need not be deleted. For MOR Table, the rollback appends logBlocks so we need to keep the appended files.
-      partitionToDeletedFiles.clear();
-    }
-    return convertFilesToFilesPartitionRecords(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Rollback");
+  private static List<HoodieRecord> convertMetadataToRollbackRecords(HoodieRollbackMetadata rollbackMetadata,
+                                                                     String instantTime) {
+    Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
+    processRollbackMetadata(rollbackMetadata, partitionToAppendedFiles);
+    return convertFilesToFilesPartitionRecords(Collections.EMPTY_MAP, partitionToAppendedFiles, instantTime, "Rollback");
   }
 
   /**
@@ -692,86 +667,15 @@ public class HoodieTableMetadataUtil {
    * During a rollback files may be deleted (COW, MOR) or rollback blocks be appended (MOR only) to files. This
    * function will extract this change file for each partition.
    *
-   * @param metadataTableTimeline    Current timeline of the Metadata Table
    * @param rollbackMetadata         {@code HoodieRollbackMetadata}
-   * @param partitionToDeletedFiles  The {@code Map} to fill with files deleted per partition.
    * @param partitionToAppendedFiles The {@code Map} to fill with files appended per partition and their sizes.
    */
-  private static void processRollbackMetadata(HoodieActiveTimeline metadataTableTimeline,
-                                              HoodieRollbackMetadata rollbackMetadata,
-                                              Map<String, List<String>> partitionToDeletedFiles,
-                                              Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                              Option<String> lastSyncTs) {
+  private static void processRollbackMetadata(HoodieRollbackMetadata rollbackMetadata,
+                                              Map<String, Map<String, Long>> partitionToAppendedFiles) {
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
-      final String instantToRollback = rollbackMetadata.getCommitsRollback().get(0);
       // Has this rollback produced new files?
       boolean hasRollbackLogFiles = pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty();
-      boolean hasNonZeroRollbackLogFiles = hasRollbackLogFiles && pm.getRollbackLogFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
-
-      // If instant-to-rollback has not been synced to metadata table yet then there is no need to update metadata
-      // This can happen in two cases:
-      //  Case 1: Metadata Table timeline is behind the instant-to-rollback.
-      boolean shouldSkip = lastSyncTs.isPresent()
-          && HoodieTimeline.compareTimestamps(instantToRollback, HoodieTimeline.GREATER_THAN, lastSyncTs.get());
-
-      if (!hasNonZeroRollbackLogFiles && shouldSkip) {
-        LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, given metadata table is already synced upto to %s",
-            instantToRollback, lastSyncTs.get()));
-        return;
-      }
-
-      // Case 2: The instant-to-rollback was never committed to Metadata Table. This can happen if the instant-to-rollback
-      // was a failed commit (never completed).
-      //
-      // There are two cases for failed commit that we need to take care of:
-      //   1) The commit was synced to metadata table successfully but the dataset meta file switches state failed
-      //   (from INFLIGHT to COMPLETED), the committed files should be rolled back thus the rollback metadata
-      //   can not be skipped, usually a failover should be triggered and the metadata active timeline expects
-      //   to contain the commit, we could check whether the commit was synced to metadata table
-      //   through HoodieActiveTimeline#containsInstant.
-      //
-      //   2) The commit synced to metadata table failed or was never synced to metadata table,
-      //      in this case, the rollback metadata should be skipped.
-      //
-      // And in which case,
-      // metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())
-      // returns true ?
-      // It is most probably because of compaction rollback, we schedule a compaction plan early in the timeline (say t1)
-      // then after a long time schedule and execute the plan then try to rollback it.
-      //
-      //     scheduled   execution rollback            compaction actions
-      // -----  t1  -----  t3  ----- t4 -----          dataset timeline
-      //
-      // ----------  t2 (archive) -----------          metadata timeline
-      //
-      // when at time t4, we commit the compaction rollback,the above check returns true.
-      HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollback);
-      if (metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-        throw new HoodieMetadataException(String.format("The instant %s required to sync rollback of %s has been archived",
-            syncedInstant, instantToRollback));
-      }
-      shouldSkip = !metadataTableTimeline.containsInstant(syncedInstant);
-      if (!hasNonZeroRollbackLogFiles && shouldSkip) {
-        LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, since this instant was never committed to Metadata Table",
-            instantToRollback));
-        return;
-      }
-
       final String partition = pm.getPartitionPath();
-      if ((!pm.getSuccessDeleteFiles().isEmpty() || !pm.getFailedDeleteFiles().isEmpty()) && !shouldSkip) {
-        if (!partitionToDeletedFiles.containsKey(partition)) {
-          partitionToDeletedFiles.put(partition, new ArrayList<>());
-        }
-
-        // Extract deleted file name from the absolute paths saved in getSuccessDeleteFiles()
-        List<String> deletedFiles = pm.getSuccessDeleteFiles().stream().map(p -> new Path(p).getName())
-            .collect(Collectors.toList());
-        if (!pm.getFailedDeleteFiles().isEmpty()) {
-          deletedFiles.addAll(pm.getFailedDeleteFiles().stream().map(p -> new Path(p).getName())
-              .collect(Collectors.toList()));
-        }
-        partitionToDeletedFiles.get(partition).addAll(deletedFiles);
-      }
 
       BiFunction<Long, Long, Long> fileMergeFn = (oldSize, newSizeCopy) -> {
         // if a file exists in both written log files and rollback log files, we want to pick the one that is higher
@@ -833,6 +737,23 @@ public class HoodieTableMetadataUtil {
     LOG.info("Found at " + instantTime + " from " + operation + ". #partitions_updated=" + records.size()
         + ", #files_deleted=" + fileChangeCount[0] + ", #files_appended=" + fileChangeCount[1]);
 
+    return records;
+  }
+
+  private static List<HoodieRecord> convertFilesToFilesPartitionRecords(Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                        String operation) {
+    List<HoodieRecord> records = new LinkedList<>();
+    int[] fileChangeCount = {0, 0}; // deletes, appends
+    partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
+      final String partition = getPartitionIdentifier(partitionName);
+      fileChangeCount[1] += appendedFileMap.size();
+      // New files added to a partition
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
+          Option.empty());
+      records.add(record);
+    });
+
+    LOG.info("Re-adding files=" + fileChangeCount[1] + " from " + operation + " with num records " + records.size());
     return records;
   }
 

@@ -1829,7 +1829,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
           .setPartitionMetadata(Collections.emptyMap())
           .setInstantsRollback(Collections.emptyList())
           .build();
-      HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata, isEmpty);
+      HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata, isEmpty, null);
+      HoodieTestTable.of(metaClient).addRollbackCompleted(rollbackTime, hoodieRollbackMetadata, isEmpty);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
   }
