@@ -19,32 +19,44 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.RowDataCastProjection;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.GenericArrayData;
+import org.apache.flink.table.data.GenericMapData;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.MapData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 
-import javax.annotation.Nullable;
+import javax.annotation.Nonnull;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.ARRAY;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.BIGINT;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.DATE;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.DECIMAL;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.DOUBLE;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.FLOAT;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.MAP;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.ROW;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
 
 /**
@@ -100,13 +112,28 @@ public final class CastMap implements Serializable {
   @VisibleForTesting
   void add(int pos, LogicalType fromType, LogicalType toType) {
     Function<Object, Object> conversion = getConversion(fromType, toType);
-    if (conversion == null) {
-      throw new IllegalArgumentException(String.format("Cannot create cast %s => %s at pos %s", fromType, toType, pos));
+    try {
+      add(pos, new Cast(fromType, toType, conversion));
+    } catch (IllegalArgumentException iae) {
+      // catch-and-throw error message to include position to facilitate debugging
+      throw new IllegalArgumentException(String.format("Unsupported cast at position %s for %s => %s", pos, fromType, toType));
     }
-    add(pos, new Cast(fromType, toType, conversion));
   }
 
-  private @Nullable Function<Object, Object> getConversion(LogicalType fromType, LogicalType toType) {
+  private void add(int pos, Cast cast) {
+    castMap.put(pos, cast);
+  }
+
+  /**
+   * Helper function to create a callable conversion function for supported type castings.
+   * <p>
+   * NOTE: The argument must be non-null when applying it to the returned function.
+   *
+   * @param fromType The input LogicalType of the value to be converted from
+   * @param toType   The output LogicalType of the value to be converted to
+   * @return Function to perform the required conversion for the provided from and to types
+   */
+  private static Function<Object, Object> getConversion(LogicalType fromType, LogicalType toType) {
     LogicalTypeRoot from = fromType.getTypeRoot();
     LogicalTypeRoot to = toType.getTypeRoot();
     switch (to) {
@@ -165,21 +192,132 @@ public final class CastMap implements Serializable {
         }
         break;
       }
+      case ARRAY: {
+        if (from == ARRAY) {
+          LogicalType fromElementType =  fromType.getChildren().get(0);
+          LogicalType toElementType = toType.getChildren().get(0);
+          return array -> doArrayConversion((ArrayData) array, fromElementType, toElementType);
+        }
+        break;
+      }
+      case MAP: {
+        if (from == MAP) {
+          return map -> doMapConversion((MapData) map, fromType, toType);
+        }
+        break;
+      }
+      case ROW: {
+        if (from == ROW) {
+          // Assumption: InternalSchemaManager should produce a cast that is of the same size
+          return row -> doRowConversion((RowData) row, fromType, toType);
+        }
+        break;
+      }
       default:
     }
-    return null;
+    throw new IllegalArgumentException(String.format("Unsupported conversion for %s => %s", fromType, toType));
   }
 
-  private void add(int pos, Cast cast) {
-    castMap.put(pos, cast);
+  /**
+   * Helper function to perform convert an arrayData from one LogicalType to another.
+   *
+   * @param array    Non-null array data to be converted; however array-elements are allowed to be null
+   * @param fromType The input LogicalType of the row data to be converted from
+   * @param toType   The output LogicalType of the row data to be converted to
+   * @return Converted array that has the structure/specifications of that defined by the output LogicalType
+   */
+  private static ArrayData doArrayConversion(@Nonnull ArrayData array, LogicalType fromType, LogicalType toType) {
+    // using Object type here as primitives are not allowed to be null
+    Object[] objects = new Object[array.size()];
+    for (int i = 0; i < array.size(); i++) {
+      Object fromObject = ArrayData.createElementGetter(fromType).getElementOrNull(array, i);
+      // need to handle nulls to prevent NullPointerException in #getConversion()
+      Object toObject = fromObject != null ? getConversion(fromType, toType).apply(fromObject) : null;
+      objects[i] = toObject;
+    }
+    return new GenericArrayData(objects);
   }
 
-  private DecimalData toDecimalData(Number val, LogicalType decimalType) {
+  /**
+   * Helper function to perform convert a MapData from one LogicalType to another.
+   *
+   * @param map      Non-null map data to be converted; however, values are allowed to be null
+   * @param fromType The input LogicalType of the row data to be converted from
+   * @param toType   The output LogicalType of the row data to be converted to
+   * @return Converted map that has the structure/specifications of that defined by the output LogicalType
+   */
+  private static MapData doMapConversion(@Nonnull MapData map, LogicalType fromType, LogicalType toType) {
+    // no schema evolution is allowed on the keyType, hence, we only need to care about the valueType
+    LogicalType fromValueType = fromType.getChildren().get(1);
+    LogicalType toValueType = toType.getChildren().get(1);
+    LogicalType keyType = fromType.getChildren().get(0);
+
+    final Map<Object, Object> result = new HashMap<>();
+    for (int i = 0; i < map.size(); i++) {
+      Object keyObject = ArrayData.createElementGetter(keyType).getElementOrNull(map.keyArray(), i);
+      Object fromObject = ArrayData.createElementGetter(fromValueType).getElementOrNull(map.valueArray(), i);
+      // need to handle nulls to prevent NullPointerException in #getConversion()
+      Object toObject = fromObject != null ? getConversion(fromValueType, toValueType).apply(fromObject) : null;
+      result.put(keyObject, toObject);
+    }
+    return new GenericMapData(result);
+  }
+
+  /**
+   * Helper function to perform convert a RowData from one LogicalType to another.
+   *
+   * @param row      Non-null row data to be converted; however, fields might contain nulls
+   * @param fromType The input LogicalType of the row data to be converted from
+   * @param toType   The output LogicalType of the row data to be converted to
+   * @return Converted row that has the structure/specifications of that defined by the output LogicalType
+   */
+  private static RowData doRowConversion(@Nonnull RowData row, LogicalType fromType, LogicalType toType) {
+    // note: InternalSchema.merge guarantees that the schema to be read fromType is orientated in the same order as toType
+    // hence, we can match types by position as it is guaranteed that it is referencing the same field
+    List<LogicalType> fromChildren = fromType.getChildren();
+    List<LogicalType> toChildren = toType.getChildren();
+    ValidationUtils.checkArgument(fromChildren.size() == toChildren.size(),
+        "fromType [" + fromType + "] size: != toType [" + toType + "] size");
+
+    GenericRowData rowData = new GenericRowData(toType.getChildren().size());
+    for (int i = 0; i < toChildren.size(); i++) {
+      Object fromVal = RowData.createFieldGetter(fromChildren.get(i), i).getFieldOrNull(row);
+      Object toVal;
+
+      // need to handle nulls to prevent NullPointerException in #getConversion()
+      if (fromChildren.get(i).equals(toChildren.get(i)) || fromVal == null) {
+        // no conversion required if the types are the same / fromVal is null
+        toVal = fromVal;
+      } else {
+        // conversion required
+        toVal = getConversion(fromChildren.get(i), toChildren.get(i)).apply(fromVal);
+      }
+
+      rowData.setField(i, toVal);
+    }
+    return rowData;
+  }
+
+  /**
+   * Helper function to convert a Number object to Flink's DecimalData format.
+   *
+   * @param val         Number object to be converted
+   * @param decimalType DecimalType containing the output decimal's precision and scale specifications
+   * @return Converted decimal that is wrapped in Flink's DecimalData object.
+   */
+  private static DecimalData toDecimalData(@Nonnull Number val, LogicalType decimalType) {
     BigDecimal valAsDecimal = BigDecimal.valueOf(val.doubleValue());
     return toDecimalData(valAsDecimal, decimalType);
   }
 
-  private DecimalData toDecimalData(BigDecimal valAsDecimal, LogicalType decimalType) {
+  /**
+   * Helper function to convert a BigDecimal object to Flink's DecimalData format.
+   *
+   * @param valAsDecimal BigDecimal object to be converted
+   * @param decimalType  DecimalType containing the output decimal's precision and scale specifications
+   * @return Converted decimal that is wrapped in Flink's DecimalData object.
+   */
+  private static DecimalData toDecimalData(@Nonnull BigDecimal valAsDecimal, LogicalType decimalType) {
     return DecimalData.fromBigDecimal(
         valAsDecimal,
         ((DecimalType) decimalType).getPrecision(),
@@ -204,7 +342,7 @@ public final class CastMap implements Serializable {
       this.conversion = conversion;
     }
 
-    Object convert(Object val) {
+    Object convert(@Nonnull Object val) {
       return conversion.apply(val);
     }
 
