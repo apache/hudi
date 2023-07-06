@@ -439,6 +439,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(false)
         .endInput(false)
+        .watermark(getWatermark())
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
@@ -478,6 +479,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
+        .watermark(getWatermark())
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);

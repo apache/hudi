@@ -21,11 +21,13 @@ package org.apache.hudi.sink;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieExtraMetadata;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -50,6 +52,7 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +72,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.Option.fromJavaOptional;
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
@@ -552,6 +556,16 @@ public class StreamWriteOperatorCoordinator
             + totalErrorRecords + "/" + totalRecords);
       }
 
+      // Does not advance watermark for commit on empty batch.
+      // Meanwhile, advance watermark for subtasks in which no data has written.
+      final long watermark = fromJavaOptional(Arrays.stream(eventBuffer)
+          .filter(event -> Objects.nonNull(event)
+              && (OptionsResolver.allowCommitOnEmptyBatch(conf)
+              || CollectionUtils.nonEmpty(event.getWriteStatuses())))
+          .map(WriteMetadataEvent::getWatermark)
+          .min((o1, o2) -> (int) (o1 - o2)))
+          .orElse(Watermark.UNINITIALIZED.getTimestamp());
+      checkpointCommitMetadata.put(HoodieExtraMetadata.WATERMARK.key(), String.valueOf(watermark));
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
           ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, writeResults)
           : Collections.emptyMap();
