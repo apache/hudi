@@ -20,6 +20,8 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.common.config.*;
+import org.apache.hudi.common.config.ConfigGroups.Names;
+import org.apache.hudi.common.config.ConfigGroups.SubGroupNames;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 
@@ -60,11 +62,15 @@ public class HoodieConfigDocGenerator {
   private static final String NEWLINE = "\n";
   private static final String LINE_BREAK = "<br></br>\n";
   private static final String DOUBLE_NEWLINE = "\n\n";
-  private static final String SUMMARY = "This page covers the different ways of configuring " +
+  private static final String ALL_CONFIGS_PAGE_SUMMARY = "This page covers the different ways of configuring " +
           "your job to write/read Hudi tables. " +
           "At a high level, you can control behaviour at few levels.";
+  private static final String BASIC_CONFIGS_PAGE_SUMMARY = "This page covers the basic configurations you may use to " +
+          "write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a " +
+          "full list of all configs, please visit the [All Configurations](/docs/configurations) page.";
   private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
   private static final String ALL_CONFIGS_PATH = "/tmp/configurations.md";
+  private static final String BASIC_CONFIGS_PATH = "/tmp/basic_configurations.md";
   private static final String EXTERNALIZED_CONFIGS = "## Externalized Config File\n" +
           "Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration\n" +
           "file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can\n" +
@@ -83,6 +89,7 @@ public class HoodieConfigDocGenerator {
     buildConfigMarkup(configClassTreeMap);
     initAndBuildSparkConfigMarkup(configClassTreeMap);
     generateAllConfigurationPages(configClassTreeMap);
+    generateBasicConfigurationPages(configClassTreeMap);
   }
 
   private static StringBuilder generateExternalizedConfigs() {
@@ -93,10 +100,12 @@ public class HoodieConfigDocGenerator {
   }
 
   /**
-   * Generated main content headings for every config group.
+   * Generated main content headings for every config group except for those from the exclusion list.
    */
-  private static void generateMainHeadings(ListBuilder builder) {
-    EnumSet.allOf(ConfigGroups.Names.class).forEach(groupName -> builder.append(
+  private static void generateMainHeadings(ListBuilder builder, EnumSet<Names> exclusionList) {
+    EnumSet<Names> filteredSet = EnumSet.noneOf(Names.class);
+    EnumSet.allOf(Names.class).stream().filter(g -> (!exclusionList.contains(g))).forEach(g -> filteredSet.add(g));
+    filteredSet.forEach(groupName -> builder.append(
             new Link(new BoldText(groupName.name),
                     "#" + groupName.name())
                     + ": " + ConfigGroups.getDescription(groupName)));
@@ -126,7 +135,7 @@ public class HoodieConfigDocGenerator {
             .append("title: ").append("All Configurations").append(NEWLINE)
             .append("keywords: [ configurations, default, flink options, spark, configs, parameters ] ").append(NEWLINE)
             .append("permalink: /docs/configurations.html").append(NEWLINE)
-            .append("summary: " + SUMMARY).append(NEWLINE)
+            .append("summary: " + ALL_CONFIGS_PAGE_SUMMARY).append(NEWLINE)
             .append("last_modified_at: " + DateTimeFormatter.ISO_DATE_TIME.format(now)).append(NEWLINE)
             .append("hide_table_of_contents: true").append(NEWLINE)
             .append(new HorizontalRule()).append(NEWLINE)
@@ -137,7 +146,43 @@ public class HoodieConfigDocGenerator {
             .append(new HorizontalRule())
             .append(DOUBLE_NEWLINE);
     // Description
-    builder.append(SUMMARY).append(DOUBLE_NEWLINE);
+    builder.append(ALL_CONFIGS_PAGE_SUMMARY).append(DOUBLE_NEWLINE);
+  }
+
+  /**
+   * Returns the header meta for the all configs doc page. This will be a .mdx page.
+   */
+  private static void generateBasicConfigsHeader(StringBuilder builder) {
+    /*
+      ---
+      title: Basic Configurations
+      summary: This page covers the basic configurations you may use to write/read Hudi tables. This page only
+      features a subset of the most frequently used configurations. For a full list of all configs, please visit the
+      [All Configurations](/docs/configurations) page.
+      last_modified_at: 2019-12-30T15:59:57-04:00
+      hide_table_of_contents: true
+      ---
+      import TOCInline from '@theme/TOCInline';
+
+      <TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>
+
+      ---
+     */
+    LocalDateTime now = LocalDateTime.now();
+    builder.append(new HorizontalRule()).append(NEWLINE)
+            .append("title: ").append("Basic Configurations").append(NEWLINE)
+            .append("summary: " + BASIC_CONFIGS_PAGE_SUMMARY).append(NEWLINE)
+            .append("last_modified_at: " + DateTimeFormatter.ISO_DATE_TIME.format(now)).append(NEWLINE)
+            .append("hide_table_of_contents: true").append(NEWLINE)
+            .append(new HorizontalRule()).append(NEWLINE)
+            .append("import TOCInline from '@theme/TOCInline';")
+            .append(DOUBLE_NEWLINE)
+            .append("<TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>")
+            .append(DOUBLE_NEWLINE)
+            .append(new HorizontalRule())
+            .append(DOUBLE_NEWLINE);
+    // Description
+    builder.append(BASIC_CONFIGS_PAGE_SUMMARY).append(DOUBLE_NEWLINE);
   }
 
   /**
@@ -299,8 +344,10 @@ public class HoodieConfigDocGenerator {
    */
   private static void buildConfigMarkup(NavigableMap<ConfigClassMeta, ConfigClassMarkups> configClassTreeMap) {
     // generate Docs from the config classes
-    ConfigGroups.Names prevGroupName = ConfigGroups.Names.ENVIRONMENT_CONFIG;
-    ConfigGroups.SubGroupNames prevSubGroupName = NONE;
+    Names prevGroupName = Names.ENVIRONMENT_CONFIG;
+    SubGroupNames prevSubGroupName = NONE;
+    String prevGroupSummary = null;
+    String prevSubGroupSummary = null;
     int configParamHeadingLevel = DEFAULT_CONFIG_PARAM_HEADING_LEVEL;
     Set<ConfigClassMeta> keySet = configClassTreeMap.keySet();
 
@@ -308,20 +355,22 @@ public class HoodieConfigDocGenerator {
       ConfigClassMarkups configClassMarkup = configClassTreeMap.get(configClassMetaInfo);
       Class<? extends HoodieConfig> subType = configClassMetaInfo.subType;
       ConfigClassProperty configClassProperty = subType.getAnnotation(ConfigClassProperty.class);
-      ConfigGroups.Names groupName = configClassProperty.groupName();
+      Names groupName = configClassProperty.groupName();
 
       /*
       We need to handle an exception for the ConfigGroup SPARK_DATASOURCE since HoodiePreCommitValidatorConfig that
       belongs to this group extends HoodieConfig whereas other config classes in this group dont extend HoodieConfig.
       They are handled in initAndBuildSparkConfigMarkup(..) method differently */
-      if (groupName != prevGroupName && groupName != ConfigGroups.Names.SPARK_DATASOURCE) {
-        configClassMarkup.topLevelGroupSummary = generateConfigGroupSummary(groupName.name, groupName.name(), ConfigGroups.getDescription(groupName), DEFAULT_CONFIG_GROUP_HEADING_LEVEL);
+      if (groupName != prevGroupName && groupName != Names.SPARK_DATASOURCE) {
+        prevGroupSummary = generateConfigGroupSummary(groupName.name, groupName.name(), ConfigGroups.getDescription(groupName), DEFAULT_CONFIG_GROUP_HEADING_LEVEL);
         prevGroupName = groupName;
       }
       LOG.info("Processing params for config class: " + subType.getName() + " " + configClassProperty.name()
               + " " + configClassProperty.description());
+      configClassMarkup.topLevelGroupSummary = prevGroupSummary;
       if (configClassMetaInfo.subGroupName == NONE) {
         configParamHeadingLevel = DEFAULT_CONFIG_PARAM_HEADING_LEVEL;
+        prevSubGroupSummary = null;
       } else if (configClassMetaInfo.subGroupName == prevSubGroupName) {
         // Continuation of more HoodieConfig classes that are part of the same subgroup
         configParamHeadingLevel = DEFAULT_CONFIG_PARAM_HEADING_LEVEL + 1;
@@ -332,16 +381,11 @@ public class HoodieConfigDocGenerator {
                 configClassMetaInfo.subGroupName.name(),
                 configClassProperty.subGroupName().getDescription(),
                 DEFAULT_CONFIG_GROUP_HEADING_LEVEL + 1);
-        if (configClassMarkup.topLevelGroupSummary != null) {
-          // We are here when handling the first config class in a new group and new subgroup. So we add the appropriate summaries first.
-          configClassMarkup.topLevelGroupSummary.concat(configSubGroupSummary);
-        } else {
-          // We are here when handling a new subgroup in the same group as earlier seen.
-          configClassMarkup.topLevelGroupSummary = configSubGroupSummary;
-        }
+        prevSubGroupSummary = configSubGroupSummary;
         configParamHeadingLevel = DEFAULT_CONFIG_PARAM_HEADING_LEVEL + 1;
       }
       prevSubGroupName = configClassMetaInfo.subGroupName;
+      configClassMarkup.topLevelSubGroupSummary = prevSubGroupSummary;
       String anchorString = configClassProperty.name().replace(" ", "-");
       String configClassSummary = generateConfigGroupSummary(
               configClassProperty.name(),
@@ -366,17 +410,14 @@ public class HoodieConfigDocGenerator {
    * HoodieConfig and also does not use ConfigClassProperty.
    */
   private static void initAndBuildSparkConfigMarkup(NavigableMap<ConfigClassMeta, ConfigClassMarkups> configClassTreeMap) {
-    boolean hasConfigGroupSummary = false;
-    ConfigGroups.Names groupName = ConfigGroups.Names.SPARK_DATASOURCE;
+    Names groupName = Names.SPARK_DATASOURCE;
     // Add entries for spark related sections next
     for (Object sparkConfigObject : HoodieSparkConfigs.getSparkConfigObjects()) {
       String configClassName = HoodieSparkConfigs.name(sparkConfigObject);
       ConfigClassMeta configClassMetaInfo = new ConfigClassMeta(groupName, NONE, false, configClassName);
       ConfigClassMarkups configClassMarkup = new ConfigClassMarkups();
-      if (!hasConfigGroupSummary) {
-        configClassMarkup.topLevelGroupSummary = generateConfigGroupSummary(groupName.name, groupName.name(), ConfigGroups.getDescription(groupName), DEFAULT_CONFIG_GROUP_HEADING_LEVEL);
-        hasConfigGroupSummary = true;
-      }
+      configClassMarkup.topLevelGroupSummary = generateConfigGroupSummary(groupName.name, groupName.name(), ConfigGroups.getDescription(groupName), DEFAULT_CONFIG_GROUP_HEADING_LEVEL);
+
       LOG.info("Processing params for config class: " + configClassName + " desc: " + HoodieSparkConfigs.description(sparkConfigObject));
 
       String anchorString = configClassName.replace(" ", "-");
@@ -490,16 +531,26 @@ public class HoodieConfigDocGenerator {
     StringBuilder mainDocBuilder = new StringBuilder();
     generateAllConfigsHeader(mainDocBuilder);
     ListBuilder contentTableBuilder = new ListBuilder();
-    generateMainHeadings(contentTableBuilder);
+    generateMainHeadings(contentTableBuilder, EnumSet.noneOf(Names.class));
     mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
     mainDocBuilder.append(generateExternalizedConfigs());
     Set<ConfigClassMeta> keySet = configClassTreeMap.keySet();
+
+    Names prevGroupName = Names.ENVIRONMENT_CONFIG;
+    SubGroupNames prevSubGroupName = NONE;
     for (ConfigClassMeta configClassMetaInfo : keySet) {
       ConfigClassMarkups configClassMarkup = configClassTreeMap.get(configClassMetaInfo);
-      if (configClassMarkup.topLevelGroupSummary != null) {
+      if(configClassMetaInfo.groupName != prevGroupName){
         mainDocBuilder.append(configClassMarkup.topLevelGroupSummary);
+        prevGroupName = configClassMetaInfo.groupName;
       }
-      mainDocBuilder.append(configClassMarkup.configClassSummary);
+      if(configClassMetaInfo.subGroupName != prevSubGroupName){
+        if (configClassMetaInfo.subGroupName != NONE && configClassMarkup.topLevelSubGroupSummary != null){
+          mainDocBuilder.append(NEWLINE).append(configClassMarkup.topLevelSubGroupSummary);
+        }
+        prevSubGroupName = configClassMetaInfo.subGroupName;
+      }
+      mainDocBuilder.append(NEWLINE).append(configClassMarkup.configClassSummary);
       if (configClassMarkup.basicConfigs != null) {
         mainDocBuilder.append(configClassMarkup.basicConfigs);
       }
@@ -514,6 +565,58 @@ public class HoodieConfigDocGenerator {
       LOG.error("Error while writing to markdown file ", e);
     }
   }
+
+  /**
+   * Generates the markdown file for basic configurations page.
+   */
+  private static void generateBasicConfigurationPages(NavigableMap<ConfigClassMeta, ConfigClassMarkups> configClassTreeMap) {
+    LOG.info("Generating markdown file");
+    StringBuilder mainDocBuilder = new StringBuilder();
+    generateBasicConfigsHeader(mainDocBuilder);
+    ListBuilder contentTableBuilder = new ListBuilder();
+    // Build a list of all Config groups that have basic configs
+    EnumSet<Names> inclusionList = EnumSet.noneOf(Names.class);
+    // Iterate the Treemap and get all config groups and classes that have basic configs.
+    Set<ConfigClassMeta> keySet = configClassTreeMap.keySet();
+    List<ConfigClassMarkups> basicConfigMarkups = new ArrayList<>();
+    for (ConfigClassMeta configClassMetaInfo : keySet) {
+      ConfigClassMarkups configClassMarkup = configClassTreeMap.get(configClassMetaInfo);
+      if (configClassMarkup.basicConfigs != null) {
+        inclusionList.add(configClassMetaInfo.groupName);
+        basicConfigMarkups.add(configClassMarkup);
+      }
+    }
+
+    String prevGroupSummary = null;
+    String prevSubGroupSummary = null;
+    StringBuilder stringBuilder = new StringBuilder();
+    for(ConfigClassMarkups configClassMarkups: basicConfigMarkups) {
+      String currentGroupSummary = configClassMarkups.topLevelGroupSummary;
+      if (currentGroupSummary != prevGroupSummary) {
+        stringBuilder.append(NEWLINE).append(currentGroupSummary);
+        prevGroupSummary = currentGroupSummary;
+      }
+      String currentSubGroupSummary = configClassMarkups.topLevelSubGroupSummary;
+      if (currentSubGroupSummary != prevSubGroupSummary) {
+        if (currentSubGroupSummary != null) {
+          stringBuilder.append(NEWLINE).append(currentSubGroupSummary);
+        }
+        prevSubGroupSummary = currentSubGroupSummary;
+      }
+      stringBuilder.append(NEWLINE).append(configClassMarkups.configClassSummary);
+      stringBuilder.append(NEWLINE).append(configClassMarkups.basicConfigs);
+      stringBuilder.append(DEFAULT_FOOTER_MARKUP);
+    }
+    generateMainHeadings(contentTableBuilder, EnumSet.complementOf(inclusionList));
+    mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
+    mainDocBuilder.append(stringBuilder);
+    try {
+      Files.write(Paths.get(BASIC_CONFIGS_PATH), mainDocBuilder.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      LOG.error("Error while writing to markdown file ", e);
+    }
+  }
+
 
   /**
    * Class for storing info about each config within a HoodieConfig class subtype. We want to know if a config is
@@ -562,8 +665,8 @@ public class HoodieConfigDocGenerator {
    * subgroup and the subtype itself.
    */
   static class ConfigClassMeta {
-    ConfigGroups.Names groupName;
-    ConfigGroups.SubGroupNames subGroupName;
+    Names groupName;
+    SubGroupNames subGroupName;
     boolean hasCommonConfigs;
     /*
     Only one of the following can be null since we are using this to track a subclass of HoodieConfig and also
@@ -572,25 +675,25 @@ public class HoodieConfigDocGenerator {
     Class<? extends HoodieConfig> subType; // Can be null for Spark datasource classes.
     String sparkConfigObjectName; // Can be null for flink and general HoodieConfig classes
 
-    ConfigClassMeta(ConfigGroups.Names groupName, ConfigGroups.SubGroupNames subGroupName, boolean hasCommonConfigs, Class<? extends HoodieConfig> subType) {
+    ConfigClassMeta(Names groupName, SubGroupNames subGroupName, boolean hasCommonConfigs, Class<? extends HoodieConfig> subType) {
       this.groupName = groupName;
       this.subGroupName = subGroupName;
       this.hasCommonConfigs = hasCommonConfigs;
       this.subType = subType;
     }
 
-    ConfigClassMeta(ConfigGroups.Names groupName, ConfigGroups.SubGroupNames subGroupName, boolean hasCommonConfigs, String sparkConfigObjectName) {
+    ConfigClassMeta(Names groupName, SubGroupNames subGroupName, boolean hasCommonConfigs, String sparkConfigObjectName) {
       this.groupName = groupName;
       this.subGroupName = subGroupName;
       this.hasCommonConfigs = hasCommonConfigs;
       this.sparkConfigObjectName = sparkConfigObjectName;
     }
 
-    public ConfigGroups.Names getGroupName() {
+    public Names getGroupName() {
       return groupName;
     }
 
-    public ConfigGroups.SubGroupNames getSubGroupName() {
+    public SubGroupNames getSubGroupName() {
       return subGroupName;
     }
 
@@ -608,6 +711,7 @@ public class HoodieConfigDocGenerator {
    */
   static class ConfigClassMarkups {
     String topLevelGroupSummary;
+    String topLevelSubGroupSummary;
     String configClassSummary;
     String basicConfigs;
     String advancedConfigs;

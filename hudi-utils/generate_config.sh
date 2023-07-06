@@ -39,3 +39,4 @@ java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar$CLASSPATH \
 org.apache.hudi.utils.HoodieConfigDocGenerator
 
 cp /tmp/configurations.md ../website/docs/configurations.md
+cp /tmp/basic_configurations.md ../website/docs/basic_configurations.md
