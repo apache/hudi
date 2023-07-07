@@ -112,12 +112,10 @@ public final class CastMap implements Serializable {
   @VisibleForTesting
   void add(int pos, LogicalType fromType, LogicalType toType) {
     Function<Object, Object> conversion = getConversion(fromType, toType);
-    try {
-      add(pos, new Cast(fromType, toType, conversion));
-    } catch (IllegalArgumentException iae) {
-      // catch-and-throw error message to include position to facilitate debugging
-      throw new IllegalArgumentException(String.format("Unsupported cast at position %s for %s => %s", pos, fromType, toType));
+    if (conversion == null) {
+      throw new IllegalArgumentException(String.format("Cannot create cast %s => %s at pos %s", fromType, toType, pos));
     }
+    add(pos, new Cast(fromType, toType, conversion));
   }
 
   private void add(int pos, Cast cast) {
@@ -196,26 +194,38 @@ public final class CastMap implements Serializable {
         if (from == ARRAY) {
           LogicalType fromElementType =  fromType.getChildren().get(0);
           LogicalType toElementType = toType.getChildren().get(0);
-          return array -> doArrayConversion((ArrayData) array, fromElementType, toElementType);
+          try {
+            return array -> doArrayConversion((ArrayData) array, fromElementType, toElementType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
         }
         break;
       }
       case MAP: {
         if (from == MAP) {
-          return map -> doMapConversion((MapData) map, fromType, toType);
+          try {
+            return map -> doMapConversion((MapData) map, fromType, toType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
         }
         break;
       }
       case ROW: {
         if (from == ROW) {
           // Assumption: InternalSchemaManager should produce a cast that is of the same size
-          return row -> doRowConversion((RowData) row, fromType, toType);
+          try {
+            return row -> doRowConversion((RowData) row, fromType, toType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
         }
         break;
       }
       default:
     }
-    throw new IllegalArgumentException(String.format("Unsupported conversion for %s => %s", fromType, toType));
+    return null;
   }
 
   /**
@@ -229,10 +239,13 @@ public final class CastMap implements Serializable {
   private static ArrayData doArrayConversion(@Nonnull ArrayData array, LogicalType fromType, LogicalType toType) {
     // using Object type here as primitives are not allowed to be null
     Object[] objects = new Object[array.size()];
+    ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(fromType);
     for (int i = 0; i < array.size(); i++) {
-      Object fromObject = ArrayData.createElementGetter(fromType).getElementOrNull(array, i);
+      Object fromObject = elementGetter.getElementOrNull(array, i);
+      Function<Object, Object> conversion = getConversion(fromType, toType);
       // need to handle nulls to prevent NullPointerException in #getConversion()
-      Object toObject = fromObject != null ? getConversion(fromType, toType).apply(fromObject) : null;
+      ValidationUtils.checkState(conversion != null, String.format("Failed to perform ARRAY conversion when casting %s => %s", fromType, toType));
+      Object toObject = fromObject != null ? conversion .apply(fromObject) : null;
       objects[i] = toObject;
     }
     return new GenericArrayData(objects);
@@ -253,11 +266,16 @@ public final class CastMap implements Serializable {
     LogicalType keyType = fromType.getChildren().get(0);
 
     final Map<Object, Object> result = new HashMap<>();
+    ArrayData.ElementGetter keyElementGetter = ArrayData.createElementGetter(keyType);
+    ArrayData.ElementGetter valueElementGetter = ArrayData.createElementGetter(fromValueType);
     for (int i = 0; i < map.size(); i++) {
-      Object keyObject = ArrayData.createElementGetter(keyType).getElementOrNull(map.keyArray(), i);
-      Object fromObject = ArrayData.createElementGetter(fromValueType).getElementOrNull(map.valueArray(), i);
+      Object keyObject = keyElementGetter.getElementOrNull(map.keyArray(), i);
+      Object fromObject = valueElementGetter.getElementOrNull(map.valueArray(), i);
+      Function<Object, Object> conversion = getConversion(fromValueType, toValueType);
+
       // need to handle nulls to prevent NullPointerException in #getConversion()
-      Object toObject = fromObject != null ? getConversion(fromValueType, toValueType).apply(fromObject) : null;
+      ValidationUtils.checkState(conversion != null, String.format("Failed to perform MAP conversion when cast %s => %s", fromType, toType));
+      Object toObject = fromObject != null ? conversion.apply(fromObject) : null;
       result.put(keyObject, toObject);
     }
     return new GenericMapData(result);
@@ -290,7 +308,9 @@ public final class CastMap implements Serializable {
         toVal = fromVal;
       } else {
         // conversion required
-        toVal = getConversion(fromChildren.get(i), toChildren.get(i)).apply(fromVal);
+        Function<Object, Object> conversion = getConversion(fromChildren.get(i), toChildren.get(i));
+        ValidationUtils.checkState(conversion != null, String.format("Failed to perform ROW conversion when casting %s => %s", fromType, toType));
+        toVal = conversion.apply(fromVal);
       }
 
       rowData.setField(i, toVal);
@@ -305,7 +325,7 @@ public final class CastMap implements Serializable {
    * @param decimalType DecimalType containing the output decimal's precision and scale specifications
    * @return Converted decimal that is wrapped in Flink's DecimalData object.
    */
-  private static DecimalData toDecimalData(@Nonnull Number val, LogicalType decimalType) {
+  private static DecimalData toDecimalData(Number val, LogicalType decimalType) {
     BigDecimal valAsDecimal = BigDecimal.valueOf(val.doubleValue());
     return toDecimalData(valAsDecimal, decimalType);
   }
@@ -317,7 +337,7 @@ public final class CastMap implements Serializable {
    * @param decimalType  DecimalType containing the output decimal's precision and scale specifications
    * @return Converted decimal that is wrapped in Flink's DecimalData object.
    */
-  private static DecimalData toDecimalData(@Nonnull BigDecimal valAsDecimal, LogicalType decimalType) {
+  private static DecimalData toDecimalData(BigDecimal valAsDecimal, LogicalType decimalType) {
     return DecimalData.fromBigDecimal(
         valAsDecimal,
         ((DecimalType) decimalType).getPrecision(),
