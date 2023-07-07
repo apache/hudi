@@ -245,7 +245,7 @@ public final class CastMap implements Serializable {
       Function<Object, Object> conversion = getConversion(fromType, toType);
       // need to handle nulls to prevent NullPointerException in #getConversion()
       ValidationUtils.checkState(conversion != null, String.format("Failed to perform ARRAY conversion when casting %s => %s", fromType, toType));
-      Object toObject = fromObject != null ? conversion .apply(fromObject) : null;
+      Object toObject = fromObject != null ? conversion.apply(fromObject) : null;
       objects[i] = toObject;
     }
     return new GenericArrayData(objects);
