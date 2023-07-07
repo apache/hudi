@@ -43,23 +43,39 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
     // NOTE: This rule adjusts [[LogicalRelation]]s resolving into Hudi tables such that
-    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark.
+    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark (Except in the
+    //       case of MergeInto. We leave the meta columns on the target table, and use other means to ensure resolution)
     //       For more details please check out the scala-doc of the rule
-    // TODO limit adapters to only Spark < 3.2
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
-    if (HoodieSparkUtils.isSpark2) {
-      val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
-      val spark2ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+    if (!HoodieSparkUtils.gteqSpark3_2) {
+      //Add or correct resolution of MergeInto
+      // the way we load the class via reflection is diff across spark2 and spark3 and hence had to split it out.
+      if (HoodieSparkUtils.isSpark2) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else if (HoodieSparkUtils.isSpark3_0) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder = {
+          session => instantiateKlass(resolveReferencesClass, session)
+        }
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else if (HoodieSparkUtils.isSpark3_1) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => instantiateKlass(resolveReferencesClass, session)
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else {
+        throw new IllegalStateException("Impossible to be here")
+      }
 
-      // TODO elaborate on the ordering
-      rules += (adaptIngestionTargetLogicalRelations, spark2ResolveReferences)
     } else {
       rules += adaptIngestionTargetLogicalRelations
-    }
-
-    if (HoodieSparkUtils.gteqSpark3_2) {
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
@@ -192,9 +208,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case mit@MatchMergeIntoTable(targetTable, query, _) =>
             val updatedTargetTable = targetTable match {
-              // In the receiving side of the MIT, we can't project meta-field attributes out,
-              // and instead have to explicitly remove them
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
+              //Do not remove the meta cols here anymore
+              case ResolvesToHudiTable(_) => Some(targetTable)
               case _ => None
             }
 

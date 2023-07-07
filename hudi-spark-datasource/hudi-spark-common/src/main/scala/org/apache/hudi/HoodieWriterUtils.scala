@@ -28,7 +28,7 @@ import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.hudi.command.SqlKeyGenerator
+import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -115,7 +115,7 @@ object HoodieWriterUtils {
 
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
-    if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
+    if (classOf[SqlKeyGenerator].getCanonicalName == kg || classOf[MergeIntoKeyGenerator].getCanonicalName == kg) {
       parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
