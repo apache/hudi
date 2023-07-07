@@ -402,23 +402,24 @@ public class StreamWriteOperatorCoordinator
    * until it finds a new inflight instant on the timeline.
    */
   private void initInstant(String instant) {
-    HoodieTimeline completedTimeline =
-        StreamerUtil.createMetaClient(conf).getActiveTimeline().filterCompletedInstants();
-    if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
-      // the last instant committed successfully
-      reset();
-    } else {
-      LOG.info("Recommit instant {}", instant);
-      commitInstant(instant);
-    }
-    // stop the heartbeat for old instant
-    if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy() && !WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
-      writeClient.getHeartbeatClient().stop(this.instant);
-    }
-    // starts a new instant
-    startInstant();
-    // upgrade downgrade
-    this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
+    HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+    executor.execute(() -> {
+      if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
+        // the last instant committed successfully
+        reset();
+      } else {
+        LOG.info("Recommit instant {}", instant);
+        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+          writeClient.getHeartbeatClient().start(instant);
+        }
+        commitInstant(instant);
+      }
+      // starts a new instant
+      startInstant();
+      // upgrade downgrade
+      this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
+    }, "initialize instant %s", instant);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
