@@ -264,7 +264,7 @@ object HoodieSparkSqlWriter {
                   HoodieCreateRecordUtils.validateMetaFieldsInAvroRecords(avroRec)
                   validatePreppedRecord = false
                 }
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, isPrepped)
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, isPrepped, false)
               }
             }).toJavaRDD()
 
