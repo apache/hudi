@@ -74,6 +74,7 @@
                   <include>org.junit.platform:junit-platform-launcher</include>
                   <include>org.junit.platform:junit-platform-commons</include>
                   <include>org.junit.platform:junit-platform-engine</include>
+                  <include>org.apache.hadoop:hadoop-common</include>
 
                   <!-- Kryo -->
                   <include>com.esotericsoftware:kryo-shaded</include>
