@@ -37,8 +37,6 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 
-import javax.annotation.Nonnull;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -236,7 +234,7 @@ public final class CastMap implements Serializable {
    * @param toType   The output LogicalType of the row data to be converted to
    * @return Converted array that has the structure/specifications of that defined by the output LogicalType
    */
-  private static ArrayData doArrayConversion(@Nonnull ArrayData array, LogicalType fromType, LogicalType toType) {
+  private static ArrayData doArrayConversion(ArrayData array, LogicalType fromType, LogicalType toType) {
     // using Object type here as primitives are not allowed to be null
     Object[] objects = new Object[array.size()];
     ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(fromType);
@@ -259,7 +257,7 @@ public final class CastMap implements Serializable {
    * @param toType   The output LogicalType of the row data to be converted to
    * @return Converted map that has the structure/specifications of that defined by the output LogicalType
    */
-  private static MapData doMapConversion(@Nonnull MapData map, LogicalType fromType, LogicalType toType) {
+  private static MapData doMapConversion(MapData map, LogicalType fromType, LogicalType toType) {
     // no schema evolution is allowed on the keyType, hence, we only need to care about the valueType
     LogicalType fromValueType = fromType.getChildren().get(1);
     LogicalType toValueType = toType.getChildren().get(1);
@@ -289,7 +287,7 @@ public final class CastMap implements Serializable {
    * @param toType   The output LogicalType of the row data to be converted to
    * @return Converted row that has the structure/specifications of that defined by the output LogicalType
    */
-  private static RowData doRowConversion(@Nonnull RowData row, LogicalType fromType, LogicalType toType) {
+  private static RowData doRowConversion(RowData row, LogicalType fromType, LogicalType toType) {
     // note: InternalSchema.merge guarantees that the schema to be read fromType is orientated in the same order as toType
     // hence, we can match types by position as it is guaranteed that it is referencing the same field
     List<LogicalType> fromChildren = fromType.getChildren();
@@ -362,7 +360,7 @@ public final class CastMap implements Serializable {
       this.conversion = conversion;
     }
 
-    Object convert(@Nonnull Object val) {
+    Object convert(Object val) {
       return conversion.apply(val);
     }
 
