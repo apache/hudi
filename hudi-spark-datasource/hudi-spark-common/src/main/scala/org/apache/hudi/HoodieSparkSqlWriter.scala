@@ -47,6 +47,8 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
@@ -59,9 +61,9 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.spark.api.java.{JavaSparkContext}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
@@ -360,7 +362,7 @@ object HoodieSparkSqlWriter {
 
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
-            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT && !isConsistentHashingBucketIndex(client)) {
               return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath,
                 instantTime, writerSchema, tableConfig)
             }
@@ -1047,6 +1049,10 @@ object HoodieSparkSqlWriter {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
       && client.getConfig.isAsyncClusteringEnabled)
+  }
+
+  private def isConsistentHashingBucketIndex(client: SparkRDDWriteClient[_]): Boolean = {
+    client.getConfig.getIndexType == IndexType.BUCKET && client.getConfig.getBucketIndexEngineType == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING
   }
 
   /**
