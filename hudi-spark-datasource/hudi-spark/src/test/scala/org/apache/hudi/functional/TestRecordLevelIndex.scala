@@ -448,29 +448,33 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     assertTrue(compactionBaseFile.isPresent)
   }
 
-  @Disabled("needs investigation")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    var hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+
+    hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "5")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
-      .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
-    assertTrue(
-      metadataTableFSView.getTimeline
-        .filter(JavaConversions.getPredicate(instant => instant.getAction == ActionType.clean.name()))
-        .lastInstant()
-        .isPresent)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
+    rollbackLastInstant(hudiOpts)
+    // Rolling back clean instant from MDT
+    rollbackLastInstant(hudiOpts)
+    validateDataAndRecordIndices(hudiOpts)
   }
 
   @ParameterizedTest
