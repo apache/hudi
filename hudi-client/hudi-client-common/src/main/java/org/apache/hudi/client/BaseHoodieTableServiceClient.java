@@ -28,6 +28,8 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -53,6 +55,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.rollback.BaseRollbackActionExecutor;
@@ -93,8 +96,11 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         HoodieHeartbeatClient heartbeatClient,
+                                         HoodieMetrics metrics,
+                                         TransactionManager txnManager) {
+    super(context, clientConfig, timelineService, heartbeatClient, metrics, txnManager);
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {

@@ -120,7 +120,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
           new EmbeddedTimelineService(context, null, writeConfig);
       timelineService.startServer();
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
-      writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
+      writeClient = new HoodieJavaWriteClient(context, writeConfig, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
       // timeline server instance.
       assertEquals(timelineService, writeClient.getTimelineServer().get());

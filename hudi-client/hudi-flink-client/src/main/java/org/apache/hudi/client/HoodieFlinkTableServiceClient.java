@@ -20,6 +20,8 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -39,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -68,8 +71,11 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
                                           HoodieWriteConfig clientConfig,
-                                          Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                          Option<EmbeddedTimelineService> timelineService,
+                                          HoodieHeartbeatClient heartbeatClient,
+                                          HoodieMetrics metrics,
+                                          TransactionManager txnManager) {
+    super(context, clientConfig, timelineService, heartbeatClient, metrics, txnManager);
   }
 
   @Override

@@ -19,11 +19,14 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -37,8 +40,11 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
 
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         HoodieHeartbeatClient heartbeatClient,
+                                         HoodieMetrics metrics,
+                                         TransactionManager txnManager) {
+    super(context, clientConfig, timelineService, heartbeatClient, metrics, txnManager);
   }
 
   @Override

@@ -76,25 +76,33 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * incremental fashion.
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
-  private final boolean shouldStopTimelineServer;
+  private final boolean isTimelineServerCreator;
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
   }
 
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig, Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer,
+        new HoodieHeartbeatClient(FSUtils.getFs(clientConfig.getBasePath(), context.getHadoopConf().get()),
+            clientConfig.getBasePath(), clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses()),
+        new HoodieMetrics(clientConfig),
+        new TransactionManager(clientConfig, FSUtils.getFs(clientConfig.getBasePath(), context.getHadoopConf().get())));
+  }
+
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+                             Option<EmbeddedTimelineService> timelineServer, HoodieHeartbeatClient heartbeatClient,
+                             HoodieMetrics metrics, TransactionManager txnManager) {
     this.hadoopConf = context.getHadoopConf().get();
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
-    shouldStopTimelineServer = !timelineServer.isPresent();
-    this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
-        clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
-    this.metrics = new HoodieMetrics(config);
-    this.txnManager = new TransactionManager(config, fs);
+    isTimelineServerCreator = !timelineServer.isPresent();
+    this.heartbeatClient = heartbeatClient;
+    this.metrics = metrics;
+    this.txnManager = txnManager;
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -112,7 +120,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
-    if (timelineServer.isPresent() && shouldStopTimelineServer) {
+    if (timelineServer.isPresent() && isTimelineServerCreator) {
       // Stop only if owner
       LOG.info("Stopping Timeline service !!");
       timelineServer.get().stop();
@@ -193,8 +201,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param metadata Current committing instant's metadata
    * @param pendingInflightAndRequestedInstants Pending instants on the timeline
    *
-   * @see {@link BaseHoodieWriteClient#preCommit}
-   * @see {@link BaseHoodieTableServiceClient#preCommit}
+   * @see BaseHoodieWriteClient#preCommit
+   * @see BaseHoodieTableServiceClient#preCommit
    */
   protected void resolveWriteConflict(HoodieTable table, HoodieCommitMetadata metadata, Set<String> pendingInflightAndRequestedInstants) {
     Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();

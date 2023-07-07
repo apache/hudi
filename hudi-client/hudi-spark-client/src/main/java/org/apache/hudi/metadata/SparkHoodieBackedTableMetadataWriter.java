@@ -186,7 +186,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
 
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig)) {
       String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
       writeClient.startCommitWithTime(instantTime, actionType);
       writeClient.deletePartitions(partitionsToDrop, instantTime);
@@ -197,7 +197,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public BaseHoodieWriteClient getWriteClient() {
     if (writeClient == null) {
-      writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+      writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig);
     }
     return writeClient;
   }

@@ -69,21 +69,11 @@ public class SparkRDDWriteClient<T> extends
     this(context, clientConfig, Option.empty());
   }
 
-  @Deprecated
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    this(context, writeConfig, Option.empty());
-  }
-
-  @Deprecated
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
-                             Option<EmbeddedTimelineService> timelineService) {
-    this(context, writeConfig, timelineService);
-  }
-
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new SparkRDDTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new SparkRDDTableServiceClient<>(context, writeConfig, getTimelineServer(),
+        getHeartbeatClient(), getMetrics(), getTxnManager());
   }
 
   @Override
