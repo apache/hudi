@@ -412,6 +412,10 @@ public class StreamWriteOperatorCoordinator
         reset();
       } else {
         LOG.info("Recommit instant {}", instant);
+        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+          writeClient.getHeartbeatClient().start(instant);
+        }
         commitInstant(instant);
       }
       // starts a new instant
@@ -593,6 +597,11 @@ public class StreamWriteOperatorCoordinator
   @VisibleForTesting
   public Context getContext() {
     return context;
+  }
+
+  @VisibleForTesting
+  public HoodieFlinkWriteClient getWriteClient() {
+    return writeClient;
   }
 
   @VisibleForTesting
