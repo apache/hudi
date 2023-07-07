@@ -160,6 +160,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)
       .sinceVersion("0.14.0")
+      .markAdvanced()
       .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
           + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "
           + "value will let the clustering job run faster, while it will give additional pressure to the "
