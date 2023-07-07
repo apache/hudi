@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -67,8 +68,9 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
-                                       Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                       Option<EmbeddedTimelineService> timelineService,
+                                       TransactionManager txnManager) {
+    super(context, clientConfig, timelineService, txnManager);
   }
 
   @Override

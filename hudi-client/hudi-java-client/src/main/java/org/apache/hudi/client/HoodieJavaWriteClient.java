@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -52,22 +51,20 @@ public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
+    this(context, writeConfig, Option.empty());
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
-                               boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer(), getTxnManager());
   }
 
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieJavaTable<T> table = HoodieJavaTable.create(config, (HoodieJavaEngineContext) context);
+    HoodieJavaTable<T> table = HoodieJavaTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));

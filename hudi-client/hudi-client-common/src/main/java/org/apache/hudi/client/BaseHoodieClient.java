@@ -76,25 +76,36 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * incremental fashion.
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
-  private final boolean shouldStopTimelineServer;
+  private final boolean isTimelineServerCreator;
+  private final boolean isTxnManagerCreator;
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
   }
 
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig, Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer, null);
+  }
+
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+                             Option<EmbeddedTimelineService> timelineServer, TransactionManager txnManager) {
     this.hadoopConf = context.getHadoopConf().get();
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
-    shouldStopTimelineServer = !timelineServer.isPresent();
+    this.isTimelineServerCreator = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
-    this.txnManager = new TransactionManager(config, fs);
+    if (txnManager == null) {
+      this.txnManager = new TransactionManager(config, fs);
+      this.isTxnManagerCreator = true;
+    } else {
+      this.txnManager = txnManager;
+      this.isTxnManagerCreator = false;
+    }
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -108,11 +119,13 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     stopEmbeddedServerView(true);
     this.context.setJobStatus("", "");
     this.heartbeatClient.close();
-    this.txnManager.close();
+    if (isTxnManagerCreator) {
+      this.txnManager.close();
+    }
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
-    if (timelineServer.isPresent() && shouldStopTimelineServer) {
+    if (timelineServer.isPresent() && isTimelineServerCreator) {
       // Stop only if owner
       LOG.info("Stopping Timeline service !!");
       timelineServer.get().stop();
@@ -184,6 +197,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   public HoodieHeartbeatClient getHeartbeatClient() {
     return heartbeatClient;
+  }
+
+  public TransactionManager getTxnManager() {
+    return txnManager;
   }
 
   /**

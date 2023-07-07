@@ -35,6 +35,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -52,6 +53,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommit
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
@@ -107,6 +109,26 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
         assertFalse(writeClient.getTimelineServer().isPresent());
       }
     }
+    writeClient.close();
+  }
+
+  @Test
+  public void testWriteClientAndTableServiceClientWithTxnManager() throws IOException {
+    HoodieTableMetaClient metaClient =
+        getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePathV2().toString())
+        .build();
+
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
+
+    assertNotNull(writeClient.getTxnManager());
+
+    assertEquals(
+        writeClient.getTxnManager(),
+        writeClient.getTableServiceClient().getTxnManager()
+    );
+
     writeClient.close();
   }
 

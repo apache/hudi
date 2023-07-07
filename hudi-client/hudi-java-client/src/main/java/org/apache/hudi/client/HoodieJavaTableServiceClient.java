@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
@@ -37,8 +38,9 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
 
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         TransactionManager txnManager) {
+    super(context, clientConfig, timelineService, txnManager);
   }
 
   @Override

@@ -23,6 +23,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -30,6 +31,8 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
@@ -58,6 +61,24 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     if (!enableEmbeddedTimelineServer) {
       assertFalse(writeClient.getTimelineServer().isPresent());
     }
+
+    writeClient.close();
+  }
+
+  @Test
+  public void testWriteClientAndTableServiceClientWithTxnManager() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePathV2().toString())
+        .build();
+
+    HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+
+    assertNotNull(writeClient.getTxnManager());
+
+    assertEquals(
+        writeClient.getTxnManager(),
+        writeClient.getTableServiceClient().getTxnManager()
+    );
 
     writeClient.close();
   }

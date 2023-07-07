@@ -61,6 +61,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
@@ -120,7 +121,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
           new EmbeddedTimelineService(context, null, writeConfig);
       timelineService.startServer();
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
-      writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
+      writeClient = new HoodieJavaWriteClient(context, writeConfig, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
       // timeline server instance.
       assertEquals(timelineService, writeClient.getTimelineServer().get());
@@ -139,6 +140,25 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
         assertFalse(writeClient.getTimelineServer().isPresent());
       }
     }
+    writeClient.close();
+  }
+
+  @Test
+  public void testWriteClientAndTableServiceClientWithTxnManager() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePathV2().toString())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
+        .build();
+
+    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig);
+
+    assertNotNull(writeClient.getTxnManager());
+
+    assertEquals(
+        writeClient.getTxnManager(),
+        writeClient.getTableServiceClient().getTxnManager()
+    );
+
     writeClient.close();
   }
 
