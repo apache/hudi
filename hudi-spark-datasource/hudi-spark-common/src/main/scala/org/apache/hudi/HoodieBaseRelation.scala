@@ -467,8 +467,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   def imbueConfigs(sqlContext: SQLContext): Unit = {
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
-    // TODO(HUDI-3639) vectorized reader has to be disabled to make sure MORIncrementalRelation is working properly
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
   }
 
   /**

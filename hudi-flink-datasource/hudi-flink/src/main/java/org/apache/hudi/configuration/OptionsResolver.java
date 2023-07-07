@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
@@ -140,8 +141,19 @@ public class OptionsResolver {
     return HoodieIndex.BucketIndexEngineType.valueOf(bucketEngineType);
   }
 
+  /**
+   * Returns whether the table index is consistent bucket index.
+   */
   public static boolean isConsistentHashingBucketIndexType(Configuration conf) {
     return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING);
+  }
+
+  /**
+   * Returns the default plan strategy class.
+   */
+  public static String getDefaultPlanStrategyClassName(Configuration conf) {
+    return OptionsResolver.isConsistentHashingBucketIndexType(conf) ? FlinkConsistentBucketClusteringPlanStrategy.class.getName() :
+        FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS.defaultValue();
   }
 
   /**
@@ -190,7 +202,19 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleClustering(Configuration conf) {
-    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
+    if (!conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED)) {
+      return false;
+    }
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+      // Write pipelines for table with consistent bucket index would detect whether clustering service occurs,
+      // and automatically adjust the partitioner and write function if clustering service happens.
+      // So it could handle UPSERT.
+      // But it could not handle INSERT case, because insert write would not take index into consideration currently.
+      return operationType == WriteOperationType.UPSERT;
+    } else {
+      return operationType == WriteOperationType.INSERT;
+    }
   }
 
   /**

@@ -43,6 +43,14 @@
             tbl_id = #{tableId}
     </select>
 
+    <delete id="deleteTimestamp" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            tbl_timestamp
+        WHERE
+            tbl_id = #{tableId}
+    </delete>
+
     <!-- instant related -->
     <insert id="insertInstant" parameterType="java.util.HashMap" useGeneratedKeys="true" keyProperty="instant_id">
         INSERT INTO instant (tbl_id, action, ts, state, duration, start_ts)

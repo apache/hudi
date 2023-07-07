@@ -31,6 +31,14 @@
         WHERE name=#{databaseName}
     </select>
 
+    <delete id="deleteDB" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            dbs
+        WHERE
+            db_id = #{dbId}
+    </delete>
+
     <!-- table related -->
     <insert id="insertTable" parameterType="java.util.Map" useGeneratedKeys="true" keyProperty="tbl_id">
         INSERT INTO tbls (db_id, name, owner_name, location)
@@ -56,5 +64,13 @@
             t.NAME = #{tableName}
             AND dbs.NAME = #{databaseName}
     </select>
+
+    <delete id="deleteTable" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            tbls
+        WHERE
+            tbl_id = #{tableId}
+    </delete>
 
 </mapper>
