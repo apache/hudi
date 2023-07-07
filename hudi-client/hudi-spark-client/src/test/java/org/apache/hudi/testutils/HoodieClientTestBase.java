@@ -484,12 +484,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         expTotalCommits, false, filterForCommitTimeWithAssert);
   }
 
-  public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
-                                          String prevCommitTime, String initCommitTime,
-                                          int numRecordsInThisCommit,
-                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
-                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
-    return deleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, deleteFn, isPreppedAPI,
+  public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                          String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI, boolean assertForCommit,
+                                          int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+    return deleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, isPreppedAPI,
         assertForCommit, expRecordsInThisCommit, expTotalRecords, true);
   }
 
@@ -502,7 +500,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @param prevCommitTime         Commit Timestamp used in previous commit
    * @param initCommitTime         Begin Timestamp (usually "000")
    * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param deleteFn               Delete Function to be used for deletes
    * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
    * @param assertForCommit        Enable Assertion of Writes
    * @param expRecordsInThisCommit Expected number of records in this commit
@@ -511,16 +508,38 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @throws Exception in case of error
    */
   public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
-      String prevCommitTime, String initCommitTime,
-      int numRecordsInThisCommit,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
+      String prevCommitTime, String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI,
       boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filterForCommitTimeWithAssert) throws Exception {
-    final Function<Integer, List<HoodieKey>> keyGenFunction =
-        generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
-    return deleteBatch(client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit,
-        keyGenFunction,
-        deleteFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert);
+    if (isPreppedAPI) {
+      final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+          generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeleteRecords);
+
+      // Delete 1 (only deletes)
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
+      JavaRDD<HoodieRecord> deleteRecords = jsc.parallelize(records, 1);
+
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> deleteFn = SparkRDDWriteClient::deletePrepped;
+      JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert, result);
+    } else {
+      final Function<Integer, List<HoodieKey>> keyGenFunction =
+          generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
+
+      // Delete 1 (only deletes)
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
+      JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
+
+      // check the partition metadata is written out
+      assertPartitionMetadataForKeys(basePath, keysToDelete, fs);
+
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn = SparkRDDWriteClient::delete;
+      JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert, result);
+    }
   }
 
   public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
@@ -647,38 +666,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return result;
   }
 
-  /**
-   * Helper to delete batch of hoodie keys and do regular assertions on the state after successful completion.
-   *
-   * @param client                 Hoodie Write Client
-   * @param newCommitTime          New Commit Timestamp to be used
-   * @param prevCommitTime         Commit Timestamp used in previous commit
-   * @param initCommitTime         Begin Timestamp (usually "000")
-   * @param keyGenFunction         Key Generation function
-   * @param deleteFn               Write Function to be used for delete
-   * @param assertForCommit        Enable Assertion of Writes
-   * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords        Expected number of records when scanned
-   * @throws Exception in case of error
-   */
-  public JavaRDD<WriteStatus> deleteBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
-      String initCommitTime, int numRecordsInThisCommit,
-      Function<Integer, List<HoodieKey>> keyGenFunction,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filerForCommitTimeWithAssert) throws Exception {
-
-    // Delete 1 (only deletes)
-    client.startCommitWithTime(newCommitTime);
-
-    List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
-    JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
-
-    JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+  private JavaRDD<WriteStatus> getWriteStatusAndVerifyDeleteOperation(String newCommitTime, String prevCommitTime, String initCommitTime, boolean assertForCommit, int expRecordsInThisCommit,
+                                                                      int expTotalRecords, boolean filerForCommitTimeWithAssert, JavaRDD<WriteStatus> result) {
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
-
-    // check the partition metadata is written out
-    assertPartitionMetadataForKeys(basePath, keysToDelete, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();

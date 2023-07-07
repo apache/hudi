@@ -123,7 +123,6 @@ object HoodieCreateRecordUtils {
             if (validatePreppedRecord && isPrepped) {
               // For prepped records, check the first record to make sure it has meta fields set.
               validateMetaFieldsInAvroRecords(avroRec)
-              // Do validation only once.
               validatePreppedRecord = false
             }
 
@@ -183,7 +182,6 @@ object HoodieCreateRecordUtils {
             if (isPrepped) {
               // For prepped records, check the record schema to make sure it has meta fields set.
               validateMetaFieldsInSparkRecords(sourceStructType)
-              // Do validation only once.
               validatePreppedRecord = false
             }
             val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped, mergeIntoWrites)
@@ -210,7 +208,7 @@ object HoodieCreateRecordUtils {
     true
   }
 
-  private def validateMetaFieldsInAvroRecords(avroRec: GenericRecord): Unit = {
+  def validateMetaFieldsInAvroRecords(avroRec: GenericRecord): Unit = {
     val avroSchema = avroRec.getSchema;
     if (avroSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null
       || avroSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) == null

@@ -83,6 +83,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
+  /**
+   * Record is considered deleted if data is null.
+   */
+  private boolean isDeleted;
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }
@@ -93,6 +97,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = false;
     this.schema = schema;
+    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(HoodieKey key, UnsafeRow data, boolean copy) {
@@ -105,6 +110,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
+    isDeleted = data == null;
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
@@ -113,6 +119,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
+    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(
@@ -126,6 +133,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     super(key, data, operation, currentLocation, newLocation);
     this.copy = copy;
     this.schema = schema;
+  }
+
+  public boolean isDeleted() {
+    return isDeleted;
   }
 
   @Override
@@ -428,7 +439,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     //       In case provided row is anything but [[UnsafeRow]], it's expected that the
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
-    boolean isValid = data instanceof UnsafeRow
+    boolean isValid = data == null || data instanceof UnsafeRow
         || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
