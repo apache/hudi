@@ -26,7 +26,8 @@ import org.apache.spark.sql.catalyst.util.toPrettySQL
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 /**
- * NOTE: Taken from HoodieSpark2Analysis and modified to resolve source and target tables if not already resolved
+ * NOTE: Taken from HoodieSpark2Analysis applied to Spark version 3.1.3 and modified to resolve source and target tables
+ * if not already resolved
  *
  *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
@@ -38,15 +39,13 @@ object HoodieSpark31Analysis {
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case mO @ MergeIntoTable(targetTableO, sourceTableO, _, _, _)
-        //// Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
-        //
+        // START custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
         if !mO.resolved || containsUnresolvedStarAssignments(mO) =>
         lazy val analyzer = spark.sessionState.analyzer
         val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
         val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
         val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
-        //
-        ////
+        // END custom Hudi change.
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
             val newMatchedActions = m.matchedActions.map {
@@ -197,11 +196,7 @@ object HoodieSpark31Analysis {
       func.map(wrapper)
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // Following section is amended to the original (Spark's) implementation
-    // >>> BEGINS
-    ////////////////////////////////////////////////////////////////////////////////////////////
-
+    // START custom Hudi change: Following section is amended to the original (Spark's) implementation
     private def containsUnresolvedStarAssignments(mit: MergeIntoTable): Boolean = {
       val containsUnresolvedInsertStar = mit.notMatchedActions.exists {
         case InsertAction(_, assignments) => assignments.isEmpty
@@ -214,10 +209,7 @@ object HoodieSpark31Analysis {
 
       containsUnresolvedInsertStar || containsUnresolvedUpdateStar
     }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // <<< ENDS
-    ////////////////////////////////////////////////////////////////////////////////////////////
+    // END custom Hudi change.
   }
 
 }

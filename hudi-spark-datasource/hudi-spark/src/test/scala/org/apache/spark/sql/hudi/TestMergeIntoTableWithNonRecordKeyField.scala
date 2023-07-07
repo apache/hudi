@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
 
-class TestMergeIntoTable3 extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
+class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test Merge into extra cond") {
     withTempDir { tmp =>

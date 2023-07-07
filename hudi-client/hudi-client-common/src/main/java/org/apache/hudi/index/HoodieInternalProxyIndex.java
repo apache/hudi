@@ -27,14 +27,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
+/**
+ * Index that does not do tagging. Its purpose is to be used for Spark sql Merge into command
+ * Merge into does not need to use index lookup because we get the location from the meta columns
+ * from the join. The reason why we can't use the prepped path is because we sometimes need to do
+ * a mix of updates and inserts and prepped only handles existing records
+ */
 public class HoodieInternalProxyIndex extends HoodieIndex<Object, Object> {
-
-  /**
-   * Index that does not do tagging. Its purpose is to be used for Spark sql Merge into command
-   * Merge into does not need to use index lookup because we get the location from the meta columns
-   * from the join. The reason why we can't use the prepped path is because we sometimes need to do
-   * a mix of updates and inserts and prepped only handles existing records
-   */
   public HoodieInternalProxyIndex(HoodieWriteConfig config) {
     super(config);
   }

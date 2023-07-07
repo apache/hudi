@@ -32,6 +32,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
+import org.apache.spark.sql.HoodieSpark2CatalystPlanUtils.createMITJoin
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
@@ -340,7 +341,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Then we want to project the output so that we have the meta columns from the target table
     // followed by the data columns of the source table
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+    val joinData = createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
     val projectedJoinPlan = Project(tableMetaCols ++ incomingDataCols, joinData)
     val projectedJoinOutput = projectedJoinPlan.output

@@ -187,11 +187,7 @@ object HoodieSpark2Analysis {
       func.map(wrapper)
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // Following section is amended to the original (Spark's) implementation
-    // >>> BEGINS
-    ////////////////////////////////////////////////////////////////////////////////////////////
-
+    // START: custom Hudi change. Following section is amended to the original (Spark's) implementation.
     private def containsUnresolvedStarAssignments(mit: MergeIntoTable): Boolean = {
       val containsUnresolvedInsertStar = mit.notMatchedActions.exists {
         case InsertAction(_, assignments) => assignments.isEmpty
@@ -204,10 +200,7 @@ object HoodieSpark2Analysis {
 
       containsUnresolvedInsertStar || containsUnresolvedUpdateStar
     }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // <<< ENDS
-    ////////////////////////////////////////////////////////////////////////////////////////////
+    // END: custom Hudi change.
   }
 
 }
