@@ -108,12 +108,23 @@ public class HoodieCleaner {
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
+    boolean success = true;
+
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+      success = false;
+      LOG.error("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
       jssc.stop();
     }
+
+    if (!success) {
+      // Return a non-zero exit code to properly notify any resource manager
+      // that cleaning was not successful
+      System.exit(1);
+    }
+
+    LOG.info("Cleaner ran successfully");
   }
 }
