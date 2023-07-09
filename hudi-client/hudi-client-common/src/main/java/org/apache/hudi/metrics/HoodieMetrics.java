@@ -209,7 +209,7 @@ public class HoodieMetrics {
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
-      String actionType, boolean enableCompactionLogBlockMetrics) {
+      String actionType) {
     updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata, actionType);
     if (config.isMetricsOn()) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
@@ -240,7 +240,7 @@ public class HoodieMetrics {
       metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_COMPACTED_STR), totalLogFilesCompacted);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_SIZE_STR), totalLogFilesSize);
       metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_DELETED), totalRecordsDeleted);
-      if (enableCompactionLogBlockMetrics) {
+      if (config.isCompactionLogBlockMetricsOn()) {
         long totalCorruptedLogBlocks = metadata.getTotalCorruptLogBlocks();
         long totalRollbackLogBlocks = metadata.getTotalRollbackLogBlocks();
         metrics.registerGauge(getMetricsName(actionType, TOTAL_CORRUPTED_LOG_BLOCKS_STR), totalCorruptedLogBlocks);

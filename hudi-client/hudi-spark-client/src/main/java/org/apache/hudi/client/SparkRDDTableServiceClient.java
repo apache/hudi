@@ -155,7 +155,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(compactionCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, COMPACTION_ACTION, config.isCompactionLogBlockMetricsOn())
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, COMPACTION_ACTION)
       );
     }
     LOG.info("Compacted successfully on commit " + compactionCommitTime);
@@ -184,8 +184,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     if (logCompactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(logCompactionTimer.stop());
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(logCompactionCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION,
-              config.isCompactionLogBlockMetricsOn())
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
       );
     }
     LOG.info("Log Compacted successfully on commit " + logCompactionCommitTime);
@@ -286,8 +285,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       HoodieActiveTimeline.parseDateFromInstantTimeSafely(clusteringCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
-              config.isCompactionLogBlockMetricsOn())
+          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION)
       );
     }
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);

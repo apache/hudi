@@ -110,7 +110,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
         metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(compactionCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION, config.isCompactionLogBlockMetricsOn());
+            durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
             + config.getBasePath() + " at time " + compactionCommitTime, e);
@@ -228,7 +228,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
         metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(clusteringCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION, config.isCompactionLogBlockMetricsOn());
+            durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
             + config.getBasePath() + " at time " + clusteringCommitTime, e);

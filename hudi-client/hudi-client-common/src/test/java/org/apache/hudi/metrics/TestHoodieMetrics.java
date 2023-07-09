@@ -72,7 +72,6 @@ public class TestHoodieMetrics {
   @Test
   public void testTimerCtx() throws InterruptedException {
     Random rand = new Random();
-
     // Index metrics
     Timer.Context timer = hoodieMetrics.getIndexCtx();
     Thread.sleep(5); // Ensure timer duration is > 0
@@ -144,7 +143,9 @@ public class TestHoodieMetrics {
       when(metadata.getTotalCorruptLogBlocks()).thenReturn(randomValue + 15);
       when(metadata.getTotalRollbackLogBlocks()).thenReturn(randomValue + 16);
       when(metadata.getMinAndMaxEventTime()).thenReturn(Pair.of(Option.empty(), Option.empty()));
-      hoodieMetrics.updateCommitMetrics(randomValue + 17, commitTimer.stop(), metadata, action, true);
+      when(config.isCompactionLogBlockMetricsOn()).thenReturn(true);
+
+      hoodieMetrics.updateCommitMetrics(randomValue + 17, commitTimer.stop(), metadata, action);
 
       String metricname = hoodieMetrics.getMetricsName(action, "duration");
       long duration = (Long)metrics.getRegistry().getGauges().get(metricname).getValue();
