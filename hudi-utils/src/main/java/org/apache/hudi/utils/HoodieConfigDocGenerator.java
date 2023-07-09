@@ -374,7 +374,7 @@ public class HoodieConfigDocGenerator {
       } else if (configClassMetaInfo.subGroupName == prevSubGroupName) {
         // Continuation of more HoodieConfig classes that are part of the same subgroup
         configParamHeadingLevel = DEFAULT_CONFIG_PARAM_HEADING_LEVEL + 1;
-      } else if (configClassMetaInfo.hasCommonConfigs) {
+      } else {
         // This is a new valid Subgroup encountered. Add description for the subgroup itself.
         String configSubGroupSummary = generateConfigGroupSummary(
                 configClassMetaInfo.subGroupName.name,
