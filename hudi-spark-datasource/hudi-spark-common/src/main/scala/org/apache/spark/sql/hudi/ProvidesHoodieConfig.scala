@@ -121,10 +121,10 @@ trait ProvidesHoodieConfig extends Logging {
    */
   private def deduceOperation(enableBulkInsert: Boolean, isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                               dropDuplicate: Boolean, isNonStrictMode: Boolean, isPartitionedTable: Boolean,
-                              hasPrecombineColumn: Boolean): String = {
+                              combineBeforeInsert: Boolean, insertMode: InsertMode): String = {
     (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
       case (true, _, _, _, false, _) =>
-        throw new IllegalArgumentException(s"Table with primaryKey can only use bulk insert in non-strict mode.")
+        throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
       case (true, _, _, true, _, _) =>
         throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
           s" Please disable $INSERT_DROP_DUPS and try again.")
@@ -139,7 +139,7 @@ trait ProvidesHoodieConfig extends Logging {
       // insert overwrite partition
       case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
       // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-      case (false, false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
+      case (false, false, false, false, false, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
       case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
       // for the rest case, use the insert operation
@@ -201,36 +201,6 @@ trait ProvidesHoodieConfig extends Logging {
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val combineBeforeInsert = hoodieCatalogTable.preCombineKey.nonEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
 
-/*<<<<<<< HEAD
-    // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
-    //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
-    val operationOverride = combinedOpts.get(DataSourceWriteOptions.OPERATION.key)
-    val operation = operationOverride.getOrElse {
-      (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-        case (true, _, _, _, false, _) =>
-          throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (true, _, _, true, _, _) =>
-          throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
-            s" Please disable $INSERT_DROP_DUPS and try again.")
-        // Bulk insert with overwrite table
-        case (true, false, true, _, _, _) =>
-          BULK_INSERT_OPERATION_OPT_VAL
-        // Bulk insert with overwrite table partition
-        case (true, true, false, _, _, true) =>
-          BULK_INSERT_OPERATION_OPT_VAL
-        // insert overwrite table
-        case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
-        // insert overwrite partition
-        case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
-        // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, false, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
-        // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
-        // for the rest case, use the insert operation
-        case _ => INSERT_OPERATION_OPT_VAL
-      }
-    }
-=======*/
     // try to use sql write operation instead of legacy insert mode. If only insert mode is explicitly specified, we will uze
     // o
     val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
@@ -238,11 +208,8 @@ trait ProvidesHoodieConfig extends Logging {
       if (useLegacyInsertModeFlow) {
         // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
         //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
-
-      /*deduceWriteOperationForInsertInfo(isPartitionedTable, isOverwritePartition, isOverwriteTable, insertModeSet, dropDuplicate,
-        enableBulkInsert, isInsertInto, isNonStrictMode, combineBeforeInsert)*/
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
-          isNonStrictMode, isPartitionedTable, combineBeforeInsert)
+          isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode)
       } else {
         deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
