@@ -29,7 +29,6 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Disabled
 
 import java.io.File
 
@@ -1848,74 +1847,5 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
-  }
-
-  def ingestAndValidateExceptionBulkInsertAndDropDupPolicy(tableType: String, tableName: String, tmp: File,
-                                     expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,
-                                     setOptions: List[String] = List.empty, insertDupPolicy : String = NONE_INSERT_DUP_POLICY) : Unit = {
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  id int,
-         |  name string,
-         |  price double,
-         |  dt string
-         |) using hudi
-         | tblproperties (
-         |  type = '$tableType',
-         |  primaryKey = 'id',
-         |  preCombine = 'name'
-         | )
-         | partitioned by (dt)
-         | location '${tmp.getCanonicalPath}/$tableName'
-         """.stripMargin)
-    // set additional options
-    setOptions.foreach(entry => {
-      spark.sql(entry)
-    })
-
-    spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
-
-    assertResult(expectedOperationtype) {
-      getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
-    }
-    checkAnswer(s"select id, name, price, dt from $tableName")(
-      Seq(1, "a1", 10.0, "2021-07-18")
-    )
-
-      spark.sql(
-        s"""
-           | insert into $tableName values
-           | (1, 'a1_1', 10, "2021-07-18"),
-           | (2, 'a2', 20, "2021-07-18"),
-           | (2, 'a2_2', 30, "2021-07-18")
-              """.stripMargin)
-
-      assertResult(expectedOperationtype) {
-        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
-      }
-        // FAIL
-        assertThrows[HoodieDuplicateKeyException] {
-          try {
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1, 'a1_1', 10, "2021-07-18"),
-                 | (2, 'a2', 20, "2021-07-18"),
-                 | (2, 'a2_2', 30, "2021-07-18")
-              """.stripMargin)
-          } catch {
-            case e: Exception =>
-              var root: Throwable = e
-              while (root.getCause != null) {
-                root = root.getCause
-              }
-              throw root
-          }
-        }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
-    spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
-    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
->>>>>>> 7708ff75ba (Simplifying INSERT_INTO config for spark-sql)
   }
 }

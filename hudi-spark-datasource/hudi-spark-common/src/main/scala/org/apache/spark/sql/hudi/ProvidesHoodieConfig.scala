@@ -196,13 +196,17 @@ trait ProvidesHoodieConfig extends Logging {
     val sqlWriteOperationOpt = combinedOpts.get(SQL_WRITE_OPERATION.key())
     val sqlWriteOperationSet = sqlWriteOperationOpt.nonEmpty
     val sqlWriteOperation = sqlWriteOperationOpt.getOrElse(SQL_WRITE_OPERATION.defaultValue())
+    val insertDupPolicyOpt = combinedOpts.get(INSERT_DUP_POLICY.key())
+    val insertDupPolicySet = insertDupPolicyOpt.nonEmpty
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
     val combineBeforeInsert = hoodieCatalogTable.preCombineKey.nonEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
 
-    // try to use sql write operation instead of legacy insert mode. If only insert mode is explicitly specified, we will uze
-    // o
+    // try to use sql write operation instead of legacy insert mode. If only insert mode is explicitly specified, w/o specifying
+    // any value for sql write operation, leagcy configs will be honored. But on all other cases (i.e when neither of the configs is set,
+    // or when both configs are set, or when only sql write operation is set), we honor sql write operation and ignore
+    // the insert mode.
     val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
     val operation = combinedOpts.getOrElse(OPERATION.key,
       if (useLegacyInsertModeFlow) {
@@ -215,10 +219,13 @@ trait ProvidesHoodieConfig extends Logging {
       }
     )
 
-    val payloadClassName =  if (useLegacyInsertModeFlow) {
+    // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
+    // w/o specifying any value for insert dup policy, leagcy configs will be honored. But on all other cases (i.e when neither of the configs is set,
+    // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
+    val useLegacyInsertDropDupFlow = insertDupPolicySet && !sqlWriteOperationSet
+    val payloadClassName =  if (useLegacyInsertDropDupFlow) {
       deducePayloadClassNameLegacy(operation, tableType, insertMode)
     } else {
-      // should we also consider old way of doing things.
       if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
         classOf[ValidateDuplicateKeyPayload].getCanonicalName
       } else {

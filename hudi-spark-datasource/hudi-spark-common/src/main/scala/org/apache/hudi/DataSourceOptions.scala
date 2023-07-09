@@ -438,6 +438,7 @@ object DataSourceWriteOptions {
     .key("hoodie.sql.bulk.insert.enable")
     .defaultValue("false")
     .markAdvanced()
+    .deprecatedAfter("0.14.0")
     .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
       "This config is deprecated as of 0.14.0. Please use " + SQL_WRITE_OPERATION.key() + " instead.")
 
@@ -445,6 +446,7 @@ object DataSourceWriteOptions {
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.insert.mode")
     .defaultValue("upsert")
+    .deprecatedAfter("0.14.0")
     .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
@@ -526,6 +528,7 @@ object DataSourceWriteOptions {
   val SQL_WRITE_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.write.operation")
     .defaultValue("insert")
+    .withValidValues("bulk_insert","insert","upsert")
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
       "do small file managmeent. If you prefer hudi to automatically managee small files, then you can go with \"insert\". There is no precombine " +
@@ -540,6 +543,7 @@ object DataSourceWriteOptions {
   val INSERT_DUP_POLICY: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.insert.dup.policy")
     .defaultValue(NONE_INSERT_DUP_POLICY)
+    .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
     .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
       + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
     " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
