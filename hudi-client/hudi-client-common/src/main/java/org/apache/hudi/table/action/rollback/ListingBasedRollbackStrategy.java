@@ -50,6 +50,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -72,14 +73,18 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   protected final String instantTime;
 
+  protected final Boolean isRestore;
+
   public ListingBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table,
                                       HoodieEngineContext context,
                                       HoodieWriteConfig config,
-                                      String instantTime) {
+                                      String instantTime,
+                                      boolean isRestore) {
     this.table = table;
     this.context = context;
     this.config = config;
     this.instantTime = instantTime;
+    this.isRestore = isRestore;
   }
 
   @Override
@@ -96,42 +101,46 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       String baseFileExtension = getBaseFileExtension(metaClient);
       Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(metaClient, instantToRollback);
       Boolean isCommitMetadataCompleted = checkCommitMetadataCompleted(instantToRollback, commitMetadataOptional);
+      AtomicBoolean isCompaction = new AtomicBoolean(false);
+      if (commitMetadataOptional.isPresent()) {
+        isCompaction.set(commitMetadataOptional.get().getOperationType() == WriteOperationType.COMPACT);
+      }
 
       return context.flatMap(partitionPaths, partitionPath -> {
         List<HoodieRollbackRequest> hoodieRollbackRequests = new ArrayList<>(partitionPaths.size());
         FileStatus[] filesToDelete =
             fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath(), baseFileExtension,
-                metaClient.getFs(), commitMetadataOptional, isCommitMetadataCompleted);
+                metaClient.getFs(), commitMetadataOptional, isCommitMetadataCompleted, tableType);
 
         if (HoodieTableType.COPY_ON_WRITE == tableType) {
           hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
         } else if (HoodieTableType.MERGE_ON_READ == tableType) {
           String commit = instantToRollback.getTimestamp();
           HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
-          switch (instantToRollback.getAction()) {
+          String action = instantToRollback.getAction();
+          if (isCompaction.get()) { // compaction's action in hoodie instant will be "commit". So, we might need to override.
+            action = HoodieTimeline.COMPACTION_ACTION;
+          }
+          switch (action) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
-              // If there is no delta commit present after the current commit (if compaction), no action, else we
-              // need to make sure that a compaction commit rollback also deletes any log files written as part of the
-              // succeeding deltacommit.
-              boolean higherDeltaCommits =
-                  !activeTimeline.getDeltaCommitTimeline().filterCompletedInstants().findInstantsAfter(commit, 1)
-                      .empty();
-              if (higherDeltaCommits) {
-                // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
+              // Depending on whether we are rolling back compaction as part of restore or a regular rollback, logic differs/
+              // as part of regular rollback(on re-attempting a failed compaction), we might have to delete/rollback only the base file that could have
+              // potentially been created. Even if there are log files added to the file slice of interest, we should not touch them.
+              // but if its part of a restore operation, rolling back a compaction should rollback entire file slice, i.e base file and all log files.
+              if (!isRestore) {
+                // Rollback of a compaction action if not for restore means that the compaction is scheduled
                 // and has not yet finished. In this scenario we should delete only the newly created base files
                 // and not corresponding base commit log files created with this as baseCommit since updates would
                 // have been written to the log files.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
-                    listFilesToBeDeleted(instantToRollback.getTimestamp(), baseFileExtension, partitionPath,
+                    listBaseFilesToBeDeleted(instantToRollback.getTimestamp(), baseFileExtension, partitionPath,
                         metaClient.getFs())));
               } else {
-                // No deltacommits present after this compaction commit (inflight or requested). In this case, we
-                // can also delete any log files that were created with this compaction commit as base
-                // commit.
+                // if this is part of a restore operation, we should rollback/delete entire file slice.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete));
               }
               break;
@@ -205,8 +214,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         .collect(Collectors.toList());
   }
 
-  private FileStatus[] listFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
-                                            FileSystem fs) throws IOException {
+  private FileStatus[] listBaseFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
+                                                FileSystem fs) throws IOException {
     LOG.info("Collecting files to be cleaned/rolledback up for path " + partitionPath + " and commit " + commit);
     PathFilter filter = (path) -> {
       if (path.toString().contains(basefileExtension)) {
@@ -221,8 +230,10 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
                                              String baseFileExtension, HoodieWrapperFileSystem fs,
                                              Option<HoodieCommitMetadata> commitMetadataOptional,
-                                             Boolean isCommitMetadataCompleted) throws IOException {
-    if (isCommitMetadataCompleted) {
+                                             Boolean isCommitMetadataCompleted,
+                                             HoodieTableType tableType) throws IOException {
+    // go w/ commit metadata only for COW table. for MOR, we need to get associated log files when commit corresponding to base file is rolledback.
+    if (isCommitMetadataCompleted && tableType == HoodieTableType.COPY_ON_WRITE) {
       return fetchFilesFromCommitMetadata(instantToRollback, partitionPath, basePath, commitMetadataOptional.get(),
           baseFileExtension, fs);
     } else {
@@ -248,6 +259,16 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     }).toArray(Path[]::new), pathFilter);
   }
 
+  /**
+   * returns matching base files and log files if any for the instant time of the commit to be rolled back.
+   * @param instantToRollback
+   * @param partitionPath
+   * @param basePath
+   * @param baseFileExtension
+   * @param fs
+   * @return
+   * @throws IOException
+   */
   private FileStatus[] fetchFilesFromListFiles(HoodieInstant instantToRollback, String partitionPath, String basePath,
                                                String baseFileExtension, HoodieWrapperFileSystem fs)
       throws IOException {

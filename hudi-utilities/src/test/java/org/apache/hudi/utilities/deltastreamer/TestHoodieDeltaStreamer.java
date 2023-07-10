@@ -59,6 +59,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -185,13 +186,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   protected HoodieDeltaStreamer initialHoodieDeltaStreamer(String tableBasePath, int totalRecords, String asyncCluster, HoodieRecordType recordType,
-                                                             WriteOperationType writeOperationType) throws IOException {
+                                                           WriteOperationType writeOperationType) throws IOException {
+    return initialHoodieDeltaStreamer(tableBasePath, totalRecords, asyncCluster, recordType, writeOperationType, Collections.emptySet());
+  }
+
+  protected HoodieDeltaStreamer initialHoodieDeltaStreamer(String tableBasePath, int totalRecords, String asyncCluster, HoodieRecordType recordType,
+                                                             WriteOperationType writeOperationType, Set<String> customConfigs) throws IOException {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, writeOperationType);
     TestHelpers.addRecordMerger(recordType, cfg.configs);
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", asyncCluster, ""));
     cfg.configs.addAll(getAllMultiWriterConfigs());
+    customConfigs.forEach(config -> cfg.configs.add(config));
     return new HoodieDeltaStreamer(cfg, jsc);
   }
 
@@ -1257,12 +1264,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
-  //@ParameterizedTest
-  //@EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  @Disabled("HUDI-6332")
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO","SPARK"})
   public void testHoodieIndexer(HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/asyncindexer";
-    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType);
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType, WriteOperationType.INSERT,
+        Collections.singleton(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() + "=true"));
 
     deltaStreamerTestRunner(ds, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, fs);
@@ -2137,7 +2144,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         try {
           fs.delete(entry.getPath());
         } catch (IOException e) {
-          e.printStackTrace();
+          LOG.warn("Failed to delete " + entry.getPath().toString(), e);
         }
       });
     }
@@ -2153,7 +2160,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
       TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     } else {
-      assertThrows(org.apache.hudi.exception.HoodieIOException.class, () -> new HoodieDeltaStreamer(
+      assertThrows(HoodieIOException.class, () -> new HoodieDeltaStreamer(
           TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
               null, PROPS_FILENAME_TEST_PARQUET, false,
               useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc));

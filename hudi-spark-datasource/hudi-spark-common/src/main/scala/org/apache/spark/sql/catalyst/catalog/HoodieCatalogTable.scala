@@ -63,7 +63,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * properties defined in catalog.
    */
-  val catalogProperties: Map[String, String] = table.storage.properties ++ table.properties
+  val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(table.storage.properties ++ table.properties)
 
   /**
    * hoodie table's location.

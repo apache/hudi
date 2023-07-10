@@ -53,6 +53,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
  */
@@ -67,10 +69,10 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema readerSchema;
   private Schema writerSchema;
   private Schema hiveSchema;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
   protected SchemaEvolutionContext schemaEvolutionContext;
   // support merge operation
-  protected boolean supportPayload = true;
+  protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
   private boolean supportTimestamp;
@@ -149,11 +151,11 @@ public abstract class AbstractRealtimeRecordReader {
         partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
             : new ArrayList<>();
     writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
-    List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), partitioningFields);
+    List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, EMPTY_STRING),
+        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, EMPTY_STRING), partitioningFields);
 
     Map<String, Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
-    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS));
+    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS, EMPTY_STRING));
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
 
@@ -166,7 +168,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
-    String[] hiveColumns = hiveColumnString.split(",");
+    String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
     LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 

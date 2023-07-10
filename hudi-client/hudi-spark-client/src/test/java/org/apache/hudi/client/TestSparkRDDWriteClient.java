@@ -22,7 +22,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -134,7 +133,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     writeClient.startCommitWithTime(instant1);
     List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
     assertNoWriteErrors(writeStatuses);
-    writeClient.commitStats(instant1, HoodieListData.eager(writeStatuses), writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    writeClient.commitStats(instant1, context().parallelize(writeStatuses, 1), writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType());
     writeClient.close();
 

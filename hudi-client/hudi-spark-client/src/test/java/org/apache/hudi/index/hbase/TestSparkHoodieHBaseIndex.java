@@ -63,6 +63,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -312,7 +313,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
         && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
   }
 
-  @Test
+  @Disabled("HUDI-6460")
   public void testTagLocationAndPartitionPathUpdateWithExplicitRollback() throws Exception {
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";

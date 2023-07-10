@@ -698,14 +698,24 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
-          .key("hoodie.rollback.instant.backup.enabled")
-          .defaultValue(false)
-          .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
+      .key("hoodie.rollback.instant.backup.enabled")
+      .defaultValue(false)
+      .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
 
   public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
-          .key("hoodie.rollback.instant.backup.dir")
-          .defaultValue(".rollback_backup")
-          .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+      .key("hoodie.rollback.instant.backup.dir")
+      .defaultValue(".rollback_backup")
+      .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
+
+  public static final ConfigProperty<String> CLIENT_INIT_CALLBACK_CLASS_NAMES = ConfigProperty
+      .key("hoodie.client.init.callback.classes")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Fully-qualified class names of the Hudi client init callbacks to run "
+          + "at the initialization of the Hudi client.  The class names are separated by `,`. "
+          + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
+          + "By default, no Hudi client init callback is executed.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1634,6 +1644,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
   }
 
+  public int getClusteringMaxParallelism() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_MAX_PARALLELISM);
+  }
+
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
     String mode = getString(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME);
     return ClusteringPlanPartitionFilterMode.valueOf(mode);
@@ -1909,7 +1923,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
 
-  public boolean getBloomIndexUpdatePartitionPath() {
+  public boolean getGlobalBloomIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
@@ -1963,6 +1977,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getRecordIndexUseCaching() {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_USE_CACHING);
+  }
+
+  public boolean getRecordIndexUpdatePartitionPath() {
+    return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
   /**
@@ -2068,6 +2086,13 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isMetricsOn() {
     return getBoolean(HoodieMetricsConfig.TURN_METRICS_ON);
+  }
+
+  /**
+   * metrics properties.
+   */
+  public boolean isCompactionLogBlockMetricsOn() {
+    return getBoolean(HoodieMetricsConfig.TURN_METRICS_COMPACTION_LOG_BLOCKS_ON);
   }
 
   public boolean isExecutorMetricsEnabled() {
@@ -2525,6 +2550,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getRollbackBackupDirectory() {
     return getString(ROLLBACK_INSTANT_BACKUP_DIRECTORY);
+  }
+
+  public String getClientInitCallbackClassNames() {
+    return getString(CLIENT_INIT_CALLBACK_CLASS_NAMES);
   }
 
   public static class Builder {
@@ -3006,6 +3035,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withRollbackBackupDirectory(String backupDir) {
       writeConfig.setValue(ROLLBACK_INSTANT_BACKUP_DIRECTORY, backupDir);
+      return this;
+    }
+
+    public Builder withClientInitCallbackClassNames(String classNames) {
+      writeConfig.setValue(CLIENT_INIT_CALLBACK_CLASS_NAMES, classNames);
       return this;
     }
 

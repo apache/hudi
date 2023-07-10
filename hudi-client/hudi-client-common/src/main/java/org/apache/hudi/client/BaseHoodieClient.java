@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
@@ -30,8 +31,11 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -45,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -92,6 +97,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.txnManager = new TransactionManager(config, fs);
     startEmbeddedServerView();
     initWrapperFSMetrics();
+    runClientInitCallbacks();
   }
 
   /**
@@ -135,6 +141,21 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     } else {
       LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
     }
+  }
+
+  private void runClientInitCallbacks() {
+    String callbackClassNames = config.getClientInitCallbackClassNames();
+    if (StringUtils.isNullOrEmpty(callbackClassNames)) {
+      return;
+    }
+    Arrays.stream(callbackClassNames.split(",")).forEach(callbackClass -> {
+      Object callback = ReflectionUtils.loadClass(callbackClass);
+      if (!(callback instanceof HoodieClientInitCallback)) {
+        throw new HoodieException(callbackClass + " is not a subclass of "
+            + HoodieClientInitCallback.class.getName());
+      }
+      ((HoodieClientInitCallback) callback).call(this);
+    });
   }
 
   public HoodieWriteConfig getConfig() {

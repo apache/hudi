@@ -57,6 +57,7 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeletePartitionCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkDeletePreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteTableCommitActionExecutor;
@@ -151,6 +152,27 @@ public class HoodieFlinkCopyOnWriteTable<T>
       String instantTime,
       List<HoodieKey> keys) {
     return new FlinkDeleteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, keys).execute();
+  }
+
+  /**
+   * Delete the given prepared records from the Hoodie table, at the supplied instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine-grained control with
+   * the underneath file.
+   *
+   * @param context {@link HoodieEngineContext}
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords Hoodie records to delete
+   * @return {@link HoodieWriteMetadata}
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    return new FlinkDeletePreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
   }
 
   /**
@@ -258,6 +280,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    throw new HoodieNotSupportedException("This method should not be invoked");
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     return new FlinkDeletePartitionCommitActionExecutor<>(context, config, this, instantTime, partitions).execute();
   }
@@ -334,9 +361,9 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
     return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers).execute();
+        shouldRollbackUsingMarkers, isRestore).execute();
   }
 
   @Override

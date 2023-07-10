@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -45,6 +46,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -102,6 +104,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -870,7 +873,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     java.nio.file.Path metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
     java.nio.file.Path tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant);
     metaClient.reloadActiveTimeline();
-    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
     // metadata based file listing.
     validateMetadata(testTable);
@@ -2029,7 +2032,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withAutoCommit(false)
-        .withClusteringConfig(clusteringConfig).build();
+        .withClusteringConfig(clusteringConfig)
+        .withRollbackUsingMarkers(false)
+        .build();
 
     // trigger clustering
     SparkRDDWriteClient newClient = getHoodieWriteClient(newWriteConfig);
@@ -2342,7 +2347,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(currentStatus.getModificationTime() > prevStatus.getModificationTime());
 
     initMetaClient();
-    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.FIVE.versionCode());
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.current().versionCode());
     assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
     FileStatus newStatus = fs.getFileStatus(new Path(metadataTableBasePath));
     assertTrue(oldStatus.getModificationTime() < newStatus.getModificationTime());
@@ -2420,7 +2425,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     initMetaClient();
-    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.FIVE.versionCode());
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.current().versionCode());
     assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
     FileStatus newStatus = fs.getFileStatus(new Path(metadataTableBasePath));
     assertTrue(oldStatus.getModificationTime() < newStatus.getModificationTime());
@@ -2821,6 +2826,69 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  /**
+   * Test duplicate operation with same instant timestamp.
+   *
+   * This can happen if the commit on the MDT succeeds but fails on the dataset. For some table services like clean,
+   * compaction, replace commit, the operation will be retried with the same timestamp (taken from inflight). Hence,
+   * metadata table will see an additional commit with the same timestamp as a previously completed deltacommit.
+   */
+  @Test
+  public void testRepeatedActionWithSameInstantTime() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    Properties props = new Properties();
+    props.put(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS.key(), "false");
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withProps(props).build();
+
+    // Perform three writes so we can initiate a clean
+    int index = 0;
+    final String partition = "2015/03/16";
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      for (; index < 3; ++index) {
+        String newCommitTime = "00" + index;
+        List<HoodieRecord> records = index == 0 ? dataGen.generateInsertsForPartition(newCommitTime, 10, partition)
+            : dataGen.generateUniqueUpdates(newCommitTime, 5);
+        client.startCommitWithTime(newCommitTime);
+        client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      }
+    }
+    assertEquals(metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants(), 3);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Perform a clean
+      String cleanInstantTime = "00" + index++;
+      HoodieCleanMetadata cleanMetadata = client.clean(cleanInstantTime);
+      // 1 partition should be cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // 1 file cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
+      // To simulate failed clean on the main dataset, we will delete the completed clean instant
+      String cleanInstantFileName = HoodieTimeline.makeCleanerFileName(cleanInstantTime);
+      assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+          cleanInstantFileName), false));
+      assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(), 1);
+      assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants(), 0);
+
+      // Initiate another clean. The previous leftover clean will be attempted and no other clean will be scheduled.
+      String newCleanInstantTime = "00" + index++;
+      cleanMetadata = client.clean(newCleanInstantTime);
+
+      // 1 partition should be cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // 1 file cleaned but was already deleted so will be a failed delete
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
+      validateMetadata(client);
+    }
+  }
+
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {
     doPreBootstrapOperations(testTable, "0000001", "0000002");
   }
@@ -3000,6 +3068,98 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // verify metadata table
     validateMetadata(client);
+  }
+
+  @Test
+  public void testDeleteWithRecordIndex() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE, true);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withEnableRecordIndex(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
+        .build();
+
+    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String secondCommitTime;
+    List<HoodieRecord> allRecords;
+    List<String> keysToDelete;
+    List<HoodieRecord> recordsToDelete;
+
+    // Initialize the dataset and add some commits.
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // First commit
+      List<HoodieRecord> firstBatchOfrecords = dataGen.generateInserts(firstCommitTime, 10);
+      client.startCommitWithTime(firstCommitTime);
+      client.insert(jsc.parallelize(firstBatchOfrecords, 1), firstCommitTime).collect();
+
+      // Records got inserted and RI is initialized
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX), "RI is disabled");
+      assertEquals(firstBatchOfrecords.size(),
+          HoodieClientTestUtils.readCommit(writeConfig.getBasePath(), engineContext.getSqlContext(), metaClient.reloadActiveTimeline(), firstCommitTime).count());
+
+      // Another batch of records added
+      secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> secondBatchOfrecords = dataGen.generateInserts(secondCommitTime, 5);
+      client.startCommitWithTime(secondCommitTime);
+      client.bulkInsert(jsc.parallelize(secondBatchOfrecords, 1), secondCommitTime).collect();
+
+      assertEquals(secondBatchOfrecords.size(),
+          HoodieClientTestUtils.readCommit(writeConfig.getBasePath(), engineContext.getSqlContext(), metaClient.reloadActiveTimeline(), secondCommitTime).count());
+
+      allRecords = new ArrayList<>(firstBatchOfrecords);
+      allRecords.addAll(secondBatchOfrecords);
+
+      // RI should have created mappings for all the records inserted above
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      Map<String, HoodieRecordGlobalLocation> result = metadataReader
+          .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
+
+      // Delete some records from each commit. This should also remove the RI mapping.
+      recordsToDelete = firstBatchOfrecords.subList(0, 3);
+      recordsToDelete.addAll(secondBatchOfrecords.subList(0, 2));
+      keysToDelete = recordsToDelete.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+
+      String deleteTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(deleteTime);
+      client.delete(jsc.parallelize(recordsToDelete, 1).map(HoodieRecord::getKey), deleteTime);
+
+      // RI should not return mappings for deleted records
+      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
+      result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
+    }
+
+    // Compaction should work too by removing the deleted keys from the base files
+    // To perform compaction, we need to create a new write client as compaction is attempted before any operations in write client
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // An empty delete to trigger compaction
+      String deleteTime = client.startCommit();
+      client.delete(jsc.emptyRDD(), deleteTime);
+
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      assertTrue(metadataReader.getLatestCompactionTime().isPresent(), "Compaction should have taken place on MDT");
+
+      // RI should not return mappings for deleted records
+      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
+      result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
+
+      // Adding records with the same keys after delete should work
+      String reinsertTime = client.startCommit();
+      client.upsert(jsc.parallelize(recordsToDelete, 1), reinsertTime).collect();
+
+      // New mappings should have been created for re-inserted records and should map to the new commit time
+      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
+      for (String reInsertedKey : keysToDelete) {
+        assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");
+      }
+    }
   }
 
   private void validateMetadata(SparkRDDWriteClient testClient) throws IOException {

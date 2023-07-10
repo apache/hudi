@@ -22,9 +22,9 @@ import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -123,5 +123,9 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
+    a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
   }
 }

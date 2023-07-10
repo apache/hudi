@@ -285,6 +285,7 @@ object DataSourceWriteOptions {
       WriteOperationType.BULK_INSERT.value,
       WriteOperationType.BULK_INSERT_PREPPED.value,
       WriteOperationType.DELETE.value,
+      WriteOperationType.DELETE_PREPPED.value,
       WriteOperationType.BOOTSTRAP.value,
       WriteOperationType.INSERT_OVERWRITE.value,
       WriteOperationType.CLUSTER.value,

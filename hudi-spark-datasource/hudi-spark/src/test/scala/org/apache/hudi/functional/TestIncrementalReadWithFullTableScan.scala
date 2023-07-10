@@ -28,33 +28,19 @@ import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.SparkException
-import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
+import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions.asScalaBuffer
 
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
-  var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestIncrementalReadWithFullTableScan])
-
+  var spark: SparkSession = _
   private val perBatchSize = 100
-
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
-  )
-
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
@@ -69,14 +55,22 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
   }
 
   @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
+    spark = null
+    cleanupResources()
   }
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testFailEarlyForIncrViewQueryForNonExistingFiles(tableType: HoodieTableType): Unit = {
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
+    )
     // Create 10 commits
     for (i <- 1 to 10) {
       val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).toList

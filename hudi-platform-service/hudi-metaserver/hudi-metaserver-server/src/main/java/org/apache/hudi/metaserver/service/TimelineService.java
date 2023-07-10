@@ -139,12 +139,8 @@ public class TimelineService implements Serializable {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     if (store.instantExists(tableId, instant)) {
-      switch (instant.getState()) {
-        case COMPLETED:
-          store.deleteInstantAllMeta(tableId, instant.getTimestamp());
-          break;
-        default:
-          store.deleteInstant(tableId, instant);
+      if (instant.getState() == TState.COMPLETED) {
+        store.deleteInstantAllMeta(tableId, instant.getTimestamp());
       }
       store.deleteInstant(tableId, instant);
     } else {

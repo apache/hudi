@@ -20,15 +20,18 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
+import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases, NamedRelation, UnresolvedAttribute, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesByPath, HoodieTableChangesOptionsParser}
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
@@ -128,8 +131,134 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
           catalogTable.location.toString))
         LogicalRelation(relation, catalogTable)
       }
+    case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)
+      //// Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
+      //
+      if !mO.resolved =>
+      lazy val analyzer = spark.sessionState.analyzer
+      val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
+      val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
+      val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
+      //
+      ////
+      EliminateSubqueryAliases(targetTable) match {
+        case r: NamedRelation if r.skipSchemaResolution =>
+          // Do not resolve the expression if the target table accepts any schema.
+          // This allows data sources to customize their own resolution logic using
+          // custom resolution rules.
+          m
+
+        case _ =>
+          val newMatchedActions = m.matchedActions.map {
+            case DeleteAction(deleteCondition) =>
+              val resolvedDeleteCondition = deleteCondition.map(
+                resolveExpressionByPlanChildren(_, m))
+              DeleteAction(resolvedDeleteCondition)
+            case UpdateAction(updateCondition, assignments) =>
+              val resolvedUpdateCondition = updateCondition.map(
+                resolveExpressionByPlanChildren(_, m))
+              UpdateAction(
+                resolvedUpdateCondition,
+                // The update value can access columns from both target and source tables.
+                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = false))
+            case UpdateStarAction(updateCondition) =>
+              ////Hudi change: filter out meta fields
+              //
+              val assignments = targetTable.output.filter(a => !isMetaField(a.name)).map { attr =>
+                Assignment(attr, UnresolvedAttribute(Seq(attr.name)))
+              }
+              //
+              ////
+              UpdateAction(
+                updateCondition.map(resolveExpressionByPlanChildren(_, m)),
+                // For UPDATE *, the value must from source table.
+                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+            case o => o
+          }
+          val newNotMatchedActions = m.notMatchedActions.map {
+            case InsertAction(insertCondition, assignments) =>
+              // The insert action is used when not matched, so its condition and value can only
+              // access columns from the source table.
+              val resolvedInsertCondition = insertCondition.map(
+                resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
+              InsertAction(
+                resolvedInsertCondition,
+                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+            case InsertStarAction(insertCondition) =>
+              // The insert action is used when not matched, so its condition and value can only
+              // access columns from the source table.
+              val resolvedInsertCondition = insertCondition.map(
+                resolveExpressionByPlanChildren(_, Project(Nil, m.sourceTable)))
+              ////Hudi change: filter out meta fields
+              //
+              val assignments = targetTable.output.filter(a => !isMetaField(a.name)).map { attr =>
+                Assignment(attr, UnresolvedAttribute(Seq(attr.name)))
+              }
+              //
+              ////
+              InsertAction(
+                resolvedInsertCondition,
+                resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
+            case o => o
+          }
+          val resolvedMergeCondition = resolveExpressionByPlanChildren(m.mergeCondition, m)
+          m.copy(mergeCondition = resolvedMergeCondition,
+            matchedActions = newMatchedActions,
+            notMatchedActions = newNotMatchedActions)
+      }
   }
+
+  def resolveAssignments(
+                          assignments: Seq[Assignment],
+                          mergeInto: MergeIntoTable,
+                          resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
+    assignments.map { assign =>
+      val resolvedKey = assign.key match {
+        case c if !c.resolved =>
+          resolveMergeExprOrFail(c, Project(Nil, mergeInto.targetTable))
+        case o => o
+      }
+      val resolvedValue = assign.value match {
+        // The update values may contain target and/or source references.
+        case c if !c.resolved =>
+          if (resolveValuesWithSourceOnly) {
+            resolveMergeExprOrFail(c, Project(Nil, mergeInto.sourceTable))
+          } else {
+            resolveMergeExprOrFail(c, mergeInto)
+          }
+        case o => o
+      }
+      Assignment(resolvedKey, resolvedValue)
+    }
+  }
+
+  private def resolveMergeExprOrFail(e: Expression, p: LogicalPlan): Expression = {
+    try {
+      val resolved = resolveExpressionByPlanChildren(e, p)
+      resolved.references.filter(!_.resolved).foreach { a =>
+        // Note: This will throw error only on unresolved attribute issues,
+        // not other resolution errors like mismatched data types.
+        val cols = p.inputSet.toSeq.map(_.sql).mkString(", ")
+        //// change from spark because spark 3.4 constructor is different for fail analysis
+        //
+        sparkAdapter.failAnalysisForMIT(a, cols)
+        //
+        ////
+      }
+      resolved
+    } catch {
+      case x: AnalysisException => throw x
+    }
+  }
+
+  private[sql] object MatchMergeIntoTable {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyMergeIntoTable(plan)
+  }
+
 }
+
+
 
 /**
  * Rule replacing resolved Spark's commands (not working for Hudi tables out-of-the-box) with

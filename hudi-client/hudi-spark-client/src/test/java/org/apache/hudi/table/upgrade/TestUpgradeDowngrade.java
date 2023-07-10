@@ -36,8 +36,10 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -46,10 +48,10 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
@@ -71,6 +73,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -82,13 +86,23 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -115,6 +129,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   public static Stream<Arguments> downGradeConfigParams() {
     Object[][] data = new Object[][] {
+        {true, HoodieTableType.COPY_ON_WRITE, true, HoodieTableVersion.SIX, HoodieTableVersion.FIVE},
+        {false, HoodieTableType.COPY_ON_WRITE, false, HoodieTableVersion.SIX, HoodieTableVersion.FIVE},
         {true, HoodieTableType.COPY_ON_WRITE, true, HoodieTableVersion.FIVE, HoodieTableVersion.FOUR},
         {false, HoodieTableType.COPY_ON_WRITE, false, HoodieTableVersion.FIVE, HoodieTableVersion.FOUR},
         {true, HoodieTableType.MERGE_ON_READ, true, HoodieTableVersion.FIVE, HoodieTableVersion.FOUR},
@@ -511,6 +527,60 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertEquals(tableConfig.getBaseFileFormat().name(), originalProps.getProperty(BASE_FILE_FORMAT.key()));
   }
 
+  @Test
+  public void testDowngradeSixToFiveShouldDeleteRecordIndexPartition() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withMetadataIndexBloomFilter(true)
+            .withEnableRecordIndex(true).build())
+        .build();
+    HoodieTable table = getHoodieTable(metaClient, config);
+    for (MetadataPartitionType partitionType : MetadataPartitionType.values()) {
+      metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType, true);
+    }
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.values());
+    String metadataTableBasePath = Paths.get(basePath, METADATA_TABLE_FOLDER_PATH).toString();
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.init(metadataTableBasePath, MERGE_ON_READ);
+    HoodieMetadataTestTable.of(metadataTableMetaClient)
+        .addCommit("000")
+        .withBaseFilesInPartition(RECORD_INDEX.getPartitionPath(), 0);
+
+    // validate the relevant table states before downgrade
+    java.nio.file.Path recordIndexPartitionPath = Paths.get(basePath,
+        METADATA_TABLE_FOLDER_PATH, RECORD_INDEX.getPartitionPath());
+    Set<String> allPartitions = CollectionUtils.createImmutableSet(
+        PARTITION_NAME_FILES,
+        PARTITION_NAME_COLUMN_STATS,
+        PARTITION_NAME_BLOOM_FILTERS,
+        PARTITION_NAME_RECORD_INDEX
+    );
+    Set<String> allPartitionsExceptRecordIndex = CollectionUtils.createImmutableSet(
+        PARTITION_NAME_FILES,
+        PARTITION_NAME_COLUMN_STATS,
+        PARTITION_NAME_BLOOM_FILTERS
+    );
+    assertTrue(Files.exists(recordIndexPartitionPath), "record index partition should exist.");
+    assertEquals(allPartitions, metaClient.getTableConfig().getMetadataPartitions(),
+        TABLE_METADATA_PARTITIONS.key() + " should contain all partitions.");
+    assertEquals(allPartitions, metaClient.getTableConfig().getMetadataPartitionsInflight(),
+        TABLE_METADATA_PARTITIONS_INFLIGHT.key() + " should contain all partitions.");
+
+    // perform downgrade
+    prepForDowngradeFromVersion(HoodieTableVersion.SIX);
+    new UpgradeDowngrade(metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.FIVE, null);
+
+    // validate the relevant table states after downgrade
+    assertFalse(Files.exists(recordIndexPartitionPath), "record index partition should be deleted.");
+    assertEquals(allPartitionsExceptRecordIndex, metaClient.getTableConfig().getMetadataPartitions(),
+        TABLE_METADATA_PARTITIONS.key() + " should contain all partitions except record_index.");
+    assertEquals(allPartitionsExceptRecordIndex, metaClient.getTableConfig().getMetadataPartitionsInflight(),
+        TABLE_METADATA_PARTITIONS_INFLIGHT.key() + " should contain all partitions except record_index.");
+
+  }
+
   @ParameterizedTest(name = TEST_NAME_WITH_DOWNGRADE_PARAMS)
   @MethodSource("downGradeConfigParams")
   public void testDowngrade(
@@ -685,7 +755,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    assertNoWriteErrors(statuses.collect());
     client.commit(newCommitTime, statuses);
     return records;
   }
@@ -743,7 +813,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    assertNoWriteErrors(statuses.collect());
     client.commit(newCommitTime, statuses);
     /**
      * Write 2 (updates)
@@ -753,7 +823,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     List<HoodieRecord> records2 = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records2, 1), newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    assertNoWriteErrors(statuses.collect());
     if (commitSecondUpsert) {
       client.commit(newCommitTime, statuses);
     }

@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.WriteOperationType;
 
 /**
  * Configs/params used for internal purposes.
@@ -36,6 +37,22 @@ public class HoodieInternalConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Schema set for row writer/bulk insert.");
+
+  public static final ConfigProperty<String> BULKINSERT_OVERWRITE_OPERATION_TYPE = ConfigProperty
+      .key("hoodie.bulkinsert.overwrite.operation.type")
+      .noDefaultValue()
+      .markAdvanced()
+      .withValidValues(WriteOperationType.INSERT_OVERWRITE_TABLE.value(), WriteOperationType.INSERT_OVERWRITE.value())
+      .withDocumentation("For SQL operations, if enables bulk_insert operation, "
+          + "this configure will take effect to decide overwrite whole table or partitions specified");
+
+  public static final ConfigProperty<Boolean> SQL_MERGE_INTO_WRITES = ConfigProperty
+      .key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("This internal config is used by Merge Into SQL logic only to mark such use case "
+          + "and let the core components know it should handle the write differently");
 
   /**
    * Returns if partition records are sorted or not.

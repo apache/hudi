@@ -21,7 +21,6 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ConsistentHashingNode;
@@ -36,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,16 +79,16 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
 
     HoodieClusteringPlan plan = instantPlanPair.get().getRight();
     HoodieJavaRDD.getJavaRDD(context.parallelize(plan.getInputGroups().stream().map(HoodieClusteringGroup::getExtraMetadata).collect(Collectors.toList())))
-        .mapToPair(m -> new Tuple2<>(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), m)
+        .mapToPair(m -> new Tuple2<>(m.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), m)
     ).groupByKey().foreach((input) -> {
       // Process each partition
       String partition = input._1();
       List<ConsistentHashingNode> childNodes = new ArrayList<>();
       int seqNo = 0;
       for (Map<String, String> m: input._2()) {
-        String nodesJson = m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
+        String nodesJson = m.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
         childNodes.addAll(ConsistentHashingNode.fromJsonString(nodesJson));
-        seqNo = Integer.parseInt(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
+        seqNo = Integer.parseInt(m.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
       }
 
       Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(hoodieTable, partition);

@@ -489,6 +489,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O delete(K keys, final String instantTime);
 
   /**
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * preppedRecords.
+   *
+   * @param preppedRecords Empty records with key and locator set.
+   * @param instantTime Commit time handle.
+   * @return Collection of WriteStatus to inspect errors and counts.
+   */
+  public abstract O deletePrepped(I preppedRecords, final String instantTime);
+
+  /**
    * Common method containing steps to be performed before write (upsert/insert/...
    * @param instantTime
    * @param writeOperationType
@@ -513,7 +523,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param hoodieTable Hoodie Table
    * @return Write Status
    */
-  protected abstract O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable);
+  public abstract O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable);
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
@@ -1210,7 +1220,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
-    if (operationType == WriteOperationType.DELETE) {
+    if (WriteOperationType.isDelete(operationType)) {
       setWriteSchemaForDeletes(metaClient);
     }
 

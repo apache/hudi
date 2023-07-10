@@ -247,6 +247,15 @@ public class SparkRDDWriteClient<T> extends
     return postWrite(resultRDD, instantTime, table);
   }
 
+  @Override
+  public JavaRDD<WriteStatus> deletePrepped(JavaRDD<HoodieRecord<T>> preppedRecord, String instantTime) {
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+    return postWrite(resultRDD, instantTime, table);
+  }
+
   public HoodieWriteResult deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
@@ -256,9 +265,9 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
-                                           String instantTime,
-                                           HoodieTable hoodieTable) {
+  public JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
+                                        String instantTime,
+                                        HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }

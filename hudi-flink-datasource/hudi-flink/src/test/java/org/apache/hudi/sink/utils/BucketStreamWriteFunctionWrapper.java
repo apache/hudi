@@ -59,24 +59,24 @@ import java.util.concurrent.CompletableFuture;
  * @param <I> Input type
  */
 public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
-  private final Configuration conf;
+  protected final Configuration conf;
 
   private final IOManager ioManager;
-  private final StreamingRuntimeContext runtimeContext;
+  protected final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
-  private final MockStateInitializationContext stateInitializationContext;
+  protected final StreamWriteOperatorCoordinator coordinator;
+  protected final MockStateInitializationContext stateInitializationContext;
 
   /**
    * Function that converts row data to HoodieRecord.
    */
-  private RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
+  protected RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
 
   /**
    * Stream write function.
    */
-  private StreamWriteFunction<HoodieRecord<?>> writeFunction;
+  protected StreamWriteFunction<HoodieRecord<?>> writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -195,7 +195,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = new BucketStreamWriteFunction<>(conf);
+    writeFunction = createWriteFunction();
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
@@ -203,5 +203,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
 
     // handle the bootstrap event
     coordinator.handleEventFromOperator(0, getNextEvent());
+  }
+
+  protected StreamWriteFunction<HoodieRecord<?>> createWriteFunction() {
+    return new BucketStreamWriteFunction<>(conf);
   }
 }
