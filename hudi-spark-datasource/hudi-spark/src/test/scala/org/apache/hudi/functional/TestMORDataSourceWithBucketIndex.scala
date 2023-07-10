@@ -32,9 +32,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
 import scala.collection.JavaConversions._
 
-/**
- *
- */
 @Tag("functional")
 class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
 

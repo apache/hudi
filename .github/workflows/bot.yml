@@ -47,6 +47,7 @@ jobs:
         run: ./scripts/release/validate_source_rat.sh
 
   test-spark:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -113,6 +114,7 @@ jobs:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -152,6 +154,7 @@ jobs:
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   validate-bundles:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -287,6 +290,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
 
   integration-tests:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:

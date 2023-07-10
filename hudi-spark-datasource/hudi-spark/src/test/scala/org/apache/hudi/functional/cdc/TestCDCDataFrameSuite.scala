@@ -583,7 +583,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       // so that it can also write out more than one cdc log file
       // and each of cdc log file has more that one data block as we expect.
       (256, 1024)
-    } else (2048, 5120)
+    } else {
+      (2048, 5120)
+    }
     val options = commonOpts ++ Map(
       HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
       "hoodie.logfile.data.block.max.size" -> blockSize.toString,
