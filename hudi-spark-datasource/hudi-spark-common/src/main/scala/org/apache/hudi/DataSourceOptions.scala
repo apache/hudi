@@ -127,7 +127,7 @@ object DataSourceReadOptions {
     .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL +
       "`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from " +
       "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
-      "Point in time type queries makes more sense with begin and end instant times specified. Note that if `"
+      "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
       + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
       + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
