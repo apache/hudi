@@ -26,7 +26,7 @@ import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
-import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -73,7 +74,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -111,13 +111,20 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   private void validate() {
+    String bootstrapModeSelectorClass = config.getBootstrapModeSelectorClass();
+    String bootstrapModeSelectorRegex = config.getBootstrapModeSelectorRegex();
+
     checkArgument(config.getBootstrapSourceBasePath() != null,
         "Ensure Bootstrap Source Path is set");
-    checkArgument(config.getBootstrapModeSelectorClass() != null,
+    checkArgument(bootstrapModeSelectorClass != null,
         "Ensure Bootstrap Partition Selector is set");
-    if (METADATA_ONLY.name().equals(config.getBootstrapModeSelectorRegex())) {
-      checkArgument(!config.getBootstrapModeSelectorClass().equals(FullRecordBootstrapModeSelector.class.getCanonicalName()),
-          "FullRecordBootstrapModeSelector cannot be used with METADATA_ONLY bootstrap mode");
+    if (!StringUtils.isNullOrEmpty(bootstrapModeSelectorRegex)) {
+      checkArgument(bootstrapModeSelectorClass.equals(BootstrapRegexModeSelector.class.getCanonicalName()),
+          "When hoodie.bootstrap.mode.selector.regex is specified, only BootstrapRegexModeSelector can be used");
+    }
+    if (BootstrapRegexModeSelector.class.getCanonicalName().equals(bootstrapModeSelectorClass)) {
+      checkArgument(!StringUtils.isNullOrEmpty(bootstrapModeSelectorRegex),
+          "When BootstrapRegexModeSelector is used, hoodie.bootstrap.mode.selector.regex must be specified");
     }
   }
 
@@ -320,18 +327,8 @@ public class SparkBootstrapCommitActionExecutor<T>
     BootstrapModeSelector selector =
         (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);
 
-    Map<BootstrapMode, List<String>> result = new HashMap<>();
-    // for FULL_RECORD mode, original record along with metadata fields are needed
-    if (FULL_RECORD.equals(config.getBootstrapModeForRegexMatch())) {
-      if (!(selector instanceof FullRecordBootstrapModeSelector)) {
-        FullRecordBootstrapModeSelector fullRecordBootstrapModeSelector = new FullRecordBootstrapModeSelector(config);
-        result.putAll(fullRecordBootstrapModeSelector.select(folders));
-      } else {
-        result.putAll(selector.select(folders));
-      }
-    } else {
-      result = selector.select(folders);
-    }
+    Map<BootstrapMode, List<String>> result = selector.select(folders);
+
     Map<String, List<HoodieFileStatus>> partitionToFiles = folders.stream().collect(
         Collectors.toMap(Pair::getKey, Pair::getValue));
 
