@@ -138,8 +138,9 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
-      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
-      testTable.updateFilesPartitionInTableConfig();
+      // reload because table configs could have been updated
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -683,10 +684,17 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
+  @Test
+  public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
+    testArchivalWithMultiWriters(false);
+  }
+
   @Disabled("HUDI-6386")
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
+  public void testArchivalWithMultiWriters() throws Exception {
+    testArchivalWithMultiWriters(true);
+  }
+
+  private void testArchivalWithMultiWriters(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 4, 5, 5, 2,
         HoodieTableType.COPY_ON_WRITE, false, 10, 209715200,
         HoodieFailedWritesCleaningPolicy.LAZY, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
@@ -1477,6 +1485,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
   /**
    * Test archival functionality when there are inflights files.
    * Archive should hold on to the greatest completed commit that is less than the oldes inflight commit.
+   *
    * @throws Exception
    */
   @Test

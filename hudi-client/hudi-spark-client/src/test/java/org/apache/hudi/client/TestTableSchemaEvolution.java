@@ -191,8 +191,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Delete with same schema is allowed
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
-    deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords,
-        SparkRDDWriteClient::delete, false, false, 0, 0);
+    deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords, false, false, 0, 0);
     checkLatestDeltaCommit("004");
     checkReadRecords("000", numRecords);
 
@@ -279,8 +278,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Delete with same schema is allowed
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
-    deleteBatch(hoodieWriteConfig, client, "003", "002", initCommitTime, numDeleteRecords,
-        SparkRDDWriteClient::delete, false, true, 0, numRecords);
+    deleteBatch(hoodieWriteConfig, client, "003", "002", initCommitTime, numDeleteRecords, false, true, 0, numRecords);
     checkReadRecords("000", numRecords);
 
     // Inserting records w/ new evolved schema (w/ tip column dropped)

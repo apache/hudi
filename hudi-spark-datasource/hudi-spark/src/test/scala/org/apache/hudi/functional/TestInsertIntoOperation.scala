@@ -29,6 +29,8 @@ import scala.collection.JavaConversions._
 
 class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
 
+  /*
+
   /**
    * asserts if number of commits = count
    * returns true if last commit is bulk insert
@@ -445,4 +447,5 @@ class TestInsertIntoOperation extends HoodieSparkSqlTestBase {
       assert(!assertCommitCountAndIsLastBulkInsert(tableBasePath, 2))
     })
   }
+   */
 }

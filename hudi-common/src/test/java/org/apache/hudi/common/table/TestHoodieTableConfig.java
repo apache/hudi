@@ -18,14 +18,13 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +34,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -142,5 +145,52 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertFalse(fs.exists(backupCfgPath));
     config = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     assertEquals(6, config.getProps().size());
+  }
+
+  @Test
+  public void testReadRetry() throws IOException {
+    // When both the hoodie.properties and hoodie.properties.backup do not exist then the read fails
+    fs.rename(cfgPath, new Path(cfgPath.toString() + ".bak"));
+    assertThrows(HoodieIOException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));
+
+    // Should return the backup config if hoodie.properties is not present
+    fs.rename(new Path(cfgPath.toString() + ".bak"), backupCfgPath);
+    new HoodieTableConfig(fs, metaPath.toString(), null, null);
+
+    // Should return backup config if hoodie.properties is corrupted
+    Properties props = new Properties();
+    try (FSDataOutputStream out = fs.create(cfgPath)) {
+      props.store(out, "No checksum in file so is invalid");
+    }
+    new HoodieTableConfig(fs, metaPath.toString(), null, null);
+
+    // Should throw exception if both hoodie.properties and backup are corrupted
+    try (FSDataOutputStream out = fs.create(backupCfgPath)) {
+      props.store(out, "No checksum in file so is invalid");
+    }
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));
+  }
+
+  @Test
+  public void testConcurrentlyUpdate() throws ExecutionException, InterruptedException {
+    final ExecutorService executor = Executors.newFixedThreadPool(2);
+    Future updaterFuture = executor.submit(() -> {
+      for (int i = 0; i < 100; i++) {
+        Properties updatedProps = new Properties();
+        updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table" + i);
+        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field" + i);
+        HoodieTableConfig.update(fs, metaPath, updatedProps);
+      }
+    });
+
+    Future readerFuture = executor.submit(() -> {
+      for (int i = 0; i < 100; i++) {
+        // Try to load the table properties, won't throw any exception
+        new HoodieTableConfig(fs, metaPath.toString(), null, null);
+      }
+    });
+
+    updaterFuture.get();
+    readerFuture.get();
   }
 }

@@ -257,6 +257,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsWritten++;
       } else {
         finalRecordOpt = Option.empty();
+        // Clear the new location as the record was deleted
+        hoodieRecord.unseal();
+        hoodieRecord.clearNewLocation();
+        hoodieRecord.seal();
         recordsDeleted++;
       }
 

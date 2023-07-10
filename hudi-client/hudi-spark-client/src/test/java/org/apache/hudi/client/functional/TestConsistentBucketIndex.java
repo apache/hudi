@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -279,7 +278,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     }
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      boolean success = writeClient.commitStats(commitTime, HoodieListData.eager(writeStatues), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      boolean success = writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(success);
     }

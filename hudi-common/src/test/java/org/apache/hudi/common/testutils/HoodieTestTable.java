@@ -36,6 +36,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -60,8 +61,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -88,12 +87,10 @@ import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static java.util.Collections.singletonMap;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -125,7 +122,6 @@ import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 
 /**
  * Test Hoodie Table for testing only.
@@ -144,36 +140,26 @@ public class HoodieTestTable {
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
-  private  boolean isNonPartitioned = false;
+  private boolean isNonPartitioned = false;
+  protected Option<HoodieEngineContext> context;
 
   protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
+    this(basePath, fs, metaClient, Option.empty());
+  }
+
+  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;
     this.fs = fs;
     this.metaClient = metaClient;
     testTableState = HoodieTestTableState.of();
+    this.context = context;
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
     return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
-  }
-
-  public void updateFilesPartitionInTableConfig() throws IOException {
-    metaClient.getTableConfig().setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, true);
-    this.metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(HoodieTableType.MERGE_ON_READ)
-        .setTableName("test_table" + METADATA_TABLE_NAME_SUFFIX)
-        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-        .setPayloadClassName(HoodieMetadataPayload.class.getName())
-        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-        .setRecordKeyFields(HoodieMetadataPayload.KEY_FIELD_NAME)
-        .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
-        .setKeyGeneratorClassProp("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator")
-        .initTable(metaClient.getHadoopConf(), metaClient.getMetaPath() + "/metadata");
   }
 
   public void setNonPartitioned() {
@@ -482,7 +468,7 @@ public class HoodieTestTable {
   public HoodieTestTable addInflightCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     List<FileSlice> fileSlices = new ArrayList<>();
     for (Map.Entry<String, List<HoodieWriteStat>> entry : commitMetadata.getPartitionToWriteStats().entrySet()) {
-      for (HoodieWriteStat stat: entry.getValue()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
         fileSlices.add(new FileSlice(entry.getKey(), instantTime, stat.getPath()));
       }
     }
@@ -503,27 +489,27 @@ public class HoodieTestTable {
     forReplaceCommit(instantTime);
     WriteOperationType operationType = WriteOperationType.DELETE_PARTITION;
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> metas =
-            generateReplaceCommitMetadata(instantTime, partition, fileIds, Option.empty(), operationType);
+        generateReplaceCommitMetadata(instantTime, partition, fileIds, Option.empty(), operationType);
     return addReplaceCommit(instantTime, Option.of(metas.getLeft()), Option.empty(), metas.getRight());
   }
 
   private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
-          String instantTime, String partition, List<String> replacedFileIds, Option<String> newFileId, WriteOperationType operationType) {
+      String instantTime, String partition, List<String> replacedFileIds, Option<String> newFileId, WriteOperationType operationType) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
     requestedReplaceMetadata.setOperationType(operationType.toString());
     requestedReplaceMetadata.setVersion(1);
     List<HoodieSliceInfo> sliceInfos = replacedFileIds.stream()
-            .map(replacedFileId -> HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build())
-            .collect(Collectors.toList());
+        .map(replacedFileId -> HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build())
+        .collect(Collectors.toList());
     List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
     clusteringGroups.add(HoodieClusteringGroup.newBuilder()
-            .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
-            .setSlices(sliceInfos).build());
+        .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
+        .setSlices(sliceInfos).build());
     requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
     requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
-            .setVersion(1).setExtraMetadata(Collections.emptyMap())
-            .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
-            .setInputGroups(clusteringGroups).build());
+        .setVersion(1).setExtraMetadata(Collections.emptyMap())
+        .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
+        .setInputGroups(clusteringGroups).build());
 
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     replacedFileIds.forEach(replacedFileId -> replaceMetadata.addReplaceFileId(partition, replacedFileId));
@@ -850,7 +836,7 @@ public class HoodieTestTable {
     for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
-    for (Map.Entry<String, List<String>> entry: extraFiles.entrySet()) {
+    for (Map.Entry<String, List<String>> entry : extraFiles.entrySet()) {
       if (partitionFiles.containsKey(entry.getKey())) {
         partitionFiles.get(entry.getKey()).addAll(entry.getValue());
       }
@@ -864,7 +850,7 @@ public class HoodieTestTable {
     List<HoodieInstant> commitsToRollback = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().findInstantsAfter(commitToRestoreTo).getReverseOrderedInstants().collect(Collectors.toList());
     Map<String, List<HoodieRollbackMetadata>> rollbackMetadataMap = new HashMap<>();
-    for (HoodieInstant commitInstantToRollback: commitsToRollback) {
+    for (HoodieInstant commitInstantToRollback : commitsToRollback) {
       Option<HoodieCommitMetadata> commitMetadata = getCommitMeta(commitInstantToRollback);
       if (!commitMetadata.isPresent()) {
         throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitInstantToRollback.getTimestamp());
@@ -877,7 +863,7 @@ public class HoodieTestTable {
       }
     }
 
-    HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(restoreTime,1000L,
+    HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(restoreTime, 1000L,
         commitsToRollback, rollbackMetadataMap);
     return addRestore(restoreTime, restoreMetadata);
   }

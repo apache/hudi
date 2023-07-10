@@ -122,7 +122,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       assertResult(2)(spark.sql(s"show compaction on '${tmp.getCanonicalPath}'").collect().length)
 
       checkException(s"run compaction on '${tmp.getCanonicalPath}' at 12345")(
-        s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
+        s"specific 12345 instants is not exist"
       )
     })
   }

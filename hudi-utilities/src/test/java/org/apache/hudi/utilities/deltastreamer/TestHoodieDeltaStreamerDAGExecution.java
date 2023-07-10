@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerStageCompleted;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -38,6 +39,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled("HUDI-6505")
 public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest

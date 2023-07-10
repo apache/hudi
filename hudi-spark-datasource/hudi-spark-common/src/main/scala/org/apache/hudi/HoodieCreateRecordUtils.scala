@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -46,16 +47,31 @@ import scala.collection.JavaConversions.mapAsJavaMap
 object HoodieCreateRecordUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
-  def createHoodieRecordRdd(df: DataFrame,
-                            config: HoodieWriteConfig,
-                            parameters: Map[String, String],
-                            recordName: String,
-                            recordNameSpace: String,
-                            writerSchema: Schema,
-                            dataFileSchema: Schema,
-                            operation: WriteOperationType,
-                            instantTime: String,
-                            isPrepped: Boolean) = {
+  case class createHoodieRecordRddArgs(df: DataFrame,
+                                       config: HoodieWriteConfig,
+                                       parameters: Map[String, String],
+                                       recordName: String,
+                                       recordNameSpace: String,
+                                       writerSchema: Schema,
+                                       dataFileSchema: Schema,
+                                       operation: WriteOperationType,
+                                       instantTime: String,
+                                       isPrepped: Boolean,
+                                       mergeIntoWrites: Boolean)
+
+  def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
+    val df = args.df
+    val config = args.config
+    val parameters = args.parameters
+    val recordName = args.recordName
+    val recordNameSpace = args.recordNameSpace
+    val writerSchema = args.writerSchema
+    val dataFileSchema = args.dataFileSchema
+    val operation = args.operation
+    val instantTime = args.instantTime
+    val isPrepped = args.isPrepped
+    val mergeIntoWrites = args.mergeIntoWrites
+
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
     val autoGenerateRecordKeys: Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -107,13 +123,12 @@ object HoodieCreateRecordUtils {
             if (validatePreppedRecord && isPrepped) {
               // For prepped records, check the first record to make sure it has meta fields set.
               validateMetaFieldsInAvroRecords(avroRec)
-              // Do validation only once.
               validatePreppedRecord = false
             }
 
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
-              isPrepped)
-            val avroRecWithoutMeta: GenericRecord = if (isPrepped) {
+              isPrepped, mergeIntoWrites)
+            val avroRecWithoutMeta: GenericRecord = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
             } else {
               avroRec
@@ -167,10 +182,9 @@ object HoodieCreateRecordUtils {
             if (isPrepped) {
               // For prepped records, check the record schema to make sure it has meta fields set.
               validateMetaFieldsInSparkRecords(sourceStructType)
-              // Do validation only once.
               validatePreppedRecord = false
             }
-            val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped)
+            val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, isPrepped, mergeIntoWrites)
 
             val targetRow = finalStructTypeRowWriter(sourceRow)
             var hoodieSparkRecord = new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
@@ -194,7 +208,7 @@ object HoodieCreateRecordUtils {
     true
   }
 
-  private def validateMetaFieldsInAvroRecords(avroRec: GenericRecord): Unit = {
+  def validateMetaFieldsInAvroRecords(avroRec: GenericRecord): Unit = {
     val avroSchema = avroRec.getSchema;
     if (avroSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null
       || avroSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) == null
@@ -206,27 +220,29 @@ object HoodieCreateRecordUtils {
   }
 
   def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: Option[BaseKeyGenerator], avroRec: GenericRecord,
-                                                 isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                 isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    //use keygen for mergeIntoWrites recordKey and partitionPath because the keygenerator handles
+    //fetching from the meta fields if they are populated and otherwise doing keygen
     val recordKey = if (isPrepped) {
       avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getRecordKey(avroRec)
-    };
+    }
 
     val partitionPath = if (isPrepped) {
       avroRec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getPartitionPath(avroRec)
-    };
+    }
 
     val hoodieKey = new HoodieKey(recordKey, partitionPath)
-    val instantTime: Option[String] = if (isPrepped) {
+    val instantTime: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(avroRec.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).map(_.toString)
     }
     else {
       None
     }
-    val fileName: Option[String] = if (isPrepped) {
+    val fileName: Option[String] = if (isPrepped || mergeIntoWrites) {
       Option(avroRec.get(HoodieRecord.FILENAME_METADATA_FIELD)).map(_.toString)
     }
     else {
@@ -243,27 +259,29 @@ object HoodieCreateRecordUtils {
 
   def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: Option[SparkKeyGeneratorInterface],
                                                   sourceRow: InternalRow, schema: StructType,
-                                                  isPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                  isPrepped: Boolean, mergeIntoWrites: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+    //use keygen for mergeIntoWrites recordKey and partitionPath because the keygenerator handles
+    //fetching from the meta fields if they are populated and otherwise doing keygen
     val recordKey = if (isPrepped) {
-      sourceRow.getString(HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      sourceRow.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD)
     } else {
       sparkKeyGenerator.get.getRecordKey(sourceRow, schema).toString
     }
 
     val partitionPath = if (isPrepped) {
-      sourceRow.getString(HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+      sourceRow.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     } else {
       sparkKeyGenerator.get.getPartitionPath(sourceRow, schema).toString
-    };
+    }
 
-    val instantTime: Option[String] = if (isPrepped) {
-      Option(sourceRow.getString(HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)))
+    val instantTime: Option[String] = if (isPrepped || mergeIntoWrites) {
+      Option(sourceRow.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD))
     } else {
       None
     }
 
-    val fileName: Option[String] = if (isPrepped) {
-      Option(sourceRow.getString(HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)))
+    val fileName: Option[String] = if (isPrepped || mergeIntoWrites) {
+      Option(sourceRow.getString(HoodieRecord.FILENAME_META_FIELD_ORD))
     } else {
       None
     }

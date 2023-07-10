@@ -30,11 +30,6 @@ set hoodie.delete.shuffle.parallelism = 1;
 | ok       |
 +----------+
 
-set hoodie.sql.insert.mode = upsert;
-+----------+
-| ok       |
-+----------+
-
 
 # CTAS
 

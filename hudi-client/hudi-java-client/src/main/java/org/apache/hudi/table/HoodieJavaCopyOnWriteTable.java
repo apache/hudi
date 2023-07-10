@@ -55,6 +55,7 @@ import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaDeletePreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
@@ -118,6 +119,12 @@ public class HoodieJavaCopyOnWriteTable<T>
                                                        String instantTime,
                                                        List<HoodieKey> keys) {
     return new JavaDeleteCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    return new JavaDeletePreppedCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
+        this, instantTime, preppedRecords).execute();
   }
 
   @Override
@@ -204,9 +211,9 @@ public class HoodieJavaCopyOnWriteTable<T>
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
     return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers).execute();
+        shouldRollbackUsingMarkers, isRestore).execute();
   }
 
   @Override

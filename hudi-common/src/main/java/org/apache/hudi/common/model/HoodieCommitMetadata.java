@@ -398,6 +398,26 @@ public class HoodieCommitMetadata implements Serializable {
     return totalUpdateRecords;
   }
 
+  public Long getTotalCorruptLogBlocks() {
+    Long totalCorruptedLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalCorruptedLogBlocks += writeStat.getTotalCorruptLogBlock();
+      }
+    }
+    return totalCorruptedLogBlocks;
+  }
+
+  public Long getTotalRollbackLogBlocks() {
+    Long totalRollbackLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalRollbackLogBlocks += writeStat.getTotalRollbackBlocks();
+      }
+    }
+    return totalRollbackLogBlocks;
+  }
+
   public Long getTotalLogFilesSize() {
     Long totalLogFilesSize = 0L;
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {

@@ -19,8 +19,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
@@ -29,6 +27,9 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstan
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
@@ -635,13 +636,9 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       // Test clustering with PARTITION_SELECTED config set, choose only a part of all partitions to schedule
       {
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          //use upsert so records are in same filegroup when in same partition
-          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
-          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
-          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1011)")
-        }
-
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1011)")
         // Do
         val result = spark.sql(s"call run_clustering(table => '$tableName', " +
           s"selected_partitions => 'ts=1010', show_involved_partition => true)")
@@ -659,12 +656,9 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       // Test clustering with PARTITION_SELECTED, choose all partitions to schedule
       {
-        withSQLConf("hoodie.sql.insert.mode"-> "upsert") {
-          //use upsert so records are in same filegroup when in same partition
-          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1010)")
-          spark.sql(s"insert into $tableName values(5, 'a5', 10, 1011)")
-          spark.sql(s"insert into $tableName values(6, 'a6', 10, 1012)")
-        }
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1010)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1011)")
+        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1012)")
         val result = spark.sql(s"call run_clustering(table => '$tableName', " +
           s"selected_partitions => 'ts=1010,ts=1011,ts=1012', show_involved_partition => true)")
           .collect()
