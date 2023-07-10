@@ -45,7 +45,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
 
   private Pair<UTF8String, Integer> lastFileId; // for efficient code path
   // p -> (fileId -> handle)
-  private final Map<String, HoodieRowCreateHandle> handles;
+  private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
   private final String indexKeyFields;
   private final int bucketNum;
 
@@ -66,7 +66,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       Pair<UTF8String, Integer> fileId = Pair.of(partitionPath, bucketId);
       if (lastFileId == null || !lastFileId.equals(fileId)) {
         LOG.info("Creating new file for partition path " + partitionPath);
-        handle = getBucketRowCreateHandle(String.valueOf(partitionPath), bucketId);
+        handle = getBucketRowCreateHandle(fileId, bucketId);
         lastFileId = fileId;
       }
       handle.write(row);
@@ -91,13 +91,13 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     }
   }
 
-  protected HoodieRowCreateHandle getBucketRowCreateHandle(String fileId, int bucketId) throws Exception {
+  protected HoodieRowCreateHandle getBucketRowCreateHandle(Pair<UTF8String, Integer> fileId, int bucketId) throws Exception {
     if (!handles.containsKey(fileId)) { // if there is no handle corresponding to the fileId
       if (this.arePartitionRecordsSorted) {
         // if records are sorted, we can close all existing handles
         close();
       }
-      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, fileId, getNextBucketFileId(bucketId),
+      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, String.valueOf(fileId.getLeft()), getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }
