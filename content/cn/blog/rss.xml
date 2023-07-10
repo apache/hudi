@@ -4,9 +4,105 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sat, 03 Jun 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sun, 09 Jul 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Hoodie Timeline: Foundational pillar for ACID transactions]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions</link>
+            <guid>/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions</guid>
+            <pubDate>Sun, 09 Jul 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/hoodie-timeline-foundational-pillar-for-acid-transactions-be871399cbae">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Quickly start using Apache Hudi on AWS EMR]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/07/08/Quickly-start-using-Apache-Hudi-on-AWS-EMR</link>
+            <guid>/2023/07/08/Quickly-start-using-Apache-Hudi-on-AWS-EMR</guid>
+            <pubDate>Sat, 08 Jul 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@ritik20023/quickly-start-using-apache-hudi-on-aws-emr-de432c01e488">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Skip rocks and files: Turbocharge Trino queries with Hudi’s multi-modal indexing subsystem]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/07/07/Skip-rocks-and-files-Turbocharge-Trino-queries-with-Hudi-multi-modal-indexing-subsystem</link>
+            <guid>/2023/07/07/Skip-rocks-and-files-Turbocharge-Trino-queries-with-Hudi-multi-modal-indexing-subsystem</guid>
+            <pubDate>Fri, 07 Jul 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://trino.io/blog/2023/07/07/trino-fest-2023-onehouse-recap.html">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Monitoring Table Size stats]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/07/01/monitoring-table-size-stats</link>
+            <guid>/2023/07/01/monitoring-table-size-stats</guid>
+            <pubDate>Sat, 01 Jul 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/monitoring-table-stats-22684eb70ee1">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[What about Apache Hudi, Apache Iceberg, and Delta Lake?]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/30/What-about-Apache-Hudi-Apache-Iceberg-and-Delta-Lake</link>
+            <guid>/2023/06/30/What-about-Apache-Hudi-Apache-Iceberg-and-Delta-Lake</guid>
+            <pubDate>Fri, 30 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@martin.jurado.p/what-about-apache-hudi-apache-iceberg-and-delta-lake-3cae0eecd148">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Unlimited Big Data Exchange: A Wonderful Review of Apache DolphinScheduler & Hudi Hangzhou Meetup]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/26/Unlimited-Big-Data-Exchange-A-Wonderful-Review-of-Apache-DolphinScheduler-and-Hudi-Hangzhou-Meetup</link>
+            <guid>/2023/06/26/Unlimited-Big-Data-Exchange-A-Wonderful-Review-of-Apache-DolphinScheduler-and-Hudi-Hangzhou-Meetup</guid>
+            <pubDate>Mon, 26 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@ApacheDolphinScheduler/unlimited-big-data-exchange-a-wonderful-review-of-apache-dolphinscheduler-hudi-hangzhou-meetup-4e4e7dae0f55">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Multi-writer support with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/24/multi-writer-support-in-apache-hudi</link>
+            <guid>/2023/06/24/multi-writer-support-in-apache-hudi</guid>
+            <pubDate>Sat, 24 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/multi-writer-support-with-apache-hudi-e1b75dca29e6">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[How to query data in Apache Hudi using StarRocks]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/20/How-to-query-data-in-Apache-Hudi-using-StarRocks</link>
+            <guid>/2023/06/20/How-to-query-data-in-Apache-Hudi-using-StarRocks</guid>
+            <pubDate>Tue, 20 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@atwong/how-to-query-data-in-apache-hudi-using-starrocks-bf0336eaa817">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Timeline Server in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/20/timeline-server-in-apache-hudi</link>
+            <guid>/2023/06/20/timeline-server-in-apache-hudi</guid>
+            <pubDate>Tue, 20 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/timeline-server-in-apache-hudi-b5be25f85e47">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Exploring New Frontiers: How Apache Flink, Apache Hudi and Presto Power New Insights at Scale]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/16/Exploring-New-Frontiers-How-Apache-Flink-Apache-Hudi-and-Presto-Power-New-Insights-at-Scale</link>
+            <guid>/2023/06/16/Exploring-New-Frontiers-How-Apache-Flink-Apache-Hudi-and-Presto-Power-New-Insights-at-Scale</guid>
+            <pubDate>Fri, 16 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/exploring-new-frontiers-how-apache-flink-apache-hudi-and-presto-power-new-insights-at-scale">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Cleaner and Archival in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/11/cleaner-and-archival-in-apache-hudi</link>
+            <guid>/2023/06/11/cleaner-and-archival-in-apache-hudi</guid>
+            <pubDate>Sun, 11 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/cleaner-and-archival-in-apache-hudi-9e15b08b2933">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[TOCTOU]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/06/06/TOCTOU</link>
+            <guid>/2023/06/06/TOCTOU</guid>
+            <pubDate>Tue, 06 Jun 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/toctou-5224db6470dc">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Text-Based Search: From Elastic Search to Vector Search]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search</link>
@@ -134,6 +230,14 @@
             <pubDate>Mon, 20 Mar 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-2-glue-studio-visual-editor-introducing-native-support-for-apache-hudi-delta-lake-and-apache-iceberg-on-aws-glue-for-apache-spark/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Introduction to Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2023/03/17/introduction-to-apache-hudi</link>
+            <guid>/2023/03/17/introduction-to-apache-hudi</guid>
+            <pubDate>Fri, 17 Mar 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://bigdataboutique.com/blog/introduction-to-apache-hudi-c83367">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi]]></title>

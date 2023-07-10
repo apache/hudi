@@ -2,11 +2,149 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-06-03T00:00:00.000Z</updated>
+    <updated>2023-07-09T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Hoodie Timeline: Foundational pillar for ACID transactions]]></title>
+        <id>/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions"/>
+        <updated>2023-07-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/hoodie-timeline-foundational-pillar-for-acid-transactions-be871399cbae">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Quickly start using Apache Hudi on AWS EMR]]></title>
+        <id>/2023/07/08/Quickly-start-using-Apache-Hudi-on-AWS-EMR</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/08/Quickly-start-using-Apache-Hudi-on-AWS-EMR"/>
+        <updated>2023-07-08T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@ritik20023/quickly-start-using-apache-hudi-on-aws-emr-de432c01e488">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Ritik Kaushik</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Skip rocks and files: Turbocharge Trino queries with Hudi’s multi-modal indexing subsystem]]></title>
+        <id>/2023/07/07/Skip-rocks-and-files-Turbocharge-Trino-queries-with-Hudi-multi-modal-indexing-subsystem</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/07/Skip-rocks-and-files-Turbocharge-Trino-queries-with-Hudi-multi-modal-indexing-subsystem"/>
+        <updated>2023-07-07T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://trino.io/blog/2023/07/07/trino-fest-2023-onehouse-recap.html">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Nadine Farah</name>
+        </author>
+        <author>
+            <name>Sagar Sumit</name>
+        </author>
+        <author>
+            <name>Cole Bowden</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Monitoring Table Size stats]]></title>
+        <id>/2023/07/01/monitoring-table-size-stats</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/01/monitoring-table-size-stats"/>
+        <updated>2023-07-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/monitoring-table-stats-22684eb70ee1">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[What about Apache Hudi, Apache Iceberg, and Delta Lake?]]></title>
+        <id>/2023/06/30/What-about-Apache-Hudi-Apache-Iceberg-and-Delta-Lake</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/30/What-about-Apache-Hudi-Apache-Iceberg-and-Delta-Lake"/>
+        <updated>2023-06-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@martin.jurado.p/what-about-apache-hudi-apache-iceberg-and-delta-lake-3cae0eecd148">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Martin Jurado Pedroza</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Unlimited Big Data Exchange: A Wonderful Review of Apache DolphinScheduler & Hudi Hangzhou Meetup]]></title>
+        <id>/2023/06/26/Unlimited-Big-Data-Exchange-A-Wonderful-Review-of-Apache-DolphinScheduler-and-Hudi-Hangzhou-Meetup</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/26/Unlimited-Big-Data-Exchange-A-Wonderful-Review-of-Apache-DolphinScheduler-and-Hudi-Hangzhou-Meetup"/>
+        <updated>2023-06-26T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@ApacheDolphinScheduler/unlimited-big-data-exchange-a-wonderful-review-of-apache-dolphinscheduler-hudi-hangzhou-meetup-4e4e7dae0f55">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Apache DolphinScheduler</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Multi-writer support with Apache Hudi]]></title>
+        <id>/2023/06/24/multi-writer-support-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/24/multi-writer-support-in-apache-hudi"/>
+        <updated>2023-06-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/multi-writer-support-with-apache-hudi-e1b75dca29e6">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to query data in Apache Hudi using StarRocks]]></title>
+        <id>/2023/06/20/How-to-query-data-in-Apache-Hudi-using-StarRocks</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/20/How-to-query-data-in-Apache-Hudi-using-StarRocks"/>
+        <updated>2023-06-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@atwong/how-to-query-data-in-apache-hudi-using-starrocks-bf0336eaa817">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Albert Wong</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Timeline Server in Apache Hudi]]></title>
+        <id>/2023/06/20/timeline-server-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/20/timeline-server-in-apache-hudi"/>
+        <updated>2023-06-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/timeline-server-in-apache-hudi-b5be25f85e47">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Exploring New Frontiers: How Apache Flink, Apache Hudi and Presto Power New Insights at Scale]]></title>
+        <id>/2023/06/16/Exploring-New-Frontiers-How-Apache-Flink-Apache-Hudi-and-Presto-Power-New-Insights-at-Scale</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/16/Exploring-New-Frontiers-How-Apache-Flink-Apache-Hudi-and-Presto-Power-New-Insights-at-Scale"/>
+        <updated>2023-06-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/exploring-new-frontiers-how-apache-flink-apache-hudi-and-presto-power-new-insights-at-scale">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Nadine Farah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Cleaner and Archival in Apache Hudi]]></title>
+        <id>/2023/06/11/cleaner-and-archival-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/11/cleaner-and-archival-in-apache-hudi"/>
+        <updated>2023-06-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/cleaner-and-archival-in-apache-hudi-9e15b08b2933">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[TOCTOU]]></title>
+        <id>/2023/06/06/TOCTOU</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/06/06/TOCTOU"/>
+        <updated>2023-06-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/toctou-5224db6470dc">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Text-Based Search: From Elastic Search to Vector Search]]></title>
         <id>/2023/06/03/text-based-search-from-elastic-search-to-vector-search</id>
@@ -193,6 +331,17 @@
         </author>
         <author>
             <name>Sean Ma</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Introduction to Apache Hudi]]></title>
+        <id>/2023/03/17/introduction-to-apache-hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/03/17/introduction-to-apache-hudi"/>
+        <updated>2023-03-17T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://bigdataboutique.com/blog/introduction-to-apache-hudi-c83367">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Itamar Syn-Hershko</name>
         </author>
     </entry>
     <entry>
