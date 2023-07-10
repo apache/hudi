@@ -47,7 +47,6 @@ import org.apache.spark.sql.SQLContext;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -207,7 +206,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
     synchronized (cachedRddIds) {
-      return cachedRddIds.getOrDefault(cacheKey, Collections.emptyList());
+      return cachedRddIds.getOrDefault(cacheKey, new ArrayList<>());
     }
   }
 
@@ -215,7 +214,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
     synchronized (cachedRddIds) {
       List<Integer> removed = cachedRddIds.remove(cacheKey);
-      return removed == null ? Collections.emptyList() : removed;
+      return removed == null ? new ArrayList<>() : removed;
     }
   }
 

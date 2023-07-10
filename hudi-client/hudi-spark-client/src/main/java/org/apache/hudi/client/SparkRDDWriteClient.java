@@ -39,6 +39,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -402,6 +403,10 @@ public class SparkRDDWriteClient<T> extends
       HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) context;
       Map<Integer, JavaRDD<?>> allCachedRdds = sparkEngineContext.getJavaSparkContext().getPersistentRDDs();
       List<Integer> dataIds = sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime));
+      if (config.isMetadataTableEnabled()) {
+        String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+        dataIds.addAll(sparkEngineContext.removeCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instantTime)));
+      }
       for (int id : dataIds) {
         if (allCachedRdds.containsKey(id)) {
           allCachedRdds.get(id).unpersist();
