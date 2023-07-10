@@ -265,3 +265,23 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 111. [How to JOIN Hudi Tables in Incremental fashion with DynamoDB in AWS GLue | Hands on Lab for Begineer](https://www.youtube.com/watch?v=ALhk1vYAwLc)- By Soumil Shah, June 5th 2023
 
 112. [Learn | How to delete Partition in Apache Hudi on AWS Glue | Hands on](https://www.youtube.com/watch?v=QqCiycIgSFk)- By Soumil Shah, June 7th 2023
+
+113. [How to read data from Multiple Hudi Tables Join them and insert into DynamoDB with AWS Glue](https://www.youtube.com/watch?v=tYyh-TNS6-E)- By Soumil Shah, June 10th 2023
+
+114. [SNS + Lambda: How to Trigger Lambda Functions from SNS using Message Filtering](https://www.youtube.com/watch?v=WhUfuJs-dsI)- By Soumil Shah, June 16th 2023
+
+115. [Full Workshop Recap: Build a ride-share lakehouse platform](https://youtu.be/YgmOASLum7g)- By Nadine Farah and Soumil Shah, June 22nd 2023
+
+116. [Learn About Apache Hudi Pre Commit Validator with Hands on Lab](https://www.youtube.com/watch?v=KNzs9dj_Btc)- By Soumil Shah, June 23rd 2023
+
+117. [Building Lakehouse using Hudi | Apache Hudi | Data Lakehouse | Hudi | Apache](https://www.youtube.com/watch?v=LcPINV7CUNc)- By DataCouch, July 1st 2023
+
+118. [Hudi Best Practices: Handling Failed Inserts/Upserts with Error Tables](https://www.youtube.com/watch?v=3N4XVil05sM)- By Soumil Shah, July 2nd 2023
+
+119. [Hudi Best Practices: Handling Failed Inserts/Upserts with Error Tables](https://www.youtube.com/watch?v=qkddwqOeQbs)- By Soumil Shah, July 2nd 2023
+
+120. [Incremental Data Extraction from Postgres using Triggers and PySpark](https://www.youtube.com/watch?v=kuuHA_1Bh2A)- By Soumil Shah, July 9th 2023
+
+121. [How Data Scientist &Data Engineer Can Query Hudi Tables with Athena Spark Notebook for AdhocAnalysis](https://www.youtube.com/watch?v=ybnH6E20GmY)- By Soumil Shah, June 7th 2023
+
+122. [Develop Incremental ETL Pipeline From Hudi Tables to Redshift Using AWS Glue and Spark](https://www.youtube.com/watch?v=n-rE1WyoD-o)- By Soumil Shah, July 9th 2023
