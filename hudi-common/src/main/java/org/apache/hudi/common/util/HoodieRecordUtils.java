@@ -83,9 +83,8 @@ public class HoodieRecordUtils {
           .filter(Objects::nonNull)
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
-          .findFirst().orElseThrow(
-              () -> new RuntimeException(String.format("No conform merger class found within %s", mergerClassList))
-          );
+          .findFirst()
+          .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
   }
 
