@@ -46,7 +46,7 @@ public class SchedulerConfGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(SchedulerConfGenerator.class);
 
-  public static final String DELTASYNC_POOL_NAME = HoodieStreamer.DELTASYNC_POOL_NAME;
+  public static final String DELTASYNC_POOL_NAME = HoodieStreamer.STREAMSYNC_POOL_NAME;
   public static final String COMPACT_POOL_NAME = AsyncCompactService.COMPACT_POOL_NAME;
   public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
   public static final String SPARK_SCHEDULER_FAIR_MODE = "FAIR";

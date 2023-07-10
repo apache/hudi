@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
@@ -43,5 +44,11 @@ public class DeltaSync extends StreamSync {
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
+  }
+
+  public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+                   TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+    super(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient);
   }
 }

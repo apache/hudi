@@ -18,13 +18,13 @@
 
 package org.apache.hudi.utilities.exception;
 
-public class HoodieDeltaStreamerWriteException extends HoodieDeltaStreamerException {
+public class HoodieStreamerWriteException extends HoodieStreamerException {
 
-  public  HoodieDeltaStreamerWriteException(String msg) {
+  public HoodieStreamerWriteException(String msg) {
     super(msg);
   }
 
-  public HoodieDeltaStreamerWriteException(String msg, Throwable e) {
+  public HoodieStreamerWriteException(String msg, Throwable e) {
     super(msg, e);
   }
 }

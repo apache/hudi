@@ -84,7 +84,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   }
 
   public DeltaSync getDeltaSync() {
-    return ((DeltaSyncService) ingestionService.get()).getDeltaSync();
+    return ((StreamSyncService) ingestionService.get()).getDeltaSync();
   }
 
 }

@@ -86,6 +86,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -2743,7 +2744,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, fs);
       // make sure the UPSERT_PARALLELISM_VALUE already changed (hot updated)
-      Assertions.assertTrue(((HoodieDeltaStreamer.DeltaSyncService) ds.ingestionService.get()).props.getLong(UPSERT_PARALLELISM_VALUE.key()) > upsertParallelism);
+      Assertions.assertTrue(((HoodieStreamer.StreamSyncService) ds.ingestionService.get()).props.getLong(UPSERT_PARALLELISM_VALUE.key()) > upsertParallelism);
       return true;
     });
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);

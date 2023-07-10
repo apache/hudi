@@ -27,6 +27,7 @@ import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -68,6 +69,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -85,8 +87,10 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackCo
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
+import org.apache.hudi.utilities.exception.HoodieStreamerWriteException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -154,14 +158,15 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
+import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
+import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DEFAULT_CHECKPOINT_FORCE_SKIP_PROP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_FORCE_SKIP_PROP;
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.DEFAULT_CHECKPOINT_FORCE_SKIP_PROP;
 
 /**
  * Sync's one batch of data to hoodie table.
@@ -205,9 +210,9 @@ public class StreamSync implements Serializable, Closeable {
   private transient FileSystem fs;
 
   /**
-   * Spark context.
+   * Spark context Wrapper.
    */
-  private transient JavaSparkContext jssc;
+  private final transient HoodieSparkEngineContext hoodieSparkContext;
 
   /**
    * Spark Session.
@@ -221,7 +226,7 @@ public class StreamSync implements Serializable, Closeable {
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
-   * <p>
+   *
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides
    */
   private final TypedProperties props;
@@ -274,12 +279,18 @@ public class StreamSync implements Serializable, Closeable {
 
   private final boolean autoGenerateRecordKeys;
 
+  @Deprecated
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+    this(cfg, sparkSession, schemaProvider, props, new HoodieSparkEngineContext(jssc), fs, conf, onInitializingHoodieWriteClient);
+  }
 
+  public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+                    TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
     this.cfg = cfg;
-    this.jssc = jssc;
+    this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
     this.fs = fs;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
@@ -302,14 +313,15 @@ public class StreamSync implements Serializable, Closeable {
     }
     this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
-      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, jssc, fs);
+      this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics),
+        UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics),
         this.errorTableWriter, Option.of(props));
 
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), this.errorTableWriter.isPresent());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
+        Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
 
   }
 
@@ -394,7 +406,7 @@ public class StreamSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-        .initTable(new Configuration(jssc.hadoopConfiguration()),
+        .initTable(new Configuration(hoodieSparkContext.hadoopConfiguration()),
             cfg.targetBasePath);
   }
 
@@ -409,7 +421,7 @@ public class StreamSync implements Serializable, Closeable {
     refreshTimeline();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitsTimelineOpt, instantTime);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime);
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
@@ -477,38 +489,15 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
-   * @param commitsTimelineOpt Timeline with completed commits, including .commit and .deltacommit
    * @return Pair<SchemaProvider, Pair < String, JavaRDD < HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitsTimelineOpt, String instantTime) throws IOException {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
-    } else {
-      // initialize the table for the first time.
-      String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
-      HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(cfg.tableType)
-          .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPayloadClassName(cfg.payloadClassName)
-          .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionFields(partitionColumns)
-          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
-          .setKeyGeneratorClassProp(keyGenClassName)
-          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
-              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
-          .setShouldDropPartitionColumns(isDropPartitionColumns())
-          .setHiveStylePartitioningEnable(props.getBoolean(HIVE_STYLE_PARTITIONING_ENABLE.key(),
-              Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
-          .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
-              Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-          .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
     LOG.debug("Checkpoint from config: " + cfg.checkpoint);
@@ -557,7 +546,7 @@ public class StreamSync implements Serializable, Closeable {
           formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
       Option<Dataset<Row>> transformed =
-          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
+          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(hoodieSparkContext.jsc(), sparkSession, data, props));
 
       transformed = formatAdapter.processErrorEvents(transformed,
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
@@ -589,7 +578,7 @@ public class StreamSync implements Serializable, Closeable {
         }
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
-        Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jssc, fs, cfg.targetBasePath);
+        Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), fs, cfg.targetBasePath);
         // Deduce proper target (writer's) schema for the transformed dataset, reconciling its
         // schema w/ the table's one
         Option<Schema> targetSchemaOpt = transformed.map(df -> {
@@ -605,8 +594,8 @@ public class StreamSync implements Serializable, Closeable {
         });
         // Override schema provider with the reconciled target schema
         schemaProvider = targetSchemaOpt.map(targetSchema ->
-                (SchemaProvider) new DelegatingSchemaProvider(props, jssc, dataAndCheckpoint.getSchemaProvider(),
-                    new SimpleSchemaProvider(jssc, targetSchema, props)))
+                (SchemaProvider) new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), dataAndCheckpoint.getSchemaProvider(),
+                    new SimpleSchemaProvider(hoodieSparkContext.jsc(), targetSchema, props)))
             .orElse(dataAndCheckpoint.getSchemaProvider());
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
@@ -628,10 +617,10 @@ public class StreamSync implements Serializable, Closeable {
       return null;
     }
 
-    jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
+    hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, hoodieSparkContext.emptyRDD()));
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -730,7 +719,7 @@ public class StreamSync implements Serializable, Closeable {
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via Hudi Streamer. Last Commit :" + lastCommit + ", Instants :"
+                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
                   + commitsTimelineOpt.get().getInstants() + ", CommitMetadata="
                   + commitMetadata.toJsonString());
         }
@@ -804,13 +793,15 @@ public class StreamSync implements Serializable, Closeable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
-      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
+      records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());
     }
 
     boolean isEmpty = records.isEmpty();
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
     LOG.info("Starting commit  : " + instantTime);
 
+    HoodieWriteResult writeResult;
+    Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
     JavaRDD<WriteStatus> writeStatusRDD;
     switch (cfg.operation) {
       case INSERT:
@@ -823,14 +814,20 @@ public class StreamSync implements Serializable, Closeable {
         writeStatusRDD = writeClient.bulkInsert(records, instantTime);
         break;
       case INSERT_OVERWRITE:
-        writeStatusRDD = writeClient.insertOverwrite(records, instantTime).getWriteStatuses();
+        writeResult = writeClient.insertOverwrite(records, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       case INSERT_OVERWRITE_TABLE:
-        writeStatusRDD = writeClient.insertOverwriteTable(records, instantTime).getWriteStatuses();
+        writeResult = writeClient.insertOverwriteTable(records, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       case DELETE_PARTITION:
         List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
-        writeStatusRDD = writeClient.deletePartitions(partitions, instantTime).getWriteStatuses();
+        writeResult = writeClient.deletePartitions(partitions, instantTime);
+        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+        writeStatusRDD = writeResult.getWriteStatuses();
         break;
       default:
         throw new HoodieStreamerException("Unknown operation : " + cfg.operation);
@@ -869,16 +866,17 @@ public class StreamSync implements Serializable, Closeable {
             case ROLLBACK_COMMIT:
               LOG.info("Commit " + instantTime + " failed!");
               writeClient.rollback(instantTime);
-              throw new HoodieException("Error Table Commit failed!");
+              throw new HoodieStreamerWriteException("Error table commit failed");
             case LOG_ERROR:
               LOG.error("Error Table write failed for instant " + instantTime);
               break;
             default:
-              throw new HoodieException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+              throw new HoodieStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
           }
         }
       }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap(), extraPreCommitFunc);
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds,
+          extraPreCommitFunc);
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         latestCheckpointWritten = checkpointStr;
@@ -893,7 +891,7 @@ public class StreamSync implements Serializable, Closeable {
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
-        throw new HoodieException("Commit " + instantTime + " failed!");
+        throw new HoodieStreamerWriteException("Commit " + instantTime + " failed!");
       }
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
@@ -906,7 +904,7 @@ public class StreamSync implements Serializable, Closeable {
       });
       // Rolling back instant
       writeClient.rollback(instantTime);
-      throw new HoodieException("Commit " + instantTime + " failed and rolled-back !");
+      throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
     }
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
@@ -962,7 +960,7 @@ public class StreamSync implements Serializable, Closeable {
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
+      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
@@ -972,21 +970,20 @@ public class StreamSync implements Serializable, Closeable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
-      //Collect exceptions in list because we want all sync to run. Then we can throw
-      List<HoodieException> metaSyncExceptions = new ArrayList<>();
+      Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
+        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         try {
-          Timer.Context syncContext = metrics.getMetaSyncTimerContext();
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
-          long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
-          metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
-        } catch (HoodieException e) {
-          LOG.info("SyncTool class " + impl.trim() + " failed with exception", e);
-          metaSyncExceptions.add(e);
+        } catch (HoodieMetaSyncException e) {
+          LOG.warn("SyncTool class " + impl.trim() + " failed with exception", e);
+          failedMetaSyncs.put(impl, e);
         }
+        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
-      if (!metaSyncExceptions.isEmpty()) {
-        throw SyncUtilHelpers.getExceptionFromList(metaSyncExceptions);
+      if (!failedMetaSyncs.isEmpty()) {
+        throw getHoodieMetaSyncException(failedMetaSyncs);
       }
     }
   }
@@ -1012,12 +1009,12 @@ public class StreamSync implements Serializable, Closeable {
     registerAvroSchemas(sourceSchema, targetSchema);
     final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
-        .getWriteConfigWithRecordSizeEstimate(jssc, records, initialWriteConfig)
+        .getWriteConfigWithRecordSizeEstimate(hoodieSparkContext.jsc(), records, initialWriteConfig)
         .orElse(initialWriteConfig);
 
     if (writeConfig.isEmbeddedTimelineServerEnabled()) {
       if (!embeddedTimelineService.isPresent()) {
-        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
+        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(hoodieSparkContext, writeConfig);
       } else {
         EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
@@ -1027,7 +1024,7 @@ public class StreamSync implements Serializable, Closeable {
       // Close Write client.
       writeClient.close();
     }
-    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
+    writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
   }
 
@@ -1132,7 +1129,7 @@ public class StreamSync implements Serializable, Closeable {
       }
       return newWriteSchema;
     } catch (Exception e) {
-      throw new HoodieException("Failed to fetch schema from table ", e);
+      throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
     }
   }
 
@@ -1165,7 +1162,8 @@ public class StreamSync implements Serializable, Closeable {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Registering Schema: " + schemas);
       }
-      jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
+      // Use the underlying spark context in case the java context is changed during runtime
+      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }
 
