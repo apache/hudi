@@ -78,17 +78,14 @@ public class HoodieRecordUtils {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
-      java.util.Optional<HoodieRecordMerger> mergerOpt = mergerClassList.stream()
+      return mergerClassList.stream()
           .map(clazz -> loadRecordMerger(clazz))
           .filter(Objects::nonNull)
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
-          .findFirst();
-      if (mergerOpt.isPresent()) {
-        return mergerOpt.get();
-      } else {
-        throw new RuntimeException(String.format("No conform merger class found within %s", mergerClassList));
-      }
+          .findFirst().orElseThrow(
+              () -> new RuntimeException(String.format("No conform merger class found within %s", mergerClassList))
+          );
     }
   }
 
