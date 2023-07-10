@@ -19,13 +19,17 @@
 package org.apache.hudi.common.util;
 
 import org.apache.avro.generic.GenericRecord;
+
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.exception.HoodieException;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestHoodieRecordUtils {
 
@@ -39,9 +43,15 @@ class TestHoodieRecordUtils {
   }
 
   @Test
+  void loadHoodieMergeWithWrongMerger() {
+    String mergeClassName = "wrong.package.MergerName";
+    assertThrows(HoodieException.class, () -> HoodieRecordUtils.loadRecordMerger(mergeClassName));
+  }
+
+  @Test
   void loadPayload() {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, new Object[]{null, 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
     assertEquals(payload.getClass().getName(), payloadClassName);
   }
 }
