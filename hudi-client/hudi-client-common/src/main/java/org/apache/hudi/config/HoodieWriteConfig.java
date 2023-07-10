@@ -2088,6 +2088,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetricsConfig.TURN_METRICS_ON);
   }
 
+  /**
+   * metrics properties.
+   */
+  public boolean isCompactionLogBlockMetricsOn() {
+    return getBoolean(HoodieMetricsConfig.TURN_METRICS_COMPACTION_LOG_BLOCKS_ON);
+  }
+
   public boolean isExecutorMetricsEnabled() {
     return Boolean.parseBoolean(
         getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"));

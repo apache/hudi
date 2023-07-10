@@ -873,7 +873,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     java.nio.file.Path metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
     java.nio.file.Path tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant);
     metaClient.reloadActiveTimeline();
-    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
     // metadata based file listing.
     validateMetadata(testTable);

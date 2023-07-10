@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.DATASOURCE_WRITE_PREPPED_KEY
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -38,15 +39,13 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
     logInfo(s"Executing 'DELETE FROM' command for $tableId")
 
     val condition = sparkAdapter.extractDeleteCondition(dft)
-
-    val targetLogicalPlan = stripMetaFieldAttributes(dft.table)
     val filteredPlan = if (condition != null) {
-      Filter(condition, targetLogicalPlan)
+      Filter(condition, dft.table)
     } else {
-      targetLogicalPlan
+      dft.table
     }
 
-    val config = buildHoodieDeleteTableConfig(catalogTable, sparkSession)
+    val config = buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (DATASOURCE_WRITE_PREPPED_KEY -> "true")
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
     df.write.format("hudi")

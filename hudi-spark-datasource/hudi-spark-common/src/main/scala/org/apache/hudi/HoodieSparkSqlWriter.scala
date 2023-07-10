@@ -48,21 +48,23 @@ import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
-import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.spark.api.java.{JavaSparkContext}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
@@ -245,11 +247,28 @@ object HoodieSparkSqlWriter {
 
       val (writeResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
-          case WriteOperationType.DELETE =>
+          case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-            val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
+            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
+            val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
+              None
+            } else {
+              Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
+                .asInstanceOf[BaseKeyGenerator])
+            }
+
+            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
+              var validatePreppedRecord = true
+              it.map { avroRec =>
+                if (validatePreppedRecord && isPrepped) {
+                  // For prepped records, check the first record to make sure it has meta fields set.
+                  HoodieCreateRecordUtils.validateMetaFieldsInAvroRecords(avroRec)
+                  validatePreppedRecord = false
+                }
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, isPrepped, false)
+              }
+            }).toJavaRDD()
 
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
@@ -271,7 +290,7 @@ object HoodieSparkSqlWriter {
 
             // Issue deletes
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
+            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, isPrepped)
             (writeStatuses, client)
 
           case WriteOperationType.DELETE_PARTITION =>
@@ -355,7 +374,7 @@ object HoodieSparkSqlWriter {
 
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
-            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
+            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT && !isConsistentHashingBucketIndex(client)) {
               return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath,
                 instantTime, writerSchema, tableConfig)
             }
@@ -869,7 +888,7 @@ object HoodieSparkSqlWriter {
       }
     }
 
-    if (operation != WriteOperationType.DELETE) {
+    if (!WriteOperationType.isDelete(operation)) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
       } else if (mode == SaveMode.Overwrite && tableExists && operation != WriteOperationType.INSERT_OVERWRITE_TABLE) {
@@ -1043,6 +1062,10 @@ object HoodieSparkSqlWriter {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
       && client.getConfig.isAsyncClusteringEnabled)
+  }
+
+  private def isConsistentHashingBucketIndex(client: SparkRDDWriteClient[_]): Boolean = {
+    client.getConfig.getIndexType == IndexType.BUCKET && client.getConfig.getBucketIndexEngineType == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING
   }
 
   /**

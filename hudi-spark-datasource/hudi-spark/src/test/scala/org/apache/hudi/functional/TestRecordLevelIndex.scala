@@ -25,8 +25,8 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{ActionType, HoodieBaseFile, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -108,7 +108,6 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Append)
   }
 
-  @Disabled("needs delete support")
   @ParameterizedTest
   @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
   def testRLIBulkInsertThenInsertOverwrite(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
@@ -198,6 +197,26 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
     validateDataAndRecordIndices(hudiOpts)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDeletePartition(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val latestSnapshot = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
+      val commitTime = client.startCommit
+      client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
+      val deletingPartition = dataGen.getPartitionPaths.last
+      val partitionList = Collections.singletonList(deletingPartition)
+      client.deletePartitions(partitionList, commitTime)
+
+      val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
+      validateDataAndRecordIndices(hudiOpts, deletedDf)
+    }
   }
 
   @ParameterizedTest
@@ -503,15 +522,18 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
+    deletedDf.cache()
     if (validate) {
       validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
+    deletedDf.unpersist()
     latestBatchDf
   }
 
