@@ -70,47 +70,44 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table Without Primary Key") {
     withRecordType()(withTempDir { tmp =>
-      Seq(true).foreach { optimizedSqlEnabled =>
-        Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName
-          // create table
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  price double,
-               |  ts long
-               |) using hudi
-               | location '${tmp.getCanonicalPath}/$tableName'
-               | tblproperties (
-               |  type = '$tableType',
-               |  preCombineField = 'ts'
-               | )
-     """.stripMargin)
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+   """.stripMargin)
 
-          // insert data to table
-          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 10.0, 1000)
-          )
+        // insert data to table
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
 
-          // test with optimized sql writes enabled / disabled.
-          println(s"XXXX: set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+        // test with optimized sql writes enabled.
+        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
 
-          // update data
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+        // update data
+        spark.sql(s"update $tableName set price = 20 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 20.0, 1000)
+        )
 
-          // update data
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
-        }
+        // update data
+        spark.sql(s"update $tableName set price = price * 2 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 40.0, 1000)
+        )
       }
     })
   }
@@ -259,35 +256,40 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test decimal type") {
     withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  ff decimal(38, 10)
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  type = 'mor',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
+      Seq(true, false).foreach { optimizedSqlEnabled =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  ff decimal(38, 10)
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
      """.stripMargin)
 
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 10.0")
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 10.0, 1000)
-      )
+        // insert data to table
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 10.0")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
 
-      spark.sql(s"update $tableName set price = 22 where id = 1")
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 22.0, 1000)
-      )
+        // test with optimized sql writes enabled / disabled.
+        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+
+        spark.sql(s"update $tableName set price = 22 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 22.0, 1000)
+        )
+      }
     }
   }
 }

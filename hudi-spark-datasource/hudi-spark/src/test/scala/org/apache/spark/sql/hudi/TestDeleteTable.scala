@@ -78,51 +78,49 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
   test("Test Delete Table Without Primary Key") {
     withTempDir { tmp =>
-      Seq(true).foreach { optimizedSqlEnabled =>
-        Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName
-          // create table
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  price double,
-               |  ts long
-               |) using hudi
-               | location '${tmp.getCanonicalPath}/$tableName'
-               | tblproperties (
-               |  type = '$tableType',
-               |  preCombineField = 'ts'
-               | )
-     """.stripMargin)
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+   """.stripMargin)
 
-          // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+        // test with optimized sql writes enabled.
+        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
 
-          // insert data to table
-          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 10.0, 1000)
-          )
+        // insert data to table
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
 
-          // delete data from table
-          spark.sql(s"delete from $tableName where id = 1")
-          checkAnswer(s"select count(1) from $tableName")(
-            Seq(0)
-          )
+        // delete data from table
+        spark.sql(s"delete from $tableName where id = 1")
+        checkAnswer(s"select count(1) from $tableName")(
+          Seq(0)
+        )
 
-          spark.sql(s"insert into $tableName select 2, 'a2', 10, 1000")
-          spark.sql(s"delete from $tableName where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(2, "a2", 10.0, 1000)
-          )
+        spark.sql(s"insert into $tableName select 2, 'a2', 10, 1000")
+        spark.sql(s"delete from $tableName where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(2, "a2", 10.0, 1000)
+        )
 
-          spark.sql(s"delete from $tableName")
-          checkAnswer(s"select count(1) from $tableName")(
-            Seq(0)
-          )
-        }
+        spark.sql(s"delete from $tableName")
+        checkAnswer(s"select count(1) from $tableName")(
+          Seq(0)
+        )
       }
     }
   }
