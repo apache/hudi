@@ -954,7 +954,7 @@ public class HoodieStreamer implements Serializable {
     }
 
     @VisibleForTesting
-    public StreamSync getDeltaSync() {
+    public StreamSync getStreamSync() {
       return streamSync;
     }
   }
