@@ -1023,7 +1023,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
-              dataMetaClient, rollbackMetadata, rollbackInstantTime));
+              dataMetaClient, rollbackMetadata, instantTime));
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitInstantTime);

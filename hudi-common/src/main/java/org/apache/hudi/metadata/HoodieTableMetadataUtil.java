@@ -624,16 +624,11 @@ public class HoodieTableMetadataUtil {
   }
 
   private static List<HoodieRecord> getHoodieRecordsForLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime) {
-    /*List<HoodieInstant> instants = dataTableMetaClient.reloadActiveTimeline().filterRequestedRollbackTimeline()
-        .filter(instant -> instant.getTimestamp().equals(instantTime) && instant.isRequested()).getInstants();*/
-
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instantTime);
-
-    // HoodieInstant rollbackInstant = instants.get(0);
     HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
     try {
       HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-          dataTableMetaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
+          dataTableMetaClient.reloadActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
 
       Map<String, Map<String, Long>> partitionToLogFilesMap = new HashMap<>();
 
