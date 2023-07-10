@@ -2744,7 +2744,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, fs);
       // make sure the UPSERT_PARALLELISM_VALUE already changed (hot updated)
-      Assertions.assertTrue(((HoodieStreamer.StreamSyncService) ds.ingestionService.get()).props.getLong(UPSERT_PARALLELISM_VALUE.key()) > upsertParallelism);
+      Assertions.assertTrue(((HoodieStreamer.StreamSyncService) ds.getIngestionService()).getProps().getLong(UPSERT_PARALLELISM_VALUE.key()) > upsertParallelism);
       return true;
     });
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
