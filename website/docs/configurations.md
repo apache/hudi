@@ -3,10 +3,13 @@ title: All Configurations
 keywords: [ configurations, default, flink options, spark, configs, parameters ] 
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
-toc: true
-toc_min_heading_level: 2
-toc_max_heading_level: 4
-last_modified_at: 2023-02-22T16:51:12.818
+last_modified_at: 2023-07-07T17:00:30.441
+hide_table_of_contents: true
+---
+import TOCInline from '@theme/TOCInline';
+
+<TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>
+
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -28,6 +31,7 @@ By default, Hudi would load the configuration file under `/etc/hudi/conf` direct
 - [**Record Payload Config**](#RECORD_PAYLOAD): This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
 - [**Kafka Connect Configs**](#KAFKA_CONNECT): These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables
 - [**Amazon Web Services Configs**](#AWS): Configurations specific to Amazon Web Services.
+- [**DeltaStreamer Configs**](#DELTA_STREAMER): These set of configs are used for DeltaStreamer utility which provides the way to ingest from different sources such as DFS or Kafka.
 
 ## Externalized Config File
 Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration
@@ -35,168 +39,51 @@ file `hudi-default.conf`. By default, Hudi would load the configuration file und
 specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be
 useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.
 
-## Environment Config {#ENVIRONMENT_CONFIG}
-Hudi supports passing configurations via a configuration file `hudi-default.conf` in which each line consists of a key and a value separated by whitespace or = sign. For example:
-```
-hoodie.datasource.hive_sync.mode               jdbc
-hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
-hoodie.datasource.hive_sync.support_timestamp  false
-```
-It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
-
-By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable.
-
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
 
-### Read Options {#Read-Options}
 
+### Read Options {#Read-Options}
 Options useful for reading tables via `read.format.option(...)`
 
 
-`Config Class`: org.apache.hudi.DataSourceOptions.scala<br></br>
-> ### as.of.instant
-> The query instant for time travel. Without specified this option, we query the latest snapshot.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TIME_TRAVEL_AS_OF_INSTANT`<br></br>
 
+
+[**Basic Configs**](#Read-Options-basic-configs)
+
+
+| Config Name                                                                       | Default             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Since Version |
+| --------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.read.begin.instanttime](#hoodiedatasourcereadbegininstanttime) | N/A **(Required)**  | Required when `hoodie.datasource.query.type` is set to `incremental`. Represents the instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time &gt; BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `hoodie.datasource.read.handle.hollow.commit` set to USE_STATE_TRANSITION_TIME, will use instant's `stateTransitionTime` to perform comparison.        |               |
+| [hoodie.datasource.read.end.instanttime](#hoodiedatasourcereadendinstanttime)     | N/A **(Required)**  | Used when `hoodie.datasource.query.type` is set to `incremental`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from timeline is assumed by default. When specified, new data written with an instant_time &lt;= END_INSTANTTIME are fetched out. Point in time type queries makes more sense with begin and end instant times specified. Note that if `hoodie.datasource.read.handle.hollow.commit` set to `USE_STATE_TRANSITION_TIME`, will use instant's `stateTransitionTime` to perform comparison. |               |
+| [hoodie.datasource.query.type](#hoodiedatasourcequerytype)                        | snapshot (Optional) | Whether data needs to be read, in `incremental` mode (new data since an instantTime) (or) `read_optimized` mode (obtain latest view, based on base files) (or) `snapshot` mode (obtain latest view, by merging base and (if any) log files)                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.datasource.write.precombine.field](#hoodiedatasourcewriteprecombinefield) | ts (Optional)       | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)                                                                                                                                                                                                                                                                                                                                                                   |               |
+
+[**Advanced Configs**](#Read-Options-advanced-configs)
+
+
+| Config Name                                                                                                                                                   | Default                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [as.of.instant](#asofinstant)                                                                                                                                 | N/A **(Required)**         | The query instant for time travel. Without specified this option, we query the latest snapshot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.read.paths](#hoodiedatasourcereadpaths)                                                                                                    | N/A **(Required)**         | Comma separated list of file paths to read within a Hudi table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.merge.type](#hoodiedatasourcemergetype)                                                                                                    | payload_combine (Optional) | For Snapshot query on merge on read table, control whether we invoke the record payload implementation to merge (payload_combine) or skip merging altogetherskip_merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.datasource.query.incremental.format](#hoodiedatasourcequeryincrementalformat)                                                                         | latest_state (Optional)    | This config is used alone with the 'incremental' query type.When set to 'latest_state', it returns the latest records' values.When set to 'cdc', it returns the cdc data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 0.13.0        |
+| [hoodie.datasource.read.extract.partition.values.from.path](#hoodiedatasourcereadextractpartitionvaluesfrompath)                                              | false (Optional)           | When set to true, values for partition columns (partition values) will be extracted from physical partition path (default Spark behavior). When set to false partition values will be read from the data file (in Hudi partition columns are persisted by default). This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 0.11.0        |
+| [hoodie.datasource.read.file.index.listing.mode](#hoodiedatasourcereadfileindexlistingmode)                                                                   | lazy (Optional)            | Overrides Hudi's file-index implementation's file listing mode: when set to 'eager', file-index will list all partition paths and corresponding file slices w/in them eagerly, during initialization, prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be  subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning to occur before that, only listing partitions that has already been pruned. Please note that, this config is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated soon after.                                                                                                                                                                        | 0.13.0        |
+| [hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled](#hoodiedatasourcereadfileindexlistingpartition-path-prefixanalysisenabled) | true (Optional)            | Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns, by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from  them (if possible).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 0.13.0        |
+| [hoodie.datasource.read.handle.hollow.commit](#hoodiedatasourcereadhandlehollowcommit)                                                                        | EXCEPTION (Optional)       | When doing incremental queries, there could be hollow commits (requested or inflight commits that are not the latest) that are produced by concurrent writers and could lead to potential data loss. This config allows users to have different ways of handling this situation. The valid values are [EXCEPTION, BLOCK, USE_STATE_TRANSITION_TIME]: Use `EXCEPTION` to throw an exception when hollow commit is detected. This is helpful when hollow commits are not expected. Use `BLOCK` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits to finish is acceptable. Use `USE_STATE_TRANSITION_TIME` (experimental) to query commits in range by state transition time (completion time), instead of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime`  instead of the instant's commit time. | 0.14.0        |
+| [hoodie.datasource.read.incr.fallback.fulltablescan.enable](#hoodiedatasourcereadincrfallbackfulltablescanenable)                                             | false (Optional)           | When doing an incremental query whether we should fall back to full table scans if file does not exist.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.datasource.read.incr.filters](#hoodiedatasourcereadincrfilters)                                                                                       |  (Optional)                | For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions, filters appearing late in the sequence of transformations cannot be automatically pushed down. This option allows setting filters directly on Hoodie Source.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.datasource.read.incr.path.glob](#hoodiedatasourcereadincrpathglob)                                                                                    |  (Optional)                | For the use-cases like users only want to incremental pull from certain partitions instead of the full table. This option allows using glob pattern to directly filter on path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.read.schema.use.end.instanttime](#hoodiedatasourcereadschemauseendinstanttime)                                                             | false (Optional)           | Uses end instant schema when incrementally fetched data to. Default: users latest instant schema.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.streaming.startOffset](#hoodiedatasourcestreamingstartOffset)                                                                              | earliest (Optional)        | Start offset to pull data from hoodie streaming source. allow earliest, latest, and specified start instant time                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0.13.0        |
+| [hoodie.enable.data.skipping](#hoodieenabledataskipping)                                                                                                      | false (Optional)           | Enables data-skipping allowing queries to leverage indexes to reduce the search space by skipping over files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.10.0        |
+| [hoodie.file.index.enable](#hoodiefileindexenable)                                                                                                            | true (Optional)            | Enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.schema.on.read.enable](#hoodieschemaonreadenable)                                                                                                     | false (Optional)           | Enables support for Schema Evolution feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
 ---
 
-> ### hoodie.datasource.read.begin.instanttime
-> Instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BEGIN_INSTANTTIME`<br></br>
-
----
-
-> ### hoodie.datasource.read.end.instanttime
-> Instant time to limit incrementally fetched data to. New data written with an instant_time <= END_INSTANTTIME are fetched out.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: END_INSTANTTIME`<br></br>
-
----
-
-> ### hoodie.datasource.read.paths
-> Comma separated list of file paths to read within a Hudi table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: READ_PATHS`<br></br>
-
----
-
-> ### hoodie.datasource.merge.type
-> For Snapshot query on merge on read table, control whether we invoke the record payload implementation to merge (payload_combine) or skip merging altogetherskip_merge<br></br>
-> `Default Value: payload_combine (Optional)`<br></br>
-> `Config Param: REALTIME_MERGE`<br></br>
-
----
-
-> ### hoodie.datasource.query.incremental.format
-> This config is used alone with the 'incremental' query type.When set to 'latest_state', it returns the latest records' values.When set to 'cdc', it returns the cdc data.<br></br>
-> `Default Value: latest_state (Optional)`<br></br>
-> `Config Param: INCREMENTAL_FORMAT`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.query.type
-> Whether data needs to be read, in incremental mode (new data since an instantTime) (or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode (obtain latest view, by merging base and (if any) log files)<br></br>
-> `Default Value: snapshot (Optional)`<br></br>
-> `Config Param: QUERY_TYPE`<br></br>
-
----
-
-> ### hoodie.datasource.read.extract.partition.values.from.path
-> When set to true, values for partition columns (partition values) will be extracted from physical partition path (default Spark behavior). When set to false partition values will be read from the data file (in Hudi partition columns are persisted by default). This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.datasource.read.file.index.listing.mode
-> Overrides Hudi's file-index implementation's file listing mode: when set to 'eager', file-index will list all partition paths and corresponding file slices w/in them eagerly, during initialization, prior to partition-pruning kicking in, meaning that all partitions will be listed including ones that might be  subsequently pruned out; when set to 'lazy', partitions and file-slices w/in them will be listed lazily (ie when they actually accessed, instead of when file-index is initialized) allowing partition pruning to occur before that, only listing partitions that has already been pruned. Please note that, this config is provided purely to allow to fallback to behavior existing prior to 0.13.0 release, and will be deprecated soon after.<br></br>
-> `Default Value: lazy (Optional)`<br></br>
-> `Config Param: FILE_INDEX_LISTING_MODE_OVERRIDE`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.read.file.index.listing.partition-path-prefix.analysis.enabled
-> Controls whether partition-path prefix analysis is enabled w/in the file-index, allowing to avoid necessity to recursively list deep folder structures of partitioned tables w/ multiple partition columns, by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from  them (if possible).<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.read.incr.fallback.fulltablescan.enable
-> When doing an incremental query whether we should fall back to full table scans if file does not exist.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES`<br></br>
-
----
-
-> ### hoodie.datasource.read.incr.filters
-> For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions, filters appearing late in the sequence of transformations cannot be automatically pushed down. This option allows setting filters directly on Hoodie Source.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: PUSH_DOWN_INCR_FILTERS`<br></br>
-
----
-
-> ### hoodie.datasource.read.incr.path.glob
-> For the use-cases like users only want to incremental pull from certain partitions instead of the full table. This option allows using glob pattern to directly filter on path.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: INCR_PATH_GLOB`<br></br>
-
----
-
-> ### hoodie.datasource.read.schema.use.end.instanttime
-> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME`<br></br>
-
----
-
-> ### hoodie.datasource.streaming.startOffset
-> Start offset to pull data from hoodie streaming source. allow earliest, latest, and specified start instant time<br></br>
-> `Default Value: earliest (Optional)`<br></br>
-> `Config Param: START_OFFSET`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.precombine.field
-> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: READ_PRE_COMBINE_FIELD`<br></br>
-
----
-
-> ### hoodie.enable.data.skipping
-> Enables data-skipping allowing queries to leverage indexes to reduce the search space by skipping over files<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_DATA_SKIPPING`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.file.index.enable
-> Enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ENABLE_HOODIE_FILE_INDEX`<br></br>
-> `Deprecated Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.schema.on.read.enable
-> Enables support for Schema Evolution feature<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SCHEMA_EVOLUTION_ENABLED`<br></br>
-
----
 
 ### Write Options {#Write-Options}
-
 You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
 
 ```java
@@ -214,5413 +101,1867 @@ inputDF.write()
 Options useful for writing tables via `write.format.option(...)`
 
 
-`Config Class`: org.apache.hudi.DataSourceOptions.scala<br></br>
-> ### hoodie.datasource.hive_sync.mode
-> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_MODE`<br></br>
 
+
+[**Basic Configs**](#Write-Options-basic-configs)
+
+
+| Config Name                                                                                              | Default                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                            | Since Version |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.mode](#hoodiedatasourcehive_syncmode)                                       | N/A **(Required)**                      | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.write.partitionpath.field](#hoodiedatasourcewritepartitionpathfield)                  | N/A **(Required)**                      | Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.datasource.write.recordkey.field](#hoodiedatasourcewriterecordkeyfield)                          | N/A **(Required)**                      | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`                                                                                                                                                                                            |               |
+| [hoodie.clustering.async.enabled](#hoodieclusteringasyncenabled)                                         | false (Optional)                        | Enable running of clustering service, asynchronously as inserts happen on the table.                                                                                                                                                                                                                                                                                                                                   | 0.7.0         |
+| [hoodie.clustering.inline](#hoodieclusteringinline)                                                      | false (Optional)                        | Turn on inline clustering - clustering will be run after each write operation is complete                                                                                                                                                                                                                                                                                                                              | 0.7.0         |
+| [hoodie.datasource.hive_sync.enable](#hoodiedatasourcehive_syncenable)                                   | false (Optional)                        | When set to true, register/sync the table to Apache Hive metastore.                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.jdbcurl](#hoodiedatasourcehive_syncjdbcurl)                                 | jdbc:hive2://localhost:10000 (Optional) | Hive metastore url                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.metastore.uris](#hoodiedatasourcehive_syncmetastoreuris)                    | thrift://localhost:9083 (Optional)      | Hive metastore url                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable)                                    | false (Optional)                        | Enable Syncing the Hudi Table with an external meta store or data catalog.                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.datasource.write.hive_style_partitioning](#hoodiedatasourcewritehive_style_partitioning)         | false (Optional)                        | Flag to indicate whether to use Hive style partitioning. If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format. By default false (the names of partition folders are only partition values)                                                                                                                                                                  |               |
+| [hoodie.datasource.write.operation](#hoodiedatasourcewriteoperation)                                     | upsert (Optional)                       | Whether to do upsert, insert or bulk_insert for the write operation. Use bulk_insert to load new data into a table, and there on use upsert/insert. bulk insert uses a disk based write path to scale to load large inputs without need to cache it.                                                                                                                                                                   |               |
+| [hoodie.datasource.write.precombine.field](#hoodiedatasourcewriteprecombinefield)                        | ts (Optional)                           | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.write.streaming.disable.compaction](#hoodiedatasourcewritestreamingdisablecompaction) | false (Optional)                        | By default for MOR table, async compaction is enabled with spark streaming sink. By setting this config to true, we can disable it and the expectation is that, users will schedule and execute compaction in a different process/job altogether. Some users may wish to run it separately to manage resources across table services and regular ingestion pipeline and so this could be preferred on such cases.      | 0.14.0        |
+| [hoodie.datasource.write.table.type](#hoodiedatasourcewritetabletype)                                    | COPY_ON_WRITE (Optional)                | The table type for the underlying data, for this write. This can’t change between writes.                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.sql.insert.mode](#hoodiesqlinsertmode)                                                           | upsert (Optional)                       | Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict.For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record.For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record.While for non-strict mode, hudi just do the insert operation for the pk-table. |               |
+
+[**Advanced Configs**](#Write-Options-advanced-configs)
+
+
+| Config Name                                                                                                                                      | Default                                                                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| [hoodie.datasource.hive_sync.serde_properties](#hoodiedatasourcehive_syncserde_properties)                                                       | N/A **(Required)**                                                     | Serde properties to hive table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.hive_sync.table_properties](#hoodiedatasourcehive_synctable_properties)                                                       | N/A **(Required)**                                                     | Additional properties to store with table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.write.partitions.to.delete](#hoodiedatasourcewritepartitionstodelete)                                                         | N/A **(Required)**                                                     | Comma separated list of partitions to delete. Allows use of wildcard *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.datasource.write.table.name](#hoodiedatasourcewritetablename)                                                                            | N/A **(Required)**                                                     | Table name for the datasource write. Also used to register the table into meta stores.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.datasource.compaction.async.enable](#hoodiedatasourcecompactionasyncenable)                                                              | true (Optional)                                                        | Controls whether async compaction should be turned on for MOR table writing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)                                       | false (Optional)                                                       | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.auto_create_database](#hoodiedatasourcehive_syncauto_create_database)                                               | true (Optional)                                                        | Auto create hive database if does not exists                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                                                       | PARQUET (Optional)                                                     | Base file format for the sync.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.batch_num](#hoodiedatasourcehive_syncbatch_num)                                                                     | 1000 (Optional)                                                        | The number of partitions one batch when synchronous partitions to hive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.datasource.hive_sync.bucket_sync](#hoodiedatasourcehive_syncbucket_sync)                                                                 | false (Optional)                                                       | Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.datasource.hive_sync.create_managed_table](#hoodiedatasourcehive_synccreate_managed_table)                                               | false (Optional)                                                       | Whether to sync the table as managed table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                                                       | default (Optional)                                                     | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.ignore_exceptions](#hoodiedatasourcehive_syncignore_exceptions)                                                     | false (Optional)                                                       | Ignore exceptions when syncing with Hive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class)                                     | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)            | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                                                       |  (Optional)                                                            | Field in the table to use for determining hive partition columns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.password](#hoodiedatasourcehive_syncpassword)                                                                       | hive (Optional)                                                        | hive password to use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.hive_sync.skip_ro_suffix](#hoodiedatasourcehive_syncskip_ro_suffix)                                                           | false (Optional)                                                       | Skip the _ro suffix for Read optimized table, when registering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.support_timestamp](#hoodiedatasourcehive_syncsupport_timestamp)                                                     | false (Optional)                                                       | ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.datasource.hive_sync.sync_as_datasource](#hoodiedatasourcehive_syncsync_as_datasource)                                                   | true (Optional)                                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.hive_sync.sync_comment](#hoodiedatasourcehive_syncsync_comment)                                                               | false (Optional)                                                       | Whether to sync the table column comments while syncing the table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                                                             | unknown (Optional)                                                     | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.hive_sync.use_jdbc](#hoodiedatasourcehive_syncuse_jdbc)                                                                       | true (Optional)                                                        | Use JDBC when hive synchronization is enabled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.use_pre_apache_input_format](#hoodiedatasourcehive_syncuse_pre_apache_input_format)                                 | false (Optional)                                                       | Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.hive_sync.username](#hoodiedatasourcehive_syncusername)                                                                       | hive (Optional)                                                        | hive user name to use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                                                            | false (Optional)                                                       | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.write.commitmeta.key.prefix](#hoodiedatasourcewritecommitmetakeyprefix)                                                       | _ (Optional)                                                           | Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. This is useful to store checkpointing information, in a consistent way with the hudi timeline                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.write.drop.partition.columns](#hoodiedatasourcewritedroppartitioncolumns)                                                     | false (Optional)                                                       | When set to true, will not write the partition columns into hudi. By default, false.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.write.insert.drop.duplicates](#hoodiedatasourcewriteinsertdropduplicates)                                                     | false (Optional)                                                       | If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.datasource.write.keygenerator.class](#hoodiedatasourcewritekeygeneratorclass)                                                            | org.apache.hudi.keygen.SimpleKeyGenerator (Optional)                   | Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled](#hoodiedatasourcewritekeygeneratorconsistentlogicaltimestampenabled) | false (Optional)                                                       | When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases.                            |               |
+| [hoodie.datasource.write.partitionpath.urlencode](#hoodiedatasourcewritepartitionpathurlencode)                                                  | false (Optional)                                                       | Should we url encode the partition path value, before creating the folder structure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.write.payload.class](#hoodiedatasourcewritepayloadclass)                                                                      | org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional) | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.write.reconcile.schema](#hoodiedatasourcewritereconcileschema)                                                                | false (Optional)                                                       | This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch) |               |
+| [hoodie.datasource.write.record.merger.impls](#hoodiedatasourcewriterecordmergerimpls)                                                           | org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)         | List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)                                                                                                                                                                                                                                                                                                                                                       | 0.13.0        |
+| [hoodie.datasource.write.record.merger.strategy](#hoodiedatasourcewriterecordmergerstrategy)                                                     | eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)                        | Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 0.13.0        |
+| [hoodie.datasource.write.row.writer.enable](#hoodiedatasourcewriterowwriterenable)                                                               | true (Optional)                                                        | When set to true, will perform write operations directly using the spark native `Row` representation, avoiding any additional conversion costs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.write.streaming.checkpoint.identifier](#hoodiedatasourcewritestreamingcheckpointidentifier)                                   | default_single_writer (Optional)                                       | A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) corresponding this writer. Please note that keep the identifier an unique value for different writer if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, causing spark will retry and rewrite the data.                                                                                                                                                                                        | 0.13.0        |
+| [hoodie.datasource.write.streaming.ignore.failed.batch](#hoodiedatasourcewritestreamingignorefailedbatch)                                        | false (Optional)                                                       | Config to indicate whether to ignore any non exception error (e.g. writestatus error) within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead.So, would recommend users to use this with caution.                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.datasource.write.streaming.retry.count](#hoodiedatasourcewritestreamingretrycount)                                                       | 3 (Optional)                                                           | Config to indicate how many times streaming job should retry for a failed micro batch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.datasource.write.streaming.retry.interval.ms](#hoodiedatasourcewritestreamingretryintervalms)                                            | 2000 (Optional)                                                        |  Config to indicate how long (by millisecond) before a retry should issued for failed microbatch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.deltastreamer.source.kafka.value.deserializer.class](#hoodiedeltastreamersourcekafkavaluedeserializerclass)                              | io.confluent.kafka.serializers.KafkaAvroDeserializer (Optional)        | This class is used by kafka client to deserialize the records                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 0.9.0         |
+| [hoodie.meta.sync.client.tool.class](#hoodiemetasyncclienttoolclass)                                                                             | org.apache.hudi.hive.HiveSyncTool (Optional)                           | Sync tool class name used to sync to metastore. Defaults to Hive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.sql.bulk.insert.enable](#hoodiesqlbulkinsertenable)                                                                                      | false (Optional)                                                       | When set to true, the sql insert statement will use bulk insert.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
 ---
 
-> ### hoodie.datasource.hive_sync.serde_properties
-> Serde properties to hive table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_SERDE_PROPERTIES`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table_properties
-> Additional properties to store with table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_PROPERTIES`<br></br>
-
----
-
-> ### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITIONPATH_FIELD`<br></br>
-
----
-
-> ### hoodie.datasource.write.partitions.to.delete
-> Comma separated list of partitions to delete. Allows use of wildcard *<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITIONS_TO_DELETE`<br></br>
-
----
-
-> ### hoodie.datasource.write.recordkey.field
-> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
-Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
-the dot notation eg: `a.b.c`<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: RECORDKEY_FIELD`<br></br>
-
----
-
-> ### hoodie.datasource.write.table.name
-> Table name for the datasource write. Also used to register the table into meta stores.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.clustering.async.enabled
-> Enable running of clustering service, asynchronously as inserts happen on the table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_CLUSTERING_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.inline
-> Turn on inline clustering - clustering will be run after each write operation is complete<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INLINE_CLUSTERING_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.datasource.compaction.async.enable
-> Controls whether async compaction should be turned on for MOR table writing.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ASYNC_COMPACT_ENABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.auto_create_database
-> Auto create hive database if does not exists<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_AUTO_CREATE_DATABASE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: HIVE_BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.batch_num
-> The number of partitions one batch when synchronous partitions to hive.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: HIVE_BATCH_SYNC_PARTITION_NUM`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.bucket_sync
-> Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_BUCKET_SYNC`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.create_managed_table
-> Whether to sync the table as managed table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_CREATE_MANAGED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: HIVE_DATABASE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.enable
-> When set to true, register/sync the table to Apache Hive metastore.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.ignore_exceptions
-> Ignore exceptions when syncing with Hive.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_IGNORE_EXCEPTIONS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.jdbcurl
-> Hive metastore url<br></br>
-> `Default Value: jdbc:hive2://localhost:10000 (Optional)`<br></br>
-> `Config Param: HIVE_URL`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.metastore.uris
-> Hive metastore url<br></br>
-> `Default Value: thrift://localhost:9083 (Optional)`<br></br>
-> `Config Param: METASTORE_URIS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: HIVE_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: HIVE_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.password
-> hive password to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_PASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table, when registering<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.support_timestamp
-> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SUPPORT_TIMESTAMP_TYPE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_as_datasource
-> <br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_AS_DATA_SOURCE_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_comment
-> Whether to sync the table column comments while syncing the table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_COMMENT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: HIVE_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_USE_JDBC`<br></br>
-> `Deprecated Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_pre_apache_input_format
-> Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_USE_PRE_APACHE_INPUT_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.username
-> hive user name to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_USER`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_CONDITIONAL_SYNC`<br></br>
-
----
-
-> ### hoodie.datasource.write.commitmeta.key.prefix
-> Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. This is useful to store checkpointing information, in a consistent way with the hudi timeline<br></br>
-> `Default Value: _ (Optional)`<br></br>
-> `Config Param: COMMIT_METADATA_KEYPREFIX`<br></br>
-
----
-
-> ### hoodie.datasource.write.drop.partition.columns
-> When set to true, will not write the partition columns into hudi. By default, false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: DROP_PARTITION_COLUMNS`<br></br>
-
----
-
-> ### hoodie.datasource.write.hive_style_partitioning
-> Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
-By default false (the names of partition folders are only partition values)<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_STYLE_PARTITIONING`<br></br>
-
----
-
-> ### hoodie.datasource.write.insert.drop.duplicates
-> If set to true, filters out all duplicate records from incoming dataframe, during insert operations.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INSERT_DROP_DUPS`<br></br>
-
----
-
-> ### hoodie.datasource.write.keygenerator.class
-> Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`<br></br>
-> `Default Value: org.apache.hudi.keygen.SimpleKeyGenerator (Optional)`<br></br>
-> `Config Param: KEYGENERATOR_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled
-> When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.write.operation
-> Whether to do upsert, insert or bulkinsert for the write operation. Use bulkinsert to load new data into a table, and there on use upsert/insert. bulk insert uses a disk based write path to scale to load large inputs without need to cache it.<br></br>
-> `Default Value: upsert (Optional)`<br></br>
-> `Config Param: OPERATION`<br></br>
-
----
-
-> ### hoodie.datasource.write.partitionpath.urlencode
-> Should we url encode the partition path value, before creating the folder structure.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: URL_ENCODE_PARTITIONING`<br></br>
-
----
-
-> ### hoodie.datasource.write.payload.class
-> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective<br></br>
-> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)`<br></br>
-> `Config Param: PAYLOAD_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.precombine.field
-> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: PRECOMBINE_FIELD`<br></br>
-
----
-
-> ### hoodie.datasource.write.reconcile.schema
-> This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch)<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: RECONCILE_SCHEMA`<br></br>
-
----
-
-> ### hoodie.datasource.write.record.merger.impls
-> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
-> `Default Value: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_IMPLS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.record.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id<br></br>
-> `Default Value: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.row.writer.enable
-> When set to true, will perform write operations directly using the spark native `Row` representation, avoiding any additional conversion costs.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ENABLE_ROW_WRITER`<br></br>
-
----
-
-> ### hoodie.datasource.write.streaming.checkpoint.identifier
-> A stream identifier used for HUDI to fetch the right checkpoint(`batch id` to be more specific) corresponding this writer. Please note that keep the identifier an unique value for different writer if under multi-writer scenario. If the value is not set, will only keep the checkpoint info in the memory. This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, causing spark will retry and rewrite the data.<br></br>
-> `Default Value: default_single_writer (Optional)`<br></br>
-> `Config Param: STREAMING_CHECKPOINT_IDENTIFIER`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.streaming.ignore.failed.batch
-> Config to indicate whether to ignore any non exception error (e.g. writestatus error) within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead.So, would recommend users to use this with caution.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: STREAMING_IGNORE_FAILED_BATCH`<br></br>
-
----
-
-> ### hoodie.datasource.write.streaming.retry.count
-> Config to indicate how many times streaming job should retry for a failed micro batch.<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: STREAMING_RETRY_CNT`<br></br>
-
----
-
-> ### hoodie.datasource.write.streaming.retry.interval.ms
->  Config to indicate how long (by millisecond) before a retry should issued for failed microbatch<br></br>
-> `Default Value: 2000 (Optional)`<br></br>
-> `Config Param: STREAMING_RETRY_INTERVAL_MS`<br></br>
-
----
-
-> ### hoodie.datasource.write.table.type
-> The table type for the underlying data, for this write. This can’t change between writes.<br></br>
-> `Default Value: COPY_ON_WRITE (Optional)`<br></br>
-> `Config Param: TABLE_TYPE`<br></br>
-
----
-
-> ### hoodie.deltastreamer.source.kafka.value.deserializer.class
-> This class is used by kafka client to deserialize the records<br></br>
-> `Default Value: io.confluent.kafka.serializers.KafkaAvroDeserializer (Optional)`<br></br>
-> `Config Param: KAFKA_AVRO_VALUE_DESERIALIZER_CLASS`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.meta.sync.client.tool.class
-> Sync tool class name used to sync to metastore. Defaults to Hive.<br></br>
-> `Default Value: org.apache.hudi.hive.HiveSyncTool (Optional)`<br></br>
-> `Config Param: META_SYNC_CLIENT_TOOL_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.sql.bulk.insert.enable
-> When set to true, the sql insert statement will use bulk insert.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SQL_ENABLE_BULK_INSERT`<br></br>
-
----
-
-> ### hoodie.sql.insert.mode
-> Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict.For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record.For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record.While for non-strict mode, hudi just do the insert operation for the pk-table.<br></br>
-> `Default Value: upsert (Optional)`<br></br>
-> `Config Param: SQL_INSERT_MODE`<br></br>
-
----
 
 ### PreCommit Validator Configurations {#PreCommit-Validator-Configurations}
 The following set of configurations help validate new data before commits.
 
-`Config Class`: org.apache.hudi.config.HoodiePreCommitValidatorConfig<br></br>
-> ### hoodie.precommit.validators
-> Comma separated list of class names that can be invoked to validate commit<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: VALIDATOR_CLASS_NAMES`<br></br>
 
----
 
-> ### hoodie.precommit.validators.equality.sql.queries
-> Spark SQL queries to run on table before committing new data to validate state before and after commit. Multiple queries separated by ';' delimiter are supported. Example: "select count(*) from \<TABLE_NAME\> Note \<TABLE_NAME\> is replaced by table state before and after commit.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: EQUALITY_SQL_QUERIES`<br></br>
+[**Advanced Configs**](#PreCommit-Validator-Configurations-advanced-configs)
 
----
 
-> ### hoodie.precommit.validators.inequality.sql.queries
-> Spark SQL queries to run on table before committing new data to validate state before and after commit.Multiple queries separated by ';' delimiter are supported.Example query: 'select count(*) from \<TABLE_NAME\> where col=null'Note \<TABLE_NAME\> variable is expected to be present in query.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: INEQUALITY_SQL_QUERIES`<br></br>
-
----
-
-> ### hoodie.precommit.validators.single.value.sql.queries
-> Spark SQL queries to run on table before committing new data to validate state after commit.Multiple queries separated by ';' delimiter are supported.Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'Note \<TABLE_NAME\> variable is expected to be present in query.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: SINGLE_VALUE_SQL_QUERIES`<br></br>
-
+| Config Name                                                                                             | Default     | Description                                                                                                                                                                                                                                                                                                                               | Since Version |
+| ------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.precommit.validators](#hoodieprecommitvalidators)                                               |  (Optional) | Comma separated list of class names that can be invoked to validate commit                                                                                                                                                                                                                                                                |               |
+| [hoodie.precommit.validators.equality.sql.queries](#hoodieprecommitvalidatorsequalitysqlqueries)        |  (Optional) | Spark SQL queries to run on table before committing new data to validate state before and after commit. Multiple queries separated by ';' delimiter are supported. Example: "select count(*) from \&lt;TABLE_NAME\&gt; Note \&lt;TABLE_NAME\&gt; is replaced by table state before and after commit.                                      |               |
+| [hoodie.precommit.validators.inequality.sql.queries](#hoodieprecommitvalidatorsinequalitysqlqueries)    |  (Optional) | Spark SQL queries to run on table before committing new data to validate state before and after commit.Multiple queries separated by ';' delimiter are supported.Example query: 'select count(*) from \&lt;TABLE_NAME\&gt; where col=null'Note \&lt;TABLE_NAME\&gt; variable is expected to be present in query.                          |               |
+| [hoodie.precommit.validators.single.value.sql.queries](#hoodieprecommitvalidatorssinglevaluesqlqueries) |  (Optional) | Spark SQL queries to run on table before committing new data to validate state after commit.Multiple queries separated by ';' delimiter are supported.Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'Note \&lt;TABLE_NAME\&gt; variable is expected to be present in query. |               |
 ---
 
 ## Flink Sql Configs {#FLINK_SQL}
 These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
 
+
 ### Flink Options {#Flink-Options}
 Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
 
-`Config Class`: org.apache.hudi.configuration.FlinkOptions<br></br>
-> #### clustering.tasks
-> Parallelism of tasks that do actual clustering, default same as the write task parallelism<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: CLUSTERING_TASKS`<br></br>
 
----
 
-> #### compaction.tasks
-> Parallelism of tasks that do actual compaction, default same as the write task parallelism<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: COMPACTION_TASKS`<br></br>
-
----
-
-> #### hive_sync.conf.dir
-> The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_CONF_DIR`<br></br>
-
----
-
-> #### hive_sync.serde_properties
-> Serde properties to hive table, the data format is k1=v1
-k2=v2<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_TABLE_SERDE_PROPERTIES`<br></br>
-
----
-
-> #### hive_sync.table_properties
-> Additional properties to store with table, the data format is k1=v1
-k2=v2<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_TABLE_PROPERTIES`<br></br>
-
----
-
-> #### hoodie.database.name
-> Database name to register to Hive metastore<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: DATABASE_NAME`<br></br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.class
-> Key generator class, that implements will extract the key out of incoming record<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: KEYGEN_CLASS_NAME`<br></br>
-
----
-
-> #### hoodie.table.name
-> Table name to register to Hive metastore<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TABLE_NAME`<br></br>
-
----
-
-> #### path
-> Base path for the target hoodie table.
-The path would be created if it does not exist,
-otherwise a Hoodie table expects to be initialized successfully<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PATH`<br></br>
-
----
-
-> #### read.end-commit
-> End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: READ_END_COMMIT`<br></br>
-
----
-
-> #### read.start-commit
-> Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: READ_START_COMMIT`<br></br>
-
----
-
-> #### read.tasks
-> Parallelism of tasks that do actual read, default is the parallelism of the execution environment<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: READ_TASKS`<br></br>
-
----
-
-> #### source.avro-schema
-> Source avro schema string, the parsed schema is used for deserialization<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: SOURCE_AVRO_SCHEMA`<br></br>
-
----
-
-> #### source.avro-schema.path
-> Source avro schema file path, the parsed schema is used for deserialization<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: SOURCE_AVRO_SCHEMA_PATH`<br></br>
-
----
-
-> #### write.bucket_assign.tasks
-> Parallelism of tasks that do bucket assign, default same as the write task parallelism<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BUCKET_ASSIGN_TASKS`<br></br>
-
----
-
-> #### write.index_bootstrap.tasks
-> Parallelism of tasks that do index bootstrap, default same as the write task parallelism<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: INDEX_BOOTSTRAP_TASKS`<br></br>
-
----
-
-> #### write.partition.format
-> Partition path format, only valid when 'write.datetime.partitioning' is true, default is:
-1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;
-2) 'yyyyMMdd' for DATE and INT.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION_FORMAT`<br></br>
-
----
-
-> #### write.tasks
-> Parallelism of tasks that do actual write, default is the parallelism of the execution environment<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: WRITE_TASKS`<br></br>
-
----
-
-> #### archive.max_commits
-> Max number of commits to keep before archiving older commits into a sequential log, default 50<br></br>
-> `Default Value: 50 (Optional)`<br></br>
-> `Config Param: ARCHIVE_MAX_COMMITS`<br></br>
-
----
-
-> #### archive.min_commits
-> Min number of commits to keep before archiving older commits into a sequential log, default 40<br></br>
-> `Default Value: 40 (Optional)`<br></br>
-> `Config Param: ARCHIVE_MIN_COMMITS`<br></br>
-
----
-
-> #### cdc.enabled
-> When enable, persist the change data if necessary, and can be queried as a CDC query mode<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: CDC_ENABLED`<br></br>
-
----
-
-> #### cdc.supplemental.logging.mode
-> Setting 'op_key_only' persists the 'op' and the record key only, setting 'data_before' persists the additional 'before' image, and setting 'data_before_after' persists the additional 'before' and 'after' images.<br></br>
-> `Default Value: data_before_after (Optional)`<br></br>
-> `Config Param: SUPPLEMENTAL_LOGGING_MODE`<br></br>
-
----
-
-> #### changelog.enabled
-> Whether to keep all the intermediate changes, we try to keep all the changes of a record when enabled:
-1). The sink accept the UPDATE_BEFORE message;
-2). The source try to emit every changes of a record.
-The semantics is best effort because the compaction job would finally merge all changes of a record into one.
- default false to have UPSERT semantics<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: CHANGELOG_ENABLED`<br></br>
-
----
-
-> #### clean.async.enabled
-> Whether to cleanup the old commits immediately on new commits, enabled by default<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: CLEAN_ASYNC_ENABLED`<br></br>
-
----
-
-> #### clean.policy
-> Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS.Default is KEEP_LATEST_COMMITS.<br></br>
-> `Default Value: KEEP_LATEST_COMMITS (Optional)`<br></br>
-> `Config Param: CLEAN_POLICY`<br></br>
-
----
-
-> #### clean.retain_commits
-> Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).
-This also directly translates into how much you can incrementally pull on this table, default 30<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: CLEAN_RETAIN_COMMITS`<br></br>
-
----
-
-> #### clean.retain_file_versions
-> Number of file versions to retain. default 5<br></br>
-> `Default Value: 5 (Optional)`<br></br>
-> `Config Param: CLEAN_RETAIN_FILE_VERSIONS`<br></br>
-
----
-
-> #### clean.retain_hours
-> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
-> `Default Value: 24 (Optional)`<br></br>
-> `Config Param: CLEAN_RETAIN_HOURS`<br></br>
-
----
-
-> #### clustering.async.enabled
-> Async Clustering, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: CLUSTERING_ASYNC_ENABLED`<br></br>
-
----
-
-> #### clustering.delta_commits
-> Max delta commits needed to trigger clustering, default 4 commits<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: CLUSTERING_DELTA_COMMITS`<br></br>
-
----
-
-> #### clustering.plan.partition.filter.mode
-> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.<br></br>
-> `Default Value: NONE (Optional)`<br></br>
-> `Config Param: CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
-
----
-
-> #### clustering.plan.strategy.class
-> Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by clustering.plan.strategy.daybased.lookback.partitions) day based partitions picks the small file slices within those partitions.<br></br>
-> `Default Value: org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy (Optional)`<br></br>
-> `Config Param: CLUSTERING_PLAN_STRATEGY_CLASS`<br></br>
-
----
-
-> #### clustering.plan.strategy.daybased.lookback.partitions
-> Number of partitions to list to create ClusteringPlan, default is 2<br></br>
-> `Default Value: 2 (Optional)`<br></br>
-> `Config Param: CLUSTERING_TARGET_PARTITIONS`<br></br>
-
----
-
-> #### clustering.plan.strategy.daybased.skipfromlatest.partitions
-> Number of partitions to skip from latest when choosing partitions to create ClusteringPlan<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST`<br></br>
-
----
-
-> #### clustering.plan.strategy.max.num.groups
-> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: CLUSTERING_MAX_NUM_GROUPS`<br></br>
-
----
-
-> #### clustering.plan.strategy.small.file.limit
-> Files smaller than the size specified here are candidates for clustering, default 600 MB<br></br>
-> `Default Value: 600 (Optional)`<br></br>
-> `Config Param: CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT`<br></br>
-
----
-
-> #### clustering.plan.strategy.sort.columns
-> Columns to sort the data by when clustering<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: CLUSTERING_SORT_COLUMNS`<br></br>
-
----
-
-> #### clustering.plan.strategy.target.file.max.bytes
-> Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB<br></br>
-> `Default Value: 1073741824 (Optional)`<br></br>
-> `Config Param: CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES`<br></br>
-
----
-
-> #### clustering.schedule.enabled
-> Schedule the cluster plan, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: CLUSTERING_SCHEDULE_ENABLED`<br></br>
-
----
-
-> #### compaction.async.enabled
-> Async Compaction, enabled by default for MOR<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COMPACTION_ASYNC_ENABLED`<br></br>
-
----
-
-> #### compaction.delta_commits
-> Max delta commits needed to trigger compaction, default 5 commits<br></br>
-> `Default Value: 5 (Optional)`<br></br>
-> `Config Param: COMPACTION_DELTA_COMMITS`<br></br>
-
----
-
-> #### compaction.delta_seconds
-> Max delta seconds time needed to trigger compaction, default 1 hour<br></br>
-> `Default Value: 3600 (Optional)`<br></br>
-> `Config Param: COMPACTION_DELTA_SECONDS`<br></br>
-
----
-
-> #### compaction.max_memory
-> Max memory in MB for compaction spillable map, default 100MB<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: COMPACTION_MAX_MEMORY`<br></br>
-
----
-
-> #### compaction.schedule.enabled
-> Schedule the compaction plan, enabled by default for MOR<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COMPACTION_SCHEDULE_ENABLED`<br></br>
-
----
-
-> #### compaction.target_io
-> Target IO in MB for per compaction (both read and write), default 500 GB<br></br>
-> `Default Value: 512000 (Optional)`<br></br>
-> `Config Param: COMPACTION_TARGET_IO`<br></br>
-
----
-
-> #### compaction.timeout.seconds
-> Max timeout time in seconds for online compaction to rollback, default 20 minutes<br></br>
-> `Default Value: 1200 (Optional)`<br></br>
-> `Config Param: COMPACTION_TIMEOUT_SECONDS`<br></br>
-
----
-
-> #### compaction.trigger.strategy
-> Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;
-'time_elapsed': trigger compaction when time elapsed &gt; N seconds since last compaction;
-'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;
-'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.
-Default is 'num_commits'<br></br>
-> `Default Value: num_commits (Optional)`<br></br>
-> `Config Param: COMPACTION_TRIGGER_STRATEGY`<br></br>
-
----
-
-> #### hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/mm/dd, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> #### hive_sync.auto_create_db
-> Auto create hive database if it does not exists, default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_AUTO_CREATE_DB`<br></br>
-
----
-
-> #### hive_sync.db
-> Database name for hive sync, default 'default'<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_DB`<br></br>
-
----
-
-> #### hive_sync.enabled
-> Asynchronously sync Hive meta to HMS, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_ENABLED`<br></br>
-
----
-
-> #### hive_sync.file_format
-> File format for hive sync, default 'PARQUET'<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_FILE_FORMAT`<br></br>
-
----
-
-> #### hive_sync.ignore_exceptions
-> Ignore exceptions during hive synchronization, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_IGNORE_EXCEPTIONS`<br></br>
-
----
-
-> #### hive_sync.jdbc_url
-> Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'<br></br>
-> `Default Value: jdbc:hive2://localhost:10000 (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_JDBC_URL`<br></br>
-
----
-
-> #### hive_sync.metastore.uris
-> Metastore uris for hive sync, default ''<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_METASTORE_URIS`<br></br>
-
----
-
-> #### hive_sync.mode
-> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'<br></br>
-> `Default Value: HMS (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_MODE`<br></br>
-
----
-
-> #### hive_sync.partition_extractor_class
-> Tool to extract the partition value from HDFS path, default 'MultiPartKeysValueExtractor'<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME`<br></br>
-
----
-
-> #### hive_sync.partition_fields
-> Partition fields for hive sync, default ''<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> #### hive_sync.password
-> Password for hive sync, default 'hive'<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_PASSWORD`<br></br>
-
----
-
-> #### hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table when registering, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br></br>
-
----
-
-> #### hive_sync.support_timestamp
-> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.
-Disabled by default for backward compatibility.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br></br>
-
----
-
-> #### hive_sync.table
-> Table name for hive sync, default 'unknown'<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_TABLE`<br></br>
-
----
-
-> #### hive_sync.table.strategy
-> Hive table synchronization strategy. Available option: RO, RT, ALL.<br></br>
-> `Default Value: ALL (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_TABLE_STRATEGY`<br></br>
-
----
-
-> #### hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled, default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_USE_JDBC`<br></br>
-
----
-
-> #### hive_sync.username
-> Username for hive sync, default 'hive'<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_USERNAME`<br></br>
-
----
-
-> #### hoodie.bucket.index.hash.field
-> Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.
-Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: INDEX_KEY_FIELD`<br></br>
-
----
-
-> #### hoodie.bucket.index.num.buckets
-> Hudi bucket number per partition. Only affected if using Hudi bucket index.<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
-
----
-
-> #### hoodie.datasource.merge.type
-> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
-1) skip_merge: read the base file records plus the log file records;
-2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
-   log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
-> `Default Value: payload_combine (Optional)`<br></br>
-> `Config Param: MERGE_TYPE`<br></br>
-
----
-
-> #### hoodie.datasource.query.type
-> Decides how data files need to be read, in
-1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
-2) incremental mode (new data since an instantTime);
-3) Read Optimized mode (obtain latest view, based on columnar data)
-.Default: snapshot<br></br>
-> `Default Value: snapshot (Optional)`<br></br>
-> `Config Param: QUERY_TYPE`<br></br>
-
----
-
-> #### hoodie.datasource.write.hive_style_partitioning
-> Whether to use Hive style partitioning.
-If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format.
-By default false (the names of partition folders are only partition values)<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_STYLE_PARTITIONING`<br></br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.type
-> Key generator type, that implements will extract the key out of incoming record. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
-> `Default Value: SIMPLE (Optional)`<br></br>
-> `Config Param: KEYGEN_TYPE`<br></br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.
-Actual value obtained by invoking .toString(), default ''<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: PARTITION_PATH_FIELD`<br></br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.urlencode
-> Whether to encode the partition path url, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: URL_ENCODE_PARTITIONING`<br></br>
-
----
-
-> #### hoodie.datasource.write.recordkey.field
-> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
-Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`<br></br>
-> `Default Value: uuid (Optional)`<br></br>
-> `Config Param: RECORD_KEY_FIELD`<br></br>
-
----
-
-> #### index.bootstrap.enabled
-> Whether to bootstrap the index state from existing hoodie table, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INDEX_BOOTSTRAP_ENABLED`<br></br>
-
----
-
-> #### index.global.enabled
-> Whether to update index for the old partition path
-if same key record with different partition path came in, default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: INDEX_GLOBAL_ENABLED`<br></br>
-
----
-
-> #### index.partition.regex
-> Whether to load partitions in state if partition path matching， default `*`<br></br>
-> `Default Value: .* (Optional)`<br></br>
-> `Config Param: INDEX_PARTITION_REGEX`<br></br>
-
----
-
-> #### index.state.ttl
-> Index state ttl in days, default stores the index permanently<br></br>
-> `Default Value: 0.0 (Optional)`<br></br>
-> `Config Param: INDEX_STATE_TTL`<br></br>
-
----
-
-> #### index.type
-> Index type of Flink write job, default is using state backed index.<br></br>
-> `Default Value: FLINK_STATE (Optional)`<br></br>
-> `Config Param: INDEX_TYPE`<br></br>
-
----
-
-> #### metadata.compaction.delta_commits
-> Max delta commits for metadata table to trigger compaction, default 10<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: METADATA_COMPACTION_DELTA_COMMITS`<br></br>
-
----
-
-> #### metadata.enabled
-> Enable the internal metadata table which serves table metadata like level file listings, default disabled<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: METADATA_ENABLED`<br></br>
-
----
-
-> #### partition.default_name
-> The default partition name in case the dynamic partition column value is null/empty string<br></br>
-> `Default Value: __HIVE_DEFAULT_PARTITION__ (Optional)`<br></br>
-> `Config Param: PARTITION_DEFAULT_NAME`<br></br>
-
----
-
-> #### payload.class
-> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
-This will render any value set for the option in-effective<br></br>
-> `Default Value: org.apache.hudi.common.model.EventTimeAvroPayload (Optional)`<br></br>
-> `Config Param: PAYLOAD_CLASS_NAME`<br></br>
-
----
-
-> #### precombine.field
-> Field used in preCombining before actual write. When two records have the same
-key value, we will pick the one with the largest value for the precombine field,
-determined by Object.compareTo(..)<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: PRECOMBINE_FIELD`<br></br>
-
----
-
-> #### read.data.skipping.enabled
-> Enables data-skipping allowing queries to leverage indexes to reduce the search space byskipping over files<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: READ_DATA_SKIPPING_ENABLED`<br></br>
-
----
-
-> #### read.streaming.check-interval
-> Check interval for streaming read of SECOND, default 1 minute<br></br>
-> `Default Value: 60 (Optional)`<br></br>
-> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br></br>
-
----
-
-> #### read.streaming.enabled
-> Whether to read as streaming source, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: READ_AS_STREAMING`<br></br>
-
----
-
-> #### read.streaming.skip_clustering
-> Whether to skip clustering instants for streaming read,
-to avoid reading duplicates<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: READ_STREAMING_SKIP_CLUSTERING`<br></br>
-
----
-
-> #### read.streaming.skip_compaction
-> Whether to skip compaction instants for streaming read,
-there are two cases that this option can be used to avoid reading duplicates:
-1) you are definitely sure that the consumer reads faster than any compaction instants, usually with delta time compaction strategy that is long enough, for e.g, one week;
-2) changelog mode is enabled, this option is a solution to keep data integrity<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: READ_STREAMING_SKIP_COMPACT`<br></br>
-
----
-
-> #### read.utc-timezone
-> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: UTC_TIMEZONE`<br></br>
-
----
-
-> #### record.merger.impls
-> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by record.merger.strategy. Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
-> `Default Value: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_IMPLS`<br></br>
-
----
-
-> #### record.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id<br></br>
-> `Default Value: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
-
----
-
-> #### table.type
-> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ<br></br>
-> `Default Value: COPY_ON_WRITE (Optional)`<br></br>
-> `Config Param: TABLE_TYPE`<br></br>
-
----
-
-> #### write.batch.size
-> Batch buffer size in MB to flush data into the underneath filesystem, default 256MB<br></br>
-> `Default Value: 256.0 (Optional)`<br></br>
-> `Config Param: WRITE_BATCH_SIZE`<br></br>
-
----
-
-> #### write.bulk_insert.shuffle_input
-> Whether to shuffle the inputs by specific fields for bulk insert tasks, default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: WRITE_BULK_INSERT_SHUFFLE_INPUT`<br></br>
-
----
-
-> #### write.bulk_insert.sort_input
-> Whether to sort the inputs by specific fields for bulk insert tasks, default true<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: WRITE_BULK_INSERT_SORT_INPUT`<br></br>
-
----
-
-> #### write.commit.ack.timeout
-> Timeout limit for a writer task after it finishes a checkpoint and
-waits for the instant commit success, only for internal use<br></br>
-> `Default Value: -1 (Optional)`<br></br>
-> `Config Param: WRITE_COMMIT_ACK_TIMEOUT`<br></br>
-
----
-
-> #### write.ignore.failed
-> Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.
-By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. 
-  So, would recommend users to use this with caution.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: IGNORE_FAILED`<br></br>
-
----
-
-> #### write.insert.cluster
-> Whether to merge small files for insert mode, if true, the write throughput will decrease because the read/write of existing small file, only valid for COW table, default false<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INSERT_CLUSTER`<br></br>
-
----
-
-> #### write.log.max.size
-> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB<br></br>
-> `Default Value: 1024 (Optional)`<br></br>
-> `Config Param: WRITE_LOG_MAX_SIZE`<br></br>
-
----
-
-> #### write.log_block.size
-> Max log block size in MB for log file, default 128MB<br></br>
-> `Default Value: 128 (Optional)`<br></br>
-> `Config Param: WRITE_LOG_BLOCK_SIZE`<br></br>
-
----
-
-> #### write.merge.max_memory
-> Max memory in MB for merge, default 100MB<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: WRITE_MERGE_MAX_MEMORY`<br></br>
-
----
-
-> #### write.operation
-> The write operation, that this write should do<br></br>
-> `Default Value: upsert (Optional)`<br></br>
-> `Config Param: OPERATION`<br></br>
-
----
-
-> #### write.parquet.block.size
-> Parquet RowGroup size. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
-> `Default Value: 120 (Optional)`<br></br>
-> `Config Param: WRITE_PARQUET_BLOCK_SIZE`<br></br>
-
----
-
-> #### write.parquet.max.file.size
-> Target size for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br></br>
-> `Default Value: 120 (Optional)`<br></br>
-> `Config Param: WRITE_PARQUET_MAX_FILE_SIZE`<br></br>
-
----
-
-> #### write.parquet.page.size
-> Parquet page size. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: WRITE_PARQUET_PAGE_SIZE`<br></br>
-
----
-
-> #### write.precombine
-> Flag to indicate whether to drop duplicates before insert/upsert.
-By default these cases will accept duplicates, to gain extra performance:
-1) insert operation;
-2) upsert for MOR table, the MOR table deduplicate on reading<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: PRE_COMBINE`<br></br>
-
----
-
-> #### write.rate.limit
-> Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: WRITE_RATE_LIMIT`<br></br>
-
----
-
-> #### write.retry.interval.ms
-> Flag to indicate how long (by millisecond) before a retry should issued for failed checkpoint batch.
-By default 2000 and it will be doubled by every retry<br></br>
-> `Default Value: 2000 (Optional)`<br></br>
-> `Config Param: RETRY_INTERVAL_MS`<br></br>
-
----
-
-> #### write.retry.times
-> Flag to indicate how many times streaming job should retry for a failed checkpoint batch.
-By default 3<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: RETRY_TIMES`<br></br>
-
----
-
-> #### write.sort.memory
-> Sort memory in MB, default 128MB<br></br>
-> `Default Value: 128 (Optional)`<br></br>
-> `Config Param: WRITE_SORT_MEMORY`<br></br>
-
----
-
-> #### write.task.max.size
-> Maximum memory in MB for a write task, when the threshold hits,
-it flushes the max size data bucket to avoid OOM, default 1GB<br></br>
-> `Default Value: 1024.0 (Optional)`<br></br>
-> `Config Param: WRITE_TASK_MAX_SIZE`<br></br>
-
+[**Basic Configs**](#Flink-Options-basic-configs)
+
+
+| Config Name                                                                                      | Default                                 | Description                                                                                                                                                                                                                                                                                                                                                       | Since Version |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.database.name](#hoodiedatabasename)                                                      | N/A **(Required)**                      | Database name to register to Hive metastore                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.table.name](#hoodietablename)                                                            | N/A **(Required)**                      | Table name to register to Hive metastore                                                                                                                                                                                                                                                                                                                          |               |
+| [path](#path)                                                                                    | N/A **(Required)**                      | Base path for the target hoodie table. The path would be created if it does not exist, otherwise a Hoodie table expects to be initialized successfully                                                                                                                                                                                                            |               |
+| [read.end-commit](#readend-commit)                                                               | N/A **(Required)**                      | End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'                                                                                                                                                                                                                                                                                 |               |
+| [read.start-commit](#readstart-commit)                                                           | N/A **(Required)**                      | Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read                                                                                                                                                                                                                |               |
+| [archive.max_commits](#archivemax_commits)                                                       | 50 (Optional)                           | Max number of commits to keep before archiving older commits into a sequential log, default 50                                                                                                                                                                                                                                                                    |               |
+| [archive.min_commits](#archivemin_commits)                                                       | 40 (Optional)                           | Min number of commits to keep before archiving older commits into a sequential log, default 40                                                                                                                                                                                                                                                                    |               |
+| [cdc.enabled](#cdcenabled)                                                                       | false (Optional)                        | When enable, persist the change data if necessary, and can be queried as a CDC query mode                                                                                                                                                                                                                                                                         |               |
+| [cdc.supplemental.logging.mode](#cdcsupplementalloggingmode)                                     | DATA_BEFORE_AFTER (Optional)            | Setting 'op_key_only' persists the 'op' and the record key only, setting 'data_before' persists the additional 'before' image, and setting 'data_before_after' persists the additional 'before' and 'after' images.                                                                                                                                               |               |
+| [changelog.enabled](#changelogenabled)                                                           | false (Optional)                        | Whether to keep all the intermediate changes, we try to keep all the changes of a record when enabled: 1). The sink accept the UPDATE_BEFORE message; 2). The source try to emit every changes of a record. The semantics is best effort because the compaction job would finally merge all changes of a record into one.  default false to have UPSERT semantics |               |
+| [clean.async.enabled](#cleanasyncenabled)                                                        | true (Optional)                         | Whether to cleanup the old commits immediately on new commits, enabled by default                                                                                                                                                                                                                                                                                 |               |
+| [clean.retain_commits](#cleanretain_commits)                                                     | 30 (Optional)                           | Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 30                                                                                                                                                     |               |
+| [clustering.async.enabled](#clusteringasyncenabled)                                              | false (Optional)                        | Async Clustering, default false                                                                                                                                                                                                                                                                                                                                   |               |
+| [clustering.plan.strategy.small.file.limit](#clusteringplanstrategysmallfilelimit)               | 600 (Optional)                          | Files smaller than the size specified here are candidates for clustering, default 600 MB                                                                                                                                                                                                                                                                          |               |
+| [clustering.plan.strategy.target.file.max.bytes](#clusteringplanstrategytargetfilemaxbytes)      | 1073741824 (Optional)                   | Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB                                                                                                                                                                                                                                               |               |
+| [compaction.async.enabled](#compactionasyncenabled)                                              | true (Optional)                         | Async Compaction, enabled by default for MOR                                                                                                                                                                                                                                                                                                                      |               |
+| [compaction.delta_commits](#compactiondelta_commits)                                             | 5 (Optional)                            | Max delta commits needed to trigger compaction, default 5 commits                                                                                                                                                                                                                                                                                                 |               |
+| [hive_sync.enabled](#hive_syncenabled)                                                           | false (Optional)                        | Asynchronously sync Hive meta to HMS, default false                                                                                                                                                                                                                                                                                                               |               |
+| [hive_sync.jdbc_url](#hive_syncjdbc_url)                                                         | jdbc:hive2://localhost:10000 (Optional) | Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'                                                                                                                                                                                                                                                                                                    |               |
+| [hive_sync.metastore.uris](#hive_syncmetastoreuris)                                              |  (Optional)                             | Metastore uris for hive sync, default ''                                                                                                                                                                                                                                                                                                                          |               |
+| [hive_sync.mode](#hive_syncmode)                                                                 | HMS (Optional)                          | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.query.type](#hoodiedatasourcequerytype)                                       | snapshot (Optional)                     | Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row &amp; columnar data); 2) incremental mode (new data since an instantTime); 3) Read Optimized mode (obtain latest view, based on columnar data) .Default: snapshot                                                                                                   |               |
+| [hoodie.datasource.write.hive_style_partitioning](#hoodiedatasourcewritehive_style_partitioning) | false (Optional)                        | Whether to use Hive style partitioning. If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format. By default false (the names of partition folders are only partition values)                                                                                                                              |               |
+| [hoodie.datasource.write.partitionpath.field](#hoodiedatasourcewritepartitionpathfield)          |  (Optional)                             | Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual value obtained by invoking .toString(), default ''                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.write.recordkey.field](#hoodiedatasourcewriterecordkeyfield)                  | uuid (Optional)                         | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`                                                                                                                                       |               |
+| [index.type](#indextype)                                                                         | FLINK_STATE (Optional)                  | Index type of Flink write job, default is using state backed index.                                                                                                                                                                                                                                                                                               |               |
+| [metadata.compaction.delta_commits](#metadatacompactiondelta_commits)                            | 10 (Optional)                           | Max delta commits for metadata table to trigger compaction, default 10                                                                                                                                                                                                                                                                                            |               |
+| [metadata.enabled](#metadataenabled)                                                             | true (Optional)                         | Enable the internal metadata table which serves table metadata like level file listings, default enabled                                                                                                                                                                                                                                                          |               |
+| [precombine.field](#precombinefield)                                                             | ts (Optional)                           | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)                                                                                                                                                                |               |
+| [read.streaming.enabled](#readstreamingenabled)                                                  | false (Optional)                        | Whether to read as streaming source, default false                                                                                                                                                                                                                                                                                                                |               |
+| [table.type](#tabletype)                                                                         | COPY_ON_WRITE (Optional)                | Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ                                                                                                                                                                                                                                                                                                          |               |
+| [write.operation](#writeoperation)                                                               | upsert (Optional)                       | The write operation, that this write should do                                                                                                                                                                                                                                                                                                                    |               |
+| [write.parquet.max.file.size](#writeparquetmaxfilesize)                                          | 120 (Optional)                          | Target size for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.                                                                                                                                                                                                 |               |
+
+[**Advanced Configs**](#Flink-Options-advanced-configs)
+
+
+| Config Name                                                                                                            | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Since Version |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [clustering.tasks](#clusteringtasks)                                                                                   | N/A **(Required)**                                                                              | Parallelism of tasks that do actual clustering, default same as the write task parallelism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [compaction.tasks](#compactiontasks)                                                                                   | N/A **(Required)**                                                                              | Parallelism of tasks that do actual compaction, default same as the write task parallelism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hive_sync.conf.dir](#hive_syncconfdir)                                                                                | N/A **(Required)**                                                                              | The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hive_sync.serde_properties](#hive_syncserde_properties)                                                               | N/A **(Required)**                                                                              | Serde properties to hive table, the data format is k1=v1 k2=v2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hive_sync.table_properties](#hive_synctable_properties)                                                               | N/A **(Required)**                                                                              | Additional properties to store with table, the data format is k1=v1 k2=v2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.write.keygenerator.class](#hoodiedatasourcewritekeygeneratorclass)                                  | N/A **(Required)**                                                                              | Key generator class, that implements will extract the key out of incoming record                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [read.tasks](#readtasks)                                                                                               | N/A **(Required)**                                                                              | Parallelism of tasks that do actual read, default is the parallelism of the execution environment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [source.avro-schema](#sourceavro-schema)                                                                               | N/A **(Required)**                                                                              | Source avro schema string, the parsed schema is used for deserialization                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [source.avro-schema.path](#sourceavro-schemapath)                                                                      | N/A **(Required)**                                                                              | Source avro schema file path, the parsed schema is used for deserialization                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [write.bucket_assign.tasks](#writebucket_assigntasks)                                                                  | N/A **(Required)**                                                                              | Parallelism of tasks that do bucket assign, default same as the write task parallelism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [write.index_bootstrap.tasks](#writeindex_bootstraptasks)                                                              | N/A **(Required)**                                                                              | Parallelism of tasks that do index bootstrap, default same as the write task parallelism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [write.partition.format](#writepartitionformat)                                                                        | N/A **(Required)**                                                                              | Partition path format, only valid when 'write.datetime.partitioning' is true, default is: 1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL; 2) 'yyyyMMdd' for DATE and INT.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [write.tasks](#writetasks)                                                                                             | N/A **(Required)**                                                                              | Parallelism of tasks that do actual write, default is the parallelism of the execution environment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [clean.policy](#cleanpolicy)                                                                                           | KEEP_LATEST_COMMITS (Optional)                                                                  | Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS.Default is KEEP_LATEST_COMMITS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [clean.retain_file_versions](#cleanretain_file_versions)                                                               | 5 (Optional)                                                                                    | Number of file versions to retain. default 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [clean.retain_hours](#cleanretain_hours)                                                                               | 24 (Optional)                                                                                   | Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [clustering.delta_commits](#clusteringdelta_commits)                                                                   | 4 (Optional)                                                                                    | Max delta commits needed to trigger clustering, default 4 commits                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [clustering.plan.partition.filter.mode](#clusteringplanpartitionfiltermode)                                            | NONE (Optional)                                                                                 | Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'clustering.plan.strategy.daybased.lookback.partitions' and 'clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['clustering.plan.strategy.cluster.begin.partition', 'clustering.plan.strategy.cluster.end.partition'].DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour. |               |
+| [clustering.plan.strategy.class](#clusteringplanstrategyclass)                                                         | org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy (Optional) | Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by clustering.plan.strategy.daybased.lookback.partitions) day based partitions picks the small file slices within those partitions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [clustering.plan.strategy.cluster.begin.partition](#clusteringplanstrategyclusterbeginpartition)                       |  (Optional)                                                                                     | Begin partition used to filter partition (inclusive)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [clustering.plan.strategy.cluster.end.partition](#clusteringplanstrategyclusterendpartition)                           |  (Optional)                                                                                     | End partition used to filter partition (inclusive)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [clustering.plan.strategy.daybased.lookback.partitions](#clusteringplanstrategydaybasedlookbackpartitions)             | 2 (Optional)                                                                                    | Number of partitions to list to create ClusteringPlan, default is 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [clustering.plan.strategy.daybased.skipfromlatest.partitions](#clusteringplanstrategydaybasedskipfromlatestpartitions) | 0 (Optional)                                                                                    | Number of partitions to skip from latest when choosing partitions to create ClusteringPlan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [clustering.plan.strategy.max.num.groups](#clusteringplanstrategymaxnumgroups)                                         | 30 (Optional)                                                                                   | Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [clustering.plan.strategy.partition.regex.pattern](#clusteringplanstrategypartitionregexpattern)                       |  (Optional)                                                                                     | Filter clustering partitions that matched regex pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [clustering.plan.strategy.partition.selected](#clusteringplanstrategypartitionselected)                                |  (Optional)                                                                                     | Partitions to run clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [clustering.plan.strategy.sort.columns](#clusteringplanstrategysortcolumns)                                            |  (Optional)                                                                                     | Columns to sort the data by when clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [clustering.schedule.enabled](#clusteringscheduleenabled)                                                              | false (Optional)                                                                                | Schedule the cluster plan, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [compaction.delta_seconds](#compactiondelta_seconds)                                                                   | 3600 (Optional)                                                                                 | Max delta seconds time needed to trigger compaction, default 1 hour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [compaction.max_memory](#compactionmax_memory)                                                                         | 100 (Optional)                                                                                  | Max memory in MB for compaction spillable map, default 100MB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [compaction.schedule.enabled](#compactionscheduleenabled)                                                              | true (Optional)                                                                                 | Schedule the compaction plan, enabled by default for MOR                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [compaction.target_io](#compactiontarget_io)                                                                           | 512000 (Optional)                                                                               | Target IO in MB for per compaction (both read and write), default 500 GB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [compaction.timeout.seconds](#compactiontimeoutseconds)                                                                | 1200 (Optional)                                                                                 | Max timeout time in seconds for online compaction to rollback, default 20 minutes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [compaction.trigger.strategy](#compactiontriggerstrategy)                                                              | num_commits (Optional)                                                                          | Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits; 'time_elapsed': trigger compaction when time elapsed &gt; N seconds since last compaction; 'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; 'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is 'num_commits'                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hive_sync.assume_date_partitioning](#hive_syncassume_date_partitioning)                                               | false (Optional)                                                                                | Assume partitioning is yyyy/mm/dd, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hive_sync.auto_create_db](#hive_syncauto_create_db)                                                                   | true (Optional)                                                                                 | Auto create hive database if it does not exists, default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hive_sync.db](#hive_syncdb)                                                                                           | default (Optional)                                                                              | Database name for hive sync, default 'default'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hive_sync.file_format](#hive_syncfile_format)                                                                         | PARQUET (Optional)                                                                              | File format for hive sync, default 'PARQUET'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hive_sync.ignore_exceptions](#hive_syncignore_exceptions)                                                             | false (Optional)                                                                                | Ignore exceptions during hive synchronization, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hive_sync.partition_extractor_class](#hive_syncpartition_extractor_class)                                             | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)                                     | Tool to extract the partition value from HDFS path, default 'MultiPartKeysValueExtractor'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hive_sync.partition_fields](#hive_syncpartition_fields)                                                               |  (Optional)                                                                                     | Partition fields for hive sync, default ''                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hive_sync.password](#hive_syncpassword)                                                                               | hive (Optional)                                                                                 | Password for hive sync, default 'hive'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hive_sync.skip_ro_suffix](#hive_syncskip_ro_suffix)                                                                   | false (Optional)                                                                                | Skip the _ro suffix for Read optimized table when registering, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hive_sync.support_timestamp](#hive_syncsupport_timestamp)                                                             | true (Optional)                                                                                 | INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hive_sync.table](#hive_synctable)                                                                                     | unknown (Optional)                                                                              | Table name for hive sync, default 'unknown'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hive_sync.table.strategy](#hive_synctablestrategy)                                                                    | ALL (Optional)                                                                                  | Hive table synchronization strategy. Available option: RO, RT, ALL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hive_sync.use_jdbc](#hive_syncuse_jdbc)                                                                               | true (Optional)                                                                                 | Use JDBC when hive synchronization is enabled, default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hive_sync.username](#hive_syncusername)                                                                               | hive (Optional)                                                                                 | Username for hive sync, default 'hive'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.bucket.index.hash.field](#hoodiebucketindexhashfield)                                                          |  (Optional)                                                                                     | Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.bucket.index.num.buckets](#hoodiebucketindexnumbuckets)                                                        | 4 (Optional)                                                                                    | Hudi bucket number per partition. Only affected if using Hudi bucket index.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.datasource.merge.type](#hoodiedatasourcemergetype)                                                             | payload_combine (Optional)                                                                      | For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the    log file records(combines the two records with same key for base and log file records), then read the left log file records                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.write.keygenerator.type](#hoodiedatasourcewritekeygeneratortype)                                    | SIMPLE (Optional)                                                                               | Key generator type, that implements will extract the key out of incoming record. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.write.partitionpath.urlencode](#hoodiedatasourcewritepartitionpathurlencode)                        | false (Optional)                                                                                | Whether to encode the partition path url, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.index.bucket.engine](#hoodieindexbucketengine)                                                                 | SIMPLE (Optional)                                                                               | Type of bucket index engine. Available options: [SIMPLE | CONSISTENT_HASHING]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [index.bootstrap.enabled](#indexbootstrapenabled)                                                                      | false (Optional)                                                                                | Whether to bootstrap the index state from existing hoodie table, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [index.global.enabled](#indexglobalenabled)                                                                            | true (Optional)                                                                                 | Whether to update index for the old partition path if same key record with different partition path came in, default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [index.partition.regex](#indexpartitionregex)                                                                          | .* (Optional)                                                                                   | Whether to load partitions in state if partition path matching， default `*`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [index.state.ttl](#indexstatettl)                                                                                      | 0.0 (Optional)                                                                                  | Index state ttl in days, default stores the index permanently                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [partition.default_name](#partitiondefault_name)                                                                       | __HIVE_DEFAULT_PARTITION__ (Optional)                                                           | The default partition name in case the dynamic partition column value is null/empty string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [payload.class](#payloadclass)                                                                                         | org.apache.hudi.common.model.EventTimeAvroPayload (Optional)                                    | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [read.data.skipping.enabled](#readdataskippingenabled)                                                                 | false (Optional)                                                                                | Enables data-skipping allowing queries to leverage indexes to reduce the search space byskipping over files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [read.streaming.check-interval](#readstreamingcheck-interval)                                                          | 60 (Optional)                                                                                   | Check interval for streaming read of SECOND, default 1 minute                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [read.streaming.skip_clustering](#readstreamingskip_clustering)                                                        | false (Optional)                                                                                | Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read to improve read performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [read.streaming.skip_compaction](#readstreamingskip_compaction)                                                        | false (Optional)                                                                                | Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance. This option can be used to avoid reading duplicates when changelog mode is enabled, it is a solution to keep data integrity                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [read.utc-timezone](#readutc-timezone)                                                                                 | true (Optional)                                                                                 | Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [record.merger.impls](#recordmergerimpls)                                                                              | org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)                                  | List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by record.merger.strategy. Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [record.merger.strategy](#recordmergerstrategy)                                                                        | eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)                                                 | Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [write.batch.size](#writebatchsize)                                                                                    | 256.0 (Optional)                                                                                | Batch buffer size in MB to flush data into the underneath filesystem, default 256MB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [write.bulk_insert.shuffle_input](#writebulk_insertshuffle_input)                                                      | true (Optional)                                                                                 | Whether to shuffle the inputs by specific fields for bulk insert tasks, default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [write.bulk_insert.sort_input](#writebulk_insertsort_input)                                                            | true (Optional)                                                                                 | Whether to sort the inputs by specific fields for bulk insert tasks, default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [write.bulk_insert.sort_input.by_record_key](#writebulk_insertsort_inputby_record_key)                                 | false (Optional)                                                                                | Whether to sort the inputs by record keys for bulk insert tasks, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [write.client.id](#writeclientid)                                                                                      |  (Optional)                                                                                     | Unique identifier used to distinguish different writer pipelines for concurrent mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [write.commit.ack.timeout](#writecommitacktimeout)                                                                     | -1 (Optional)                                                                                   | Timeout limit for a writer task after it finishes a checkpoint and waits for the instant commit success, only for internal use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [write.ignore.failed](#writeignorefailed)                                                                              | false (Optional)                                                                                | Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.  By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead.  So, would recommend users to use this with caution.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [write.insert.cluster](#writeinsertcluster)                                                                            | false (Optional)                                                                                | Whether to merge small files for insert mode, if true, the write throughput will decrease because the read/write of existing small file, only valid for COW table, default false                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [write.log.max.size](#writelogmaxsize)                                                                                 | 1024 (Optional)                                                                                 | Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [write.log_block.size](#writelog_blocksize)                                                                            | 128 (Optional)                                                                                  | Max log block size in MB for log file, default 128MB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [write.merge.max_memory](#writemergemax_memory)                                                                        | 100 (Optional)                                                                                  | Max memory in MB for merge, default 100MB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [write.parquet.block.size](#writeparquetblocksize)                                                                     | 120 (Optional)                                                                                  | Parquet RowGroup size. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [write.parquet.page.size](#writeparquetpagesize)                                                                       | 1 (Optional)                                                                                    | Parquet page size. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [write.precombine](#writeprecombine)                                                                                   | false (Optional)                                                                                | Flag to indicate whether to drop duplicates before insert/upsert. By default these cases will accept duplicates, to gain extra performance: 1) insert operation; 2) upsert for MOR table, the MOR table deduplicate on reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [write.rate.limit](#writeratelimit)                                                                                    | 0 (Optional)                                                                                    | Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [write.retry.interval.ms](#writeretryintervalms)                                                                       | 2000 (Optional)                                                                                 | Flag to indicate how long (by millisecond) before a retry should issued for failed checkpoint batch. By default 2000 and it will be doubled by every retry                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [write.retry.times](#writeretrytimes)                                                                                  | 3 (Optional)                                                                                    | Flag to indicate how many times streaming job should retry for a failed checkpoint batch. By default 3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [write.sort.memory](#writesortmemory)                                                                                  | 128 (Optional)                                                                                  | Sort memory in MB, default 128MB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [write.task.max.size](#writetaskmaxsize)                                                                               | 1024.0 (Optional)                                                                               | Maximum memory in MB for a write task, when the threshold hits, it flushes the max size data bucket to avoid OOM, default 1GB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
 ---
 
 ## Write Client Configs {#WRITE_CLIENT}
 Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 
-### Layout Configs {#Layout-Configs}
-Configurations that control storage layout and data distribution, which defines how the files are organized within a table.
-
-`Config Class`: org.apache.hudi.config.HoodieLayoutConfig<br></br>
-> ### hoodie.storage.layout.partitioner.class
-> Partitioner class, it is used to distribute data in a specific way.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: LAYOUT_PARTITIONER_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.storage.layout.type
-> Type of storage layout. Possible options are [DEFAULT | BUCKET]<br></br>
-> `Default Value: DEFAULT (Optional)`<br></br>
-> `Config Param: LAYOUT_TYPE`<br></br>
-
----
-
-### Clean Configs {#Clean-Configs}
-Cleaning (reclamation of older/unused file groups/slices).
-
-`Config Class`: org.apache.hudi.config.HoodieCleanConfig<br></br>
-> ### hoodie.clean.allow.multiple
-> Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, .i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ALLOW_MULTIPLE_CLEANS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clean.async
-> Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_CLEAN`<br></br>
-
----
-
-> ### hoodie.clean.automatic
-> When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: AUTO_CLEAN`<br></br>
-
----
-
-> ### hoodie.clean.max.commits
-> Number of commits after the last clean operation, before scheduling of a new clean is attempted.<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: CLEAN_MAX_COMMITS`<br></br>
-
----
-
-> ### hoodie.clean.trigger.strategy
-> Controls how cleaning is scheduled. Valid options: NUM_COMMITS<br></br>
-> `Default Value: NUM_COMMITS (Optional)`<br></br>
-> `Config Param: CLEAN_TRIGGER_STRATEGY`<br></br>
-
----
-
-> ### hoodie.cleaner.commits.retained
-> Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
-
----
-
-> ### hoodie.cleaner.delete.bootstrap.base.file
-> When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is  cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap  base files are also physically deleted, to comply with data privacy enforcement processes.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: CLEANER_BOOTSTRAP_BASE_FILE_ENABLE`<br></br>
-
----
-
-> ### hoodie.cleaner.fileversions.retained
-> When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: CLEANER_FILE_VERSIONS_RETAINED`<br></br>
-
----
-
-> ### hoodie.cleaner.hours.retained
-> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
-> `Default Value: 24 (Optional)`<br></br>
-> `Config Param: CLEANER_HOURS_RETAINED`<br></br>
-
----
-
-> ### hoodie.cleaner.incremental.mode
-> When enabled, the plans for each cleaner service run is computed incrementally off the events  in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full table for each planning (even with a metadata table).<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: CLEANER_INCREMENTAL_MODE_ENABLE`<br></br>
-
----
-
-> ### hoodie.cleaner.parallelism
-> Parallelism for the cleaning operation. Increase this if cleaning becomes slow.<br></br>
-> `Default Value: 200 (Optional)`<br></br>
-> `Config Param: CLEANER_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.cleaner.policy
-> Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. By default, cleaner spares the file slices written by the last N commits, determined by  hoodie.cleaner.commits.retained Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time<br></br>
-> `Default Value: KEEP_LATEST_COMMITS (Optional)`<br></br>
-> `Config Param: CLEANER_POLICY`<br></br>
-
----
-
-> ### hoodie.cleaner.policy.failed.writes
-> Cleaning policy for failed writes to be used. Hudi will delete any files written by failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)<br></br>
-> `Default Value: EAGER (Optional)`<br></br>
-> `Config Param: FAILED_WRITES_CLEANER_POLICY`<br></br>
-
----
-
-### Memory Configurations {#Memory-Configurations}
-Controls memory usage for compaction and merges, performed internally by Hudi.
-
-`Config Class`: org.apache.hudi.config.HoodieMemoryConfig<br></br>
-> ### hoodie.memory.compaction.max.size
-> Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: MAX_MEMORY_FOR_COMPACTION`<br></br>
-
----
-
-> ### hoodie.memory.compaction.fraction
-> HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map<br></br>
-> `Default Value: 0.6 (Optional)`<br></br>
-> `Config Param: MAX_MEMORY_FRACTION_FOR_COMPACTION`<br></br>
-
----
-
-> ### hoodie.memory.dfs.buffer.max.size
-> Property to control the max memory in bytes for dfs input stream buffer size<br></br>
-> `Default Value: 16777216 (Optional)`<br></br>
-> `Config Param: MAX_DFS_STREAM_BUFFER_SIZE`<br></br>
-
----
-
-> ### hoodie.memory.merge.fraction
-> This fraction is multiplied with the user memory fraction (1 - spark.memory.fraction) to get a final fraction of heap space to use during merge<br></br>
-> `Default Value: 0.6 (Optional)`<br></br>
-> `Config Param: MAX_MEMORY_FRACTION_FOR_MERGE`<br></br>
-
----
-
-> ### hoodie.memory.merge.max.size
-> Maximum amount of memory used  in bytes for merge operations, before spilling to local storage.<br></br>
-> `Default Value: 1073741824 (Optional)`<br></br>
-> `Config Param: MAX_MEMORY_FOR_MERGE`<br></br>
-
----
-
-> ### hoodie.memory.spillable.map.path
-> Default file path for spillable map<br></br>
-> `Default Value: /tmp/ (Optional)`<br></br>
-> `Config Param: SPILLABLE_MAP_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.memory.writestatus.failure.fraction
-> Property to control how what fraction of the failed record, exceptions we report back to driver. Default is 10%. If set to 100%, with lot of failures, this can cause memory pressure, cause OOMs and mask actual data errors.<br></br>
-> `Default Value: 0.1 (Optional)`<br></br>
-> `Config Param: WRITESTATUS_FAILURE_FRACTION`<br></br>
-
----
-
-### Archival Configs {#Archival-Configs}
-Configurations that control archival.
-
-`Config Class`: org.apache.hudi.config.HoodieArchivalConfig<br></br>
-> ### hoodie.archive.async
-> Only applies when hoodie.archive.automatic is turned on. When turned on runs archiver async with writing, which can speed up overall write performance.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_ARCHIVE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.archive.automatic
-> When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: AUTO_ARCHIVE`<br></br>
-
----
-
-> ### hoodie.archive.beyond.savepoint
-> If enabled, archival will proceed beyond savepoint, skipping savepoint commits. If disabled, archival will stop at the earliest savepoint commit.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ARCHIVE_BEYOND_SAVEPOINT`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> ### hoodie.archive.delete.parallelism
-> Parallelism for deleting archived hoodie commits.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.archive.merge.enable
-> When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ARCHIVE_MERGE_ENABLE`<br></br>
-
----
-
-> ### hoodie.archive.merge.files.batch.size
-> The number of small archive files to be merged at once.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: ARCHIVE_MERGE_FILES_BATCH_SIZE`<br></br>
-
----
-
-> ### hoodie.archive.merge.small.file.limit.bytes
-> This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.<br></br>
-> `Default Value: 20971520 (Optional)`<br></br>
-> `Config Param: ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES`<br></br>
-
----
-
-> ### hoodie.commits.archival.batch
-> Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: COMMITS_ARCHIVAL_BATCH_SIZE`<br></br>
-
----
-
-> ### hoodie.keep.max.commits
-> Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline. <br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
-
----
-
-> ### hoodie.keep.min.commits
-> Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.<br></br>
-> `Default Value: 20 (Optional)`<br></br>
-> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
-
----
-
-### Metadata Configs {#Metadata-Configs}
-Configurations used by the Hudi Metadata Table. This table maintains the metadata about a given Hudi table (e.g file listings)  to avoid overhead of accessing cloud storage, during queries.
-
-`Config Class`: org.apache.hudi.common.config.HoodieMetadataConfig<br></br>
-> ### hoodie.metadata.index.bloom.filter.column.list
-> Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BLOOM_FILTER_INDEX_FOR_COLUMNS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.column.list
-> Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: COLUMN_STATS_INDEX_FOR_COLUMNS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.processing.mode.override
-> By default Column Stats Index is automatically determining whether it should be read and processed either'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index and how many columns are read. This config allows to override this behavior.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> ### _hoodie.metadata.ignore.spurious.deletes
-> There are cases when extra files are requested to be deleted from metadata table which are never added before. This config determines how to handle such spurious deletes<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: IGNORE_SPURIOUS_DELETES`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.assume.date.partitioning
-> Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASSUME_DATE_PARTITIONING`<br></br>
-> `Since Version: 0.3.0`<br></br>
-
----
-
-> ### hoodie.file.listing.parallelism
-> Parallelism to use, when listing the table on lake storage.<br></br>
-> `Default Value: 200 (Optional)`<br></br>
-> `Config Param: FILE_LISTING_PARALLELISM_VALUE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.clean.async
-> Enable asynchronous cleaning for metadata table. This is an internal config and setting this will not overwrite the value actually used.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_CLEAN_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.cleaner.commits.retained
-> Number of commits to retain, without cleaning, on metadata table. This is an internal config and setting this will not overwrite the actual value used.<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.compact.max.delta.commits
-> Controls how often the metadata table is compacted.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: COMPACT_NUM_DELTA_COMMITS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.dir.filter.regex
-> Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: DIR_FILTER_REGEX`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.enable
-> Enable the internal metadata table which serves table metadata like level file listings<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.enable.full.scan.log.files
-> Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries. This is an internal config and setting this will not overwrite the actual value used.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ENABLE_FULL_SCAN_LOG_FILES`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.async
-> Enable asynchronous indexing of metadata table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_INDEX_ENABLE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.bloom.filter.enable
-> Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.bloom.filter.file.group.count
-> Metadata bloom filter index partition file group count. This controls the size of the base and log files and read parallelism in the bloom filter index partition. The recommendation is to size the file group count such that the base files are under 1GB.<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.bloom.filter.parallelism
-> Parallelism to use for generating bloom filter index in metadata table.<br></br>
-> `Default Value: 200 (Optional)`<br></br>
-> `Config Param: BLOOM_FILTER_INDEX_PARALLELISM`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.check.timeout.seconds
-> After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.<br></br>
-> `Default Value: 900 (Optional)`<br></br>
-> `Config Param: METADATA_INDEX_CHECK_TIMEOUT_SECONDS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.enable
-> Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_METADATA_INDEX_COLUMN_STATS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.file.group.count
-> Metadata column stats partition file group count. This controls the size of the base and log files and read parallelism in the column stats index partition. The recommendation is to size the file group count such that the base files are under 1GB.<br></br>
-> `Default Value: 2 (Optional)`<br></br>
-> `Config Param: METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.inMemory.projection.threshold
-> When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory threshold (counted by the # of rows), it will be attempted to be loaded "in-memory" (ie not using the execution engine like Spark, Flink, etc). If the value is above the threshold execution engine will be used to compose the projection.<br></br>
-> `Default Value: 100000 (Optional)`<br></br>
-> `Config Param: COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> ### hoodie.metadata.index.column.stats.parallelism
-> Parallelism to use, when generating column stats index.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: COLUMN_STATS_INDEX_PARALLELISM`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metadata.insert.parallelism
-> Parallelism to use when inserting to the metadata table<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: INSERT_PARALLELISM_VALUE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.keep.max.commits
-> Similar to hoodie.metadata.keep.min.commits, this config controls the maximum number of instants to retain in the active timeline.<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.keep.min.commits
-> Archiving service moves older entries from metadata table’s timeline into an archived log after each write, to keep the overhead constant, even as the metadata table size grows.  This config controls the minimum number of instants to retain in the active timeline.<br></br>
-> `Default Value: 20 (Optional)`<br></br>
-> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.metrics.enable
-> Enable publishing of metrics around metadata table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: METRICS_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.metadata.optimized.log.blocks.scan.enable
-> Optimized log blocks scanner that addresses all the multiwriter use-cases while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.metadata.populate.meta.fields
-> When enabled, populates all meta fields. When disabled, no meta fields are populated. This is an internal config and setting this will not overwrite the actual value used.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: POPULATE_META_FIELDS`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-### Consistency Guard Configurations {#Consistency-Guard-Configurations}
-The consistency guard related config options, to help talk to eventually consistent object storage.(Tip: S3 is NOT eventually consistent anymore!)
-
-`Config Class`: org.apache.hudi.common.fs.ConsistencyGuardConfig<br></br>
-> ### _hoodie.optimistic.consistency.guard.enable
-> Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: OPTIMISTIC_CONSISTENCY_GUARD_ENABLE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.consistency.check.enabled
-> Enabled to handle S3 eventual consistency issue. This property is no longer required since S3 is now strongly consistent. Will be removed in the future releases.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE`<br></br>
-> `Since Version: 0.5.0`<br></br>
-> `Deprecated Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.consistency.check.initial_interval_ms
-> Amount of time (in ms) to wait, before checking for consistency after an operation on storage.<br></br>
-> `Default Value: 400 (Optional)`<br></br>
-> `Config Param: INITIAL_CHECK_INTERVAL_MS`<br></br>
-> `Since Version: 0.5.0`<br></br>
-> `Deprecated Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.consistency.check.max_checks
-> Maximum number of consistency checks to perform, with exponential backoff.<br></br>
-> `Default Value: 6 (Optional)`<br></br>
-> `Config Param: MAX_CHECKS`<br></br>
-> `Since Version: 0.5.0`<br></br>
-> `Deprecated Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.consistency.check.max_interval_ms
-> Maximum amount of time (in ms), to wait for consistency checking.<br></br>
-> `Default Value: 20000 (Optional)`<br></br>
-> `Config Param: MAX_CHECK_INTERVAL_MS`<br></br>
-> `Since Version: 0.5.0`<br></br>
-> `Deprecated Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.optimistic.consistency.guard.sleep_time_ms
-> Amount of time (in ms), to wait after which we assume storage is consistent.<br></br>
-> `Default Value: 500 (Optional)`<br></br>
-> `Config Param: OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-### FileSystem Guard Configurations {#FileSystem-Guard-Configurations}
-The filesystem retry related config options, to help deal with runtime exception like list/get/put/delete performance issues.
-
-`Config Class`: org.apache.hudi.common.fs.FileSystemRetryConfig<br></br>
-> ### hoodie.filesystem.operation.retry.enable
-> Enabled to handle list/get/delete etc file system performance issue.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: FILESYSTEM_RETRY_ENABLE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.filesystem.operation.retry.exceptions
-> The class name of the Exception that needs to be re-tryed, separated by commas. Default is empty which means retry all the IOException and RuntimeException from FileSystem<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: RETRY_EXCEPTIONS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.filesystem.operation.retry.initial_interval_ms
-> Amount of time (in ms) to wait, before retry to do operations on storage.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: INITIAL_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.filesystem.operation.retry.max_interval_ms
-> Maximum amount of time (in ms), to wait for next retry.<br></br>
-> `Default Value: 2000 (Optional)`<br></br>
-> `Config Param: MAX_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.filesystem.operation.retry.max_numbers
-> Maximum number of retry actions to perform, with exponential backoff.<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: MAX_RETRY_NUMBERS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-### Write Configurations {#Write-Configurations}
-Configurations that control write behavior on Hudi tables. These can be directly passed down from even higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).
-
-`Config Class`: org.apache.hudi.config.HoodieWriteConfig<br></br>
-> ### hoodie.avro.schema
-> Schema string representing the current write schema of the table. Hudi passes this to implementations of HoodieRecordPayload to convert incoming records to avro. This is also used as the write schema evolving records during an update.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: AVRO_SCHEMA_STRING`<br></br>
-
----
-
-> ### hoodie.base.path
-> Base path on lake storage, under which all the table data is stored. Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs etc in .hoodie directory under this base path directory.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BASE_PATH`<br></br>
-
----
-
-> ### hoodie.bulkinsert.user.defined.partitioner.class
-> If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner which can does sorting based on specified column values set by hoodie.bulkinsert.user.defined.partitioner.sort.columns<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.bulkinsert.user.defined.partitioner.sort.columns
-> Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. For example 'column1,column2'<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS`<br></br>
-
----
-
-> ### hoodie.datasource.write.keygenerator.class
-> Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` extract a key out of incoming records.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: KEYGENERATOR_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.internal.schema
-> Schema string representing the latest schema of the table. Hudi passes this to implementations of evolution of schema<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: INTERNAL_SCHEMA_STRING`<br></br>
-
----
-
-> ### hoodie.table.name
-> Table name that will be used for registering with metastores like HMS. Needs to be same across runs.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TBL_NAME`<br></br>
-
----
-
-> ### hoodie.write.schema
-> Config allowing to override writer's schema. This might be necessary in cases when writer's schema derived from the incoming dataset might actually be different from the schema we actually want to use when writing. This, for ex, could be the case for'partial-update' use-cases (like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset might be used to update the records in the existing table, prompting us to override the writer's schema<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: WRITE_SCHEMA_OVERRIDE`<br></br>
-
----
-
-> ### _.hoodie.allow.multi.write.on.same.instant
-> <br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE`<br></br>
-
----
-
-> ### hoodie.allow.empty.commit
-> Whether to allow generation of empty commits, even if no data was written in the commit. It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ALLOW_EMPTY_COMMIT`<br></br>
-
----
-
-> ### hoodie.allow.operation.metadata.field
-> Whether to include '_hoodie_operation' in the metadata fields. Once enabled, all the changes of a record are persisted to the delta log directly without merge<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ALLOW_OPERATION_METADATA_FIELD`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.auto.adjust.lock.configs
-> Auto adjust lock configurations when metadata table is enabled and for async table services.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: AUTO_ADJUST_LOCK_CONFIGS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.auto.commit
-> Controls whether a write operation should auto commit. This can be turned off to perform inspection of the uncommitted write before deciding to commit.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: AUTO_COMMIT_ENABLE`<br></br>
-
----
-
-> ### hoodie.avro.schema.external.transformation
-> When enabled, records in older schema are rewritten into newer schema during upsert,delete and background compaction,clustering operations.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE`<br></br>
-
----
-
-> ### hoodie.avro.schema.validate
-> Validate the schema used for the write against the latest schema, for backwards compatibility.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: AVRO_SCHEMA_VALIDATE_ENABLE`<br></br>
-
----
-
-> ### hoodie.bulkinsert.shuffle.parallelism
-> For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning donebefore writing records to the table.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: BULKINSERT_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.bulkinsert.sort.mode
-> Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. PARTITION_PATH_REPARTITION: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. PARTITION_PATH_REPARTITION_AND_SORT: this ensures that the data for a single physical partition in the table is written by the same Spark executor, best for input data evenly distributed across different partition paths. Compared to PARTITION_PATH_REPARTITION, this sort mode does an additional step of sorting the records based on the partition path within a single Spark partition, given that data for multiple physical partitions can be sent to the same Spark partition and executor. This can cause imbalance among Spark executors if the input data is skewed, i.e., most records are intended for a handful of partition paths among all. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
-> `Default Value: NONE (Optional)`<br></br>
-> `Config Param: BULK_INSERT_SORT_MODE`<br></br>
-
----
-
-> ### hoodie.client.heartbeat.interval_in_ms
-> Writers perform heartbeats to indicate liveness. Controls how often (in ms), such heartbeats are registered to lake storage.<br></br>
-> `Default Value: 60000 (Optional)`<br></br>
-> `Config Param: CLIENT_HEARTBEAT_INTERVAL_IN_MS`<br></br>
-
----
-
-> ### hoodie.client.heartbeat.tolerable.misses
-> Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.<br></br>
-> `Default Value: 2 (Optional)`<br></br>
-> `Config Param: CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES`<br></br>
-
----
-
-> ### hoodie.combine.before.delete
-> During delete operations, controls whether we should combine deletes (and potentially also upserts) before  writing to storage.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COMBINE_BEFORE_DELETE`<br></br>
-
----
-
-> ### hoodie.combine.before.insert
-> When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before writing to storage.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: COMBINE_BEFORE_INSERT`<br></br>
-
----
-
-> ### hoodie.combine.before.upsert
-> When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming,  otherwise it can lead to duplicate keys and violate the uniqueness guarantees.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COMBINE_BEFORE_UPSERT`<br></br>
-
----
-
-> ### hoodie.consistency.check.initial_interval_ms
-> Initial time between successive attempts to ensure written data's metadata is consistent on storage. Grows with exponential backoff after the initial value.<br></br>
-> `Default Value: 2000 (Optional)`<br></br>
-> `Config Param: INITIAL_CONSISTENCY_CHECK_INTERVAL_MS`<br></br>
-
----
-
-> ### hoodie.consistency.check.max_checks
-> Maximum number of checks, for consistency of written data.<br></br>
-> `Default Value: 7 (Optional)`<br></br>
-> `Config Param: MAX_CONSISTENCY_CHECKS`<br></br>
-
----
-
-> ### hoodie.consistency.check.max_interval_ms
-> Max time to wait between successive attempts at performing consistency checks<br></br>
-> `Default Value: 300000 (Optional)`<br></br>
-> `Config Param: MAX_CONSISTENCY_CHECK_INTERVAL_MS`<br></br>
-
----
-
-> ### hoodie.datasource.write.keygenerator.type
-> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
-> `Default Value: SIMPLE (Optional)`<br></br>
-> `Config Param: KEYGENERATOR_TYPE`<br></br>
-
----
-
-> ### hoodie.datasource.write.payload.class
-> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective<br></br>
-> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)`<br></br>
-> `Config Param: WRITE_PAYLOAD_CLASS_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.precombine.field
-> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: PRECOMBINE_FIELD_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.record.merger.impls
-> List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)<br></br>
-> `Default Value: org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_IMPLS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.record.merger.strategy
-> Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id<br></br>
-> `Default Value: eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)`<br></br>
-> `Config Param: RECORD_MERGER_STRATEGY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.write.schema.allow.auto.evolution.column.drop
-> Controls whether table's schema is allowed to automatically evolve when incoming batch's schema can have any of the columns dropped. By default, Hudi will not allow this kind of (auto) schema evolution. Set this config to true to allow table's schema to be updated automatically when columns are dropped from the new incoming batch.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.delete.shuffle.parallelism
-> Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: DELETE_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server
-> When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),running on each writer's driver process, accepting requests during the write from executors.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_SERVER_ENABLE`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server.async
-> Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, potentially improving throughput.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server.gzip
-> Controls whether gzip compression is used, for large responses from the timeline server, to improve latency.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_SERVER_COMPRESS_ENABLE`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server.port
-> Port at which the timeline server listens for requests. When running embedded in each writer, it picks a free port and communicates to all the executors. This should rarely be changed.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_SERVER_PORT_NUM`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server.reuse.enabled
-> Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)to avoid startup costs. This should rarely be changed.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED`<br></br>
-
----
-
-> ### hoodie.embed.timeline.server.threads
-> Number of threads to serve requests in the timeline server. By default, auto configured based on the number of underlying cores.<br></br>
-> `Default Value: -1 (Optional)`<br></br>
-> `Config Param: EMBEDDED_TIMELINE_NUM_SERVER_THREADS`<br></br>
-
----
-
-> ### hoodie.fail.on.timeline.archiving
-> Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. Controls whether or not, the write should be failed as well, if such archiving fails.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: FAIL_ON_TIMELINE_ARCHIVING_ENABLE`<br></br>
-
----
-
-> ### hoodie.fail.writes.on.inline.table.service.exception
-> Table services such as compaction and clustering can fail and prevent syncing to the metaclient. Set this to true to fail writes when table services fail<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.fileid.prefix.provider.class
-> File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`<br></br>
-> `Default Value: org.apache.hudi.table.RandomFileIdPrefixProvider (Optional)`<br></br>
-> `Config Param: FILEID_PREFIX_PROVIDER_CLASS`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.finalize.write.parallelism
-> Parallelism for the write finalization internal operation, which involves removing any partially written files from lake storage, before committing the write. Reduce this value, if the high number of tasks incur delays for smaller tables or low latency writes.<br></br>
-> `Default Value: 200 (Optional)`<br></br>
-> `Config Param: FINALIZE_WRITE_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.insert.shuffle.parallelism
-> Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: INSERT_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.markers.delete.parallelism
-> Determines the parallelism for deleting marker files, which are used to track all files (valid or invalid/partial) written during a write operation. Increase this value if delays are observed, with large batch writes.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: MARKERS_DELETE_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.markers.timeline_server_based.batch.interval_ms
-> The batch interval in milliseconds for marker creation batch processing<br></br>
-> `Default Value: 50 (Optional)`<br></br>
-> `Config Param: MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.markers.timeline_server_based.batch.num_threads
-> Number of threads to use for batch processing marker creation requests at the timeline server<br></br>
-> `Default Value: 20 (Optional)`<br></br>
-> `Config Param: MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.merge.allow.duplicate.on.inserts
-> When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing). This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE`<br></br>
-
----
-
-> ### hoodie.merge.data.validation.enabled
-> When enabled, data validation checks are performed during merges to ensure expected number of records after merge operation.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: MERGE_DATA_VALIDATION_CHECK_ENABLE`<br></br>
-
----
-
-> ### hoodie.merge.small.file.group.candidates.limit
-> Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. Only applicable to MOR tables<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT`<br></br>
-
----
-
-> ### hoodie.release.resource.on.completion.enable
-> Control to enable release all persist rdds when the spark job finish.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: RELEASE_RESOURCE_ENABLE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.rollback.parallelism
-> Parallelism for rollback of commits. Rollbacks perform delete of files or logging delete blocks to file groups on storage in parallel.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: ROLLBACK_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.rollback.using.markers
-> Enables a more efficient mechanism for rollbacks based on the marker files generated during the writes. Turned on by default.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ROLLBACK_USING_MARKERS_ENABLE`<br></br>
-
----
-
-> ### hoodie.schema.cache.enable
-> cache query internalSchemas in driver/executor side<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_INTERNAL_SCHEMA_CACHE`<br></br>
-
----
-
-> ### hoodie.skip.default.partition.validation
-> When table is upgraded from pre 0.12 to 0.12, we check for "default" partition and fail if found one. Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SKIP_DEFAULT_PARTITION_VALIDATION`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> ### hoodie.table.base.file.format
-> Base file format to store all the base file data.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.table.services.enabled
-> Master control to disable all table services including archive, clean, compact, cluster, etc.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: TABLE_SERVICES_ENABLED`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.timeline.layout.version
-> Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models the timeline as an immutable log relying only on atomic writes for object storage.<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: TIMELINE_LAYOUT_VERSION_NUM`<br></br>
-> `Since Version: 0.5.1`<br></br>
-
----
-
-> ### hoodie.upsert.shuffle.parallelism
-> Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimallyinto file groups.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: UPSERT_PARALLELISM_VALUE`<br></br>
-
----
-
-> ### hoodie.write.buffer.limit.bytes
-> Size of in-memory buffer used for parallelizing network reads and lake storage writes.<br></br>
-> `Default Value: 4194304 (Optional)`<br></br>
-> `Config Param: WRITE_BUFFER_LIMIT_BYTES_VALUE`<br></br>
-
----
-
-> ### hoodie.write.concurrency.async.conflict.detector.initial_delay_ms
-> Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The time in milliseconds to delay the first execution of async marker-based conflict detection.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: ASYNC_CONFLICT_DETECTOR_INITIAL_DELAY_MS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.concurrency.async.conflict.detector.period_ms
-> Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The period in milliseconds between successive executions of async marker-based conflict detection.<br></br>
-> `Default Value: 30000 (Optional)`<br></br>
-> `Config Param: ASYNC_CONFLICT_DETECTOR_PERIOD_MS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.concurrency.early.conflict.check.commit.conflict
-> Whether to enable commit conflict checking or not during early conflict detection.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: EARLY_CONFLICT_DETECTION_CHECK_COMMIT_CONFLICT`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.concurrency.early.conflict.detection.enable
-> Whether to enable early conflict detection based on markers. It eagerly detects writing conflict before create markers and fails fast if a conflict is detected, to release cluster compute resources as soon as possible.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: EARLY_CONFLICT_DETECTION_ENABLE`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.concurrency.early.conflict.detection.strategy
-> The class name of the early conflict detection strategy to use. This should be a subclass of `org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.concurrency.mode
-> Enable different concurrency modes. Options are SINGLE_WRITER: Only one active writer to the table. Maximizes throughputOPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed if a conflict (writes affect the same file group) is detected.<br></br>
-> `Default Value: SINGLE_WRITER (Optional)`<br></br>
-> `Config Param: WRITE_CONCURRENCY_MODE`<br></br>
-
----
-
-> ### hoodie.write.executor.disruptor.buffer.limit.bytes
-> The size of the Disruptor Executor ring buffer, must be power of 2<br></br>
-> `Default Value: 1024 (Optional)`<br></br>
-> `Config Param: WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.executor.disruptor.wait.strategy
-> Strategy employed for making Disruptor Executor wait on a cursor. Other options are SLEEPING_WAIT, it attempts to be conservative with CPU usage by using a simple busy wait loopYIELDING_WAIT, it is designed for cases where there is the option to burn CPU cycles with the goal of improving latencyBUSY_SPIN_WAIT, it can be used in low-latency systems, but puts the highest constraints on the deployment environment<br></br>
-> `Default Value: BLOCKING_WAIT (Optional)`<br></br>
-> `Config Param: WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.executor.type
-> Set executor which orchestrates concurrent producers and consumers communicating through a message queue.BOUNDED_IN_MEMORY(default): Use LinkedBlockingQueue as a bounded in-memory queue, this queue will use extra lock to balance producers and consumerDISRUPTOR: Use disruptor which a lock free message queue as inner message, this queue may gain better writing performance if lock was the bottleneck. SIMPLE: Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. Compared with BIM and DISRUPTOR, this queue has no need for additional memory and cpu resources due to lock or multithreading, but also lost some benefits such as speed limit. Although DISRUPTOR_EXECUTOR and SIMPLE are still in experimental.<br></br>
-> `Default Value: SIMPLE (Optional)`<br></br>
-> `Config Param: WRITE_EXECUTOR_TYPE`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.write.markers.type
-> Marker type to use.  Two modes are supported: - DIRECT: individual marker file corresponding to each data file is directly created by the writer. - TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service which serves as a proxy.  New marker entries are batch processed and stored in a limited number of underlying files for efficiency.  If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configure.  For Spark structured streaming, this configuration does not take effect, i.e., DIRECT markers are always used for Spark structured streaming.<br></br>
-> `Default Value: TIMELINE_SERVER_BASED (Optional)`<br></br>
-> `Config Param: MARKERS_TYPE`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.write.status.storage.level
-> Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.<br></br>
-> `Default Value: MEMORY_AND_DISK_SER (Optional)`<br></br>
-> `Config Param: WRITE_STATUS_STORAGE_LEVEL_VALUE`<br></br>
-
----
-
-> ### hoodie.writestatus.class
-> Subclass of org.apache.hudi.client.WriteStatus to be used to collect information about a write. Can be overridden to collection additional metrics/statistics about the data if needed.<br></br>
-> `Default Value: org.apache.hudi.client.WriteStatus (Optional)`<br></br>
-> `Config Param: WRITE_STATUS_CLASS_NAME`<br></br>
-
----
-
-### Metastore Configs {#Metastore-Configs}
-Configurations used by the Hudi Metastore.
-
-`Config Class`: org.apache.hudi.common.config.HoodieMetaserverConfig<br></br>
-> ### hoodie.database.name
-> Database name that will be used for incremental query.If different databases have the same table name during incremental query, we can set it to limit the table name under a specific database<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: DATABASE_NAME`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.table.name
-> Table name that will be used for registering with Hive. Needs to be same across runs.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TABLE_NAME`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.metaserver.connect.retries
-> Number of retries while opening a connection to metastore<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: METASERVER_CONNECTION_RETRIES`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.metaserver.connect.retry.delay
-> Number of seconds for the client to wait between consecutive connection attempts<br></br>
-> `Default Value: 1 (Optional)`<br></br>
-> `Config Param: METASERVER_CONNECTION_RETRY_DELAY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.metaserver.enabled
-> Enable Hudi metaserver for storing Hudi tables' metadata.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: METASERVER_ENABLE`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.metaserver.uris
-> Metastore server uris<br></br>
-> `Default Value: thrift://localhost:9090 (Optional)`<br></br>
-> `Config Param: METASERVER_URLS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-### Key Generator Options {#Key-Generator-Options}
-Hudi maintains keys (record key + partition path) for uniquely identifying a particular record. This config allows developers to setup the Key generator class that will extract these out of incoming records.
-
-`Config Class`: org.apache.hudi.keygen.constant.KeyGeneratorOptions<br></br>
-> ### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITIONPATH_FIELD_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.recordkey.field
-> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
-Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
-the dot notation eg: `a.b.c`<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: RECORDKEY_FIELD_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.write.hive_style_partitioning
-> Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
-By default false (the names of partition folders are only partition values)<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_STYLE_PARTITIONING_ENABLE`<br></br>
-
----
-
-> ### hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled
-> When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.write.partitionpath.urlencode
-> Should we url encode the partition path value, before creating the folder structure.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: URL_ENCODE_PARTITIONING`<br></br>
-
----
-
-### Storage Configs {#Storage-Configs}
-Configurations that control aspects around writing, sizing, reading base and log files.
-
-`Config Class`: org.apache.hudi.common.config.HoodieStorageConfig<br></br>
-> ### hoodie.logfile.data.block.format
-> Format of the data block within delta logs. Following formats are currently supported "avro", "hfile", "parquet"<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: LOGFILE_DATA_BLOCK_FORMAT`<br></br>
-
----
-
-> ### hoodie.hfile.block.size
-> Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially faster lookup times.<br></br>
-> `Default Value: 1048576 (Optional)`<br></br>
-> `Config Param: HFILE_BLOCK_SIZE`<br></br>
-
----
-
-> ### hoodie.hfile.compression.algorithm
-> Compression codec to use for hfile base files.<br></br>
-> `Default Value: GZ (Optional)`<br></br>
-> `Config Param: HFILE_COMPRESSION_ALGORITHM_NAME`<br></br>
-
----
-
-> ### hoodie.hfile.max.file.size
-> Target file size in bytes for HFile base files.<br></br>
-> `Default Value: 125829120 (Optional)`<br></br>
-> `Config Param: HFILE_MAX_FILE_SIZE`<br></br>
-
----
-
-> ### hoodie.logfile.data.block.max.size
-> LogFile Data block max size in bytes. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.<br></br>
-> `Default Value: 268435456 (Optional)`<br></br>
-> `Config Param: LOGFILE_DATA_BLOCK_MAX_SIZE`<br></br>
-
----
-
-> ### hoodie.logfile.max.size
-> LogFile max size in bytes. This is the maximum size allowed for a log file before it is rolled over to the next version.<br></br>
-> `Default Value: 1073741824 (Optional)`<br></br>
-> `Config Param: LOGFILE_MAX_SIZE`<br></br>
-
----
-
-> ### hoodie.logfile.to.parquet.compression.ratio
-> Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files & control the size of compacted parquet file.<br></br>
-> `Default Value: 0.35 (Optional)`<br></br>
-> `Config Param: LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
-
----
-
-> ### hoodie.orc.block.size
-> ORC block size, recommended to be aligned with the target file size.<br></br>
-> `Default Value: 125829120 (Optional)`<br></br>
-> `Config Param: ORC_BLOCK_SIZE`<br></br>
-
----
-
-> ### hoodie.orc.compression.codec
-> Compression codec to use for ORC base files.<br></br>
-> `Default Value: ZLIB (Optional)`<br></br>
-> `Config Param: ORC_COMPRESSION_CODEC_NAME`<br></br>
-
----
-
-> ### hoodie.orc.max.file.size
-> Target file size in bytes for ORC base files.<br></br>
-> `Default Value: 125829120 (Optional)`<br></br>
-> `Config Param: ORC_FILE_MAX_SIZE`<br></br>
-
----
-
-> ### hoodie.orc.stripe.size
-> Size of the memory buffer in bytes for writing<br></br>
-> `Default Value: 67108864 (Optional)`<br></br>
-> `Config Param: ORC_STRIPE_SIZE`<br></br>
-
----
-
-> ### hoodie.parquet.block.size
-> Parquet RowGroup size in bytes. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
-> `Default Value: 125829120 (Optional)`<br></br>
-> `Config Param: PARQUET_BLOCK_SIZE`<br></br>
-
----
-
-> ### hoodie.parquet.compression.codec
-> Compression Codec for parquet files<br></br>
-> `Default Value: gzip (Optional)`<br></br>
-> `Config Param: PARQUET_COMPRESSION_CODEC_NAME`<br></br>
-
----
-
-> ### hoodie.parquet.compression.ratio
-> Expected compression of parquet data used by Hudi, when it tries to size new parquet files. Increase this value, if bulk_insert is producing smaller than expected sized files<br></br>
-> `Default Value: 0.1 (Optional)`<br></br>
-> `Config Param: PARQUET_COMPRESSION_RATIO_FRACTION`<br></br>
-
----
-
-> ### hoodie.parquet.dictionary.enabled
-> Whether to use dictionary encoding<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PARQUET_DICTIONARY_ENABLED`<br></br>
-
----
-
-> ### hoodie.parquet.field_id.write.enabled
-> Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PARQUET_FIELD_ID_WRITE_ENABLED`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> ### hoodie.parquet.max.file.size
-> Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br></br>
-> `Default Value: 125829120 (Optional)`<br></br>
-> `Config Param: PARQUET_MAX_FILE_SIZE`<br></br>
-
----
-
-> ### hoodie.parquet.outputtimestamptype
-> Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.<br></br>
-> `Default Value: TIMESTAMP_MICROS (Optional)`<br></br>
-> `Config Param: PARQUET_OUTPUT_TIMESTAMP_TYPE`<br></br>
-
----
-
-> ### hoodie.parquet.page.size
-> Parquet page size in bytes. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
-> `Default Value: 1048576 (Optional)`<br></br>
-> `Config Param: PARQUET_PAGE_SIZE`<br></br>
-
----
-
-> ### hoodie.parquet.writelegacyformat.enabled
-> Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: PARQUET_WRITE_LEGACY_FORMAT_ENABLED`<br></br>
-
----
-
-### Compaction Configs {#Compaction-Configs}
-Configurations that control compaction (merging of log files onto a new base files).
-
-`Config Class`: org.apache.hudi.config.HoodieCompactionConfig<br></br>
-> ### hoodie.compact.inline
-> When set to true, compaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INLINE_COMPACT`<br></br>
-
----
-
-> ### hoodie.compact.inline.max.delta.commits
-> Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. This config takes effect only for the compaction triggering strategy based on the number of commits, i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.<br></br>
-> `Default Value: 5 (Optional)`<br></br>
-> `Config Param: INLINE_COMPACT_NUM_DELTA_COMMITS`<br></br>
-
----
-
-> ### hoodie.compact.inline.max.delta.seconds
-> Number of elapsed seconds after the last compaction, before scheduling a new one. This config takes effect only for the compaction triggering strategy based on the elapsed time, i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.<br></br>
-> `Default Value: 3600 (Optional)`<br></br>
-> `Config Param: INLINE_COMPACT_TIME_DELTA_SECONDS`<br></br>
-
----
-
-> ### hoodie.compact.inline.trigger.strategy
-> Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. Valid options: NUM_COMMITS,NUM_COMMITS_AFTER_LAST_REQUEST,TIME_ELAPSED,NUM_AND_TIME,NUM_OR_TIME<br></br>
-> `Default Value: NUM_COMMITS (Optional)`<br></br>
-> `Config Param: INLINE_COMPACT_TRIGGER_STRATEGY`<br></br>
-
----
-
-> ### hoodie.compact.schedule.inline
-> When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both `hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. But if `hoodie.compact.inline` is set to false, and `hoodie.compact.schedule.inline` is set to true, regular writers will schedule compaction inline, but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and execution inline for compaction<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SCHEDULE_INLINE_COMPACT`<br></br>
-
----
-
-> ### hoodie.compaction.daybased.target.partitions
-> Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of latest partitions to compact during a compaction run.<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: TARGET_PARTITIONS_PER_DAYBASED_COMPACTION`<br></br>
-
----
-
-> ### hoodie.compaction.lazy.block.read
-> When merging the delta log files, this config helps to choose whether the log blocks should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block header) or false for immediate block read (higher memory usage)<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COMPACTION_LAZY_BLOCK_READ_ENABLE`<br></br>
-
----
-
-> ### hoodie.compaction.logfile.num.threshold
-> Only if the log file num is greater than the threshold, the file group will be compacted.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: COMPACTION_LOG_FILE_NUM_THRESHOLD`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.compaction.logfile.size.threshold
-> Only if the log file size is greater than the threshold in bytes, the file group will be compacted.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: COMPACTION_LOG_FILE_SIZE_THRESHOLD`<br></br>
-
----
-
-> ### hoodie.compaction.preserve.commit.metadata
-> When rewriting data, preserves existing hoodie_commit_time<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.compaction.reverse.log.read
-> HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: COMPACTION_REVERSE_LOG_READ_ENABLE`<br></br>
-
----
-
-> ### hoodie.compaction.strategy
-> Compaction strategy decides which file groups are picked up for compaction during each compaction run. By default. Hudi picks the log file with most accumulated unmerged data<br></br>
-> `Default Value: org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy (Optional)`<br></br>
-> `Config Param: COMPACTION_STRATEGY`<br></br>
-
----
-
-> ### hoodie.compaction.target.io
-> Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. This value helps bound ingestion latency while compaction is run inline mode.<br></br>
-> `Default Value: 512000 (Optional)`<br></br>
-> `Config Param: TARGET_IO_PER_COMPACTION_IN_MB`<br></br>
-
----
-
-> ### hoodie.copyonwrite.insert.auto.split
-> Config to control whether we control insert split sizes automatically based on average record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely cumbersome.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: COPY_ON_WRITE_AUTO_SPLIT_INSERTS`<br></br>
-
----
-
-> ### hoodie.copyonwrite.insert.split.size
-> Number of inserts assigned for each partition/bucket for writing. We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and   over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first   write, where there is no history to learn record sizes from.<br></br>
-> `Default Value: 500000 (Optional)`<br></br>
-> `Config Param: COPY_ON_WRITE_INSERT_SPLIT_SIZE`<br></br>
-
----
-
-> ### hoodie.copyonwrite.record.size.estimate
-> The average record size. If not explicitly specified, hudi will compute the record size estimate compute dynamically based on commit metadata.  This is critical in computing the insert parallelism and bin-packing inserts into small files.<br></br>
-> `Default Value: 1024 (Optional)`<br></br>
-> `Config Param: COPY_ON_WRITE_RECORD_SIZE_ESTIMATE`<br></br>
-
----
-
-> ### hoodie.log.compaction.blocks.threshold
-> Log compaction can be scheduled if the no. of log blocks crosses this threshold value. This is effective only when log compaction is enabled via hoodie.log.compaction.inline<br></br>
-> `Default Value: 5 (Optional)`<br></br>
-> `Config Param: LOG_COMPACTION_BLOCKS_THRESHOLD`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.log.compaction.inline
-> When set to true, logcompaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INLINE_LOG_COMPACT`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.optimized.log.blocks.scan.enable
-> New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.parquet.small.file.limit
-> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage  becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file. Also note that if this set <= 0, will not try to get small files and directly write new files<br></br>
-> `Default Value: 104857600 (Optional)`<br></br>
-> `Config Param: PARQUET_SMALL_FILE_LIMIT`<br></br>
-
----
-
-> ### hoodie.record.size.estimation.threshold
-> We use the previous commits' metadata to calculate the estimated record size and use it  to bin pack records into partitions. If the previous commit is too small to make an accurate estimation,  Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten  larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)<br></br>
-> `Default Value: 1.0 (Optional)`<br></br>
-> `Config Param: RECORD_SIZE_ESTIMATION_THRESHOLD`<br></br>
-
----
-
-### File System View Storage Configurations {#File-System-View-Storage-Configurations}
-Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.
-
-`Config Class`: org.apache.hudi.common.table.view.FileSystemViewStorageConfig<br></br>
-> ### hoodie.filesystem.remote.backup.view.enable
-> Config to control whether backup needs to be configured if clients were not able to reach timeline service.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: REMOTE_BACKUP_VIEW_ENABLE`<br></br>
-
----
-
-> ### hoodie.filesystem.view.incr.timeline.sync.enable
-> Controls whether or not, the file system view is incrementally updated as new actions are performed on the timeline.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INCREMENTAL_TIMELINE_SYNC_ENABLE`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.host
-> We expect this to be rarely hand configured.<br></br>
-> `Default Value: localhost (Optional)`<br></br>
-> `Config Param: REMOTE_HOST_NAME`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.port
-> Port to serve file system view queries, when remote. We expect this to be rarely hand configured.<br></br>
-> `Default Value: 26754 (Optional)`<br></br>
-> `Config Param: REMOTE_PORT_NUM`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.retry.enable
-> Whether to enable API request retry for remote file system view.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: REMOTE_RETRY_ENABLE`<br></br>
-> `Since Version: 0.12.1`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.retry.exceptions
-> The class name of the Exception that needs to be re-tryed, separated by commas. Default is empty which means retry all the IOException and RuntimeException from Remote Request.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: RETRY_EXCEPTIONS`<br></br>
-> `Since Version: 0.12.1`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.retry.initial_interval_ms
-> Amount of time (in ms) to wait, before retry to do operations on storage.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: REMOTE_INITIAL_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.12.1`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.retry.max_interval_ms
-> Maximum amount of time (in ms), to wait for next retry.<br></br>
-> `Default Value: 2000 (Optional)`<br></br>
-> `Config Param: REMOTE_MAX_RETRY_INTERVAL_MS`<br></br>
-> `Since Version: 0.12.1`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.retry.max_numbers
-> Maximum number of retry for API requests against a remote file system view. e.g timeline server.<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: REMOTE_MAX_RETRY_NUMBERS`<br></br>
-> `Since Version: 0.12.1`<br></br>
-
----
-
-> ### hoodie.filesystem.view.remote.timeout.secs
-> Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.<br></br>
-> `Default Value: 300 (Optional)`<br></br>
-> `Config Param: REMOTE_TIMEOUT_SECS`<br></br>
-
----
-
-> ### hoodie.filesystem.view.rocksdb.base.path
-> Path on local storage to use, when storing file system view in embedded kv store/rocksdb.<br></br>
-> `Default Value: /tmp/hoodie_timeline_rocksdb (Optional)`<br></br>
-> `Config Param: ROCKSDB_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.filesystem.view.secondary.type
-> Specifies the secondary form of storage for file system view, if the primary (e.g timeline server)  is unavailable.<br></br>
-> `Default Value: MEMORY (Optional)`<br></br>
-> `Config Param: SECONDARY_VIEW_TYPE`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction
-> Fraction of the file system view memory, to be used for holding mapping to bootstrap base files.<br></br>
-> `Default Value: 0.05 (Optional)`<br></br>
-> `Config Param: BOOTSTRAP_BASE_FILE_MEM_FRACTION`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.clustering.mem.fraction
-> Fraction of the file system view memory, to be used for holding clustering related metadata.<br></br>
-> `Default Value: 0.01 (Optional)`<br></br>
-> `Config Param: SPILLABLE_CLUSTERING_MEM_FRACTION`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.compaction.mem.fraction
-> Fraction of the file system view memory, to be used for holding compaction related metadata.<br></br>
-> `Default Value: 0.8 (Optional)`<br></br>
-> `Config Param: SPILLABLE_COMPACTION_MEM_FRACTION`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.dir
-> Path on local storage to use, when file system view is held in a spillable map.<br></br>
-> `Default Value: /tmp/ (Optional)`<br></br>
-> `Config Param: SPILLABLE_DIR`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.log.compaction.mem.fraction
-> Fraction of the file system view memory, to be used for holding log compaction related metadata.<br></br>
-> `Default Value: 0.8 (Optional)`<br></br>
-> `Config Param: SPILLABLE_LOG_COMPACTION_MEM_FRACTION`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.mem
-> Amount of memory to be used in bytes for holding file system view, before spilling to disk.<br></br>
-> `Default Value: 104857600 (Optional)`<br></br>
-> `Config Param: SPILLABLE_MEMORY`<br></br>
-
----
-
-> ### hoodie.filesystem.view.spillable.replaced.mem.fraction
-> Fraction of the file system view memory, to be used for holding replace commit related metadata.<br></br>
-> `Default Value: 0.01 (Optional)`<br></br>
-> `Config Param: SPILLABLE_REPLACED_MEM_FRACTION`<br></br>
-
----
-
-> ### hoodie.filesystem.view.type
-> File system view provides APIs for viewing the files on the underlying lake storage,  as file groups and file slices. This config controls how such a view is held. Options include MEMORY,SPILLABLE_DISK,EMBEDDED_KV_STORE,REMOTE_ONLY,REMOTE_FIRST which provide different trade offs for memory usage and API request performance.<br></br>
-> `Default Value: MEMORY (Optional)`<br></br>
-> `Config Param: VIEW_TYPE`<br></br>
-
----
-
-### Clustering Configs {#Clustering-Configs}
-Configurations that control the clustering table service in hudi, which optimizes the storage layout for better query performance by sorting and sizing data files.
-
-`Config Class`: org.apache.hudi.config.HoodieClusteringConfig<br></br>
-> ### hoodie.clustering.plan.strategy.cluster.begin.partition
-> Begin partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION_FILTER_BEGIN_PARTITION`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.cluster.end.partition
-> End partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION_FILTER_END_PARTITION`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.partition.regex.pattern
-> Filter clustering partitions that matched regex pattern<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION_REGEX_PATTERN`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.partition.selected
-> Partitions to run clustering<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION_SELECTED`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.sort.columns
-> Columns to sort the data by when clustering<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PLAN_STRATEGY_SORT_COLUMNS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.async.enabled
-> Enable running of clustering service, asynchronously as inserts happen on the table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ASYNC_CLUSTERING_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.async.max.commits
-> Config to control frequency of async clustering<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: ASYNC_CLUSTERING_MAX_COMMITS`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.clustering.execution.strategy.class
-> Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the  clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while  meeting the configured target file sizes.<br></br>
-> `Default Value: org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy (Optional)`<br></br>
-> `Config Param: EXECUTION_STRATEGY_CLASS_NAME`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.inline
-> Turn on inline clustering - clustering will be run after each write operation is complete<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: INLINE_CLUSTERING`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.inline.max.commits
-> Config to control frequency of clustering planning<br></br>
-> `Default Value: 4 (Optional)`<br></br>
-> `Config Param: INLINE_CLUSTERING_MAX_COMMITS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.partition.filter.mode
-> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].DAY_ROLLING: clustering partitions on a rolling basis by the hour to avoid clustering all partitions each time, which strategy sorts the partitions asc and chooses the partition of which index is divided by 24 and the remainder is equal to the current hour.<br></br>
-> `Default Value: NONE (Optional)`<br></br>
-> `Config Param: PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.class
-> Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by hoodie.clustering.plan.strategy.small.file.limit) to pick the small file slices within partitions for clustering.<br></br>
-> `Default Value: org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_CLASS_NAME`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.daybased.lookback.partitions
-> Number of partitions to list to create ClusteringPlan<br></br>
-> `Default Value: 2 (Optional)`<br></br>
-> `Config Param: DAYBASED_LOOKBACK_PARTITIONS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions
-> Number of partitions to skip from latest when choosing partitions to create ClusteringPlan<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.max.bytes.per.group
-> Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). Max amount of data to be included in one group<br></br>
-> `Default Value: 2147483648 (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.max.num.groups
-> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_MAX_GROUPS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.small.file.limit
-> Files smaller than the size in bytes specified here are candidates for clustering<br></br>
-> `Default Value: 314572800 (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_SMALL_FILE_LIMIT`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.plan.strategy.target.file.max.bytes
-> Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups<br></br>
-> `Default Value: 1073741824 (Optional)`<br></br>
-> `Config Param: PLAN_STRATEGY_TARGET_FILE_MAX_BYTES`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.clustering.preserve.commit.metadata
-> When rewriting data, preserves existing hoodie_commit_time<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.clustering.rollback.pending.replacecommit.on.conflict
-> If updates are allowed to file groups pending clustering, then set this config to rollback failed or pending clustering instants. Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.clustering.schedule.inline
-> When set to true, clustering service will be attempted for inline scheduling after each write. Users have to ensure they have a separate job to run async clustering(execution) for the one scheduled by this writer. Users can choose to set both `hoodie.clustering.inline` and `hoodie.clustering.schedule.inline` to false and have both scheduling and execution triggered by any async process, on which case `hoodie.clustering.async.enabled` is expected to be set to true. But if `hoodie.clustering.inline` is set to false, and `hoodie.clustering.schedule.inline` is set to true, regular writers will schedule clustering inline, but users are expected to trigger async job for execution. If `hoodie.clustering.inline` is set to true, regular writers will do both scheduling and execution inline for clustering<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SCHEDULE_INLINE_CLUSTERING`<br></br>
-
----
-
-> ### hoodie.clustering.updates.strategy
-> Determines how to handle updates, deletes to file groups that are under clustering. Default strategy just rejects the update<br></br>
-> `Default Value: org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy (Optional)`<br></br>
-> `Config Param: UPDATES_STRATEGY`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> ### hoodie.layout.optimize.build.curve.sample.size
-> Determines target sample size used by the Boundary-based Interleaved Index method of building space-filling curve. Larger sample size entails better layout optimization outcomes, at the expense of higher memory footprint.<br></br>
-> `Default Value: 200000 (Optional)`<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.layout.optimize.curve.build.method
-> Controls how data is sampled to build the space-filling curves. Two methods: "direct", "sample". The direct method is faster than the sampling, however sample method would produce a better data layout.<br></br>
-> `Default Value: direct (Optional)`<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.layout.optimize.data.skipping.enable
-> Enable data skipping by collecting statistics once layout optimization is complete.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-> `Deprecated Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.layout.optimize.enable
-> This setting has no effect. Please refer to clustering configuration, as well as LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_ENABLE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-> `Deprecated Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.layout.optimize.strategy
-> Determines ordering strategy used in records layout optimization. Currently supported strategies are "linear", "z-order" and "hilbert" values are supported.<br></br>
-> `Default Value: linear (Optional)`<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_STRATEGY`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
 
 ### Common Configurations {#Common-Configurations}
 The following set of configurations are common across Hudi.
 
-`Config Class`: org.apache.hudi.common.config.HoodieCommonConfig<br></br>
-> ### as.of.instant
-> The query instant for time travel. Without specified this option, we query the latest snapshot.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TIMESTAMP_AS_OF`<br></br>
 
+
+[**Advanced Configs**](#Common-Configurations-advanced-configs)
+
+
+| Config Name                                                                            | Default              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Since Version |
+| -------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [as.of.instant](#asofinstant)                                                          | N/A **(Required)**   | The query instant for time travel. Without specified this option, we query the latest snapshot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.common.diskmap.compression.enabled](#hoodiecommondiskmapcompressionenabled)    | true (Optional)      | Turn on compression for BITCASK disk map used by the External Spillable Map                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.common.spillable.diskmap.type](#hoodiecommonspillablediskmaptype)              | BITCASK (Optional)   | When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.read.handle.hollow.commit](#hoodiedatasourcereadhandlehollowcommit) | EXCEPTION (Optional) | When doing incremental queries, there could be hollow commits (requested or inflight commits that are not the latest) that are produced by concurrent writers and could lead to potential data loss. This config allows users to have different ways of handling this situation. The valid values are [EXCEPTION, BLOCK, USE_STATE_TRANSITION_TIME]: Use `EXCEPTION` to throw an exception when hollow commit is detected. This is helpful when hollow commits are not expected. Use `BLOCK` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits to finish is acceptable. Use `USE_STATE_TRANSITION_TIME` (experimental) to query commits in range by state transition time (completion time), instead of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime`  instead of the instant's commit time. | 0.14.0        |
+| [hoodie.datasource.write.reconcile.schema](#hoodiedatasourcewritereconcileschema)      | false (Optional)     | This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch)                                                                                                                                                                                                                                                                 |               |
+| [hoodie.fs.atomic_creation.support](#hoodiefsatomic_creationsupport)                   |  (Optional)          | This config is used to specify the file system which supports atomic file creation . atomic means that an operation either succeeds and has an effect or has fails and has no effect; now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time. since some FS does not support atomic file creation (eg: S3), we decide the FileSystemLockProvider only support HDFS,local FS and View FS as default. if you want to use FileSystemLockProvider with other FS, you can set this config with the FS scheme, eg: fs1,fs2                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.schema.on.read.enable](#hoodieschemaonreadenable)                              | false (Optional)     | Enables support for Schema Evolution feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
 ---
 
-> ### hoodie.common.diskmap.compression.enabled
-> Turn on compression for BITCASK disk map used by the External Spillable Map<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: DISK_MAP_BITCASK_COMPRESSION_ENABLED`<br></br>
 
+### Metadata Configs {#Metadata-Configs}
+Configurations used by the Hudi Metadata Table. This table maintains the metadata about a given Hudi table (e.g file listings)  to avoid overhead of accessing cloud storage, during queries.
+
+
+
+[**Basic Configs**](#Metadata-Configs-basic-configs)
+
+
+| Config Name                                                                        | Default          | Description                                                                                                                                                                                                                   | Since Version |
+| ---------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.metadata.enable](#hoodiemetadataenable)                                    | true (Optional)  | Enable the internal metadata table which serves table metadata like level file listings                                                                                                                                       | 0.7.0         |
+| [hoodie.metadata.index.bloom.filter.enable](#hoodiemetadataindexbloomfilterenable) | false (Optional) | Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.                          | 0.11.0        |
+| [hoodie.metadata.index.column.stats.enable](#hoodiemetadataindexcolumnstatsenable) | false (Optional) | Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups. | 0.11.0        |
+
+[**Advanced Configs**](#Metadata-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                    | Default               | Description                                                                                                                                                                                                                                                                                                                                           | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.metadata.index.bloom.filter.column.list](#hoodiemetadataindexbloomfiltercolumnlist)                                    | N/A **(Required)**    | Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.                                                                                                                                                                                                                              | 0.11.0        |
+| [hoodie.metadata.index.column.stats.column.list](#hoodiemetadataindexcolumnstatscolumnlist)                                    | N/A **(Required)**    | Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed                                                                                                                                                                                                                                   | 0.11.0        |
+| [hoodie.metadata.index.column.stats.processing.mode.override](#hoodiemetadataindexcolumnstatsprocessingmodeoverride)           | N/A **(Required)**    | By default Column Stats Index is automatically determining whether it should be read and processed either'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index and how many columns are read. This config allows to override this behavior.                                            | 0.12.0        |
+| [_hoodie.metadata.ignore.spurious.deletes](#_hoodiemetadataignorespuriousdeletes)                                              | true (Optional)       | There are cases when extra files are requested to be deleted from metadata table which are never added before. This config determines how to handle such spurious deletes                                                                                                                                                                             | 0.10.0        |
+| [hoodie.assume.date.partitioning](#hoodieassumedatepartitioning)                                                               | false (Optional)      | Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. This is a stop-gap to support tables created by versions &lt; 0.3.1. Will be removed eventually                                                                                                                                                    | 0.3.0         |
+| [hoodie.file.listing.parallelism](#hoodiefilelistingparallelism)                                                               | 200 (Optional)        | Parallelism to use, when listing the table on lake storage.                                                                                                                                                                                                                                                                                           | 0.7.0         |
+| [hoodie.metadata.compact.max.delta.commits](#hoodiemetadatacompactmaxdeltacommits)                                             | 10 (Optional)         | Controls how often the metadata table is compacted.                                                                                                                                                                                                                                                                                                   | 0.7.0         |
+| [hoodie.metadata.dir.filter.regex](#hoodiemetadatadirfilterregex)                                                              |  (Optional)           | Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.                                                                                                                                                                                                                          | 0.7.0         |
+| [hoodie.metadata.index.async](#hoodiemetadataindexasync)                                                                       | false (Optional)      | Enable asynchronous indexing of metadata table.                                                                                                                                                                                                                                                                                                       | 0.11.0        |
+| [hoodie.metadata.index.bloom.filter.file.group.count](#hoodiemetadataindexbloomfilterfilegroupcount)                           | 4 (Optional)          | Metadata bloom filter index partition file group count. This controls the size of the base and log files and read parallelism in the bloom filter index partition. The recommendation is to size the file group count such that the base files are under 1GB.                                                                                         | 0.11.0        |
+| [hoodie.metadata.index.bloom.filter.parallelism](#hoodiemetadataindexbloomfilterparallelism)                                   | 200 (Optional)        | Parallelism to use for generating bloom filter index in metadata table.                                                                                                                                                                                                                                                                               | 0.11.0        |
+| [hoodie.metadata.index.check.timeout.seconds](#hoodiemetadataindexchecktimeoutseconds)                                         | 900 (Optional)        | After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.                                                                                                                               | 0.11.0        |
+| [hoodie.metadata.index.column.stats.file.group.count](#hoodiemetadataindexcolumnstatsfilegroupcount)                           | 2 (Optional)          | Metadata column stats partition file group count. This controls the size of the base and log files and read parallelism in the column stats index partition. The recommendation is to size the file group count such that the base files are under 1GB.                                                                                               | 0.11.0        |
+| [hoodie.metadata.index.column.stats.inMemory.projection.threshold](#hoodiemetadataindexcolumnstatsinMemoryprojectionthreshold) | 100000 (Optional)     | When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory threshold (counted by the # of rows), it will be attempted to be loaded "in-memory" (ie not using the execution engine like Spark, Flink, etc). If the value is above the threshold execution engine will be used to compose the projection. | 0.12.0        |
+| [hoodie.metadata.index.column.stats.parallelism](#hoodiemetadataindexcolumnstatsparallelism)                                   | 200 (Optional)        | Parallelism to use, when generating column stats index.                                                                                                                                                                                                                                                                                               | 0.11.0        |
+| [hoodie.metadata.insert.parallelism](#hoodiemetadatainsertparallelism)                                                         | 1 (Optional)          | Parallelism to use when inserting to the metadata table                                                                                                                                                                                                                                                                                               | 0.7.0         |
+| [hoodie.metadata.log.compaction.blocks.threshold](#hoodiemetadatalogcompactionblocksthreshold)                                 | 5 (Optional)          | Controls the criteria to log compacted files groups in metadata table.                                                                                                                                                                                                                                                                                |               |
+| [hoodie.metadata.log.compaction.enable](#hoodiemetadatalogcompactionenable)                                                    | false (Optional)      | This configs enables logcompaction for the metadata table.                                                                                                                                                                                                                                                                                            | 0.14          |
+| [hoodie.metadata.max.deltacommits.when_pending](#hoodiemetadatamaxdeltacommitswhen_pending)                                    | 1000 (Optional)       | When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.                                                                                      | 0.14.0        |
+| [hoodie.metadata.max.reader.buffer.size](#hoodiemetadatamaxreaderbuffersize)                                                   | 10485760 (Optional)   | Max memory to use for the reader buffer while merging log blocks                                                                                                                                                                                                                                                                                      | 0.14.0        |
+| [hoodie.metadata.max.reader.memory](#hoodiemetadatamaxreadermemory)                                                            | 1073741824 (Optional) | Max memory to use for the reader to read from metadata                                                                                                                                                                                                                                                                                                | 0.14.0        |
+| [hoodie.metadata.metrics.enable](#hoodiemetadatametricsenable)                                                                 | false (Optional)      | Enable publishing of metrics around metadata table.                                                                                                                                                                                                                                                                                                   | 0.7.0         |
+| [hoodie.metadata.optimized.log.blocks.scan.enable](#hoodiemetadataoptimizedlogblocksscanenable)                                | false (Optional)      | Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written by log compaction.                                                                                                                          | 0.13.0        |
+| [hoodie.metadata.record.index.enable](#hoodiemetadatarecordindexenable)                                                        | false (Optional)      | Create the HUDI Record Index within the Metadata Table                                                                                                                                                                                                                                                                                                | 0.14.0        |
+| [hoodie.metadata.record.index.growth.factor](#hoodiemetadatarecordindexgrowthfactor)                                           | 2.0 (Optional)        | The current number of records are multiplied by this number when estimating the number of file groups to create automatically. This helps account for growth in the number of records in the dataset.                                                                                                                                                 | 0.14.0        |
+| [hoodie.metadata.record.index.max.filegroup.count](#hoodiemetadatarecordindexmaxfilegroupcount)                                | 1000 (Optional)       | Maximum number of file groups to use for Record Index.                                                                                                                                                                                                                                                                                                | 0.14.0        |
+| [hoodie.metadata.record.index.max.filegroup.size](#hoodiemetadatarecordindexmaxfilegroupsize)                                  | 1073741824 (Optional) | Maximum size in bytes of a single file group. Large file group takes longer to compact.                                                                                                                                                                                                                                                               | 0.14.0        |
+| [hoodie.metadata.record.index.min.filegroup.count](#hoodiemetadatarecordindexminfilegroupcount)                                | 10 (Optional)         | Minimum number of file groups to use for Record Index.                                                                                                                                                                                                                                                                                                | 0.14.0        |
+| [hoodie.metadata.spillable.map.path](#hoodiemetadataspillablemappath)                                                          |  (Optional)           | Path on local storage to use, when keys read from metadata are held in a spillable map.                                                                                                                                                                                                                                                               | 0.14.0        |
 ---
 
-> ### hoodie.common.spillable.diskmap.type
-> When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.<br></br>
-> `Default Value: BITCASK (Optional)`<br></br>
-> `Config Param: SPILLABLE_DISK_MAP_TYPE`<br></br>
 
+### Metaserver Configs {#Metaserver-Configs}
+Configurations used by the Hudi Metaserver.
+
+
+
+[**Advanced Configs**](#Metaserver-Configs-advanced-configs)
+
+
+| Config Name                                                                 | Default                            | Description                                                                                                                                                                                     | Since Version |
+| --------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.database.name](#hoodiedatabasename)                                 | N/A **(Required)**                 | Database name that will be used for incremental query.If different databases have the same table name during incremental query, we can set it to limit the table name under a specific database | 0.13.0        |
+| [hoodie.table.name](#hoodietablename)                                       | N/A **(Required)**                 | Table name that will be used for registering with Hive. Needs to be same across runs.                                                                                                           | 0.13.0        |
+| [hoodie.metaserver.connect.retries](#hoodiemetaserverconnectretries)        | 3 (Optional)                       | Number of retries while opening a connection to metaserver                                                                                                                                      | 0.13.0        |
+| [hoodie.metaserver.connect.retry.delay](#hoodiemetaserverconnectretrydelay) | 1 (Optional)                       | Number of seconds for the client to wait between consecutive connection attempts                                                                                                                | 0.13.0        |
+| [hoodie.metaserver.enabled](#hoodiemetaserverenabled)                       | false (Optional)                   | Enable Hudi metaserver for storing Hudi tables' metadata.                                                                                                                                       | 0.13.0        |
+| [hoodie.metaserver.uris](#hoodiemetaserveruris)                             | thrift://localhost:9090 (Optional) | Metaserver server uris                                                                                                                                                                          | 0.13.0        |
 ---
 
-> ### hoodie.datasource.write.reconcile.schema
-> This config controls how writer's schema will be selected based on the incoming batch's schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation is ENABLED, writer-schema will be picked such that table's schema (after txn) is either kept the same or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. This enables us, to always extend the table's schema during evolution and never lose the data (when, for ex, existing column is being dropped in a new batch)<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: RECONCILE_SCHEMA`<br></br>
 
+### Storage Configs {#Storage-Configs}
+Configurations that control aspects around writing, sizing, reading base and log files.
+
+
+
+[**Basic Configs**](#Storage-Configs-basic-configs)
+
+
+| Config Name                                                        | Default              | Description                                                                                                                                                                | Since Version |
+| ------------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.parquet.compression.codec](#hoodieparquetcompressioncodec) | gzip (Optional)      | Compression Codec for parquet files                                                                                                                                        |               |
+| [hoodie.parquet.max.file.size](#hoodieparquetmaxfilesize)          | 125829120 (Optional) | Target size in bytes for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance. |               |
+
+[**Advanced Configs**](#Storage-Configs-advanced-configs)
+
+
+| Config Name                                                                            | Default                                                | Description                                                                                                                                                                                                                                                                                                                                                                      | Since Version |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.logfile.data.block.format](#hoodielogfiledatablockformat)                      | N/A **(Required)**                                     | Format of the data block within delta logs. Following formats are currently supported "avro", "hfile", "parquet"                                                                                                                                                                                                                                                                 |               |
+| [hoodie.avro.write.support.class](#hoodieavrowritesupportclass)                        | org.apache.hudi.avro.HoodieAvroWriteSupport (Optional) | Provided write support class should extend HoodieAvroWriteSupport class and it is loaded at runtime. This is only required when trying to override the existing write context.                                                                                                                                                                                                   | 0.14.0        |
+| [hoodie.hfile.block.size](#hoodiehfileblocksize)                                       | 1048576 (Optional)                                     | Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially faster lookup times.                                                                                                                                                                                                                                                         |               |
+| [hoodie.hfile.compression.algorithm](#hoodiehfilecompressionalgorithm)                 | GZ (Optional)                                          | Compression codec to use for hfile base files.                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.hfile.max.file.size](#hoodiehfilemaxfilesize)                                  | 125829120 (Optional)                                   | Target file size in bytes for HFile base files.                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.logfile.data.block.max.size](#hoodielogfiledatablockmaxsize)                   | 268435456 (Optional)                                   | LogFile Data block max size in bytes. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.                                                                             |               |
+| [hoodie.logfile.max.size](#hoodielogfilemaxsize)                                       | 1073741824 (Optional)                                  | LogFile max size in bytes. This is the maximum size allowed for a log file before it is rolled over to the next version.                                                                                                                                                                                                                                                         |               |
+| [hoodie.logfile.to.parquet.compression.ratio](#hoodielogfiletoparquetcompressionratio) | 0.35 (Optional)                                        | Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files &amp; control the size of compacted parquet file.                                                                                                                                                                                         |               |
+| [hoodie.orc.block.size](#hoodieorcblocksize)                                           | 125829120 (Optional)                                   | ORC block size, recommended to be aligned with the target file size.                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.orc.compression.codec](#hoodieorccompressioncodec)                             | ZLIB (Optional)                                        | Compression codec to use for ORC base files.                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.orc.max.file.size](#hoodieorcmaxfilesize)                                      | 125829120 (Optional)                                   | Target file size in bytes for ORC base files.                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.orc.stripe.size](#hoodieorcstripesize)                                         | 67108864 (Optional)                                    | Size of the memory buffer in bytes for writing                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.parquet.block.size](#hoodieparquetblocksize)                                   | 125829120 (Optional)                                   | Parquet RowGroup size in bytes. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.                                                                                                                                                                                                             |               |
+| [hoodie.parquet.compression.ratio](#hoodieparquetcompressionratio)                     | 0.1 (Optional)                                         | Expected compression of parquet data used by Hudi, when it tries to size new parquet files. Increase this value, if bulk_insert is producing smaller than expected sized files                                                                                                                                                                                                   |               |
+| [hoodie.parquet.dictionary.enabled](#hoodieparquetdictionaryenabled)                   | true (Optional)                                        | Whether to use dictionary encoding                                                                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.parquet.field_id.write.enabled](#hoodieparquetfield_idwriteenabled)            | true (Optional)                                        | Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.                                                                                                                                             | 0.12.0        |
+| [hoodie.parquet.outputtimestamptype](#hoodieparquetoutputtimestamptype)                | TIMESTAMP_MICROS (Optional)                            | Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.                                                                                                                                                                                                                                                               |               |
+| [hoodie.parquet.page.size](#hoodieparquetpagesize)                                     | 1048576 (Optional)                                     | Parquet page size in bytes. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.                                                                                                                                                                                                                                                     |               |
+| [hoodie.parquet.writelegacyformat.enabled](#hoodieparquetwritelegacyformatenabled)     | false (Optional)                                       | Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format. |               |
 ---
 
-> ### hoodie.schema.on.read.enable
-> Enables support for Schema Evolution feature<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: SCHEMA_EVOLUTION_ENABLE`<br></br>
 
+### Consistency Guard Configurations {#Consistency-Guard-Configurations}
+The consistency guard related config options, to help talk to eventually consistent object storage.(Tip: S3 is NOT eventually consistent anymore!)
+
+
+
+[**Advanced Configs**](#Consistency-Guard-Configurations-advanced-configs)
+
+
+| Config Name                                                                                         | Default          | Description                                                                                                                                                       | Since Version                  |
+| --------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [_hoodie.optimistic.consistency.guard.enable](#_hoodieoptimisticconsistencyguardenable)             | false (Optional) | Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.                                                       | 0.6.0                          |
+| [hoodie.consistency.check.enabled](#hoodieconsistencycheckenabled)                                  | false (Optional) | Enabled to handle S3 eventual consistency issue. This property is no longer required since S3 is now strongly consistent. Will be removed in the future releases. | 0.5.0. Deprecated since: 0.7.0 |
+| [hoodie.consistency.check.initial_interval_ms](#hoodieconsistencycheckinitial_interval_ms)          | 400 (Optional)   | Amount of time (in ms) to wait, before checking for consistency after an operation on storage.                                                                    | 0.5.0. Deprecated since: 0.7.0 |
+| [hoodie.consistency.check.max_checks](#hoodieconsistencycheckmax_checks)                            | 6 (Optional)     | Maximum number of consistency checks to perform, with exponential backoff.                                                                                        | 0.5.0. Deprecated since: 0.7.0 |
+| [hoodie.consistency.check.max_interval_ms](#hoodieconsistencycheckmax_interval_ms)                  | 20000 (Optional) | Maximum amount of time (in ms), to wait for consistency checking.                                                                                                 | 0.5.0. Deprecated since: 0.7.0 |
+| [hoodie.optimistic.consistency.guard.sleep_time_ms](#hoodieoptimisticconsistencyguardsleep_time_ms) | 500 (Optional)   | Amount of time (in ms), to wait after which we assume storage is consistent.                                                                                      | 0.6.0                          |
 ---
+
+
+### FileSystem Guard Configurations {#FileSystem-Guard-Configurations}
+The filesystem retry related config options, to help deal with runtime exception like list/get/put/delete performance issues.
+
+
+
+[**Advanced Configs**](#FileSystem-Guard-Configurations-advanced-configs)
+
+
+| Config Name                                                                                                 | Default          | Description                                                                                                                                                                | Since Version |
+| ----------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.filesystem.operation.retry.enable](#hoodiefilesystemoperationretryenable)                           | false (Optional) | Enabled to handle list/get/delete etc file system performance issue.                                                                                                       | 0.11.0        |
+| [hoodie.filesystem.operation.retry.exceptions](#hoodiefilesystemoperationretryexceptions)                   |  (Optional)      | The class name of the Exception that needs to be retried, separated by commas. Default is empty which means retry all the IOException and RuntimeException from FileSystem | 0.11.0        |
+| [hoodie.filesystem.operation.retry.initial_interval_ms](#hoodiefilesystemoperationretryinitial_interval_ms) | 100 (Optional)   | Amount of time (in ms) to wait, before retry to do operations on storage.                                                                                                  | 0.11.0        |
+| [hoodie.filesystem.operation.retry.max_interval_ms](#hoodiefilesystemoperationretrymax_interval_ms)         | 2000 (Optional)  | Maximum amount of time (in ms), to wait for next retry.                                                                                                                    | 0.11.0        |
+| [hoodie.filesystem.operation.retry.max_numbers](#hoodiefilesystemoperationretrymax_numbers)                 | 4 (Optional)     | Maximum number of retry actions to perform, with exponential backoff.                                                                                                      | 0.11.0        |
+---
+
+
+### File System View Storage Configurations {#File-System-View-Storage-Configurations}
+Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.
+
+
+
+[**Advanced Configs**](#File-System-View-Storage-Configurations-advanced-configs)
+
+
+| Config Name                                                                                                                     | Default                                 | Description                                                                                                                                                                                                                                                                                                                           | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.filesystem.remote.backup.view.enable](#hoodiefilesystemremotebackupviewenable)                                          | true (Optional)                         | Config to control whether backup needs to be configured if clients were not able to reach timeline service.                                                                                                                                                                                                                           |               |
+| [hoodie.filesystem.view.incr.timeline.sync.enable](#hoodiefilesystemviewincrtimelinesyncenable)                                 | false (Optional)                        | Controls whether or not, the file system view is incrementally updated as new actions are performed on the timeline.                                                                                                                                                                                                                  |               |
+| [hoodie.filesystem.view.remote.host](#hoodiefilesystemviewremotehost)                                                           | localhost (Optional)                    | We expect this to be rarely hand configured.                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.filesystem.view.remote.port](#hoodiefilesystemviewremoteport)                                                           | 26754 (Optional)                        | Port to serve file system view queries, when remote. We expect this to be rarely hand configured.                                                                                                                                                                                                                                     |               |
+| [hoodie.filesystem.view.remote.retry.enable](#hoodiefilesystemviewremoteretryenable)                                            | false (Optional)                        | Whether to enable API request retry for remote file system view.                                                                                                                                                                                                                                                                      | 0.12.1        |
+| [hoodie.filesystem.view.remote.retry.exceptions](#hoodiefilesystemviewremoteretryexceptions)                                    |  (Optional)                             | The class name of the Exception that needs to be retried, separated by commas. Default is empty which means retry all the IOException and RuntimeException from Remote Request.                                                                                                                                                       | 0.12.1        |
+| [hoodie.filesystem.view.remote.retry.initial_interval_ms](#hoodiefilesystemviewremoteretryinitial_interval_ms)                  | 100 (Optional)                          | Amount of time (in ms) to wait, before retry to do operations on storage.                                                                                                                                                                                                                                                             | 0.12.1        |
+| [hoodie.filesystem.view.remote.retry.max_interval_ms](#hoodiefilesystemviewremoteretrymax_interval_ms)                          | 2000 (Optional)                         | Maximum amount of time (in ms), to wait for next retry.                                                                                                                                                                                                                                                                               | 0.12.1        |
+| [hoodie.filesystem.view.remote.retry.max_numbers](#hoodiefilesystemviewremoteretrymax_numbers)                                  | 3 (Optional)                            | Maximum number of retry for API requests against a remote file system view. e.g timeline server.                                                                                                                                                                                                                                      | 0.12.1        |
+| [hoodie.filesystem.view.remote.timeout.secs](#hoodiefilesystemviewremotetimeoutsecs)                                            | 300 (Optional)                          | Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.                                                                                                                                                                                                                                  |               |
+| [hoodie.filesystem.view.rocksdb.base.path](#hoodiefilesystemviewrocksdbbasepath)                                                | /tmp/hoodie_timeline_rocksdb (Optional) | Path on local storage to use, when storing file system view in embedded kv store/rocksdb.                                                                                                                                                                                                                                             |               |
+| [hoodie.filesystem.view.secondary.type](#hoodiefilesystemviewsecondarytype)                                                     | MEMORY (Optional)                       | Specifies the secondary form of storage for file system view, if the primary (e.g timeline server)  is unavailable.                                                                                                                                                                                                                   |               |
+| [hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction](#hoodiefilesystemviewspillablebootstrapbasefilememfraction) | 0.05 (Optional)                         | Fraction of the file system view memory, to be used for holding mapping to bootstrap base files.                                                                                                                                                                                                                                      |               |
+| [hoodie.filesystem.view.spillable.clustering.mem.fraction](#hoodiefilesystemviewspillableclusteringmemfraction)                 | 0.01 (Optional)                         | Fraction of the file system view memory, to be used for holding clustering related metadata.                                                                                                                                                                                                                                          |               |
+| [hoodie.filesystem.view.spillable.compaction.mem.fraction](#hoodiefilesystemviewspillablecompactionmemfraction)                 | 0.8 (Optional)                          | Fraction of the file system view memory, to be used for holding compaction related metadata.                                                                                                                                                                                                                                          |               |
+| [hoodie.filesystem.view.spillable.dir](#hoodiefilesystemviewspillabledir)                                                       | /tmp/ (Optional)                        | Path on local storage to use, when file system view is held in a spillable map.                                                                                                                                                                                                                                                       |               |
+| [hoodie.filesystem.view.spillable.log.compaction.mem.fraction](#hoodiefilesystemviewspillablelogcompactionmemfraction)          | 0.8 (Optional)                          | Fraction of the file system view memory, to be used for holding log compaction related metadata.                                                                                                                                                                                                                                      | 0.13.0        |
+| [hoodie.filesystem.view.spillable.mem](#hoodiefilesystemviewspillablemem)                                                       | 104857600 (Optional)                    | Amount of memory to be used in bytes for holding file system view, before spilling to disk.                                                                                                                                                                                                                                           |               |
+| [hoodie.filesystem.view.spillable.replaced.mem.fraction](#hoodiefilesystemviewspillablereplacedmemfraction)                     | 0.01 (Optional)                         | Fraction of the file system view memory, to be used for holding replace commit related metadata.                                                                                                                                                                                                                                      |               |
+| [hoodie.filesystem.view.type](#hoodiefilesystemviewtype)                                                                        | MEMORY (Optional)                       | File system view provides APIs for viewing the files on the underlying lake storage,  as file groups and file slices. This config controls how such a view is held. Options include MEMORY,SPILLABLE_DISK,EMBEDDED_KV_STORE,REMOTE_ONLY,REMOTE_FIRST which provide different trade offs for memory usage and API request performance. |               |
+---
+
+
+### Archival Configs {#Archival-Configs}
+Configurations that control archival.
+
+
+
+[**Basic Configs**](#Archival-Configs-basic-configs)
+
+
+| Config Name                                      | Default       | Description                                                                                                                                                                                                                                             | Since Version |
+| ------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.keep.max.commits](#hoodiekeepmaxcommits) | 30 (Optional) | Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline.  |               |
+| [hoodie.keep.min.commits](#hoodiekeepmincommits) | 20 (Optional) | Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.                                                                                                                                       |               |
+
+[**Advanced Configs**](#Archival-Configs-advanced-configs)
+
+
+| Config Name                                                                           | Default             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Since Version |
+| ------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.archive.async](#hoodiearchiveasync)                                           | false (Optional)    | Only applies when hoodie.archive.automatic is turned on. When turned on runs archiver async with writing, which can speed up overall write performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.11.0        |
+| [hoodie.archive.automatic](#hoodiearchiveautomatic)                                   | true (Optional)     | When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.archive.beyond.savepoint](#hoodiearchivebeyondsavepoint)                      | false (Optional)    | If enabled, archival will proceed beyond savepoint, skipping savepoint commits. If disabled, archival will stop at the earliest savepoint commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 0.12.0        |
+| [hoodie.archive.delete.parallelism](#hoodiearchivedeleteparallelism)                  | 100 (Optional)      | When performing archival operation, Hudi needs to delete the files of the archived instants in the active timeline in .hoodie folder. The file deletion also happens after merging small archived files into larger ones if enabled. This config limits the Spark parallelism for deleting files in both cases, i.e., parallelism of deleting files does not go above the configured value and the parallelism is the number of files to delete if smaller than the configured value.  If you see that the file deletion in archival operation is slow because of the limited parallelism, you can increase this to tune the performance. |               |
+| [hoodie.archive.merge.enable](#hoodiearchivemergeenable)                              | false (Optional)    | When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.archive.merge.files.batch.size](#hoodiearchivemergefilesbatchsize)            | 10 (Optional)       | The number of small archive files to be merged at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.archive.merge.small.file.limit.bytes](#hoodiearchivemergesmallfilelimitbytes) | 20971520 (Optional) | This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.commits.archival.batch](#hoodiecommitsarchivalbatch)                          | 10 (Optional)       | Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+---
+
 
 ### Bootstrap Configs {#Bootstrap-Configs}
 Configurations that control how you want to bootstrap your existing tables for the first time into hudi. The bootstrap operation can flexibly avoid copying data over before you can use Hudi and support running the existing  writers and new hudi writers in parallel, to validate the migration.
 
-`Config Class`: org.apache.hudi.config.HoodieBootstrapConfig<br></br>
-> ### hoodie.bootstrap.base.path
-> Base path of the dataset that needs to be bootstrapped as a Hudi table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BASE_PATH`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+
+[**Basic Configs**](#Bootstrap-Configs-basic-configs)
+
+
+| Config Name                                            | Default            | Description                                                            | Since Version |
+| ------------------------------------------------------ | ------------------ | ---------------------------------------------------------------------- | ------------- |
+| [hoodie.bootstrap.base.path](#hoodiebootstrapbasepath) | N/A **(Required)** | Base path of the dataset that needs to be bootstrapped as a Hudi table | 0.6.0         |
+
+[**Advanced Configs**](#Bootstrap-Configs-advanced-configs)
+
+
+| Config Name                                                                                     | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Since Version |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.bootstrap.data.queries.only](#hoodiebootstrapdataqueriesonly)                           | false (Optional)                                                                                | Improves query performance, but queries cannot use hudi metadata fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.14.0        |
+| [hoodie.bootstrap.full.input.provider](#hoodiebootstrapfullinputprovider)                       | org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider (Optional)                          | Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.6.0         |
+| [hoodie.bootstrap.index.class](#hoodiebootstrapindexclass)                                      | org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex (Optional)                           | Implementation to use, for mapping a skeleton base file to a bootstrap base file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.6.0         |
+| [hoodie.bootstrap.mode.selector](#hoodiebootstrapmodeselector)                                  | org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector (Optional)          | Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.6.0         |
+| [hoodie.bootstrap.mode.selector.regex](#hoodiebootstrapmodeselectorregex)                       | .* (Optional)                                                                                   | Matches each bootstrap dataset partition against this regex and applies the mode below to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 0.6.0         |
+| [hoodie.bootstrap.mode.selector.regex.mode](#hoodiebootstrapmodeselectorregexmode)              | METADATA_ONLY (Optional)                                                                        | org.apache.hudi.client.bootstrap.BootstrapMode: Bootstrap mode for importing an existing table into Hudi     FULL_RECORD: In this mode, the full record data is copied into hudi and metadata columns are added. A full record bootstrap is functionally equivalent to a bulk-insert. After a full record bootstrap, Hudi will function properly even if the original table is modified or deleted.     METADATA_ONLY(default): In this mode, the full record data is not copied into Hudi therefore it avoids full cost of rewriting the dataset. Instead, 'skeleton' files containing just the corresponding metadata columns are added to the Hudi table. Hudi relies on the data in the original table and will face data-loss or corruption if files in the original table location are deleted or modified. | 0.6.0         |
+| [hoodie.bootstrap.parallelism](#hoodiebootstrapparallelism)                                     | 1500 (Optional)                                                                                 | For metadata-only bootstrap, Hudi parallelizes the operation so that each table partition is handled by one Spark task. This config limits the number of parallelism. We pick the configured parallelism if the number of table partitions is larger than this configured value. The parallelism is assigned to the number of table partitions if it is smaller than the configured value. For full-record bootstrap, i.e., BULK_INSERT operation of the records, this configured value is passed as the BULK_INSERT shuffle parallelism (`hoodie.bulkinsert.shuffle.parallelism`), determining the BULK_INSERT write behavior. If you see that the bootstrap is slow due to the limited parallelism, you can increase this.                                                                                      | 0.6.0         |
+| [hoodie.bootstrap.partitionpath.translator.class](#hoodiebootstrappartitionpathtranslatorclass) | org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator (Optional) | Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.6.0         |
 ---
 
-> ### hoodie.bootstrap.keygen.class
-> Key generator implementation to be used for generating keys from the bootstrapped dataset<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: KEYGEN_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+### Clean Configs {#Clean-Configs}
+Cleaning (reclamation of older/unused file groups/slices).
+
+
+
+[**Basic Configs**](#Clean-Configs-basic-configs)
+
+
+| Config Name                                                      | Default          | Description                                                                                                                                                                                                                        | Since Version |
+| ---------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.clean.async](#hoodiecleanasync)                          | false (Optional) | Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.                                                                               |               |
+| [hoodie.cleaner.commits.retained](#hoodiecleanercommitsretained) | 10 (Optional)    | Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries. |               |
+
+[**Advanced Configs**](#Clean-Configs-advanced-configs)
+
+
+| Config Name                                                                        | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Since Version |
+| ---------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| [hoodie.clean.allow.multiple](#hoodiecleanallowmultiple)                           | true (Optional)                | Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, .i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.11.0        |
+| [hoodie.clean.automatic](#hoodiecleanautomatic)                                    | true (Optional)                | When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.clean.max.commits](#hoodiecleanmaxcommits)                                 | 1 (Optional)                   | Number of commits after the last clean operation, before scheduling of a new clean is attempted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.clean.trigger.strategy](#hoodiecleantriggerstrategy)                       | NUM_COMMITS (Optional)         | org.apache.hudi.table.action.clean.CleaningTriggerStrategy: Controls when cleaning is scheduled.     NUM_COMMITS(default): Trigger the cleaning service every N commits, determined by `hoodie.clean.max.commits`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.cleaner.delete.bootstrap.base.file](#hoodiecleanerdeletebootstrapbasefile) | false (Optional)               | When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is  cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap  base files are also physically deleted, to comply with data privacy enforcement processes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.cleaner.fileversions.retained](#hoodiecleanerfileversionsretained)         | 3 (Optional)                   | When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.cleaner.hours.retained](#hoodiecleanerhoursretained)                       | 24 (Optional)                  | Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.cleaner.incremental.mode](#hoodiecleanerincrementalmode)                   | true (Optional)                | When enabled, the plans for each cleaner service run is computed incrementally off the events  in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full table for each planning (even with a metadata table).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.cleaner.parallelism](#hoodiecleanerparallelism)                            | 200 (Optional)                 | This config controls the behavior of both the cleaning plan and cleaning execution. Deriving the cleaning plan is parallelized at the table partition level, i.e., each table partition is processed by one Spark task to figure out the files to clean. The cleaner picks the configured parallelism if the number of table partitions is larger than this configured value. The parallelism is assigned to the number of table partitions if it is smaller than the configured value. The clean execution, i.e., the file deletion, is parallelized at file level, which is the unit of Spark task distribution. Similarly, the actual parallelism cannot exceed the configured value if the number of files is larger. If cleaning plan or execution is slow due to limited parallelism, you can increase this to tune the performance..                                                                                                                                                                                                                                                                        |               |
+| [hoodie.cleaner.policy](#hoodiecleanerpolicy)                                      | KEEP_LATEST_COMMITS (Optional) | org.apache.hudi.common.model.HoodieCleaningPolicy: Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time. By default, the cleaning policy is determined based on one of the following configs explicitly set by the user (at most one of them can be set; otherwise, KEEP_LATEST_COMMITS cleaning policy is used).     KEEP_LATEST_FILE_VERSIONS: keeps the last N versions of the file slices written; used when "hoodie.cleaner.fileversions.retained" is explicitly set only.     KEEP_LATEST_COMMITS(default): keeps the file slices written by the last N commits; used when "hoodie.cleaner.commits.retained" is explicitly set only.     KEEP_LATEST_BY_HOURS: keeps the file slices written in the last N hours based on the commit time; used when "hoodie.cleaner.hours.retained" is explicitly set only. |               |
+| [hoodie.cleaner.policy.failed.writes](#hoodiecleanerpolicyfailedwrites)            | EAGER (Optional)               | org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy: Policy that controls how to clean up failed writes. Hudi will delete any files written by failed writes to re-claim space.     EAGER(default): Clean failed writes inline after every write operation.     LAZY: Clean failed writes lazily after heartbeat timeout when the cleaning service runs. This policy is required when multi-writers are enabled.     NEVER: Never clean failed writes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
 ---
 
-> ### hoodie.bootstrap.full.input.provider
-> Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD<br></br>
-> `Default Value: org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider (Optional)`<br></br>
-> `Config Param: FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+### Clustering Configs {#Clustering-Configs}
+Configurations that control the clustering table service in hudi, which optimizes the storage layout for better query performance by sorting and sizing data files.
+
+
+
+[**Basic Configs**](#Clustering-Configs-basic-configs)
+
+
+| Config Name                                                                                              | Default               | Description                                                                                           | Since Version |
+| -------------------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.clustering.async.enabled](#hoodieclusteringasyncenabled)                                         | false (Optional)      | Enable running of clustering service, asynchronously as inserts happen on the table.                  | 0.7.0         |
+| [hoodie.clustering.inline](#hoodieclusteringinline)                                                      | false (Optional)      | Turn on inline clustering - clustering will be run after each write operation is complete             | 0.7.0         |
+| [hoodie.clustering.plan.strategy.small.file.limit](#hoodieclusteringplanstrategysmallfilelimit)          | 314572800 (Optional)  | Files smaller than the size in bytes specified here are candidates for clustering                     | 0.7.0         |
+| [hoodie.clustering.plan.strategy.target.file.max.bytes](#hoodieclusteringplanstrategytargetfilemaxbytes) | 1073741824 (Optional) | Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups | 0.7.0         |
+
+[**Advanced Configs**](#Clustering-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                         | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Since Version                    |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| [hoodie.clustering.plan.strategy.cluster.begin.partition](#hoodieclusteringplanstrategyclusterbeginpartition)                       | N/A **(Required)**                                                                              | Begin partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 0.11.0                           |
+| [hoodie.clustering.plan.strategy.cluster.end.partition](#hoodieclusteringplanstrategyclusterendpartition)                           | N/A **(Required)**                                                                              | End partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0.11.0                           |
+| [hoodie.clustering.plan.strategy.partition.regex.pattern](#hoodieclusteringplanstrategypartitionregexpattern)                       | N/A **(Required)**                                                                              | Filter clustering partitions that matched regex pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 0.11.0                           |
+| [hoodie.clustering.plan.strategy.partition.selected](#hoodieclusteringplanstrategypartitionselected)                                | N/A **(Required)**                                                                              | Partitions to run clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 0.11.0                           |
+| [hoodie.clustering.plan.strategy.sort.columns](#hoodieclusteringplanstrategysortcolumns)                                            | N/A **(Required)**                                                                              | Columns to sort the data by when clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.7.0                            |
+| [hoodie.clustering.async.max.commits](#hoodieclusteringasyncmaxcommits)                                                             | 4 (Optional)                                                                                    | Config to control frequency of async clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 0.9.0                            |
+| [hoodie.clustering.execution.strategy.class](#hoodieclusteringexecutionstrategyclass)                                               | org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy (Optional)     | Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the  clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while  meeting the configured target file sizes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 0.7.0                            |
+| [hoodie.clustering.inline.max.commits](#hoodieclusteringinlinemaxcommits)                                                           | 4 (Optional)                                                                                    | Config to control frequency of clustering planning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 0.7.0                            |
+| [hoodie.clustering.max.parallelism](#hoodieclusteringmaxparallelism)                                                                | 15 (Optional)                                                                                   | Maximum number of parallelism jobs submitted in clustering operation. If the resource is sufficient(Like Spark engine has enough idle executors), increasing this value will let the clustering job run faster, while it will give additional pressure to the execution engines to manage more concurrent running jobs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 0.14.0                           |
+| [hoodie.clustering.plan.partition.filter.mode](#hoodieclusteringplanpartitionfiltermode)                                            | NONE (Optional)                                                                                 | org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode: Partition filter mode used in the creation of clustering plan.     NONE(default): Do not filter partitions. The clustering plan will include all partitions that have clustering candidates.     RECENT_DAYS: This filter assumes that your data is partitioned by date. The clustering plan will only include partitions from K days ago to N days ago, where K &gt;= N. K is determined by `hoodie.clustering.plan.strategy.daybased.lookback.partitions` and N is determined by `hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions`.     SELECTED_PARTITIONS: The clustering plan will include only partition paths with names that sort within the inclusive range [`hoodie.clustering.plan.strategy.cluster.begin.partition`, `hoodie.clustering.plan.strategy.cluster.end.partition`].     DAY_ROLLING: To determine the partitions in the clustering plan, the eligible partitions will be sorted in ascending order. Each partition will have an index i in that list. The clustering plan will only contain partitions such that i mod 24 = H, where H is the current hour of the day (from 0 to 23).                                                                                                                                                                                                                                                                                     | 0.11.0                           |
+| [hoodie.clustering.plan.strategy.class](#hoodieclusteringplanstrategyclass)                                                         | org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy (Optional) | Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by hoodie.clustering.plan.strategy.small.file.limit) to pick the small file slices within partitions for clustering.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 0.7.0                            |
+| [hoodie.clustering.plan.strategy.daybased.lookback.partitions](#hoodieclusteringplanstrategydaybasedlookbackpartitions)             | 2 (Optional)                                                                                    | Number of partitions to list to create ClusteringPlan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.7.0                            |
+| [hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions](#hoodieclusteringplanstrategydaybasedskipfromlatestpartitions) | 0 (Optional)                                                                                    | Number of partitions to skip from latest when choosing partitions to create ClusteringPlan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 0.9.0                            |
+| [hoodie.clustering.plan.strategy.max.bytes.per.group](#hoodieclusteringplanstrategymaxbytespergroup)                                | 2147483648 (Optional)                                                                           | Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). Max amount of data to be included in one group                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 0.7.0                            |
+| [hoodie.clustering.plan.strategy.max.num.groups](#hoodieclusteringplanstrategymaxnumgroups)                                         | 30 (Optional)                                                                                   | Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.7.0                            |
+| [hoodie.clustering.plan.strategy.single.group.clustering.enabled](#hoodieclusteringplanstrategysinglegroupclusteringenabled)        | true (Optional)                                                                                 | Whether to generate clustering plan when there is only one file group involved, by default true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 0.14.0                           |
+| [hoodie.clustering.rollback.pending.replacecommit.on.conflict](#hoodieclusteringrollbackpendingreplacecommitonconflict)             | false (Optional)                                                                                | If updates are allowed to file groups pending clustering, then set this config to rollback failed or pending clustering instants. Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 0.10.0                           |
+| [hoodie.clustering.schedule.inline](#hoodieclusteringscheduleinline)                                                                | false (Optional)                                                                                | When set to true, clustering service will be attempted for inline scheduling after each write. Users have to ensure they have a separate job to run async clustering(execution) for the one scheduled by this writer. Users can choose to set both `hoodie.clustering.inline` and `hoodie.clustering.schedule.inline` to false and have both scheduling and execution triggered by any async process, on which case `hoodie.clustering.async.enabled` is expected to be set to true. But if `hoodie.clustering.inline` is set to false, and `hoodie.clustering.schedule.inline` is set to true, regular writers will schedule clustering inline, but users are expected to trigger async job for execution. If `hoodie.clustering.inline` is set to true, regular writers will do both scheduling and execution inline for clustering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |                                  |
+| [hoodie.clustering.updates.strategy](#hoodieclusteringupdatesstrategy)                                                              | org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy (Optional)          | Determines how to handle updates, deletes to file groups that are under clustering. Default strategy just rejects the update                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 0.7.0                            |
+| [hoodie.layout.optimize.build.curve.sample.size](#hoodielayoutoptimizebuildcurvesamplesize)                                         | 200000 (Optional)                                                                               | Determines target sample size used by the Boundary-based Interleaved Index method of building space-filling curve. Larger sample size entails better layout optimization outcomes, at the expense of higher memory footprint.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0.10.0                           |
+| [hoodie.layout.optimize.curve.build.method](#hoodielayoutoptimizecurvebuildmethod)                                                  | DIRECT (Optional)                                                                               | org.apache.hudi.config.HoodieClusteringConfig$SpatialCurveCompositionStrategyType: This configuration only has effect if `hoodie.layout.optimize.strategy` is set to either "z-order" or "hilbert" (i.e. leveraging space-filling curves). This configuration controls the type of a strategy to use for building the space-filling curves, tackling specifically how the Strings are ordered based on the curve. Since we truncate the String to 8 bytes for ordering, there are two issues: (1) it can lead to poor aggregation effect, (2) the truncation of String longer than 8 bytes loses the precision, if the Strings are different but the 8-byte prefix is the same. The boundary-based interleaved index method ("SAMPLE") has better generalization, solving the two problems above, but is slower than direct method ("DIRECT"). User should benchmark the write and query performance before tweaking this in production, if this is actually a problem. Please refer to RFC-28 for more details.     DIRECT(default): This strategy builds the spatial curve in full, filling in all of the individual points corresponding to each individual record, which requires less compute.     SAMPLE: This strategy leverages boundary-base interleaved index method (described in more details in Amazon DynamoDB blog https://aws.amazon.com/cn/blogs/database/tag/z-order/) and produces a better layout compared to DIRECT strategy.  It requires more compute and is slower. | 0.10.0                           |
+| [hoodie.layout.optimize.data.skipping.enable](#hoodielayoutoptimizedataskippingenable)                                              | true (Optional)                                                                                 | Enable data skipping by collecting statistics once layout optimization is complete.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 0.10.0. Deprecated since: 0.11.0 |
+| [hoodie.layout.optimize.enable](#hoodielayoutoptimizeenable)                                                                        | false (Optional)                                                                                | This setting has no effect. Please refer to clustering configuration, as well as LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 0.10.0. Deprecated since: 0.11.0 |
+| [hoodie.layout.optimize.strategy](#hoodielayoutoptimizestrategy)                                                                    | linear (Optional)                                                                               | Determines ordering strategy used in records layout optimization. Currently supported strategies are "linear", "z-order" and "hilbert" values are supported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 0.10.0                           |
 ---
 
-> ### hoodie.bootstrap.index.class
-> Implementation to use, for mapping a skeleton base file to a boostrap base file.<br></br>
-> `Default Value: org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex (Optional)`<br></br>
-> `Config Param: INDEX_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+### Compaction Configs {#Compaction-Configs}
+Configurations that control compaction (merging of log files onto a new base files).
+
+
+
+[**Basic Configs**](#Compaction-Configs-basic-configs)
+
+
+| Config Name                                                                    | Default          | Description                                                                                                                                                                                                                                                                                   | Since Version |
+| ------------------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.compact.inline](#hoodiecompactinline)                                  | false (Optional) | When set to true, compaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.                                                                                                                                            |               |
+| [hoodie.compact.inline.max.delta.commits](#hoodiecompactinlinemaxdeltacommits) | 5 (Optional)     | Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. This config takes effect only for the compaction triggering strategy based on the number of commits, i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME. |               |
+
+[**Advanced Configs**](#Compaction-Configs-advanced-configs)
+
+
+| Config Name                                                                               | Default                                                                                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Since Version |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.compact.inline.max.delta.seconds](#hoodiecompactinlinemaxdeltaseconds)            | 3600 (Optional)                                                                             | Number of elapsed seconds after the last compaction, before scheduling a new one. This config takes effect only for the compaction triggering strategy based on the elapsed time, i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.compact.inline.trigger.strategy](#hoodiecompactinlinetriggerstrategy)             | NUM_COMMITS (Optional)                                                                      | org.apache.hudi.table.action.compact.CompactionTriggerStrategy: Controls when compaction is scheduled.     NUM_COMMITS(default): triggers compaction when there are at least N delta commits after last completed compaction.     NUM_COMMITS_AFTER_LAST_REQUEST: triggers compaction when there are at least N delta commits after last completed or requested compaction.     TIME_ELAPSED: triggers compaction after N seconds since last compaction.     NUM_AND_TIME: triggers compaction when both there are at least N delta commits and N seconds elapsed (both must be satisfied) after last completed compaction.     NUM_OR_TIME: triggers compaction when both there are at least N delta commits or N seconds elapsed (either condition is satisfied) after last completed compaction. |               |
+| [hoodie.compact.schedule.inline](#hoodiecompactscheduleinline)                            | false (Optional)                                                                            | When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both `hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. But if `hoodie.compact.inline` is set to false, and `hoodie.compact.schedule.inline` is set to true, regular writers will schedule compaction inline, but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and execution inline for compaction                                                             |               |
+| [hoodie.compaction.daybased.target.partitions](#hoodiecompactiondaybasedtargetpartitions) | 10 (Optional)                                                                               | Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of latest partitions to compact during a compaction run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.compaction.lazy.block.read](#hoodiecompactionlazyblockread)                       | true (Optional)                                                                             | When merging the delta log files, this config helps to choose whether the log blocks should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block header) or false for immediate block read (higher memory usage)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.compaction.logfile.num.threshold](#hoodiecompactionlogfilenumthreshold)           | 0 (Optional)                                                                                | Only if the log file num is greater than the threshold, the file group will be compacted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.13.0        |
+| [hoodie.compaction.logfile.size.threshold](#hoodiecompactionlogfilesizethreshold)         | 0 (Optional)                                                                                | Only if the log file size is greater than the threshold in bytes, the file group will be compacted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.compaction.reverse.log.read](#hoodiecompactionreverselogread)                     | false (Optional)                                                                            | HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.compaction.strategy](#hoodiecompactionstrategy)                                   | org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy (Optional) | Compaction strategy decides which file groups are picked up for compaction during each compaction run. By default. Hudi picks the log file with most accumulated unmerged data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.compaction.target.io](#hoodiecompactiontargetio)                                  | 512000 (Optional)                                                                           | Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. This value helps bound ingestion latency while compaction is run inline mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.copyonwrite.insert.auto.split](#hoodiecopyonwriteinsertautosplit)                 | true (Optional)                                                                             | Config to control whether we control insert split sizes automatically based on average record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely cumbersome.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.copyonwrite.insert.split.size](#hoodiecopyonwriteinsertsplitsize)                 | 500000 (Optional)                                                                           | Number of inserts assigned for each partition/bucket for writing. We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and   over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first   write, where there is no history to learn record sizes from.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.copyonwrite.record.size.estimate](#hoodiecopyonwriterecordsizeestimate)           | 1024 (Optional)                                                                             | The average record size. If not explicitly specified, hudi will compute the record size estimate compute dynamically based on commit metadata.  This is critical in computing the insert parallelism and bin-packing inserts into small files.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.log.compaction.blocks.threshold](#hoodielogcompactionblocksthreshold)             | 5 (Optional)                                                                                | Log compaction can be scheduled if the no. of log blocks crosses this threshold value. This is effective only when log compaction is enabled via hoodie.log.compaction.inline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.13.0        |
+| [hoodie.log.compaction.enable](#hoodielogcompactionenable)                                | false (Optional)                                                                            | By enabling log compaction through this config, log compaction will also get enabled for the metadata table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 0.14          |
+| [hoodie.log.compaction.inline](#hoodielogcompactioninline)                                | false (Optional)                                                                            | When set to true, logcompaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0.13.0        |
+| [hoodie.optimized.log.blocks.scan.enable](#hoodieoptimizedlogblocksscanenable)            | false (Optional)                                                                            | New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 0.13.0        |
+| [hoodie.parquet.small.file.limit](#hoodieparquetsmallfilelimit)                           | 104857600 (Optional)                                                                        | During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage  becomes a candidate to be selected as such a `small file`. By default, treat any file &lt;= 100MB as a small file. Also note that if this set &lt;= 0, will not try to get small files and directly write new files                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.record.size.estimation.threshold](#hoodierecordsizeestimationthreshold)           | 1.0 (Optional)                                                                              | We use the previous commits' metadata to calculate the estimated record size and use it  to bin pack records into partitions. If the previous commit is too small to make an accurate estimation,  Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten  larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
 ---
 
-> ### hoodie.bootstrap.keygen.type
-> Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE<br></br>
-> `Default Value: SIMPLE (Optional)`<br></br>
-> `Config Param: KEYGEN_TYPE`<br></br>
-> `Since Version: 0.9.0`<br></br>
 
+### Layout Configs {#Layout-Configs}
+Configurations that control storage layout and data distribution, which defines how the files are organized within a table.
+
+
+
+[**Advanced Configs**](#Layout-Configs-advanced-configs)
+
+
+| Config Name                                                                     | Default            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Since Version |
+| ------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.storage.layout.partitioner.class](#hoodiestoragelayoutpartitionerclass) | N/A **(Required)** | Partitioner class, it is used to distribute data in a specific way.                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.storage.layout.type](#hoodiestoragelayouttype)                          | DEFAULT (Optional) | org.apache.hudi.table.storage.HoodieStorageLayout$LayoutType: Determines how the files are organized within a table.     DEFAULT(default): Each file group contains records of a certain set of keys, without particular grouping criteria.     BUCKET: Each file group contains records of a set of keys which map to a certain range of hash values, so that using the hash function can easily identify the file group a record belongs to, based on the record key. |               |
 ---
 
-> ### hoodie.bootstrap.mode.selector
-> Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped<br></br>
-> `Default Value: org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector (Optional)`<br></br>
-> `Config Param: MODE_SELECTOR_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+### Memory Configurations {#Memory-Configurations}
+Controls memory usage for compaction and merges, performed internally by Hudi.
+
+
+
+[**Advanced Configs**](#Memory-Configurations-advanced-configs)
+
+
+| Config Name                                                                           | Default               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                           | Since Version |
+| ------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.memory.compaction.max.size](#hoodiememorycompactionmaxsize)                   | N/A **(Required)**    | Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.memory.spillable.map.path](#hoodiememoryspillablemappath)                     | N/A **(Required)**    | Default file path for spillable map                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.memory.compaction.fraction](#hoodiememorycompactionfraction)                  | 0.6 (Optional)        | HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map |               |
+| [hoodie.memory.dfs.buffer.max.size](#hoodiememorydfsbuffermaxsize)                    | 16777216 (Optional)   | Property to control the max memory in bytes for dfs input stream buffer size                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.memory.merge.fraction](#hoodiememorymergefraction)                            | 0.6 (Optional)        | This fraction is multiplied with the user memory fraction (1 - spark.memory.fraction) to get a final fraction of heap space to use during merge                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.memory.merge.max.size](#hoodiememorymergemaxsize)                             | 1073741824 (Optional) | Maximum amount of memory used  in bytes for merge operations, before spilling to local storage.                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.memory.writestatus.failure.fraction](#hoodiememorywritestatusfailurefraction) | 0.1 (Optional)        | Property to control how what fraction of the failed record, exceptions we report back to driver. Default is 10%. If set to 100%, with lot of failures, this can cause memory pressure, cause OOMs and mask actual data errors.                                                                                                                                                                                                                        |               |
 ---
 
-> ### hoodie.bootstrap.mode.selector.regex
-> Matches each bootstrap dataset partition against this regex and applies the mode below to it.<br></br>
-> `Default Value: .* (Optional)`<br></br>
-> `Config Param: PARTITION_SELECTOR_REGEX_PATTERN`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+### Write Configurations {#Write-Configurations}
+Configurations that control write behavior on Hudi tables. These can be directly passed down from even higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).
+
+
+
+[**Basic Configs**](#Write-Configurations-basic-configs)
+
+
+| Config Name                                                                       | Default                  | Description                                                                                                                                                                                                                                                                                                                                                                                           | Since Version |
+| --------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.base.path](#hoodiebasepath)                                               | N/A **(Required)**       | Base path on lake storage, under which all the table data is stored. Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs etc in .hoodie directory under this base path directory.                                                                                                         |               |
+| [hoodie.table.name](#hoodietablename)                                             | N/A **(Required)**       | Table name that will be used for registering with metastores like HMS. Needs to be same across runs.                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.write.precombine.field](#hoodiedatasourcewriteprecombinefield) | ts (Optional)            | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)                                                                                                                                                                                                    |               |
+| [hoodie.write.concurrency.mode](#hoodiewriteconcurrencymode)                      | SINGLE_WRITER (Optional) | org.apache.hudi.common.model.WriteConcurrencyMode: Concurrency modes for write operations.     SINGLE_WRITER(default): Only one active writer to the table. Maximizes throughput.     OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group. |               |
+
+[**Advanced Configs**](#Write-Configurations-advanced-configs)
+
+
+| Config Name                                                                                                                       | Default                                                                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Since Version |
+| --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| [hoodie.avro.schema](#hoodieavroschema)                                                                                           | N/A **(Required)**                                                     | Schema string representing the current write schema of the table. Hudi passes this to implementations of HoodieRecordPayload to convert incoming records to avro. This is also used as the write schema evolving records during an update.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.bulkinsert.user.defined.partitioner.class](#hoodiebulkinsertuserdefinedpartitionerclass)                                  | N/A **(Required)**                                                     | If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner which can does sorting based on specified column values set by hoodie.bulkinsert.user.defined.partitioner.sort.columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.bulkinsert.user.defined.partitioner.sort.columns](#hoodiebulkinsertuserdefinedpartitionersortcolumns)                     | N/A **(Required)**                                                     | Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. For example 'column1,column2'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.datasource.write.keygenerator.class](#hoodiedatasourcewritekeygeneratorclass)                                             | N/A **(Required)**                                                     | Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` extract a key out of incoming records.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.internal.schema](#hoodieinternalschema)                                                                                   | N/A **(Required)**                                                     | Schema string representing the latest schema of the table. Hudi passes this to implementations of evolution of schema                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.write.schema](#hoodiewriteschema)                                                                                         | N/A **(Required)**                                                     | Config allowing to override writer's schema. This might be necessary in cases when writer's schema derived from the incoming dataset might actually be different from the schema we actually want to use when writing. This, for ex, could be the case for'partial-update' use-cases (like `MERGE INTO` Spark SQL statement for ex) where only a projection of the incoming dataset might be used to update the records in the existing table, prompting us to override the writer's schema                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [_.hoodie.allow.multi.write.on.same.instant](#_hoodieallowmultiwriteonsameinstant)                                                | false (Optional)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.allow.empty.commit](#hoodieallowemptycommit)                                                                              | true (Optional)                                                        | Whether to allow generation of empty commits, even if no data was written in the commit. It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.allow.operation.metadata.field](#hoodieallowoperationmetadatafield)                                                       | false (Optional)                                                       | Whether to include '_hoodie_operation' in the metadata fields. Once enabled, all the changes of a record are persisted to the delta log directly without merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 0.9.0         |
+| [hoodie.auto.adjust.lock.configs](#hoodieautoadjustlockconfigs)                                                                   | false (Optional)                                                       | Auto adjust lock configurations when metadata table is enabled and for async table services.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.11.0        |
+| [hoodie.auto.commit](#hoodieautocommit)                                                                                           | true (Optional)                                                        | Controls whether a write operation should auto commit. This can be turned off to perform inspection of the uncommitted write before deciding to commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.avro.schema.external.transformation](#hoodieavroschemaexternaltransformation)                                             | false (Optional)                                                       | When enabled, records in older schema are rewritten into newer schema during upsert,delete and background compaction,clustering operations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.avro.schema.validate](#hoodieavroschemavalidate)                                                                          | false (Optional)                                                       | Validate the schema used for the write against the latest schema, for backwards compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.bulkinsert.shuffle.parallelism](#hoodiebulkinsertshuffleparallelism)                                                      | 0 (Optional)                                                           | For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done before writing records to the table. Before 0.13.0 release, if users do not configure it, Hudi would use 200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the parallelism deduced by Spark based on the source data or the parallelism based on the logical plan for row writer. If the shuffle parallelism is explicitly configured by the user, the user-configured parallelism is used in defining the actual parallelism. If you observe small files from the bulk insert operation, we suggest configuring this shuffle parallelism explicitly, so that the parallelism is around total_input_data_size/120MB.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.bulkinsert.sort.mode](#hoodiebulkinsertsortmode)                                                                          | NONE (Optional)                                                        | org.apache.hudi.execution.bulkinsert.BulkInsertSortMode: Modes for sorting records during bulk insert.     NONE(default): No sorting. Fastest and matches `spark.write.parquet()` in number of files and overhead.     GLOBAL_SORT: This ensures best file sizes, with lowest memory overhead at cost of sorting.     PARTITION_SORT: Strikes a balance by only sorting within a Spark RDD partition, still keeping the memory overhead of writing low. File sizing is not as good as GLOBAL_SORT.     PARTITION_PATH_REPARTITION: This ensures that the data for a single physical partition in the table is written by the same Spark executor. This should only be used when input data is evenly distributed across different partition paths. If data is skewed (most records are intended for a handful of partition paths among all) then this can cause an imbalance among Spark executors.     PARTITION_PATH_REPARTITION_AND_SORT: This ensures that the data for a single physical partition in the table is written by the same Spark executor. This should only be used when input data is evenly distributed across different partition paths. Compared to PARTITION_PATH_REPARTITION, this sort mode does an additional step of sorting the records based on the partition path within a single Spark partition, given that data for multiple physical partitions can be sent to the same Spark partition and executor. If data is skewed (most records are intended for a handful of partition paths among all) then this can cause an imbalance among Spark executors.                            |               |
+| [hoodie.client.heartbeat.interval_in_ms](#hoodieclientheartbeatinterval_in_ms)                                                    | 60000 (Optional)                                                       | Writers perform heartbeats to indicate liveness. Controls how often (in ms), such heartbeats are registered to lake storage.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.client.heartbeat.tolerable.misses](#hoodieclientheartbeattolerablemisses)                                                 | 2 (Optional)                                                           | Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.client.init.callback.classes](#hoodieclientinitcallbackclasses)                                                           |  (Optional)                                                            | Fully-qualified class names of the Hudi client init callbacks to run at the initialization of the Hudi client.  The class names are separated by `,`. The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`.By default, no Hudi client init callback is executed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 0.14.0        |
+| [hoodie.combine.before.delete](#hoodiecombinebeforedelete)                                                                        | true (Optional)                                                        | During delete operations, controls whether we should combine deletes (and potentially also upserts) before  writing to storage.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.combine.before.insert](#hoodiecombinebeforeinsert)                                                                        | false (Optional)                                                       | When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before writing to storage.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.combine.before.upsert](#hoodiecombinebeforeupsert)                                                                        | true (Optional)                                                        | When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming,  otherwise it can lead to duplicate keys and violate the uniqueness guarantees.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.consistency.check.initial_interval_ms](#hoodieconsistencycheckinitial_interval_ms)                                        | 2000 (Optional)                                                        | Initial time between successive attempts to ensure written data's metadata is consistent on storage. Grows with exponential backoff after the initial value.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.consistency.check.max_checks](#hoodieconsistencycheckmax_checks)                                                          | 7 (Optional)                                                           | Maximum number of checks, for consistency of written data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.consistency.check.max_interval_ms](#hoodieconsistencycheckmax_interval_ms)                                                | 300000 (Optional)                                                      | Max time to wait between successive attempts at performing consistency checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.datasource.write.keygenerator.type](#hoodiedatasourcewritekeygeneratortype)                                               | SIMPLE (Optional)                                                      | **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead. org.apache.hudi.keygen.constant.KeyGeneratorType: Key generator type, indicating the key generator class to use, that implements `org.apache.hudi.keygen.KeyGenerator`.     SIMPLE(default): Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.     COMPLEX: Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.     TIMESTAMP: Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.     CUSTOM: This is a generic implementation type of KeyGenerator where users can configure record key as a single field or  a combination of fields. Similarly partition path can be configured to have multiple fields or only one field.  This KeyGenerator expects value for prop "hoodie.datasource.write.partitionpath.field" in a specific format.  For example:  properties.put("hoodie.datasource.write.partitionpath.field", "field1:PartitionKeyType1,field2:PartitionKeyType2").     NON_PARTITION: Simple Key generator for non-partitioned tables.     GLOBAL_DELETE: Key generator for deletes using global indices.                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.write.payload.class](#hoodiedatasourcewritepayloadclass)                                                       | org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional) | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.write.record.merger.impls](#hoodiedatasourcewriterecordmergerimpls)                                            | org.apache.hudi.common.model.HoodieAvroRecordMerger (Optional)         | List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. These merger impls will filter by hoodie.datasource.write.record.merger.strategy Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.13.0        |
+| [hoodie.datasource.write.record.merger.strategy](#hoodiedatasourcewriterecordmergerstrategy)                                      | eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 (Optional)                        | Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 0.13.0        |
+| [hoodie.datasource.write.schema.allow.auto.evolution.column.drop](#hoodiedatasourcewriteschemaallowautoevolutioncolumndrop)       | false (Optional)                                                       | Controls whether table's schema is allowed to automatically evolve when incoming batch's schema can have any of the columns dropped. By default, Hudi will not allow this kind of (auto) schema evolution. Set this config to true to allow table's schema to be updated automatically when columns are dropped from the new incoming batch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.13.0        |
+| [hoodie.delete.shuffle.parallelism](#hoodiedeleteshuffleparallelism)                                                              | 0 (Optional)                                                           | Parallelism used for delete operation. Delete operations also performs shuffles, similar to upsert operation. Before 0.13.0 release, if users do not configure it, Hudi would use 200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the parallelism deduced by Spark based on the source data. If the shuffle parallelism is explicitly configured by the user, the user-configured parallelism is used in defining the actual parallelism.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.embed.timeline.server](#hoodieembedtimelineserver)                                                                        | true (Optional)                                                        | When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),running on each writer's driver process, accepting requests during the write from executors.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.embed.timeline.server.async](#hoodieembedtimelineserverasync)                                                             | false (Optional)                                                       | Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, potentially improving throughput.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.embed.timeline.server.gzip](#hoodieembedtimelineservergzip)                                                               | true (Optional)                                                        | Controls whether gzip compression is used, for large responses from the timeline server, to improve latency.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.embed.timeline.server.port](#hoodieembedtimelineserverport)                                                               | 0 (Optional)                                                           | Port at which the timeline server listens for requests. When running embedded in each writer, it picks a free port and communicates to all the executors. This should rarely be changed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.embed.timeline.server.reuse.enabled](#hoodieembedtimelineserverreuseenabled)                                              | false (Optional)                                                       | Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)to avoid startup costs. This should rarely be changed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.embed.timeline.server.threads](#hoodieembedtimelineserverthreads)                                                         | -1 (Optional)                                                          | Number of threads to serve requests in the timeline server. By default, auto configured based on the number of underlying cores.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |               |
+| [hoodie.fail.on.timeline.archiving](#hoodiefailontimelinearchiving)                                                               | true (Optional)                                                        | Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. Controls whether or not, the write should be failed as well, if such archiving fails.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.fail.writes.on.inline.table.service.exception](#hoodiefailwritesoninlinetableserviceexception)                            | true (Optional)                                                        | Table services such as compaction and clustering can fail and prevent syncing to the metaclient. Set this to true to fail writes when table services fail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 0.13.0        |
+| [hoodie.fileid.prefix.provider.class](#hoodiefileidprefixproviderclass)                                                           | org.apache.hudi.table.RandomFileIdPrefixProvider (Optional)            | File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.10.0        |
+| [hoodie.finalize.write.parallelism](#hoodiefinalizewriteparallelism)                                                              | 200 (Optional)                                                         | Parallelism for the write finalization internal operation, which involves removing any partially written files from lake storage, before committing the write. Reduce this value, if the high number of tasks incur delays for smaller tables or low latency writes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.insert.shuffle.parallelism](#hoodieinsertshuffleparallelism)                                                              | 0 (Optional)                                                           | Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout. Before 0.13.0 release, if users do not configure it, Hudi would use 200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the parallelism deduced by Spark based on the source data. If the shuffle parallelism is explicitly configured by the user, the user-configured parallelism is used in defining the actual parallelism. If you observe small files from the insert operation, we suggest configuring this shuffle parallelism explicitly, so that the parallelism is around total_input_data_size/120MB.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.markers.delete.parallelism](#hoodiemarkersdeleteparallelism)                                                              | 100 (Optional)                                                         | Determines the parallelism for deleting marker files, which are used to track all files (valid or invalid/partial) written during a write operation. Increase this value if delays are observed, with large batch writes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.markers.timeline_server_based.batch.interval_ms](#hoodiemarkerstimeline_server_basedbatchinterval_ms)                     | 50 (Optional)                                                          | The batch interval in milliseconds for marker creation batch processing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 0.9.0         |
+| [hoodie.markers.timeline_server_based.batch.num_threads](#hoodiemarkerstimeline_server_basedbatchnum_threads)                     | 20 (Optional)                                                          | Number of threads to use for batch processing marker creation requests at the timeline server                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 0.9.0         |
+| [hoodie.merge.allow.duplicate.on.inserts](#hoodiemergeallowduplicateoninserts)                                                    | false (Optional)                                                       | When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing). This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.merge.data.validation.enabled](#hoodiemergedatavalidationenabled)                                                         | false (Optional)                                                       | When enabled, data validation checks are performed during merges to ensure expected number of records after merge operation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.merge.small.file.group.candidates.limit](#hoodiemergesmallfilegroupcandidateslimit)                                       | 1 (Optional)                                                           | Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. Only applicable to MOR tables                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.release.resource.on.completion.enable](#hoodiereleaseresourceoncompletionenable)                                          | true (Optional)                                                        | Control to enable release all persist rdds when the spark job finish.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 0.11.0        |
+| [hoodie.rollback.instant.backup.dir](#hoodierollbackinstantbackupdir)                                                             | .rollback_backup (Optional)                                            | Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.rollback.instant.backup.enabled](#hoodierollbackinstantbackupenabled)                                                     | false (Optional)                                                       | Backup instants removed during rollback and restore (useful for debugging)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.rollback.parallelism](#hoodierollbackparallelism)                                                                         | 100 (Optional)                                                         | This config controls the parallelism for rollback of commits. Rollbacks perform deletion of files or logging delete blocks to file groups on storage in parallel. The configure value limits the parallelism so that the number of Spark tasks do not exceed the value. If rollback is slow due to the limited parallelism, you can increase this to tune the performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.rollback.using.markers](#hoodierollbackusingmarkers)                                                                      | true (Optional)                                                        | Enables a more efficient mechanism for rollbacks based on the marker files generated during the writes. Turned on by default.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.schema.cache.enable](#hoodieschemacacheenable)                                                                            | false (Optional)                                                       | cache query internalSchemas in driver/executor side                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.sensitive.config.keys](#hoodiesensitiveconfigkeys)                                                                        | ssl,tls,sasl,auth,credentials (Optional)                               | Comma separated list of filters for sensitive config keys. Delta Streamer will not print any configuration which contains the configured filter. For example with a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.skip.default.partition.validation](#hoodieskipdefaultpartitionvalidation)                                                 | false (Optional)                                                       | When table is upgraded from pre 0.12 to 0.12, we check for "default" partition and fail if found one. Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.12.0        |
+| [hoodie.table.base.file.format](#hoodietablebasefileformat)                                                                       | PARQUET (Optional)                                                     | File format to store all the base file data. org.apache.hudi.common.model.HoodieFileFormat: Hoodie file formats.     PARQUET(default): Apache Parquet is an open source, column-oriented data file format designed for efficient data storage and retrieval. It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk.     HFILE: (internal config) File format for metadata table. A file of sorted key/value pairs. Both keys and values are byte arrays.     ORC: The Optimized Row Columnar (ORC) file format provides a highly efficient way to store Hive data. It was designed to overcome limitations of the other Hive file formats. Using ORC files improves performance when Hive is reading, writing, and processing data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.table.services.enabled](#hoodietableservicesenabled)                                                                      | true (Optional)                                                        | Master control to disable all table services including archive, clean, compact, cluster, etc.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 0.11.0        |
+| [hoodie.timeline.layout.version](#hoodietimelinelayoutversion)                                                                    | 1 (Optional)                                                           | Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models the timeline as an immutable log relying only on atomic writes for object storage.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 0.5.1         |
+| [hoodie.upsert.shuffle.parallelism](#hoodieupsertshuffleparallelism)                                                              | 0 (Optional)                                                           | Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimally into file groups. Before 0.13.0 release, if users do not configure it, Hudi would use 200 as the default shuffle parallelism. From 0.13.0 onwards Hudi by default automatically uses the parallelism deduced by Spark based on the source data. If the shuffle parallelism is explicitly configured by the user, the user-configured parallelism is used in defining the actual parallelism. If you observe small files from the upsert operation, we suggest configuring this shuffle parallelism explicitly, so that the parallelism is around total_input_data_size/120MB.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.write.buffer.limit.bytes](#hoodiewritebufferlimitbytes)                                                                   | 4194304 (Optional)                                                     | Size of in-memory buffer used for parallelizing network reads and lake storage writes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.write.concurrency.async.conflict.detector.initial_delay_ms](#hoodiewriteconcurrencyasyncconflictdetectorinitial_delay_ms) | 0 (Optional)                                                           | Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The time in milliseconds to delay the first execution of async marker-based conflict detection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.13.0        |
+| [hoodie.write.concurrency.async.conflict.detector.period_ms](#hoodiewriteconcurrencyasyncconflictdetectorperiod_ms)               | 30000 (Optional)                                                       | Used for timeline-server-based markers with `AsyncTimelineServerBasedDetectionStrategy`. The period in milliseconds between successive executions of async marker-based conflict detection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 0.13.0        |
+| [hoodie.write.concurrency.early.conflict.check.commit.conflict](#hoodiewriteconcurrencyearlyconflictcheckcommitconflict)          | false (Optional)                                                       | Whether to enable commit conflict checking or not during early conflict detection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.13.0        |
+| [hoodie.write.concurrency.early.conflict.detection.enable](#hoodiewriteconcurrencyearlyconflictdetectionenable)                   | false (Optional)                                                       | Whether to enable early conflict detection based on markers. It eagerly detects writing conflict before create markers and fails fast if a conflict is detected, to release cluster compute resources as soon as possible.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 0.13.0        |
+| [hoodie.write.concurrency.early.conflict.detection.strategy](#hoodiewriteconcurrencyearlyconflictdetectionstrategy)               |  (Optional)                                                            | The class name of the early conflict detection strategy to use. This should be a subclass of `org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.13.0        |
+| [hoodie.write.executor.disruptor.buffer.limit.bytes](#hoodiewriteexecutordisruptorbufferlimitbytes)                               | 1024 (Optional)                                                        | The size of the Disruptor Executor ring buffer, must be power of 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 0.13.0        |
+| [hoodie.write.executor.disruptor.wait.strategy](#hoodiewriteexecutordisruptorwaitstrategy)                                        | BLOCKING_WAIT (Optional)                                               | org.apache.hudi.common.util.queue.DisruptorWaitStrategyType: Strategy employed for making Disruptor Executor wait on a cursor.     BLOCKING_WAIT(default): The slowest of the available wait strategies. However, it is the most conservative with the respect to CPU usage and will give the most consistent behaviour across the widest variety of deployment options.     SLEEPING_WAIT: Like the `BLOCKING_WAIT` strategy, it attempts to be conservative with CPU usage by using a simple busy wait loop. The difference is that the `SLEEPING_WAIT` strategy uses a call to `LockSupport.parkNanos(1)` in the middle of the loop. On a typical Linux system this will pause the thread for around 60µs.     YIELDING_WAIT: The `YIELDING_WAIT` strategy is one of two wait strategy that can be used in low-latency systems. It is designed for cases where there is an opportunity to burn CPU cycles with the goal of improving latency. The `YIELDING_WAIT` strategy will busy spin, waiting for the sequence to increment to the appropriate value. Inside the body of the loop `Thread#yield()` will be called allowing other queued threads to run. This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores, such as when hyper-threading is enabled.     BUSY_SPIN_WAIT: The `BUSY_SPIN_WAIT` strategy is the highest performing wait strategy. Like the `YIELDING_WAIT` strategy, it can be used in low-latency systems, but puts the highest constraints on the deployment environment. | 0.13.0        |
+| [hoodie.write.executor.type](#hoodiewriteexecutortype)                                                                            | SIMPLE (Optional)                                                      | org.apache.hudi.common.util.queue.ExecutorType: Types of executor that implements org.apache.hudi.common.util.queue.HoodieExecutor. The executor orchestrates concurrent producers and consumers communicating through a message queue.     BOUNDED_IN_MEMORY: Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory message queue using LinkedBlockingQueue. This queue will use extra lock to balance producers and consumers.     DISRUPTOR: Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue to gain better writing performance. Although DisruptorExecutor is still an experimental feature.     SIMPLE(default): Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. The advantage is that there is no need for additional memory and cpu resources due to lock or multithreading. The disadvantage is that the executor is a single-write-single-read model, cannot support functions such as speed limit and can not de-couple the network read (shuffle read) and network write (writing objects/files to storage) anymore.                                                                                                                                                                                                                                                                                                                                                                                       | 0.13.0        |
+| [hoodie.write.markers.type](#hoodiewritemarkerstype)                                                                              | TIMELINE_SERVER_BASED (Optional)                                       | org.apache.hudi.common.table.marker.MarkerType: Marker type indicating how markers are stored in the file system, used for identifying the files written and cleaning up files not committed which should be deleted.     DIRECT: Individual marker file corresponding to each data file is directly created by the writer.     TIMELINE_SERVER_BASED(default): Marker operations are all handled at the timeline service which serves as a proxy. New marker entries are batch processed and stored in a limited number of underlying files for efficiency. If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configured. This configuration does not take effect for Spark structured streaming; DIRECT markers are always used.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0.9.0         |
+| [hoodie.write.status.storage.level](#hoodiewritestatusstoragelevel)                                                               | MEMORY_AND_DISK_SER (Optional)                                         | Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.write.tagged.record.storage.level](#hoodiewritetaggedrecordstoragelevel)                                                  | MEMORY_AND_DISK_SER (Optional)                                         | Determine what level of persistence is used to cache write RDDs. Refer to org.apache.spark.storage.StorageLevel for different values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.writestatus.class](#hoodiewritestatusclass)                                                                               | org.apache.hudi.client.WriteStatus (Optional)                          | Subclass of org.apache.hudi.client.WriteStatus to be used to collect information about a write. Can be overridden to collection additional metrics/statistics about the data if needed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |               |
 ---
 
-> ### hoodie.bootstrap.mode.selector.regex.mode
-> Bootstrap mode to apply for partition paths, that match regex above. METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.<br></br>
-> `Default Value: METADATA_ONLY (Optional)`<br></br>
-> `Config Param: PARTITION_SELECTOR_REGEX_MODE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.bootstrap.parallelism
-> Parallelism value to be used to bootstrap data into hudi<br></br>
-> `Default Value: 1500 (Optional)`<br></br>
-> `Config Param: PARALLELISM_VALUE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.bootstrap.partitionpath.translator.class
-> Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.<br></br>
-> `Default Value: org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator (Optional)`<br></br>
-> `Config Param: PARTITION_PATH_TRANSLATOR_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
 
 ### Commit Callback Configs {#COMMIT_CALLBACK}
-Configurations controling callback behavior into HTTP endpoints, to push notifications on commits on hudi tables.
+Configurations controlling callback behavior into HTTP endpoints, to push notifications on commits on hudi tables.
+
 
 #### Write commit callback configs {#Write-commit-callback-configs}
 
 
-`Config Class`: org.apache.hudi.config.HoodieWriteCommitCallbackConfig<br></br>
-> #### hoodie.write.commit.callback.http.url
-> Callback host to be sent along with callback messages<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: CALLBACK_HTTP_URL`<br></br>
-> `Since Version: 0.6.0`<br></br>
 
+
+[**Advanced Configs**](#Write-commit-callback-configs-advanced-configs)
+
+
+| Config Name                                                                                       | Default                                                                | Description                                                                                                                                                   | Since Version |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.write.commit.callback.http.url](#hoodiewritecommitcallbackhttpurl)                        | N/A **(Required)**                                                     | Callback host to be sent along with callback messages                                                                                                         | 0.6.0         |
+| [hoodie.write.commit.callback.class](#hoodiewritecommitcallbackclass)                             | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback (Optional) | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | 0.6.0         |
+| [hoodie.write.commit.callback.http.api.key](#hoodiewritecommitcallbackhttpapikey)                 | hudi_write_commit_http_callback (Optional)                             | Http callback API key. hudi_write_commit_http_callback by default                                                                                             | 0.6.0         |
+| [hoodie.write.commit.callback.http.timeout.seconds](#hoodiewritecommitcallbackhttptimeoutseconds) | 30 (Optional)                                                          | Callback timeout in seconds.                                                                                                                                  | 0.6.0         |
+| [hoodie.write.commit.callback.on](#hoodiewritecommitcallbackon)                                   | false (Optional)                                                       | Turn commit callback on/off. off by default.                                                                                                                  | 0.6.0         |
 ---
 
-> #### hoodie.write.commit.callback.class
-> Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default<br></br>
-> `Default Value: org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback (Optional)`<br></br>
-> `Config Param: CALLBACK_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.http.api.key
-> Http callback API key. hudi_write_commit_http_callback by default<br></br>
-> `Default Value: hudi_write_commit_http_callback (Optional)`<br></br>
-> `Config Param: CALLBACK_HTTP_API_KEY_VALUE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.http.timeout.seconds
-> Callback timeout in seconds. 3 by default<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: CALLBACK_HTTP_TIMEOUT_IN_SECONDS`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.on
-> Turn commit callback on/off. off by default.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: TURN_CALLBACK_ON`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-#### Write commit pulsar callback configs {#Write-commit-pulsar-callback-configs}
-Controls notifications sent to pulsar, on events happening to a hudi table.
-
-`Config Class`: org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig<br></br>
-> #### hoodie.write.commit.callback.pulsar.broker.service.url
-> Server's url of pulsar cluster, to be used for publishing commit metadata.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BROKER_SERVICE_URL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.topic
-> pulsar topic name to publish timeline activity into.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TOPIC`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.connection-timeout
-> Duration of waiting for a connection to a broker to be established.<br></br>
-> `Default Value: 10s (Optional)`<br></br>
-> `Config Param: CONNECTION_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.keepalive-interval
-> Duration of keeping alive interval for each client broker connection.<br></br>
-> `Default Value: 30s (Optional)`<br></br>
-> `Config Param: KEEPALIVE_INTERVAL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.operation-timeout
-> Duration of waiting for completing an operation.<br></br>
-> `Default Value: 30s (Optional)`<br></br>
-> `Config Param: OPERATION_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.block-if-queue-full
-> When the queue is full, the method is blocked instead of an exception is thrown.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PRODUCER_BLOCK_QUEUE_FULL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.pending-queue-size
-> The maximum size of a queue holding pending messages.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: PRODUCER_PENDING_QUEUE_SIZE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.pending-total-size
-> The maximum number of pending messages across partitions.<br></br>
-> `Default Value: 50000 (Optional)`<br></br>
-> `Config Param: PRODUCER_PENDING_SIZE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.route-mode
-> Message routing logic for producers on partitioned topics.<br></br>
-> `Default Value: RoundRobinPartition (Optional)`<br></br>
-> `Config Param: PRODUCER_ROUTE_MODE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.send-timeout
-> The timeout in each sending to pulsar.<br></br>
-> `Default Value: 30s (Optional)`<br></br>
-> `Config Param: PRODUCER_SEND_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.request-timeout
-> Duration of waiting for completing a request.<br></br>
-> `Default Value: 60s (Optional)`<br></br>
-> `Config Param: REQUEST_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
 
 #### Write commit Kafka callback configs {#Write-commit-Kafka-callback-configs}
 Controls notifications sent to Kafka, on events happening to a hudi table.
 
-`Config Class`: org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig<br></br>
-> #### hoodie.write.commit.callback.kafka.bootstrap.servers
-> Bootstrap servers of kafka cluster, to be used for publishing commit metadata.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BOOTSTRAP_SERVERS`<br></br>
-> `Since Version: 0.7.0`<br></br>
 
+
+[**Advanced Configs**](#Write-commit-Kafka-callback-configs-advanced-configs)
+
+
+| Config Name                                                                                             | Default            | Description                                                                                                                                                                                                                                                       | Since Version |
+| ------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.write.commit.callback.kafka.bootstrap.servers](#hoodiewritecommitcallbackkafkabootstrapservers) | N/A **(Required)** | Bootstrap servers of kafka cluster, to be used for publishing commit metadata.                                                                                                                                                                                    | 0.7.0         |
+| [hoodie.write.commit.callback.kafka.partition](#hoodiewritecommitcallbackkafkapartition)                | N/A **(Required)** | It may be desirable to serialize all changes into a single Kafka partition  for providing strict ordering. By default, Kafka messages are keyed by table name, which  guarantees ordering at the table level, but not globally (or when new partitions are added) | 0.7.0         |
+| [hoodie.write.commit.callback.kafka.topic](#hoodiewritecommitcallbackkafkatopic)                        | N/A **(Required)** | Kafka topic name to publish timeline activity into.                                                                                                                                                                                                               | 0.7.0         |
+| [hoodie.write.commit.callback.kafka.acks](#hoodiewritecommitcallbackkafkaacks)                          | all (Optional)     | kafka acks level, all by default to ensure strong durability.                                                                                                                                                                                                     | 0.7.0         |
+| [hoodie.write.commit.callback.kafka.retries](#hoodiewritecommitcallbackkafkaretries)                    | 3 (Optional)       | Times to retry the produce. 3 by default                                                                                                                                                                                                                          | 0.7.0         |
 ---
 
-> #### hoodie.write.commit.callback.kafka.partition
-> It may be desirable to serialize all changes into a single Kafka partition  for providing strict ordering. By default, Kafka messages are keyed by table name, which  guarantees ordering at the table level, but not globally (or when new partitions are added)<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: PARTITION`<br></br>
-> `Since Version: 0.7.0`<br></br>
 
+#### Write commit pulsar callback configs {#Write-commit-pulsar-callback-configs}
+Controls notifications sent to pulsar, on events happening to a hudi table.
+
+
+
+[**Advanced Configs**](#Write-commit-pulsar-callback-configs-advanced-configs)
+
+
+| Config Name                                                                                                                     | Default                        | Description                                                                      | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------- | ------------- |
+| [hoodie.write.commit.callback.pulsar.broker.service.url](#hoodiewritecommitcallbackpulsarbrokerserviceurl)                      | N/A **(Required)**             | Server's url of pulsar cluster, to be used for publishing commit metadata.       | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.topic](#hoodiewritecommitcallbackpulsartopic)                                              | N/A **(Required)**             | pulsar topic name to publish timeline activity into.                             | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.connection-timeout](#hoodiewritecommitcallbackpulsarconnection-timeout)                    | 10s (Optional)                 | Duration of waiting for a connection to a broker to be established.              | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.keepalive-interval](#hoodiewritecommitcallbackpulsarkeepalive-interval)                    | 30s (Optional)                 | Duration of keeping alive interval for each client broker connection.            | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.operation-timeout](#hoodiewritecommitcallbackpulsaroperation-timeout)                      | 30s (Optional)                 | Duration of waiting for completing an operation.                                 | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.producer.block-if-queue-full](#hoodiewritecommitcallbackpulsarproducerblock-if-queue-full) | true (Optional)                | When the queue is full, the method is blocked instead of an exception is thrown. | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.producer.pending-queue-size](#hoodiewritecommitcallbackpulsarproducerpending-queue-size)   | 1000 (Optional)                | The maximum size of a queue holding pending messages.                            | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.producer.pending-total-size](#hoodiewritecommitcallbackpulsarproducerpending-total-size)   | 50000 (Optional)               | The maximum number of pending messages across partitions.                        | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.producer.route-mode](#hoodiewritecommitcallbackpulsarproducerroute-mode)                   | RoundRobinPartition (Optional) | Message routing logic for producers on partitioned topics.                       | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.producer.send-timeout](#hoodiewritecommitcallbackpulsarproducersend-timeout)               | 30s (Optional)                 | The timeout in each sending to pulsar.                                           | 0.11.0        |
+| [hoodie.write.commit.callback.pulsar.request-timeout](#hoodiewritecommitcallbackpulsarrequest-timeout)                          | 60s (Optional)                 | Duration of waiting for completing a request.                                    | 0.11.0        |
 ---
 
-> #### hoodie.write.commit.callback.kafka.topic
-> Kafka topic name to publish timeline activity into.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TOPIC`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.kafka.acks
-> kafka acks level, all by default to ensure strong durability.<br></br>
-> `Default Value: all (Optional)`<br></br>
-> `Config Param: ACKS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.kafka.retries
-> Times to retry the produce. 3 by default<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: RETRIES`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
 
 ### Lock Configs {#LOCK}
 Configurations that control locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
 
+
 #### Common Lock Configurations {#Common-Lock-Configurations}
 
 
-`Config Class`: org.apache.hudi.config.HoodieLockConfig<br></br>
-> #### hoodie.write.lock.filesystem.path
-> For DFS based lock providers, path to store the locks under. use Table's meta path as default<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: FILESYSTEM_LOCK_PATH`<br></br>
-> `Since Version: 0.8.0`<br></br>
 
+
+[**Advanced Configs**](#Common-Lock-Configurations-advanced-configs)
+
+
+| Config Name                                                                                             | Default                                                                                            | Description                                                                                                                                                                               | Since Version |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.write.lock.filesystem.path](#hoodiewritelockfilesystempath)                                     | N/A **(Required)**                                                                                 | For DFS based lock providers, path to store the locks under. use Table's meta path as default                                                                                             | 0.8.0         |
+| [hoodie.write.lock.hivemetastore.database](#hoodiewritelockhivemetastoredatabase)                       | N/A **(Required)**                                                                                 | For Hive based lock provider, the Hive database to acquire lock against                                                                                                                   | 0.8.0         |
+| [hoodie.write.lock.hivemetastore.table](#hoodiewritelockhivemetastoretable)                             | N/A **(Required)**                                                                                 | For Hive based lock provider, the Hive table to acquire lock against                                                                                                                      | 0.8.0         |
+| [hoodie.write.lock.hivemetastore.uris](#hoodiewritelockhivemetastoreuris)                               | N/A **(Required)**                                                                                 | For Hive based lock provider, the Hive metastore URI to acquire locks against.                                                                                                            | 0.8.0         |
+| [hoodie.write.lock.zookeeper.base_path](#hoodiewritelockzookeeperbase_path)                             | N/A **(Required)**                                                                                 | The base path on Zookeeper under which to create lock related ZNodes. This should be same for all concurrent writers to the same table                                                    | 0.8.0         |
+| [hoodie.write.lock.zookeeper.port](#hoodiewritelockzookeeperport)                                       | N/A **(Required)**                                                                                 | Zookeeper port to connect to.                                                                                                                                                             | 0.8.0         |
+| [hoodie.write.lock.zookeeper.url](#hoodiewritelockzookeeperurl)                                         | N/A **(Required)**                                                                                 | Zookeeper URL to connect to.                                                                                                                                                              | 0.8.0         |
+| [hoodie.write.lock.client.num_retries](#hoodiewritelockclientnum_retries)                               | 50 (Optional)                                                                                      | Maximum number of times to retry to acquire lock additionally from the lock manager.                                                                                                      | 0.8.0         |
+| [hoodie.write.lock.client.wait_time_ms_between_retry](#hoodiewritelockclientwait_time_ms_between_retry) | 5000 (Optional)                                                                                    | Amount of time to wait between retries on the lock provider by the lock manager                                                                                                           | 0.8.0         |
+| [hoodie.write.lock.conflict.resolution.strategy](#hoodiewritelockconflictresolutionstrategy)            | org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy (Optional) | Lock provider class name, this should be subclass of org.apache.hudi.client.transaction.ConflictResolutionStrategy                                                                        | 0.8.0         |
+| [hoodie.write.lock.filesystem.expire](#hoodiewritelockfilesystemexpire)                                 | 0 (Optional)                                                                                       | For DFS based lock providers, expire time in minutes, must be a non-negative number, default means no expire                                                                              | 0.12.0        |
+| [hoodie.write.lock.max_wait_time_ms_between_retry](#hoodiewritelockmax_wait_time_ms_between_retry)      | 16000 (Optional)                                                                                   | Maximum amount of time to wait between retries by lock provider client. This bounds the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.        | 0.8.0         |
+| [hoodie.write.lock.num_retries](#hoodiewritelocknum_retries)                                            | 15 (Optional)                                                                                      | Maximum number of times to retry lock acquire, at each lock provider                                                                                                                      | 0.8.0         |
+| [hoodie.write.lock.provider](#hoodiewritelockprovider)                                                  | org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider (Optional)                      | Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider                                  | 0.8.0         |
+| [hoodie.write.lock.wait_time_ms](#hoodiewritelockwait_time_ms)                                          | 60000 (Optional)                                                                                   | Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.                                                                                                        | 0.8.0         |
+| [hoodie.write.lock.wait_time_ms_between_retry](#hoodiewritelockwait_time_ms_between_retry)              | 1000 (Optional)                                                                                    | Initial amount of time to wait between retries to acquire locks,  subsequent retries will exponentially backoff.                                                                          | 0.8.0         |
+| [hoodie.write.lock.zookeeper.connection_timeout_ms](#hoodiewritelockzookeeperconnection_timeout_ms)     | 15000 (Optional)                                                                                   | Timeout in ms, to wait for establishing connection with Zookeeper.                                                                                                                        | 0.8.0         |
+| [hoodie.write.lock.zookeeper.lock_key](#hoodiewritelockzookeeperlock_key)                               |  (Optional)                                                                                        | Key name under base_path at which to create a ZNode and acquire lock. Final path on zk will look like base_path/lock_key. If this parameter is not set, we would set it as the table name | 0.8.0         |
+| [hoodie.write.lock.zookeeper.session_timeout_ms](#hoodiewritelockzookeepersession_timeout_ms)           | 60000 (Optional)                                                                                   | Timeout in ms, to wait after losing connection to ZooKeeper, before the session is expired                                                                                                | 0.8.0         |
 ---
 
-> #### hoodie.write.lock.hivemetastore.database
-> For Hive based lock provider, the Hive database to acquire lock against<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_DATABASE_NAME`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.hivemetastore.table
-> For Hive based lock provider, the Hive table to acquire lock against<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_NAME`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.hivemetastore.uris
-> For Hive based lock provider, the Hive metastore URI to acquire locks against.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_METASTORE_URI`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.base_path
-> The base path on Zookeeper under which to create lock related ZNodes. This should be same for all concurrent writers to the same table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZK_BASE_PATH`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.port
-> Zookeeper port to connect to.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZK_PORT`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.url
-> Zookeeper URL to connect to.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZK_CONNECT_URL`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.client.num_retries
-> Maximum number of times to retry to acquire lock additionally from the lock manager.<br></br>
-> `Default Value: 50 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_CLIENT_NUM_RETRIES`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.client.wait_time_ms_between_retry
-> Amount of time to wait between retries on the lock provider by the lock manager<br></br>
-> `Default Value: 5000 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.conflict.resolution.strategy
-> Lock provider class name, this should be subclass of org.apache.hudi.client.transaction.ConflictResolutionStrategy<br></br>
-> `Default Value: org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy (Optional)`<br></br>
-> `Config Param: WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.filesystem.expire
-> For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: FILESYSTEM_LOCK_EXPIRE`<br></br>
-> `Since Version: 0.12.0`<br></br>
-
----
-
-> #### hoodie.write.lock.max_wait_time_ms_between_retry
-> Maximum amount of time to wait between retries by lock provider client. This bounds the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.<br></br>
-> `Default Value: 5000 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.num_retries
-> Maximum number of times to retry lock acquire, at each lock provider<br></br>
-> `Default Value: 15 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_NUM_RETRIES`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.provider
-> Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider<br></br>
-> `Default Value: org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider (Optional)`<br></br>
-> `Config Param: LOCK_PROVIDER_CLASS_NAME`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.wait_time_ms
-> Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.<br></br>
-> `Default Value: 60000 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_WAIT_TIMEOUT_MS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.wait_time_ms_between_retry
-> Initial amount of time to wait between retries to acquire locks,  subsequent retries will exponentially backoff.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.connection_timeout_ms
-> Timeout in ms, to wait for establishing connection with Zookeeper.<br></br>
-> `Default Value: 15000 (Optional)`<br></br>
-> `Config Param: ZK_CONNECTION_TIMEOUT_MS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.lock_key
-> Key name under base_path at which to create a ZNode and acquire lock. Final path on zk will look like base_path/lock_key. If this parameter is not set, we would set it as the table name<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: ZK_LOCK_KEY`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
-
-> #### hoodie.write.lock.zookeeper.session_timeout_ms
-> Timeout in ms, to wait after losing connection to ZooKeeper, before the session is expired<br></br>
-> `Default Value: 60000 (Optional)`<br></br>
-> `Config Param: ZK_SESSION_TIMEOUT_MS`<br></br>
-> `Since Version: 0.8.0`<br></br>
-
----
 
 #### DynamoDB based Locks Configurations {#DynamoDB-based-Locks-Configurations}
 Configs that control DynamoDB based locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
 
-`Config Class`: org.apache.hudi.config.DynamoDbBasedLockConfig<br></br>
-> #### hoodie.write.lock.dynamodb.endpoint_url
-> For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: DYNAMODB_ENDPOINT_URL`<br></br>
-> `Since Version: 0.10.1`<br></br>
 
+
+[**Advanced Configs**](#DynamoDB-based-Locks-Configurations-advanced-configs)
+
+
+| Config Name                                                                                         | Default                    | Description                                                                                                                                                                                                                                                        | Since Version |
+| --------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| [hoodie.write.lock.dynamodb.endpoint_url](#hoodiewritelockdynamodbendpoint_url)                     | N/A **(Required)**         | For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.                                                                                                                        | 0.10.1        |
+| [hoodie.write.lock.dynamodb.billing_mode](#hoodiewritelockdynamodbbilling_mode)                     | PAY_PER_REQUEST (Optional) | For DynamoDB based lock provider, by default it is `PAY_PER_REQUEST` mode. Alternative is `PROVISIONED`.                                                                                                                                                           | 0.10.0        |
+| [hoodie.write.lock.dynamodb.partition_key](#hoodiewritelockdynamodbpartition_key)                   |  (Optional)                | For DynamoDB based lock provider, the partition key for the DynamoDB lock table. Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key. By default we use the Hudi table name specified to be the partition key | 0.10.0        |
+| [hoodie.write.lock.dynamodb.read_capacity](#hoodiewritelockdynamodbread_capacity)                   | 20 (Optional)              | For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode                                                                                                                                                                          | 0.10.0        |
+| [hoodie.write.lock.dynamodb.region](#hoodiewritelockdynamodbregion)                                 | us-east-1 (Optional)       | For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service. Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1                                                                   | 0.10.0        |
+| [hoodie.write.lock.dynamodb.table](#hoodiewritelockdynamodbtable)                                   | hudi_locks (Optional)      | For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table                                                                                                                                                                              | 0.10.0        |
+| [hoodie.write.lock.dynamodb.table_creation_timeout](#hoodiewritelockdynamodbtable_creation_timeout) | 120000 (Optional)          | For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table                                                                                                                                                           | 0.10.0        |
+| [hoodie.write.lock.dynamodb.write_capacity](#hoodiewritelockdynamodbwrite_capacity)                 | 10 (Optional)              | For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode                                                                                                                                                                         | 0.10.0        |
+| [hoodie.write.lock.wait_time_ms](#hoodiewritelockwait_time_ms)                                      | 60000 (Optional)           | Lock Acquire Wait Timeout in milliseconds                                                                                                                                                                                                                          | 0.10.0        |
 ---
 
-> #### hoodie.write.lock.dynamodb.table
-> For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: DYNAMODB_LOCK_TABLE_NAME`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
+### Key Generator Configs {#KEY_GENERATOR}
+Hudi maintains keys (record key + partition path) for uniquely identifying a particular record. These configs allow developers to setup the Key generator class that extracts these out of incoming records.
+
+
+#### Key Generator Options {#Key-Generator-Options}
+
+
+
+
+[**Basic Configs**](#Key-Generator-Options-basic-configs)
+
+
+| Config Name                                                                                      | Default            | Description                                                                                                                                                                                                                                           | Since Version |
+| ------------------------------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.write.partitionpath.field](#hoodiedatasourcewritepartitionpathfield)          | N/A **(Required)** | Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value obtained by invoking .toString()                                                                                                                     |               |
+| [hoodie.datasource.write.recordkey.field](#hoodiedatasourcewriterecordkeyfield)                  | N/A **(Required)** | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`                           |               |
+| [hoodie.datasource.write.hive_style_partitioning](#hoodiedatasourcewritehive_style_partitioning) | false (Optional)   | Flag to indicate whether to use Hive style partitioning. If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format. By default false (the names of partition folders are only partition values) |               |
+
+[**Advanced Configs**](#Key-Generator-Options-advanced-configs)
+
+
+| Config Name                                                                                                                                      | Default          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled](#hoodiedatasourcewritekeygeneratorconsistentlogicaltimestampenabled) | false (Optional) | When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases. |               |
+| [hoodie.datasource.write.partitionpath.urlencode](#hoodiedatasourcewritepartitionpathurlencode)                                                  | false (Optional) | Should we url encode the partition path value, before creating the folder structure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
 ---
 
-> #### hoodie.write.lock.dynamodb.billing_mode
-> For DynamoDB based lock provider, by default it is `PAY_PER_REQUEST` mode. Alternative is `PROVISIONED`.<br></br>
-> `Default Value: PAY_PER_REQUEST (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_BILLING_MODE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.partition_key
-> For DynamoDB based lock provider, the partition key for the DynamoDB lock table. Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key. By default we use the Hudi table name specified to be the partition key<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_PARTITION_KEY`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.read_capacity
-> For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode<br></br>
-> `Default Value: 20 (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_READ_CAPACITY`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.region
-> For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service. Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1<br></br>
-> `Default Value: us-east-1 (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_REGION`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.table_creation_timeout
-> For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table<br></br>
-> `Default Value: 600000 (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.write_capacity
-> For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode<br></br>
-> `Default Value: 10 (Optional)`<br></br>
-> `Config Param: DYNAMODB_LOCK_WRITE_CAPACITY`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
 
 ### Index Configs {#INDEX}
 Configurations that control indexing behavior, which tags incoming records as either inserts or updates to older records.
 
+
 #### Common Index Configs {#Common-Index-Configs}
 
 
-`Config Class`: org.apache.hudi.config.HoodieIndexConfig<br></br>
-> #### hoodie.bucket.index.hash.field
-> Index key. It is used to index the record and find its file group. If not set, use record key field as default<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BUCKET_INDEX_HASH_FIELD`<br></br>
 
+
+[**Basic Configs**](#Common-Index-Configs-basic-configs)
+
+
+| Config Name                           | Default            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Since Version |
+| ------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.index.type](#hoodieindextype) | N/A **(Required)** | org.apache.hudi.index.HoodieIndex$IndexType: Determines how input records are indexed, i.e., looked up based on the key for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines.     HBASE: uses an external managed Apache HBase table to store record key to location mapping. HBase index is a global index, enforcing key uniqueness across all partitions in the table.     INMEMORY: Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.     BLOOM: Employs bloom filters built out of the record keys, optionally also pruning candidate files using record key ranges. Key uniqueness is enforced inside partitions.     GLOBAL_BLOOM: Employs bloom filters built out of the record keys, optionally also pruning candidate files using record key ranges. Key uniqueness is enforced across all partitions in the table.      SIMPLE: Performs a lean join of the incoming update/delete records against keys extracted from the table on storage.Key uniqueness is enforced inside partitions.     GLOBAL_SIMPLE: Performs a lean join of the incoming update/delete records against keys extracted from the table on storage.Key uniqueness is enforced across all partitions in the table.     BUCKET: locates the file group containing the record fast by using bucket hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to choose bucket engine type, i.e., how buckets are generated.     FLINK_STATE: Internal Config for indexing based on Flink state.     RECORD_INDEX: Index which saves the record key to location mappings in the HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all partitions in the table. Supports sharding to achieve very high scale. |               |
+
+[**Advanced Configs**](#Common-Index-Configs-advanced-configs)
+
+
+| Config Name                                                                               | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Since Version |
+| ----------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.bucket.index.hash.field](#hoodiebucketindexhashfield)                             | N/A **(Required)**             | Index key. It is used to index the record and find its file group. If not set, use record key field as default                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.bucket.index.max.num.buckets](#hoodiebucketindexmaxnumbuckets)                    | N/A **(Required)**             | Only applies if bucket index engine is consistent hashing. Determine the upper bound of the number of buckets in the hudi table. Bucket resizing cannot be done higher than this max limit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 0.13.0        |
+| [hoodie.bucket.index.min.num.buckets](#hoodiebucketindexminnumbuckets)                    | N/A **(Required)**             | Only applies if bucket index engine is consistent hashing. Determine the lower bound of the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 0.13.0        |
+| [hoodie.bloom.index.bucketized.checking](#hoodiebloomindexbucketizedchecking)             | true (Optional)                | Only applies if index type is BLOOM. When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.bloom.index.filter.dynamic.max.entries](#hoodiebloomindexfilterdynamicmaxentries) | 100000 (Optional)              | The threshold for the maximum number of keys to record in a dynamic Bloom filter row. Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.bloom.index.filter.type](#hoodiebloomindexfiltertype)                             | DYNAMIC_V0 (Optional)          | org.apache.hudi.common.bloom.BloomFilterTypeCode: Filter type used by Bloom filter.     SIMPLE: Bloom filter that is based on the configured size.     DYNAMIC_V0(default): Bloom filter that is auto sized based on number of keys.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.bloom.index.input.storage.level](#hoodiebloomindexinputstoragelevel)              | MEMORY_AND_DISK_SER (Optional) | Only applies when #bloomIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.bloom.index.keys.per.bucket](#hoodiebloomindexkeysperbucket)                      | 10000000 (Optional)            | Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. This configuration controls the “bucket” size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory.                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.bloom.index.parallelism](#hoodiebloomindexparallelism)                            | 0 (Optional)                   | Only applies if index type is BLOOM. This is the amount of parallelism for index lookup, which involves a shuffle. By default, this is auto computed based on input workload characteristics. If the parallelism is explicitly configured by the user, the user-configured value is used in defining the actual parallelism. If the indexing stage is slow due to the limited parallelism, you can increase this to tune the performance.                                                                                                                                                                                                                                                             |               |
+| [hoodie.bloom.index.prune.by.ranges](#hoodiebloomindexprunebyranges)                      | true (Optional)                | Only applies if index type is BLOOM. When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off, since range pruning will only  add extra overhead to the index lookup.                                                                                                                                                                                                                                                                                                                                             |               |
+| [hoodie.bloom.index.update.partition.path](#hoodiebloomindexupdatepartitionpath)          | true (Optional)                | Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.bloom.index.use.caching](#hoodiebloomindexusecaching)                             | true (Optional)                | Only applies if index type is BLOOM.When true, the input RDD will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.bloom.index.use.metadata](#hoodiebloomindexusemetadata)                           | false (Optional)               | Only applies if index type is BLOOM.When true, the index lookup uses bloom filters and column stats from metadata table when available to speed up the process.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 0.11.0        |
+| [hoodie.bloom.index.use.treebased.filter](#hoodiebloomindexusetreebasedfilter)            | true (Optional)                | Only applies if index type is BLOOM. When true, interval tree based file pruning optimization is enabled. This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.bucket.index.merge.threshold](#hoodiebucketindexmergethreshold)                   | 0.2 (Optional)                 | Control if buckets should be merged when using consistent hashing bucket indexSpecifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be consideredas a merge candidate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 0.13.0        |
+| [hoodie.bucket.index.num.buckets](#hoodiebucketindexnumbuckets)                           | 256 (Optional)                 | Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.bucket.index.split.threshold](#hoodiebucketindexsplitthreshold)                   | 2.0 (Optional)                 | Control if the bucket should be split when using consistent hashing bucket index.Specifically, if a file slice size reaches `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 0.13.0        |
+| [hoodie.global.index.reconcile.parallelism](#hoodieglobalindexreconcileparallelism)       | 60 (Optional)                  | Only applies if index type is GLOBAL_BLOOM or GLOBAL_SIMPLE. This controls the parallelism for deduplication during indexing where more than 1 record could be tagged due to partition update.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.global.simple.index.parallelism](#hoodieglobalsimpleindexparallelism)             | 100 (Optional)                 | Only applies if index type is GLOBAL_SIMPLE. This limits the parallelism of fetching records from the base files of all table partitions. The index picks the configured parallelism if the number of base files is larger than this configured value; otherwise, the number of base files is used as the parallelism. If the indexing stage is slow due to the limited parallelism, you can increase this to tune the performance.                                                                                                                                                                                                                                                                   |               |
+| [hoodie.index.bloom.fpp](#hoodieindexbloomfpp)                                            | 0.000000001 (Optional)         | Only applies if index type is BLOOM. Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), then this fpp may not be honored.                                                                                                                                                                                                                                 |               |
+| [hoodie.index.bloom.num_entries](#hoodieindexbloomnum_entries)                            | 60000 (Optional)               | Only applies if index type is BLOOM. This is the number of entries to be stored in the bloom filter. The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and setting this to a very high number will increase the size every base file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom. |               |
+| [hoodie.index.bucket.engine](#hoodieindexbucketengine)                                    | SIMPLE (Optional)              | org.apache.hudi.index.HoodieIndex$BucketIndexEngineType: Determines the type of bucketing or hashing to use when `hoodie.index.type` is set to `BUCKET`.     SIMPLE(default): Uses a fixed number of buckets for file groups which cannot shrink or expand. This works for both COW and MOR tables.     CONSISTENT_HASHING: Supports dynamic number of buckets with bucket resizing to properly size each bucket. This solves potential data skew problem where one bucket can be significantly larger than others in SIMPLE engine type. This only works with MOR tables.                                                                                                                            | 0.11.0        |
+| [hoodie.index.class](#hoodieindexclass)                                                   |  (Optional)                    | Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the hoodie.index.type configuration if specified                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.record.index.input.storage.level](#hoodierecordindexinputstoragelevel)            | MEMORY_AND_DISK_SER (Optional) | Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.record.index.update.partition.path](#hoodierecordindexupdatepartitionpath)        | false (Optional)               | Similar to Key: 'hoodie.bloom.index.update.partition.path' , default: true , isAdvanced: true , description: Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition since version: version is not defined deprecated after: version is not defined), but for record index.                                                                                                                                  |               |
+| [hoodie.record.index.use.caching](#hoodierecordindexusecaching)                           | true (Optional)                | Only applies if index type is RECORD_INDEX.When true, the input RDD will be cached to speed up index lookup by reducing IO for computing parallelism or affected partitions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.simple.index.input.storage.level](#hoodiesimpleindexinputstoragelevel)            | MEMORY_AND_DISK_SER (Optional) | Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.simple.index.parallelism](#hoodiesimpleindexparallelism)                          | 0 (Optional)                   | Only applies if index type is SIMPLE. This limits the parallelism of fetching records from the base files of affected partitions. By default, this is auto computed based on input workload characteristics. If the parallelism is explicitly configured by the user, the user-configured value is used in defining the actual parallelism. If the indexing stage is slow due to the limited parallelism, you can increase this to tune the performance.                                                                                                                                                                                                                                              |               |
+| [hoodie.simple.index.update.partition.path](#hoodiesimpleindexupdatepartitionpath)        | true (Optional)                | Similar to Key: 'hoodie.bloom.index.update.partition.path' , default: true , isAdvanced: true , description: Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition since version: version is not defined deprecated after: version is not defined), but for simple index.                                                                                                                                  |               |
+| [hoodie.simple.index.use.caching](#hoodiesimpleindexusecaching)                           | true (Optional)                | Only applies if index type is SIMPLE. When true, the incoming writes will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |               |
 ---
 
-> #### hoodie.bucket.index.max.num.buckets
-> Only applies if bucket index engine is consistent hashing. Determine the upper bound of the number of buckets in the hudi table. Bucket resizing cannot be done higher than this max limit.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BUCKET_INDEX_MAX_NUM_BUCKETS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> #### hoodie.bucket.index.min.num.buckets
-> Only applies if bucket index engine is consistent hashing. Determine the lower bound of the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BUCKET_INDEX_MIN_NUM_BUCKETS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> #### hoodie.index.type
-> Type of index to use. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: INDEX_TYPE`<br></br>
-
----
-
-> #### hoodie.bloom.index.bucketized.checking
-> Only applies if index type is BLOOM. When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_BUCKETIZED_CHECKING`<br></br>
-
----
-
-> #### hoodie.bloom.index.filter.dynamic.max.entries
-> The threshold for the maximum number of keys to record in a dynamic Bloom filter row. Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.<br></br>
-> `Default Value: 100000 (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES`<br></br>
-
----
-
-> #### hoodie.bloom.index.filter.type
-> Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys.<br></br>
-> `Default Value: DYNAMIC_V0 (Optional)`<br></br>
-> `Config Param: BLOOM_FILTER_TYPE`<br></br>
-
----
-
-> #### hoodie.bloom.index.input.storage.level
-> Only applies when #bloomIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values<br></br>
-> `Default Value: MEMORY_AND_DISK_SER (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE`<br></br>
-
----
-
-> #### hoodie.bloom.index.keys.per.bucket
-> Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. This configuration controls the “bucket” size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory.<br></br>
-> `Default Value: 10000000 (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_KEYS_PER_BUCKET`<br></br>
-
----
-
-> #### hoodie.bloom.index.parallelism
-> Only applies if index type is BLOOM. This is the amount of parallelism for index lookup, which involves a shuffle. By default, this is auto computed based on input workload characteristics.<br></br>
-> `Default Value: 0 (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_PARALLELISM`<br></br>
-
----
-
-> #### hoodie.bloom.index.prune.by.ranges
-> Only applies if index type is BLOOM. When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off, since range pruning will only  add extra overhead to the index lookup.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_PRUNE_BY_RANGES`<br></br>
-
----
-
-> #### hoodie.bloom.index.update.partition.path
-> Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE`<br></br>
-
----
-
-> #### hoodie.bloom.index.use.caching
-> Only applies if index type is BLOOM.When true, the input RDD will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_USE_CACHING`<br></br>
-
----
-
-> #### hoodie.bloom.index.use.metadata
-> Only applies if index type is BLOOM.When true, the index lookup uses bloom filters and column stats from metadata table when available to speed up the process.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_USE_METADATA`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.bloom.index.use.treebased.filter
-> Only applies if index type is BLOOM. When true, interval tree based file pruning optimization is enabled. This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: BLOOM_INDEX_TREE_BASED_FILTER`<br></br>
-
----
-
-> #### hoodie.bucket.index.merge.threshold
-> Control if buckets should be merged when using consistent hashing bucket indexSpecifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be consideredas a merge candidate.<br></br>
-> `Default Value: 0.2 (Optional)`<br></br>
-> `Config Param: BUCKET_MERGE_THRESHOLD`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> #### hoodie.bucket.index.num.buckets
-> Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
-> `Default Value: 256 (Optional)`<br></br>
-> `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
-
----
-
-> #### hoodie.bucket.index.split.threshold
-> Control if the bucket should be split when using consistent hashing bucket index.Specifically, if a file slice size reaches `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.<br></br>
-> `Default Value: 2.0 (Optional)`<br></br>
-> `Config Param: BUCKET_SPLIT_THRESHOLD`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> #### hoodie.global.simple.index.parallelism
-> Only applies if index type is GLOBAL_SIMPLE. This is the amount of parallelism for index lookup, which involves a Spark Shuffle<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: GLOBAL_SIMPLE_INDEX_PARALLELISM`<br></br>
-
----
-
-> #### hoodie.index.bloom.fpp
-> Only applies if index type is BLOOM. Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), then this fpp may not be honored.<br></br>
-> `Default Value: 0.000000001 (Optional)`<br></br>
-> `Config Param: BLOOM_FILTER_FPP_VALUE`<br></br>
-
----
-
-> #### hoodie.index.bloom.num_entries
-> Only applies if index type is BLOOM. This is the number of entries to be stored in the bloom filter. The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and setting this to a very high number will increase the size every base file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.<br></br>
-> `Default Value: 60000 (Optional)`<br></br>
-> `Config Param: BLOOM_FILTER_NUM_ENTRIES_VALUE`<br></br>
-
----
-
-> #### hoodie.index.bucket.engine
-> Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket.Possible options are [SIMPLE | CONSISTENT_HASHING].Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size issues of the SIMPLE hashing engine. Consistent hashing only works with MOR tables, only use simple hashing on COW tables.<br></br>
-> `Default Value: SIMPLE (Optional)`<br></br>
-> `Config Param: BUCKET_INDEX_ENGINE_TYPE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.index.class
-> Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the hoodie.index.type configuration if specified<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: INDEX_CLASS_NAME`<br></br>
-
----
-
-> #### hoodie.simple.index.input.storage.level
-> Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. Refer to org.apache.spark.storage.StorageLevel for different values<br></br>
-> `Default Value: MEMORY_AND_DISK_SER (Optional)`<br></br>
-> `Config Param: SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE`<br></br>
-
----
-
-> #### hoodie.simple.index.parallelism
-> Only applies if index type is SIMPLE. This is the amount of parallelism for index lookup, which involves a Spark Shuffle<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: SIMPLE_INDEX_PARALLELISM`<br></br>
-
----
-
-> #### hoodie.simple.index.update.partition.path
-> Similar to Key: 'hoodie.bloom.index.update.partition.path' , default: true description: Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition since version: version is not defined deprecated after: version is not defined), but for simple index.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE`<br></br>
-
----
-
-> #### hoodie.simple.index.use.caching
-> Only applies if index type is SIMPLE. When true, the incoming writes will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: SIMPLE_INDEX_USE_CACHING`<br></br>
-
----
 
 #### HBase Index Configs {#HBase-Index-Configs}
 Configurations that control indexing behavior (when HBase based indexing is enabled), which tags incoming records as either inserts or updates to older records.
 
-`Config Class`: org.apache.hudi.config.HoodieHBaseIndexConfig<br></br>
-> #### hoodie.index.hbase.kerberos.user.keytab
-> File name of the kerberos keytab file for connecting to the hbase cluster.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: KERBEROS_USER_KEYTAB`<br></br>
 
----
 
-> #### hoodie.index.hbase.kerberos.user.principal
-> The kerberos principal name for connecting to the hbase cluster.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: KERBEROS_USER_PRINCIPAL`<br></br>
+[**Advanced Configs**](#HBase-Index-Configs-advanced-configs)
 
----
 
-> #### hoodie.index.hbase.master.kerberos.principal
-> The value of hbase.master.kerberos.principal in hbase cluster.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: MASTER_PRINCIPAL`<br></br>
-
----
-
-> #### hoodie.index.hbase.max.qps.fraction
-> Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: MAX_QPS_FRACTION`<br></br>
-
----
-
-> #### hoodie.index.hbase.min.qps.fraction
-> Minimum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: MIN_QPS_FRACTION`<br></br>
-
----
-
-> #### hoodie.index.hbase.regionserver.kerberos.principal
-> The value of hbase.regionserver.kerberos.principal in hbase cluster.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: REGIONSERVER_PRINCIPAL`<br></br>
-
----
-
-> #### hoodie.index.hbase.sleep.ms.for.get.batch
-> <br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: SLEEP_MS_FOR_GET_BATCH`<br></br>
-
----
-
-> #### hoodie.index.hbase.sleep.ms.for.put.batch
-> <br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: SLEEP_MS_FOR_PUT_BATCH`<br></br>
-
----
-
-> #### hoodie.index.hbase.table
-> Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: TABLENAME`<br></br>
-
----
-
-> #### hoodie.index.hbase.zknode.path
-> Only applies if index type is HBASE. This is the root znode that will contain all the znodes created/used by HBase<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZK_NODE_PATH`<br></br>
-
----
-
-> #### hoodie.index.hbase.zkport
-> Only applies if index type is HBASE. HBase ZK Quorum port to connect to<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZKPORT`<br></br>
-
----
-
-> #### hoodie.index.hbase.zkquorum
-> Only applies if index type is HBASE. HBase ZK Quorum url to connect to<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: ZKQUORUM`<br></br>
-
----
-
-> #### hoodie.hbase.index.update.partition.path
-> Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old partition and will insert it as new record in new partition.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: UPDATE_PARTITION_PATH_ENABLE`<br></br>
-
----
-
-> #### hoodie.index.hbase.bucket.number
-> Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance<br></br>
-> `Default Value: 8 (Optional)`<br></br>
-> `Config Param: BUCKET_NUMBER`<br></br>
-
----
-
-> #### hoodie.index.hbase.desired_puts_time_in_secs
-> <br></br>
-> `Default Value: 600 (Optional)`<br></br>
-> `Config Param: DESIRED_PUTS_TIME_IN_SECONDS`<br></br>
-
----
-
-> #### hoodie.index.hbase.dynamic_qps
-> Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: COMPUTE_QPS_DYNAMICALLY`<br></br>
-
----
-
-> #### hoodie.index.hbase.get.batch.size
-> Controls the batch size for performing gets against HBase. Batching improves throughput, by saving round trips.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: GET_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.index.hbase.max.qps.per.region.server
-> Property to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to
- limit the aggregate QPS generated across various jobs to an Hbase Region Server. It is recommended to set this
- value based on global indexing throughput needs and most importantly, how much the HBase installation in use is
- able to tolerate without Region Servers going down.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: MAX_QPS_PER_REGION_SERVER`<br></br>
-
----
-
-> #### hoodie.index.hbase.put.batch.size
-> Controls the batch size for performing puts against HBase. Batching improves throughput, by saving round trips.<br></br>
-> `Default Value: 100 (Optional)`<br></br>
-> `Config Param: PUT_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.index.hbase.put.batch.size.autocompute
-> Property to set to enable auto computation of put batch size<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: PUT_BATCH_SIZE_AUTO_COMPUTE`<br></br>
-
----
-
-> #### hoodie.index.hbase.qps.allocator.class
-> Property to set which implementation of HBase QPS resource allocator to be used, whichcontrols the batching rate dynamically.<br></br>
-> `Default Value: org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator (Optional)`<br></br>
-> `Config Param: QPS_ALLOCATOR_CLASS_NAME`<br></br>
-
----
-
-> #### hoodie.index.hbase.qps.fraction
-> Property to set the fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively. Default is 50%, which means a total of 2 jobs can run using HbaseIndex without overwhelming Region Servers.<br></br>
-> `Default Value: 0.5 (Optional)`<br></br>
-> `Config Param: QPS_FRACTION`<br></br>
-
----
-
-> #### hoodie.index.hbase.rollback.sync
-> When set to true, the rollback method will delete the last failed task index. The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: ROLLBACK_SYNC_ENABLE`<br></br>
-
----
-
-> #### hoodie.index.hbase.security.authentication
-> Property to decide if the hbase cluster secure authentication is enabled or not. Possible values are 'simple' (no authentication), and 'kerberos'.<br></br>
-> `Default Value: simple (Optional)`<br></br>
-> `Config Param: SECURITY_AUTHENTICATION`<br></br>
-
----
-
-> #### hoodie.index.hbase.zk.connection_timeout_ms
-> Timeout to use for establishing connection with zookeeper, from HBase client.<br></br>
-> `Default Value: 15000 (Optional)`<br></br>
-> `Config Param: ZK_CONNECTION_TIMEOUT_MS`<br></br>
-
----
-
-> #### hoodie.index.hbase.zk.session_timeout_ms
-> Session timeout value to use for Zookeeper failure detection, for the HBase client.Lower this value, if you want to fail faster.<br></br>
-> `Default Value: 60000 (Optional)`<br></br>
-> `Config Param: ZK_SESSION_TIMEOUT_MS`<br></br>
-
----
-
-> #### hoodie.index.hbase.zkpath.qps_root
-> chroot in zookeeper, to use for all qps allocation co-ordination.<br></br>
-> `Default Value: /QPS_ROOT (Optional)`<br></br>
-> `Config Param: ZKPATH_QPS_ROOT`<br></br>
-
+| Config Name                                                                                          | Default                                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                             | Since Version |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.index.hbase.kerberos.user.keytab](#hoodieindexhbasekerberosuserkeytab)                       | N/A **(Required)**                                                      | File name of the kerberos keytab file for connecting to the hbase cluster.                                                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.index.hbase.kerberos.user.principal](#hoodieindexhbasekerberosuserprincipal)                 | N/A **(Required)**                                                      | The kerberos principal name for connecting to the hbase cluster.                                                                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.index.hbase.master.kerberos.principal](#hoodieindexhbasemasterkerberosprincipal)             | N/A **(Required)**                                                      | The value of hbase.master.kerberos.principal in hbase cluster.                                                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.index.hbase.max.qps.fraction](#hoodieindexhbasemaxqpsfraction)                               | N/A **(Required)**                                                      | Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.index.hbase.min.qps.fraction](#hoodieindexhbaseminqpsfraction)                               | N/A **(Required)**                                                      | Minimum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.index.hbase.regionserver.kerberos.principal](#hoodieindexhbaseregionserverkerberosprincipal) | N/A **(Required)**                                                      | The value of hbase.regionserver.kerberos.principal in hbase cluster.                                                                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.index.hbase.sleep.ms.for.get.batch](#hoodieindexhbasesleepmsforgetbatch)                     | N/A **(Required)**                                                      |                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.sleep.ms.for.put.batch](#hoodieindexhbasesleepmsforputbatch)                     | N/A **(Required)**                                                      |                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.table](#hoodieindexhbasetable)                                                   | N/A **(Required)**                                                      | Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table                                                                                                                                                                                                                                                                        |               |
+| [hoodie.index.hbase.zknode.path](#hoodieindexhbasezknodepath)                                        | N/A **(Required)**                                                      | Only applies if index type is HBASE. This is the root znode that will contain all the znodes created/used by HBase                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.index.hbase.zkport](#hoodieindexhbasezkport)                                                 | N/A **(Required)**                                                      | Only applies if index type is HBASE. HBase ZK Quorum port to connect to                                                                                                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.index.hbase.zkquorum](#hoodieindexhbasezkquorum)                                             | N/A **(Required)**                                                      | Only applies if index type is HBASE. HBase ZK Quorum url to connect to                                                                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.hbase.index.update.partition.path](#hoodiehbaseindexupdatepartitionpath)                     | false (Optional)                                                        | Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old partition and will insert it as new record in new partition.                                                                                                                                                                                      |               |
+| [hoodie.index.hbase.bucket.number](#hoodieindexhbasebucketnumber)                                    | 8 (Optional)                                                            | Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance                                                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.index.hbase.desired_puts_time_in_secs](#hoodieindexhbasedesired_puts_time_in_secs)           | 600 (Optional)                                                          |                                                                                                                                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.dynamic_qps](#hoodieindexhbasedynamic_qps)                                       | false (Optional)                                                        | Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.                                                                                                                                                                                                                                                                                                                                          |               |
+| [hoodie.index.hbase.get.batch.size](#hoodieindexhbasegetbatchsize)                                   | 100 (Optional)                                                          | Controls the batch size for performing gets against HBase. Batching improves throughput, by saving round trips.                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.max.qps.per.region.server](#hoodieindexhbasemaxqpsperregionserver)               | 1000 (Optional)                                                         | Property to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to  limit the aggregate QPS generated across various jobs to an Hbase Region Server. It is recommended to set this  value based on global indexing throughput needs and most importantly, how much the HBase installation in use is  able to tolerate without Region Servers going down.                               |               |
+| [hoodie.index.hbase.put.batch.size](#hoodieindexhbaseputbatchsize)                                   | 100 (Optional)                                                          | Controls the batch size for performing puts against HBase. Batching improves throughput, by saving round trips.                                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.put.batch.size.autocompute](#hoodieindexhbaseputbatchsizeautocompute)            | false (Optional)                                                        | Property to set to enable auto computation of put batch size                                                                                                                                                                                                                                                                                                                                                                            |               |
+| [hoodie.index.hbase.qps.allocator.class](#hoodieindexhbaseqpsallocatorclass)                         | org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator (Optional) | Property to set which implementation of HBase QPS resource allocator to be used, whichcontrols the batching rate dynamically.                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.index.hbase.qps.fraction](#hoodieindexhbaseqpsfraction)                                      | 0.5 (Optional)                                                          | Property to set the fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively. Default is 50%, which means a total of 2 jobs can run using HbaseIndex without overwhelming Region Servers. |               |
+| [hoodie.index.hbase.rollback.sync](#hoodieindexhbaserollbacksync)                                    | false (Optional)                                                        | When set to true, the rollback method will delete the last failed task index. The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback                                                                                                                                                                                                                                         |               |
+| [hoodie.index.hbase.security.authentication](#hoodieindexhbasesecurityauthentication)                | simple (Optional)                                                       | Property to decide if the hbase cluster secure authentication is enabled or not. Possible values are 'simple' (no authentication), and 'kerberos'.                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.index.hbase.zk.connection_timeout_ms](#hoodieindexhbasezkconnection_timeout_ms)              | 15000 (Optional)                                                        | Timeout to use for establishing connection with zookeeper, from HBase client.                                                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.index.hbase.zk.session_timeout_ms](#hoodieindexhbasezksession_timeout_ms)                    | 60000 (Optional)                                                        | Session timeout value to use for Zookeeper failure detection, for the HBase client.Lower this value, if you want to fail faster.                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.index.hbase.zkpath.qps_root](#hoodieindexhbasezkpathqps_root)                                | /QPS_ROOT (Optional)                                                    | chroot in zookeeper, to use for all qps allocation co-ordination.                                                                                                                                                                                                                                                                                                                                                                       |               |
 ---
 
 ## Metastore and Catalog Sync Configs {#META_SYNC}
 Configurations used by the Hudi to sync metadata to external metastores and catalogs.
 
+
 ### Common Metadata Sync Configs {#Common-Metadata-Sync-Configs}
 
 
-`Config Class`: org.apache.hudi.sync.common.HoodieSyncConfig<br></br>
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ASSUME_DATE_PARTITION`<br></br>
 
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: META_SYNC_DATABASE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: META_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.base.path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_CONDITIONAL_SYNC`<br></br>
-
----
-
-> ### hoodie.meta.sync.decode_partition
-> If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_DECODE_PARTITION`<br></br>
-
----
-
-> ### hoodie.meta.sync.metadata_file_listing
-> Enable the internal metadata table for file listing for syncing with metastores<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
-
----
-
-> ### hoodie.meta_sync.spark.version
-> The spark version used when syncing with a metastore.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_SPARK_VERSION`<br></br>
-
----
-
-### Global Hive Sync Configs {#Global-Hive-Sync-Configs}
-Global replication configurations used by the Hudi to sync metadata to Hive Metastore.
-
-`Config Class`: org.apache.hudi.hive.replication.GlobalHiveSyncConfig<br></br>
-> ### hoodie.datasource.hive_sync.mode
-> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_MODE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.serde_properties
-> Serde properties to hive table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_SERDE_PROPERTIES`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table_properties
-> Additional properties to store with table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_PROPERTIES`<br></br>
-
----
-
-> ### hoodie.meta_sync.global.replicate.timestamp
-> <br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: META_SYNC_GLOBAL_REPLICATE_TIMESTAMP`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.auto_create_database
-> Auto create hive database if does not exists<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_AUTO_CREATE_DATABASE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.batch_num
-> The number of partitions one batch when synchronous partitions to hive.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: HIVE_BATCH_SYNC_PARTITION_NUM`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.bucket_sync
-> Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_BUCKET_SYNC`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.bucket_sync_spec
-> The hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_BUCKET_SYNC_SPEC`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.create_managed_table
-> Whether to sync the table as managed table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_CREATE_MANAGED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: META_SYNC_DATABASE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.enable
-> When set to true, register/sync the table to Apache Hive metastore.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.filter_pushdown_enabled
-> Whether to enable push down partitions by filter<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_FILTER_PUSHDOWN_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.filter_pushdown_max_size
-> Max size limit to push down partition filters, if the estimate push down filters exceed this size, will directly try to fetch all partitions<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.ignore_exceptions
-> Ignore exceptions when syncing with Hive.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_IGNORE_EXCEPTIONS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.jdbcurl
-> Hive metastore url<br></br>
-> `Default Value: jdbc:hive2://localhost:10000 (Optional)`<br></br>
-> `Config Param: HIVE_URL`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.metastore.uris
-> Hive metastore url<br></br>
-> `Default Value: thrift://localhost:9083 (Optional)`<br></br>
-> `Config Param: METASTORE_URIS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.omit_metadata_fields
-> Whether to omit the hoodie metadata fields in the target table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_OMIT_METADATA_FIELDS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.password
-> hive password to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_PASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.schema_string_length_thresh
-> <br></br>
-> `Default Value: 4000 (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table, when registering<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.support_timestamp
-> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SUPPORT_TIMESTAMP_TYPE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_as_datasource
-> <br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_AS_DATA_SOURCE_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_comment
-> Whether to sync the table column comments while syncing the table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_COMMENT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: META_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table.strategy
-> Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.<br></br>
-> `Default Value: ALL (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_TABLE_STRATEGY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_USE_JDBC`<br></br>
-> `Deprecated Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_pre_apache_input_format
-> Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_USE_PRE_APACHE_INPUT_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.username
-> hive user name to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_USER`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.base.path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_CONDITIONAL_SYNC`<br></br>
-
----
-
-> ### hoodie.meta.sync.decode_partition
-> If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_DECODE_PARTITION`<br></br>
 
----
-
-> ### hoodie.meta.sync.metadata_file_listing
-> Enable the internal metadata table for file listing for syncing with metastores<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
-
----
-
-> ### hoodie.meta_sync.spark.version
-> The spark version used when syncing with a metastore.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_SPARK_VERSION`<br></br>
-
----
-
-### DataHub Sync Configs {#DataHub-Sync-Configs}
-Configurations used by the Hudi to sync metadata to DataHub.
-
-`Config Class`: org.apache.hudi.sync.datahub.config.DataHubSyncConfig<br></br>
-> ### hoodie.meta.sync.datahub.emitter.server
-> Server URL of the DataHub instance.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: META_SYNC_DATAHUB_EMITTER_SERVER`<br></br>
-
----
-
-> ### hoodie.meta.sync.datahub.emitter.supplier.class
-> Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS`<br></br>
-
----
-
-> ### hoodie.meta.sync.datahub.emitter.token
-> Auth token to connect to the DataHub instance.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: META_SYNC_DATAHUB_EMITTER_TOKEN`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_FILE_FORMAT`<br></br>
-
----
+[**Basic Configs**](#Common-Metadata-Sync-Configs-basic-configs)
 
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: META_SYNC_DATABASE_NAME`<br></br>
 
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: META_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.base.path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
+| Config Name                                                           | Default          | Description                                                                | Since Version |
+| --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable) | false (Optional) | Enable Syncing the Hudi Table with an external meta store or data catalog. |               |
 
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_CONDITIONAL_SYNC`<br></br>
-
----
+[**Advanced Configs**](#Common-Metadata-Sync-Configs-advanced-configs)
 
-> ### hoodie.meta.sync.datahub.dataplatform.name
-> String used to represent Hudi when creating its corresponding DataPlatform entity within Datahub<br></br>
-> `Default Value: hudi (Optional)`<br></br>
-> `Config Param: META_SYNC_DATAHUB_DATAPLATFORM_NAME`<br></br>
 
+| Config Name                                                                                                  | Default                                                     | Description                                                                                                                                                                                                                                        | Since Version |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)   | false (Optional)                                            | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                   | PARQUET (Optional)                                          | Base file format for the sync.                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                   | default (Optional)                                          | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                        |               |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class) | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional) | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                        |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                   |  (Optional)                                                 | Field in the table to use for determining hive partition columns.                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                         | unknown (Optional)                                          | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                           |               |
+| [hoodie.datasource.meta.sync.base.path](#hoodiedatasourcemetasyncbasepath)                                   |  (Optional)                                                 | Base path of the hoodie table to sync                                                                                                                                                                                                              |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                        | false (Optional)                                            | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                           |               |
+| [hoodie.meta.sync.decode_partition](#hoodiemetasyncdecode_partition)                                         | false (Optional)                                            | If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.                                                                                                                                           |               |
+| [hoodie.meta.sync.incremental](#hoodiemetasyncincremental)                                                   | true (Optional)                                             | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost. | 0.14.0        |
+| [hoodie.meta.sync.metadata_file_listing](#hoodiemetasyncmetadata_file_listing)                               | false (Optional)                                            | Enable the internal metadata table for file listing for syncing with metastores                                                                                                                                                                    |               |
+| [hoodie.meta.sync.sync_snapshot_with_table_name](#hoodiemetasyncsync_snapshot_with_table_name)               | false (Optional)                                            | sync meta info to origin table if enable                                                                                                                                                                                                           | 0.14.0        |
+| [hoodie.meta_sync.spark.version](#hoodiemeta_syncsparkversion)                                               |  (Optional)                                                 | The spark version used when syncing with a metastore.                                                                                                                                                                                              |               |
 ---
 
-> ### hoodie.meta.sync.datahub.dataset.env
-> Environment to use when pushing entities to Datahub<br></br>
-> `Default Value: DEV (Optional)`<br></br>
-> `Config Param: META_SYNC_DATAHUB_DATASET_ENV`<br></br>
 
----
+### Glue catalog sync based client Configurations {#Glue-catalog-sync-based-client-Configurations}
+Configs that control Glue catalog sync based client.
 
-> ### hoodie.meta.sync.datahub.dataset.identifier.class
-> Pluggable class to help provide info to identify a DataHub Dataset.<br></br>
-> `Default Value: org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier (Optional)`<br></br>
-> `Config Param: META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS`<br></br>
-
----
 
-> ### hoodie.meta.sync.decode_partition
-> If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_DECODE_PARTITION`<br></br>
 
----
+[**Advanced Configs**](#Glue-catalog-sync-based-client-Configurations-advanced-configs)
 
-> ### hoodie.meta.sync.metadata_file_listing
-> Enable the internal metadata table for file listing for syncing with metastores<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
 
+| Config Name                                                                                                  | Default          | Description                                                                                                                         | Since Version |
+| ------------------------------------------------------------------------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.meta.sync.glue.metadata_file_listing](#hoodiedatasourcemetasyncgluemetadata_file_listing) | false (Optional) | Makes athena use the metadata table to list partitions and files. Currently it won't benefit from other features such stats indexes | 0.14.0        |
+| [hoodie.datasource.meta.sync.glue.skip_table_archive](#hoodiedatasourcemetasyncglueskip_table_archive)       | true (Optional)  | Glue catalog sync based client will skip archiving the table version if this config is set to true                                  | 0.14.0        |
 ---
 
-> ### hoodie.meta_sync.spark.version
-> The spark version used when syncing with a metastore.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_SPARK_VERSION`<br></br>
-
----
 
 ### BigQuery Sync Configs {#BigQuery-Sync-Configs}
 Configurations used by the Hudi to sync metadata to Google BigQuery.
 
-`Config Class`: org.apache.hudi.gcp.bigquery.BigQuerySyncConfig<br></br>
-> ### hoodie.gcp.bigquery.sync.base_path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_SYNC_BASE_PATH`<br></br>
 
+
+[**Basic Configs**](#BigQuery-Sync-Configs-basic-configs)
+
+
+| Config Name                                                           | Default          | Description                                                                | Since Version |
+| --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable) | false (Optional) | Enable Syncing the Hudi Table with an external meta store or data catalog. |               |
+
+[**Advanced Configs**](#BigQuery-Sync-Configs-advanced-configs)
+
+
+| Config Name                                                                                                     | Default                                                     | Description                                                                                                                                                                                                                                                                                                                                                 | Since Version |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.gcp.bigquery.sync.dataset_location](#hoodiegcpbigquerysyncdataset_location)                             | N/A **(Required)**                                          | Location of the target dataset in BigQuery                                                                                                                                                                                                                                                                                                                  |               |
+| [hoodie.gcp.bigquery.sync.project_id](#hoodiegcpbigquerysyncproject_id)                                         | N/A **(Required)**                                          | Name of the target project in BigQuery                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.gcp.bigquery.sync.source_uri](#hoodiegcpbigquerysyncsource_uri)                                         | N/A **(Required)**                                          | Name of the source uri gcs path of the table                                                                                                                                                                                                                                                                                                                |               |
+| [hoodie.gcp.bigquery.sync.source_uri_prefix](#hoodiegcpbigquerysyncsource_uri_prefix)                           | N/A **(Required)**                                          | Name of the source uri gcs path prefix of the table                                                                                                                                                                                                                                                                                                         |               |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)      | false (Optional)                                            | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                      | PARQUET (Optional)                                          | Base file format for the sync.                                                                                                                                                                                                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                      | default (Optional)                                          | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class)    | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional) | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                      |  (Optional)                                                 | Field in the table to use for determining hive partition columns.                                                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                            | unknown (Optional)                                          | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.meta.sync.base.path](#hoodiedatasourcemetasyncbasepath)                                      |  (Optional)                                                 | Base path of the hoodie table to sync                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                           | false (Optional)                                            | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                                                                                                                                    |               |
+| [hoodie.gcp.bigquery.sync.assume_date_partitioning](#hoodiegcpbigquerysyncassume_date_partitioning)             | false (Optional)                                            | Assume standard yyyy/mm/dd partitioning, this exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter                                                                                                                                                                                                                  |               |
+| [hoodie.gcp.bigquery.sync.base_path](#hoodiegcpbigquerysyncbase_path)                                           |  (Optional)                                                 | Base path of the hoodie table to sync                                                                                                                                                                                                                                                                                                                       |               |
+| [hoodie.gcp.bigquery.sync.dataset_name](#hoodiegcpbigquerysyncdataset_name)                                     |  (Optional)                                                 | Name of the target dataset in BigQuery                                                                                                                                                                                                                                                                                                                      |               |
+| [hoodie.gcp.bigquery.sync.partition_fields](#hoodiegcpbigquerysyncpartition_fields)                             |  (Optional)                                                 | Comma-delimited partition fields. Default to non-partitioned.                                                                                                                                                                                                                                                                                               |               |
+| [hoodie.gcp.bigquery.sync.table_name](#hoodiegcpbigquerysynctable_name)                                         |  (Optional)                                                 | Name of the target table in BigQuery                                                                                                                                                                                                                                                                                                                        |               |
+| [hoodie.gcp.bigquery.sync.use_bq_manifest_file](#hoodiegcpbigquerysyncuse_bq_manifest_file)                     | false (Optional)                                            | If true, generate a manifest file with data file absolute paths and use BigQuery manifest file support to directly create one external table over the Hudi table. If false (default), generate a manifest file with data file names and create two external tables and one view in BigQuery. Query the view for the same results as querying the Hudi table |               |
+| [hoodie.gcp.bigquery.sync.use_file_listing_from_metadata](#hoodiegcpbigquerysyncuse_file_listing_from_metadata) | false (Optional)                                            | Fetch file listing from Hudi's metadata                                                                                                                                                                                                                                                                                                                     |               |
+| [hoodie.meta.sync.decode_partition](#hoodiemetasyncdecode_partition)                                            | false (Optional)                                            | If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.                                                                                                                                                                                                                                                    |               |
+| [hoodie.meta.sync.incremental](#hoodiemetasyncincremental)                                                      | true (Optional)                                             | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost.                                                                                                          | 0.14.0        |
+| [hoodie.meta.sync.metadata_file_listing](#hoodiemetasyncmetadata_file_listing)                                  | false (Optional)                                            | Enable the internal metadata table for file listing for syncing with metastores                                                                                                                                                                                                                                                                             |               |
+| [hoodie.meta.sync.sync_snapshot_with_table_name](#hoodiemetasyncsync_snapshot_with_table_name)                  | false (Optional)                                            | sync meta info to origin table if enable                                                                                                                                                                                                                                                                                                                    | 0.14.0        |
+| [hoodie.meta_sync.spark.version](#hoodiemeta_syncsparkversion)                                                  |  (Optional)                                                 | The spark version used when syncing with a metastore.                                                                                                                                                                                                                                                                                                       |               |
 ---
 
-> ### hoodie.gcp.bigquery.sync.dataset_location
-> Location of the target dataset in BigQuery<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_DATASET_LOCATION`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.dataset_name
-> Name of the target dataset in BigQuery<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_DATASET_NAME`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.partition_fields
-> Comma-delimited partition fields. Default to non-partitioned.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.project_id
-> Name of the target project in BigQuery<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_PROJECT_ID`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.source_uri
-> Name of the source uri gcs path of the table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_SOURCE_URI`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.source_uri_prefix
-> Name of the source uri gcs path prefix of the table<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_SOURCE_URI_PREFIX`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.table_name
-> Name of the target table in BigQuery<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: BIGQUERY_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: META_SYNC_DATABASE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: META_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.base.path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_CONDITIONAL_SYNC`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.assume_date_partitioning
-> Assume standard yyyy/mm/dd partitioning, this exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING`<br></br>
-
----
-
-> ### hoodie.gcp.bigquery.sync.use_file_listing_from_metadata
-> Fetch file listing from Hudi's metadata<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
-
----
-
-> ### hoodie.meta.sync.decode_partition
-> If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_DECODE_PARTITION`<br></br>
-
----
-
-> ### hoodie.meta.sync.metadata_file_listing
-> Enable the internal metadata table for file listing for syncing with metastores<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
-
----
-
-> ### hoodie.meta_sync.spark.version
-> The spark version used when syncing with a metastore.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_SPARK_VERSION`<br></br>
-
----
 
 ### Hive Sync Configs {#Hive-Sync-Configs}
 Configurations used by the Hudi to sync metadata to Hive Metastore.
 
-`Config Class`: org.apache.hudi.hive.HiveSyncConfig<br></br>
-> ### hoodie.datasource.hive_sync.mode
-> Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_SYNC_MODE`<br></br>
 
+
+[**Basic Configs**](#Hive-Sync-Configs-basic-configs)
+
+
+| Config Name                                                                           | Default                                 | Description                                                                | Since Version |
+| ------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.mode](#hoodiedatasourcehive_syncmode)                    | N/A **(Required)**                      | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.        |               |
+| [hoodie.datasource.hive_sync.enable](#hoodiedatasourcehive_syncenable)                | false (Optional)                        | When set to true, register/sync the table to Apache Hive metastore.        |               |
+| [hoodie.datasource.hive_sync.jdbcurl](#hoodiedatasourcehive_syncjdbcurl)              | jdbc:hive2://localhost:10000 (Optional) | Hive metastore url                                                         |               |
+| [hoodie.datasource.hive_sync.metastore.uris](#hoodiedatasourcehive_syncmetastoreuris) | thrift://localhost:9083 (Optional)      | Hive metastore url                                                         |               |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable)                 | false (Optional)                        | Enable Syncing the Hudi Table with an external meta store or data catalog. |               |
+
+[**Advanced Configs**](#Hive-Sync-Configs-advanced-configs)
+
+
+| Config Name                                                                                                      | Default                                                     | Description                                                                                                                                                                                                                                                                     | Since Version |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.serde_properties](#hoodiedatasourcehive_syncserde_properties)                       | N/A **(Required)**                                          | Serde properties to hive table.                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.table_properties](#hoodiedatasourcehive_synctable_properties)                       | N/A **(Required)**                                          | Additional properties to store with table.                                                                                                                                                                                                                                      |               |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)       | false (Optional)                                            | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                                               |               |
+| [hoodie.datasource.hive_sync.auto_create_database](#hoodiedatasourcehive_syncauto_create_database)               | true (Optional)                                             | Auto create hive database if does not exists                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                       | PARQUET (Optional)                                          | Base file format for the sync.                                                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.batch_num](#hoodiedatasourcehive_syncbatch_num)                                     | 1000 (Optional)                                             | The number of partitions one batch when synchronous partitions to hive.                                                                                                                                                                                                         |               |
+| [hoodie.datasource.hive_sync.bucket_sync](#hoodiedatasourcehive_syncbucket_sync)                                 | false (Optional)                                            | Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'                                                                                                             |               |
+| [hoodie.datasource.hive_sync.bucket_sync_spec](#hoodiedatasourcehive_syncbucket_sync_spec)                       |  (Optional)                                                 | The hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'                                                                                                                      |               |
+| [hoodie.datasource.hive_sync.create_managed_table](#hoodiedatasourcehive_synccreate_managed_table)               | false (Optional)                                            | Whether to sync the table as managed table.                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                       | default (Optional)                                          | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.filter_pushdown_enabled](#hoodiedatasourcehive_syncfilter_pushdown_enabled)         | false (Optional)                                            | Whether to enable push down partitions by filter                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.hive_sync.filter_pushdown_max_size](#hoodiedatasourcehive_syncfilter_pushdown_max_size)       | 1000 (Optional)                                             | Max size limit to push down partition filters, if the estimate push down filters exceed this size, will directly try to fetch all partitions                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.ignore_exceptions](#hoodiedatasourcehive_syncignore_exceptions)                     | false (Optional)                                            | Ignore exceptions when syncing with Hive.                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.hive_sync.omit_metadata_fields](#hoodiedatasourcehive_syncomit_metadata_fields)               | false (Optional)                                            | Whether to omit the hoodie metadata fields in the target table.                                                                                                                                                                                                                 | 0.13.0        |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class)     | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional) | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                       |  (Optional)                                                 | Field in the table to use for determining hive partition columns.                                                                                                                                                                                                               |               |
+| [hoodie.datasource.hive_sync.password](#hoodiedatasourcehive_syncpassword)                                       | hive (Optional)                                             | hive password to use                                                                                                                                                                                                                                                            |               |
+| [hoodie.datasource.hive_sync.schema_string_length_thresh](#hoodiedatasourcehive_syncschema_string_length_thresh) | 4000 (Optional)                                             |                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.skip_ro_suffix](#hoodiedatasourcehive_syncskip_ro_suffix)                           | false (Optional)                                            | Skip the _ro suffix for Read optimized table, when registering                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.support_timestamp](#hoodiedatasourcehive_syncsupport_timestamp)                     | false (Optional)                                            | ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.sync_as_datasource](#hoodiedatasourcehive_syncsync_as_datasource)                   | true (Optional)                                             |                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.sync_comment](#hoodiedatasourcehive_syncsync_comment)                               | false (Optional)                                            | Whether to sync the table column comments while syncing the table.                                                                                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                             | unknown (Optional)                                          | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                                                        |               |
+| [hoodie.datasource.hive_sync.table.strategy](#hoodiedatasourcehive_synctablestrategy)                            | ALL (Optional)                                              | Hive table synchronization strategy. Available option: RO, RT, ALL.                                                                                                                                                                                                             | 0.13.0        |
+| [hoodie.datasource.hive_sync.use_jdbc](#hoodiedatasourcehive_syncuse_jdbc)                                       | true (Optional)                                             | Use JDBC when hive synchronization is enabled                                                                                                                                                                                                                                   |               |
+| [hoodie.datasource.hive_sync.use_pre_apache_input_format](#hoodiedatasourcehive_syncuse_pre_apache_input_format) | false (Optional)                                            | Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format |               |
+| [hoodie.datasource.hive_sync.username](#hoodiedatasourcehive_syncusername)                                       | hive (Optional)                                             | hive user name to use                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.meta.sync.base.path](#hoodiedatasourcemetasyncbasepath)                                       |  (Optional)                                                 | Base path of the hoodie table to sync                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                            | false (Optional)                                            | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                                                        |               |
+| [hoodie.meta.sync.decode_partition](#hoodiemetasyncdecode_partition)                                             | false (Optional)                                            | If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.                                                                                                                                                                        |               |
+| [hoodie.meta.sync.incremental](#hoodiemetasyncincremental)                                                       | true (Optional)                                             | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost.                              | 0.14.0        |
+| [hoodie.meta.sync.metadata_file_listing](#hoodiemetasyncmetadata_file_listing)                                   | false (Optional)                                            | Enable the internal metadata table for file listing for syncing with metastores                                                                                                                                                                                                 |               |
+| [hoodie.meta.sync.sync_snapshot_with_table_name](#hoodiemetasyncsync_snapshot_with_table_name)                   | false (Optional)                                            | sync meta info to origin table if enable                                                                                                                                                                                                                                        | 0.14.0        |
+| [hoodie.meta_sync.spark.version](#hoodiemeta_syncsparkversion)                                                   |  (Optional)                                                 | The spark version used when syncing with a metastore.                                                                                                                                                                                                                           |               |
 ---
 
-> ### hoodie.datasource.hive_sync.serde_properties
-> Serde properties to hive table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_SERDE_PROPERTIES`<br></br>
 
+### Global Hive Sync Configs {#Global-Hive-Sync-Configs}
+Global replication configurations used by the Hudi to sync metadata to Hive Metastore.
+
+
+
+[**Basic Configs**](#Global-Hive-Sync-Configs-basic-configs)
+
+
+| Config Name                                                                           | Default                                 | Description                                                                | Since Version |
+| ------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.mode](#hoodiedatasourcehive_syncmode)                    | N/A **(Required)**                      | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.        |               |
+| [hoodie.datasource.hive_sync.enable](#hoodiedatasourcehive_syncenable)                | false (Optional)                        | When set to true, register/sync the table to Apache Hive metastore.        |               |
+| [hoodie.datasource.hive_sync.jdbcurl](#hoodiedatasourcehive_syncjdbcurl)              | jdbc:hive2://localhost:10000 (Optional) | Hive metastore url                                                         |               |
+| [hoodie.datasource.hive_sync.metastore.uris](#hoodiedatasourcehive_syncmetastoreuris) | thrift://localhost:9083 (Optional)      | Hive metastore url                                                         |               |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable)                 | false (Optional)                        | Enable Syncing the Hudi Table with an external meta store or data catalog. |               |
+
+[**Advanced Configs**](#Global-Hive-Sync-Configs-advanced-configs)
+
+
+| Config Name                                                                                                      | Default                                                     | Description                                                                                                                                                                                                                                                                     | Since Version |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.hive_sync.serde_properties](#hoodiedatasourcehive_syncserde_properties)                       | N/A **(Required)**                                          | Serde properties to hive table.                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.table_properties](#hoodiedatasourcehive_synctable_properties)                       | N/A **(Required)**                                          | Additional properties to store with table.                                                                                                                                                                                                                                      |               |
+| [hoodie.meta_sync.global.replicate.timestamp](#hoodiemeta_syncglobalreplicatetimestamp)                          | N/A **(Required)**                                          |                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)       | false (Optional)                                            | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                                               |               |
+| [hoodie.datasource.hive_sync.auto_create_database](#hoodiedatasourcehive_syncauto_create_database)               | true (Optional)                                             | Auto create hive database if does not exists                                                                                                                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                       | PARQUET (Optional)                                          | Base file format for the sync.                                                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.batch_num](#hoodiedatasourcehive_syncbatch_num)                                     | 1000 (Optional)                                             | The number of partitions one batch when synchronous partitions to hive.                                                                                                                                                                                                         |               |
+| [hoodie.datasource.hive_sync.bucket_sync](#hoodiedatasourcehive_syncbucket_sync)                                 | false (Optional)                                            | Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'                                                                                                             |               |
+| [hoodie.datasource.hive_sync.bucket_sync_spec](#hoodiedatasourcehive_syncbucket_sync_spec)                       |  (Optional)                                                 | The hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'                                                                                                                      |               |
+| [hoodie.datasource.hive_sync.create_managed_table](#hoodiedatasourcehive_synccreate_managed_table)               | false (Optional)                                            | Whether to sync the table as managed table.                                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                       | default (Optional)                                          | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.filter_pushdown_enabled](#hoodiedatasourcehive_syncfilter_pushdown_enabled)         | false (Optional)                                            | Whether to enable push down partitions by filter                                                                                                                                                                                                                                |               |
+| [hoodie.datasource.hive_sync.filter_pushdown_max_size](#hoodiedatasourcehive_syncfilter_pushdown_max_size)       | 1000 (Optional)                                             | Max size limit to push down partition filters, if the estimate push down filters exceed this size, will directly try to fetch all partitions                                                                                                                                    |               |
+| [hoodie.datasource.hive_sync.ignore_exceptions](#hoodiedatasourcehive_syncignore_exceptions)                     | false (Optional)                                            | Ignore exceptions when syncing with Hive.                                                                                                                                                                                                                                       |               |
+| [hoodie.datasource.hive_sync.omit_metadata_fields](#hoodiedatasourcehive_syncomit_metadata_fields)               | false (Optional)                                            | Whether to omit the hoodie metadata fields in the target table.                                                                                                                                                                                                                 | 0.13.0        |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class)     | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional) | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                       |  (Optional)                                                 | Field in the table to use for determining hive partition columns.                                                                                                                                                                                                               |               |
+| [hoodie.datasource.hive_sync.password](#hoodiedatasourcehive_syncpassword)                                       | hive (Optional)                                             | hive password to use                                                                                                                                                                                                                                                            |               |
+| [hoodie.datasource.hive_sync.schema_string_length_thresh](#hoodiedatasourcehive_syncschema_string_length_thresh) | 4000 (Optional)                                             |                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.skip_ro_suffix](#hoodiedatasourcehive_syncskip_ro_suffix)                           | false (Optional)                                            | Skip the _ro suffix for Read optimized table, when registering                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.support_timestamp](#hoodiedatasourcehive_syncsupport_timestamp)                     | false (Optional)                                            | ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.sync_as_datasource](#hoodiedatasourcehive_syncsync_as_datasource)                   | true (Optional)                                             |                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.datasource.hive_sync.sync_comment](#hoodiedatasourcehive_syncsync_comment)                               | false (Optional)                                            | Whether to sync the table column comments while syncing the table.                                                                                                                                                                                                              |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                             | unknown (Optional)                                          | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                                                        |               |
+| [hoodie.datasource.hive_sync.table.strategy](#hoodiedatasourcehive_synctablestrategy)                            | ALL (Optional)                                              | Hive table synchronization strategy. Available option: RO, RT, ALL.                                                                                                                                                                                                             | 0.13.0        |
+| [hoodie.datasource.hive_sync.use_jdbc](#hoodiedatasourcehive_syncuse_jdbc)                                       | true (Optional)                                             | Use JDBC when hive synchronization is enabled                                                                                                                                                                                                                                   |               |
+| [hoodie.datasource.hive_sync.use_pre_apache_input_format](#hoodiedatasourcehive_syncuse_pre_apache_input_format) | false (Optional)                                            | Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format |               |
+| [hoodie.datasource.hive_sync.username](#hoodiedatasourcehive_syncusername)                                       | hive (Optional)                                             | hive user name to use                                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.meta.sync.base.path](#hoodiedatasourcemetasyncbasepath)                                       |  (Optional)                                                 | Base path of the hoodie table to sync                                                                                                                                                                                                                                           |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                            | false (Optional)                                            | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                                                        |               |
+| [hoodie.meta.sync.decode_partition](#hoodiemetasyncdecode_partition)                                             | false (Optional)                                            | If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.                                                                                                                                                                        |               |
+| [hoodie.meta.sync.incremental](#hoodiemetasyncincremental)                                                       | true (Optional)                                             | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost.                              | 0.14.0        |
+| [hoodie.meta.sync.metadata_file_listing](#hoodiemetasyncmetadata_file_listing)                                   | false (Optional)                                            | Enable the internal metadata table for file listing for syncing with metastores                                                                                                                                                                                                 |               |
+| [hoodie.meta.sync.sync_snapshot_with_table_name](#hoodiemetasyncsync_snapshot_with_table_name)                   | false (Optional)                                            | sync meta info to origin table if enable                                                                                                                                                                                                                                        | 0.14.0        |
+| [hoodie.meta_sync.spark.version](#hoodiemeta_syncsparkversion)                                                   |  (Optional)                                                 | The spark version used when syncing with a metastore.                                                                                                                                                                                                                           |               |
 ---
 
-> ### hoodie.datasource.hive_sync.table_properties
-> Additional properties to store with table.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HIVE_TABLE_PROPERTIES`<br></br>
 
----
-
-> ### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/MM/dd<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.auto_create_database
-> Auto create hive database if does not exists<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_AUTO_CREATE_DATABASE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.base_file_format
-> Base file format for the sync.<br></br>
-> `Default Value: PARQUET (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_FILE_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.batch_num
-> The number of partitions one batch when synchronous partitions to hive.<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: HIVE_BATCH_SYNC_PARTITION_NUM`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.bucket_sync
-> Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_BUCKET_SYNC`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.bucket_sync_spec
-> The hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_BUCKET_SYNC_SPEC`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.create_managed_table
-> Whether to sync the table as managed table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_CREATE_MANAGED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.database
-> The name of the destination database that we should sync the hudi table to.<br></br>
-> `Default Value: default (Optional)`<br></br>
-> `Config Param: META_SYNC_DATABASE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.enable
-> When set to true, register/sync the table to Apache Hive metastore.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.filter_pushdown_enabled
-> Whether to enable push down partitions by filter<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_FILTER_PUSHDOWN_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.filter_pushdown_max_size
-> Max size limit to push down partition filters, if the estimate push down filters exceed this size, will directly try to fetch all partitions<br></br>
-> `Default Value: 1000 (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.ignore_exceptions
-> Ignore exceptions when syncing with Hive.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_IGNORE_EXCEPTIONS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.jdbcurl
-> Hive metastore url<br></br>
-> `Default Value: jdbc:hive2://localhost:10000 (Optional)`<br></br>
-> `Config Param: HIVE_URL`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.metastore.uris
-> Hive metastore url<br></br>
-> `Default Value: thrift://localhost:9083 (Optional)`<br></br>
-> `Config Param: METASTORE_URIS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.omit_metadata_fields
-> Whether to omit the hoodie metadata fields in the target table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_OMIT_METADATA_FIELDS`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
-> `Default Value: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_EXTRACTOR_CLASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.partition_fields
-> Field in the table to use for determining hive partition columns.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_PARTITION_FIELDS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.password
-> hive password to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_PASS`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.schema_string_length_thresh
-> <br></br>
-> `Default Value: 4000 (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table, when registering<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.support_timestamp
-> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SUPPORT_TIMESTAMP_TYPE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_as_datasource
-> <br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_AS_DATA_SOURCE_TABLE`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.sync_comment
-> Whether to sync the table column comments while syncing the table.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_COMMENT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table
-> The name of the destination table that we should sync the hudi table to.<br></br>
-> `Default Value: unknown (Optional)`<br></br>
-> `Config Param: META_SYNC_TABLE_NAME`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.table.strategy
-> Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL.<br></br>
-> `Default Value: ALL (Optional)`<br></br>
-> `Config Param: HIVE_SYNC_TABLE_STRATEGY`<br></br>
-> `Since Version: 0.13.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: HIVE_USE_JDBC`<br></br>
-> `Deprecated Version: 0.9.0`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.use_pre_apache_input_format
-> Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. Use this when you are in the process of migrating from com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: HIVE_USE_PRE_APACHE_INPUT_FORMAT`<br></br>
-
----
-
-> ### hoodie.datasource.hive_sync.username
-> hive user name to use<br></br>
-> `Default Value: hive (Optional)`<br></br>
-> `Config Param: HIVE_USER`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.base.path
-> Base path of the hoodie table to sync<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_BASE_PATH`<br></br>
-
----
-
-> ### hoodie.datasource.meta.sync.enable
-> Enable Syncing the Hudi Table with an external meta store or data catalog.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLED`<br></br>
-
----
-
-> ### hoodie.datasource.meta_sync.condition.sync
-> If true, only sync on conditions like schema change or partition change.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_CONDITIONAL_SYNC`<br></br>
-
----
-
-> ### hoodie.meta.sync.decode_partition
-> If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_DECODE_PARTITION`<br></br>
-
----
-
-> ### hoodie.meta.sync.metadata_file_listing
-> Enable the internal metadata table for file listing for syncing with metastores<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_USE_FILE_LISTING_FROM_METADATA`<br></br>
-
----
-
-> ### hoodie.meta_sync.spark.version
-> The spark version used when syncing with a metastore.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: META_SYNC_SPARK_VERSION`<br></br>
-
+### DataHub Sync Configs {#DataHub-Sync-Configs}
+Configurations used by the Hudi to sync metadata to DataHub.
+
+
+
+[**Basic Configs**](#DataHub-Sync-Configs-basic-configs)
+
+
+| Config Name                                                           | Default          | Description                                                                | Since Version |
+| --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- | ------------- |
+| [hoodie.datasource.meta.sync.enable](#hoodiedatasourcemetasyncenable) | false (Optional) | Enable Syncing the Hudi Table with an external meta store or data catalog. |               |
+
+[**Advanced Configs**](#DataHub-Sync-Configs-advanced-configs)
+
+
+| Config Name                                                                                                  | Default                                                                       | Description                                                                                                                                                                                                                                        | Since Version |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.meta.sync.datahub.emitter.server](#hoodiemetasyncdatahubemitterserver)                               | N/A **(Required)**                                                            | Server URL of the DataHub instance.                                                                                                                                                                                                                |               |
+| [hoodie.meta.sync.datahub.emitter.supplier.class](#hoodiemetasyncdatahubemittersupplierclass)                | N/A **(Required)**                                                            | Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.                                                                                                                        |               |
+| [hoodie.meta.sync.datahub.emitter.token](#hoodiemetasyncdatahubemittertoken)                                 | N/A **(Required)**                                                            | Auth token to connect to the DataHub instance.                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.assume_date_partitioning](#hoodiedatasourcehive_syncassume_date_partitioning)   | false (Optional)                                                              | Assume partitioning is yyyy/MM/dd                                                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.base_file_format](#hoodiedatasourcehive_syncbase_file_format)                   | PARQUET (Optional)                                                            | Base file format for the sync.                                                                                                                                                                                                                     |               |
+| [hoodie.datasource.hive_sync.database](#hoodiedatasourcehive_syncdatabase)                                   | default (Optional)                                                            | The name of the destination database that we should sync the hudi table to.                                                                                                                                                                        |               |
+| [hoodie.datasource.hive_sync.partition_extractor_class](#hoodiedatasourcehive_syncpartition_extractor_class) | org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)                   | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                        |               |
+| [hoodie.datasource.hive_sync.partition_fields](#hoodiedatasourcehive_syncpartition_fields)                   |  (Optional)                                                                   | Field in the table to use for determining hive partition columns.                                                                                                                                                                                  |               |
+| [hoodie.datasource.hive_sync.table](#hoodiedatasourcehive_synctable)                                         | unknown (Optional)                                                            | The name of the destination table that we should sync the hudi table to.                                                                                                                                                                           |               |
+| [hoodie.datasource.meta.sync.base.path](#hoodiedatasourcemetasyncbasepath)                                   |  (Optional)                                                                   | Base path of the hoodie table to sync                                                                                                                                                                                                              |               |
+| [hoodie.datasource.meta_sync.condition.sync](#hoodiedatasourcemeta_syncconditionsync)                        | false (Optional)                                                              | If true, only sync on conditions like schema change or partition change.                                                                                                                                                                           |               |
+| [hoodie.meta.sync.datahub.dataplatform.name](#hoodiemetasyncdatahubdataplatformname)                         | hudi (Optional)                                                               | String used to represent Hudi when creating its corresponding DataPlatform entity within Datahub                                                                                                                                                   |               |
+| [hoodie.meta.sync.datahub.dataset.env](#hoodiemetasyncdatahubdatasetenv)                                     | DEV (Optional)                                                                | Environment to use when pushing entities to Datahub                                                                                                                                                                                                |               |
+| [hoodie.meta.sync.datahub.dataset.identifier.class](#hoodiemetasyncdatahubdatasetidentifierclass)            | org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier (Optional) | Pluggable class to help provide info to identify a DataHub Dataset.                                                                                                                                                                                |               |
+| [hoodie.meta.sync.decode_partition](#hoodiemetasyncdecode_partition)                                         | false (Optional)                                                              | If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.                                                                                                                                           |               |
+| [hoodie.meta.sync.incremental](#hoodiemetasyncincremental)                                                   | true (Optional)                                                               | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost. | 0.14.0        |
+| [hoodie.meta.sync.metadata_file_listing](#hoodiemetasyncmetadata_file_listing)                               | false (Optional)                                                              | Enable the internal metadata table for file listing for syncing with metastores                                                                                                                                                                    |               |
+| [hoodie.meta.sync.sync_snapshot_with_table_name](#hoodiemetasyncsync_snapshot_with_table_name)               | false (Optional)                                                              | sync meta info to origin table if enable                                                                                                                                                                                                           | 0.14.0        |
+| [hoodie.meta_sync.spark.version](#hoodiemeta_syncsparkversion)                                               |  (Optional)                                                                   | The spark version used when syncing with a metastore.                                                                                                                                                                                              |               |
 ---
 
 ## Metrics Configs {#METRICS}
 These set of configs are used to enable monitoring and reporting of keyHudi stats and metrics.
 
-### Metrics Configurations for Datadog reporter {#Metrics-Configurations-for-Datadog-reporter}
-Enables reporting on Hudi metrics using the Datadog reporter type. Hudi publishes metrics on every commit, clean, rollback etc.
-
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig<br></br>
-> ### hoodie.metrics.datadog.api.key
-> Datadog API key<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: API_KEY`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.api.key.supplier
-> Datadog API key supplier to supply the API key at runtime. This will take effect if hoodie.metrics.datadog.api.key is not set.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: API_KEY_SUPPLIER`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.api.site
-> Datadog API site: EU or US<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: API_SITE_VALUE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.metric.host
-> Datadog metric host to be sent along with metrics data.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: METRIC_HOST_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.metric.prefix
-> Datadog metric prefix to be prepended to each metric name with a dot as delimiter. For example, if it is set to foo, foo. will be prepended.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: METRIC_PREFIX_VALUE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.metric.tags
-> Datadog metric tags (comma-delimited) to be sent along with metrics data.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: METRIC_TAG_VALUES`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.api.key.skip.validation
-> Before sending metrics via Datadog API, whether to skip validating Datadog API key or not. Default to false.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: API_KEY_SKIP_VALIDATION`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.api.timeout.seconds
-> Datadog API timeout in seconds. Default to 3.<br></br>
-> `Default Value: 3 (Optional)`<br></br>
-> `Config Param: API_TIMEOUT_IN_SECONDS`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.datadog.report.period.seconds
-> Datadog reporting period in seconds. Default to 30.<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: REPORT_PERIOD_IN_SECONDS`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
 
 ### Metrics Configurations for Amazon CloudWatch {#Metrics-Configurations-for-Amazon-CloudWatch}
 Enables reporting on Hudi metrics using Amazon CloudWatch.  Hudi publishes metrics on every commit, clean, rollback etc.
 
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig<br></br>
-> ### hoodie.metrics.cloudwatch.maxDatumsPerRequest
-> Max number of Datums per request<br></br>
-> `Default Value: 20 (Optional)`<br></br>
-> `Config Param: MAX_DATUMS_PER_REQUEST`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
+
+[**Advanced Configs**](#Metrics-Configurations-for-Amazon-CloudWatch-advanced-configs)
+
+
+| Config Name                                                                                    | Default         | Description                      | Since Version |
+| ---------------------------------------------------------------------------------------------- | --------------- | -------------------------------- | ------------- |
+| [hoodie.metrics.cloudwatch.maxDatumsPerRequest](#hoodiemetricscloudwatchmaxDatumsPerRequest)   | 20 (Optional)   | Max number of Datums per request | 0.10.0        |
+| [hoodie.metrics.cloudwatch.metric.prefix](#hoodiemetricscloudwatchmetricprefix)                |  (Optional)     | Metric prefix of reporter        | 0.10.0        |
+| [hoodie.metrics.cloudwatch.namespace](#hoodiemetricscloudwatchnamespace)                       | Hudi (Optional) | Namespace of reporter            | 0.10.0        |
+| [hoodie.metrics.cloudwatch.report.period.seconds](#hoodiemetricscloudwatchreportperiodseconds) | 60 (Optional)   | Reporting interval in seconds    | 0.10.0        |
 ---
 
-> ### hoodie.metrics.cloudwatch.metric.prefix
-> Metric prefix of reporter<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: METRIC_PREFIX`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.metrics.cloudwatch.namespace
-> Namespace of reporter<br></br>
-> `Default Value: Hudi (Optional)`<br></br>
-> `Config Param: METRIC_NAMESPACE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> ### hoodie.metrics.cloudwatch.report.period.seconds
-> Reporting interval in seconds<br></br>
-> `Default Value: 60 (Optional)`<br></br>
-> `Config Param: REPORT_PERIOD_SECONDS`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
 
 ### Metrics Configurations {#Metrics-Configurations}
 Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean, rollback etc. The following sections list the supported reporters.
 
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsConfig<br></br>
-> ### hoodie.metrics.executor.enable
-> <br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: EXECUTOR_METRICS_ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
 
+
+[**Basic Configs**](#Metrics-Configurations-basic-configs)
+
+
+| Config Name                                                | Default             | Description                                    | Since Version |
+| ---------------------------------------------------------- | ------------------- | ---------------------------------------------- | ------------- |
+| [hoodie.metrics.on](#hoodiemetricson)                      | false (Optional)    | Turn on/off metrics reporting. off by default. | 0.5.0         |
+| [hoodie.metrics.reporter.type](#hoodiemetricsreportertype) | GRAPHITE (Optional) | Type of metrics reporter.                      | 0.5.0         |
+
+[**Advanced Configs**](#Metrics-Configurations-advanced-configs)
+
+
+| Config Name                                                                           | Default            | Description                                                                 | Since Version |
+| ------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------- | ------------- |
+| [hoodie.metrics.executor.enable](#hoodiemetricsexecutorenable)                        | N/A **(Required)** |                                                                             | 0.7.0         |
+| [hoodie.metrics.configs.properties](#hoodiemetricsconfigsproperties)                  |  (Optional)        | Comma separated list of config file paths for metric exporter configs       | 0.14.0        |
+| [hoodie.metrics.lock.enable](#hoodiemetricslockenable)                                | false (Optional)   | Enable metrics for locking infra. Useful when operating in multiwriter mode | 0.13.0        |
+| [hoodie.metrics.reporter.class](#hoodiemetricsreporterclass)                          |  (Optional)        |                                                                             | 0.6.0         |
+| [hoodie.metrics.reporter.metricsname.prefix](#hoodiemetricsreportermetricsnameprefix) |  (Optional)        | The prefix given to the metrics names.                                      | 0.11.0        |
 ---
 
-> ### hoodie.metrics.lock.enable
-> Enable metrics for locking infra. Useful when operating in multiwriter mode<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: LOCK_METRICS_ENABLE`<br></br>
-> `Since Version: 0.13.0`<br></br>
 
+### Metrics Configurations for Datadog reporter {#Metrics-Configurations-for-Datadog-reporter}
+Enables reporting on Hudi metrics using the Datadog reporter type. Hudi publishes metrics on every commit, clean, rollback etc.
+
+
+
+[**Advanced Configs**](#Metrics-Configurations-for-Datadog-reporter-advanced-configs)
+
+
+| Config Name                                                                                 | Default            | Description                                                                                                                                  | Since Version |
+| ------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.metrics.datadog.api.key](#hoodiemetricsdatadogapikey)                               | N/A **(Required)** | Datadog API key                                                                                                                              | 0.6.0         |
+| [hoodie.metrics.datadog.api.key.supplier](#hoodiemetricsdatadogapikeysupplier)              | N/A **(Required)** | Datadog API key supplier to supply the API key at runtime. This will take effect if hoodie.metrics.datadog.api.key is not set.               | 0.6.0         |
+| [hoodie.metrics.datadog.api.site](#hoodiemetricsdatadogapisite)                             | N/A **(Required)** | Datadog API site: EU or US                                                                                                                   | 0.6.0         |
+| [hoodie.metrics.datadog.metric.host](#hoodiemetricsdatadogmetrichost)                       | N/A **(Required)** | Datadog metric host to be sent along with metrics data.                                                                                      | 0.6.0         |
+| [hoodie.metrics.datadog.metric.prefix](#hoodiemetricsdatadogmetricprefix)                   | N/A **(Required)** | Datadog metric prefix to be prepended to each metric name with a dot as delimiter. For example, if it is set to foo, foo. will be prepended. | 0.6.0         |
+| [hoodie.metrics.datadog.metric.tags](#hoodiemetricsdatadogmetrictags)                       | N/A **(Required)** | Datadog metric tags (comma-delimited) to be sent along with metrics data.                                                                    | 0.6.0         |
+| [hoodie.metrics.datadog.api.key.skip.validation](#hoodiemetricsdatadogapikeyskipvalidation) | false (Optional)   | Before sending metrics via Datadog API, whether to skip validating Datadog API key or not. Default to false.                                 | 0.6.0         |
+| [hoodie.metrics.datadog.api.timeout.seconds](#hoodiemetricsdatadogapitimeoutseconds)        | 3 (Optional)       | Datadog API timeout in seconds. Default to 3.                                                                                                | 0.6.0         |
+| [hoodie.metrics.datadog.report.period.seconds](#hoodiemetricsdatadogreportperiodseconds)    | 30 (Optional)      | Datadog reporting period in seconds. Default to 30.                                                                                          | 0.6.0         |
 ---
 
-> ### hoodie.metrics.on
-> Turn on/off metrics reporting. off by default.<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: TURN_METRICS_ON`<br></br>
-> `Since Version: 0.5.0`<br></br>
-
----
-
-> ### hoodie.metrics.reporter.class
-> <br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: METRICS_REPORTER_CLASS_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.reporter.metricsname.prefix
-> The prefix given to the metrics names.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: METRICS_REPORTER_PREFIX`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> ### hoodie.metrics.reporter.type
-> Type of metrics reporter.<br></br>
-> `Default Value: GRAPHITE (Optional)`<br></br>
-> `Config Param: METRICS_REPORTER_TYPE_VALUE`<br></br>
-> `Since Version: 0.5.0`<br></br>
-
----
-
-### Metrics Configurations for Jmx {#Metrics-Configurations-for-Jmx}
-Enables reporting on Hudi metrics using Jmx.  Hudi publishes metrics on every commit, clean, rollback etc.
-
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsJmxConfig<br></br>
-> ### hoodie.metrics.jmx.host
-> Jmx host to connect to<br></br>
-> `Default Value: localhost (Optional)`<br></br>
-> `Config Param: JMX_HOST_NAME`<br></br>
-> `Since Version: 0.5.1`<br></br>
-
----
-
-> ### hoodie.metrics.jmx.port
-> Jmx port to connect to<br></br>
-> `Default Value: 9889 (Optional)`<br></br>
-> `Config Param: JMX_PORT_NUM`<br></br>
-> `Since Version: 0.5.1`<br></br>
-
----
-
-### Metrics Configurations for Prometheus {#Metrics-Configurations-for-Prometheus}
-Enables reporting on Hudi metrics using Prometheus.  Hudi publishes metrics on every commit, clean, rollback etc.
-
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig<br></br>
-> ### hoodie.metrics.prometheus.port
-> Port for prometheus server.<br></br>
-> `Default Value: 9090 (Optional)`<br></br>
-> `Config Param: PROMETHEUS_PORT_NUM`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.delete.on.shutdown
-> Delete the pushgateway info or not when job shutdown, true by default.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.host
-> Hostname of the prometheus push gateway.<br></br>
-> `Default Value: localhost (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_HOST_NAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.job.name
-> Name of the push gateway job.<br></br>
-> `Default Value:  (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_JOBNAME`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.port
-> Port for the push gateway.<br></br>
-> `Default Value: 9091 (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_PORT_NUM`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.random.job.name.suffix
-> Whether the pushgateway name need a random suffix , default true.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
-
-> ### hoodie.metrics.pushgateway.report.period.seconds
-> Reporting interval in seconds.<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS`<br></br>
-> `Since Version: 0.6.0`<br></br>
-
----
 
 ### Metrics Configurations for Graphite {#Metrics-Configurations-for-Graphite}
 Enables reporting on Hudi metrics using Graphite.  Hudi publishes metrics on every commit, clean, rollback etc.
 
-`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig<br></br>
-> ### hoodie.metrics.graphite.metric.prefix
-> Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: GRAPHITE_METRIC_PREFIX_VALUE`<br></br>
-> `Since Version: 0.5.1`<br></br>
 
+
+[**Advanced Configs**](#Metrics-Configurations-for-Graphite-advanced-configs)
+
+
+| Config Name                                                                                | Default              | Description                                                                                           | Since Version |
+| ------------------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.metrics.graphite.metric.prefix](#hoodiemetricsgraphitemetricprefix)                | N/A **(Required)**   | Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g | 0.5.1         |
+| [hoodie.metrics.graphite.host](#hoodiemetricsgraphitehost)                                 | localhost (Optional) | Graphite host to connect to.                                                                          | 0.5.0         |
+| [hoodie.metrics.graphite.port](#hoodiemetricsgraphiteport)                                 | 4756 (Optional)      | Graphite port to connect to.                                                                          | 0.5.0         |
+| [hoodie.metrics.graphite.report.period.seconds](#hoodiemetricsgraphitereportperiodseconds) | 30 (Optional)        | Graphite reporting period in seconds. Default to 30.                                                  | 0.10.0        |
 ---
 
-> ### hoodie.metrics.graphite.host
-> Graphite host to connect to.<br></br>
-> `Default Value: localhost (Optional)`<br></br>
-> `Config Param: GRAPHITE_SERVER_HOST_NAME`<br></br>
-> `Since Version: 0.5.0`<br></br>
 
+### Metrics Configurations for Jmx {#Metrics-Configurations-for-Jmx}
+Enables reporting on Hudi metrics using Jmx.  Hudi publishes metrics on every commit, clean, rollback etc.
+
+
+
+[**Advanced Configs**](#Metrics-Configurations-for-Jmx-advanced-configs)
+
+
+| Config Name                                      | Default              | Description            | Since Version |
+| ------------------------------------------------ | -------------------- | ---------------------- | ------------- |
+| [hoodie.metrics.jmx.host](#hoodiemetricsjmxhost) | localhost (Optional) | Jmx host to connect to | 0.5.1         |
+| [hoodie.metrics.jmx.port](#hoodiemetricsjmxport) | 9889 (Optional)      | Jmx port to connect to | 0.5.1         |
 ---
 
-> ### hoodie.metrics.graphite.port
-> Graphite port to connect to.<br></br>
-> `Default Value: 4756 (Optional)`<br></br>
-> `Config Param: GRAPHITE_SERVER_PORT_NUM`<br></br>
-> `Since Version: 0.5.0`<br></br>
 
----
+### Metrics Configurations for Prometheus {#Metrics-Configurations-for-Prometheus}
+Enables reporting on Hudi metrics using Prometheus.  Hudi publishes metrics on every commit, clean, rollback etc.
 
-> ### hoodie.metrics.graphite.report.period.seconds
-> Graphite reporting period in seconds. Default to 30.<br></br>
-> `Default Value: 30 (Optional)`<br></br>
-> `Config Param: GRAPHITE_REPORT_PERIOD_IN_SECONDS`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
+
+[**Advanced Configs**](#Metrics-Configurations-for-Prometheus-advanced-configs)
+
+
+| Config Name                                                                                       | Default              | Description                                                                                                        | Since Version |
+| ------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------- |
+| [hoodie.metrics.prometheus.port](#hoodiemetricsprometheusport)                                    | 9090 (Optional)      | Port for prometheus server.                                                                                        | 0.6.0         |
+| [hoodie.metrics.pushgateway.delete.on.shutdown](#hoodiemetricspushgatewaydeleteonshutdown)        | true (Optional)      | Delete the pushgateway info or not when job shutdown, true by default.                                             | 0.6.0         |
+| [hoodie.metrics.pushgateway.host](#hoodiemetricspushgatewayhost)                                  | localhost (Optional) | Hostname of the prometheus push gateway.                                                                           | 0.6.0         |
+| [hoodie.metrics.pushgateway.job.name](#hoodiemetricspushgatewayjobname)                           |  (Optional)          | Name of the push gateway job.                                                                                      | 0.6.0         |
+| [hoodie.metrics.pushgateway.port](#hoodiemetricspushgatewayport)                                  | 9091 (Optional)      | Port for the push gateway.                                                                                         | 0.6.0         |
+| [hoodie.metrics.pushgateway.random.job.name.suffix](#hoodiemetricspushgatewayrandomjobnamesuffix) | true (Optional)      | Whether the pushgateway name need a random suffix , default true.                                                  | 0.6.0         |
+| [hoodie.metrics.pushgateway.report.labels](#hoodiemetricspushgatewayreportlabels)                 |  (Optional)          | Label for the metrics emitted to the Pushgateway. Labels can be specified with key:value pairs separated by commas | 0.14.0        |
+| [hoodie.metrics.pushgateway.report.period.seconds](#hoodiemetricspushgatewayreportperiodseconds)  | 30 (Optional)        | Reporting interval in seconds.                                                                                     | 0.6.0         |
 ---
 
 ## Record Payload Config {#RECORD_PAYLOAD}
 This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
 
+
 ### Payload Configurations {#Payload-Configurations}
 Payload related configs, that can be leveraged to control merges based on specific business fields in the data.
 
-`Config Class`: org.apache.hudi.config.HoodiePayloadConfig<br></br>
-> ### hoodie.compaction.payload.class
-> This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.<br></br>
-> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)`<br></br>
-> `Config Param: PAYLOAD_CLASS_NAME`<br></br>
 
----
 
-> ### hoodie.payload.event.time.field
-> Table column/field name to derive timestamp associated with the records. This canbe useful for e.g, determining the freshness of the table.<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: EVENT_TIME_FIELD`<br></br>
+[**Advanced Configs**](#Payload-Configurations-advanced-configs)
 
----
 
-> ### hoodie.payload.ordering.field
-> Table column/field name to order records that have the same key, before merging and writing to storage.<br></br>
-> `Default Value: ts (Optional)`<br></br>
-> `Config Param: ORDERING_FIELD`<br></br>
-
+| Config Name                                                      | Default                                                                | Description                                                                                                                                                                                                                                                             | Since Version |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.compaction.payload.class](#hoodiecompactionpayloadclass) | org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional) | This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction. |               |
+| [hoodie.payload.event.time.field](#hoodiepayloadeventtimefield)  | ts (Optional)                                                          | Table column/field name to derive timestamp associated with the records. This canbe useful for e.g, determining the freshness of the table.                                                                                                                             |               |
+| [hoodie.payload.ordering.field](#hoodiepayloadorderingfield)     | ts (Optional)                                                          | Table column/field name to order records that have the same key, before merging and writing to storage.                                                                                                                                                                 |               |
 ---
 
 ## Kafka Connect Configs {#KAFKA_CONNECT}
 These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables
 
+
 ### Kafka Sink Connect Configurations {#Kafka-Sink-Connect-Configurations}
 Configurations for Kafka Connect Sink Connector for Hudi.
 
-`Config Class`: org.apache.hudi.connect.writers.KafkaConnectConfigs<br></br>
-> ### hadoop.conf.dir
-> The Hadoop configuration directory.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HADOOP_CONF_DIR`<br></br>
 
----
 
-> ### hadoop.home
-> The Hadoop home directory.<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: HADOOP_HOME`<br></br>
+[**Basic Configs**](#Kafka-Sink-Connect-Configurations-basic-configs)
 
----
 
-> ### bootstrap.servers
-> The bootstrap servers for the Kafka Cluster.<br></br>
-> `Default Value: localhost:9092 (Optional)`<br></br>
-> `Config Param: KAFKA_BOOTSTRAP_SERVERS`<br></br>
+| Config Name                            | Default                   | Description                                  | Since Version |
+| -------------------------------------- | ------------------------- | -------------------------------------------- | ------------- |
+| [bootstrap.servers](#bootstrapservers) | localhost:9092 (Optional) | The bootstrap servers for the Kafka Cluster. |               |
 
----
+[**Advanced Configs**](#Kafka-Sink-Connect-Configurations-advanced-configs)
 
-> ### hoodie.kafka.allow.commit.on.errors
-> Commit even when some records failed to be written<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ALLOW_COMMIT_ON_ERRORS`<br></br>
 
----
-
-> ### hoodie.kafka.commit.interval.secs
-> The interval at which Hudi will commit the records written to the files, making them consumable on the read-side.<br></br>
-> `Default Value: 60 (Optional)`<br></br>
-> `Config Param: COMMIT_INTERVAL_SECS`<br></br>
-
----
-
-> ### hoodie.kafka.compaction.async.enable
-> Controls whether async compaction should be turned on for MOR table writing.<br></br>
-> `Default Value: true (Optional)`<br></br>
-> `Config Param: ASYNC_COMPACT_ENABLE`<br></br>
-
----
-
-> ### hoodie.kafka.control.topic
-> Kafka topic name used by the Hudi Sink Connector for sending and receiving control messages. Not used for data records.<br></br>
-> `Default Value: hudi-control-topic (Optional)`<br></br>
-> `Config Param: CONTROL_TOPIC_NAME`<br></br>
-
----
-
-> ### hoodie.kafka.coordinator.write.timeout.secs
-> The timeout after sending an END_COMMIT until when the coordinator will wait for the write statuses from all the partitionsto ignore the current commit and start a new commit.<br></br>
-> `Default Value: 300 (Optional)`<br></br>
-> `Config Param: COORDINATOR_WRITE_TIMEOUT_SECS`<br></br>
-
----
-
-> ### hoodie.meta.sync.classes
-> Meta sync client tool, using comma to separate multi tools<br></br>
-> `Default Value: org.apache.hudi.hive.HiveSyncTool (Optional)`<br></br>
-> `Config Param: META_SYNC_CLASSES`<br></br>
-
----
-
-> ### hoodie.meta.sync.enable
-> Enable Meta Sync such as Hive<br></br>
-> `Default Value: false (Optional)`<br></br>
-> `Config Param: META_SYNC_ENABLE`<br></br>
-
----
-
-> ### hoodie.schemaprovider.class
-> subclass of org.apache.hudi.schema.SchemaProvider to attach schemas to input & target table data, built in options: org.apache.hudi.schema.FilebasedSchemaProvider.<br></br>
-> `Default Value: org.apache.hudi.schema.FilebasedSchemaProvider (Optional)`<br></br>
-> `Config Param: SCHEMA_PROVIDER_CLASS`<br></br>
-
+| Config Name                                                                            | Default                                                   | Description                                                                                                                                                                     | Since Version |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hadoop.conf.dir](#hadoopconfdir)                                                      | N/A **(Required)**                                        | The Hadoop configuration directory.                                                                                                                                             |               |
+| [hadoop.home](#hadoophome)                                                             | N/A **(Required)**                                        | The Hadoop home directory.                                                                                                                                                      |               |
+| [hoodie.kafka.allow.commit.on.errors](#hoodiekafkaallowcommitonerrors)                 | true (Optional)                                           | Commit even when some records failed to be written                                                                                                                              |               |
+| [hoodie.kafka.commit.interval.secs](#hoodiekafkacommitintervalsecs)                    | 60 (Optional)                                             | The interval at which Hudi will commit the records written to the files, making them consumable on the read-side.                                                               |               |
+| [hoodie.kafka.compaction.async.enable](#hoodiekafkacompactionasyncenable)              | true (Optional)                                           | Controls whether async compaction should be turned on for MOR table writing.                                                                                                    |               |
+| [hoodie.kafka.control.topic](#hoodiekafkacontroltopic)                                 | hudi-control-topic (Optional)                             | Kafka topic name used by the Hudi Sink Connector for sending and receiving control messages. Not used for data records.                                                         |               |
+| [hoodie.kafka.coordinator.write.timeout.secs](#hoodiekafkacoordinatorwritetimeoutsecs) | 300 (Optional)                                            | The timeout after sending an END_COMMIT until when the coordinator will wait for the write statuses from all the partitionsto ignore the current commit and start a new commit. |               |
+| [hoodie.meta.sync.classes](#hoodiemetasyncclasses)                                     | org.apache.hudi.hive.HiveSyncTool (Optional)              | Meta sync client tool, using comma to separate multi tools                                                                                                                      |               |
+| [hoodie.meta.sync.enable](#hoodiemetasyncenable)                                       | false (Optional)                                          | Enable Meta Sync such as Hive                                                                                                                                                   |               |
+| [hoodie.schemaprovider.class](#hoodieschemaproviderclass)                              | org.apache.hudi.schema.FilebasedSchemaProvider (Optional) | subclass of org.apache.hudi.schema.SchemaProvider to attach schemas to input &amp; target table data, built in options: org.apache.hudi.schema.FilebasedSchemaProvider.         |               |
 ---
 
 ## Amazon Web Services Configs {#AWS}
 Configurations specific to Amazon Web Services.
 
+
 ### Amazon Web Services Configs {#Amazon-Web-Services-Configs}
 Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks), Amazon CloudWatch (metrics).
 
-`Config Class`: org.apache.hudi.config.HoodieAWSConfig<br></br>
-> ### hoodie.aws.access.key
-> AWS access key id<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: AWS_ACCESS_KEY`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
+
+[**Advanced Configs**](#Amazon-Web-Services-Configs-advanced-configs)
+
+
+| Config Name                                        | Default            | Description       | Since Version |
+| -------------------------------------------------- | ------------------ | ----------------- | ------------- |
+| [hoodie.aws.access.key](#hoodieawsaccesskey)       | N/A **(Required)** | AWS access key id | 0.10.0        |
+| [hoodie.aws.secret.key](#hoodieawssecretkey)       | N/A **(Required)** | AWS secret key    | 0.10.0        |
+| [hoodie.aws.session.token](#hoodieawssessiontoken) | N/A **(Required)** | AWS session token | 0.10.0        |
 ---
 
-> ### hoodie.aws.secret.key
-> AWS secret key<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: AWS_SECRET_KEY`<br></br>
-> `Since Version: 0.10.0`<br></br>
+## DeltaStreamer Configs {#DELTA_STREAMER}
+These set of configs are used for DeltaStreamer utility which provides the way to ingest from different sources such as DFS or Kafka.
 
+
+### DeltaStreamer Configs {#DeltaStreamer-Configs}
+Configurations that control DeltaStreamer.
+
+
+
+[**Basic Configs**](#DeltaStreamer-Configs-basic-configs)
+
+
+| Config Name                                                                     | Default            | Description       | Since Version |
+| ------------------------------------------------------------------------------- | ------------------ | ----------------- | ------------- |
+| [hoodie.deltastreamer.source.kafka.topic](#hoodiedeltastreamersourcekafkatopic) | N/A **(Required)** | Kafka topic name. |               |
+
+[**Advanced Configs**](#DeltaStreamer-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                  | Default            | Description                                                                                                                                                                                                                                                                                                 | Since Version |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.checkpoint.provider.path](#hoodiedeltastreamercheckpointproviderpath)                                  | N/A **(Required)** | The path for providing the checkpoints.                                                                                                                                                                                                                                                                     |               |
+| [hoodie.deltastreamer.ingestion.tablesToBeIngested](#hoodiedeltastreameringestiontablesToBeIngested)                         | N/A **(Required)** | Comma separated names of tables to be ingested in the format &lt;database&gt;.&lt;table&gt;, for example db1.table1,db1.table2                                                                                                                                                                              |               |
+| [hoodie.deltastreamer.ingestion.targetBasePath](#hoodiedeltastreameringestiontargetBasePath)                                 | N/A **(Required)** | The path to which a particular table is ingested. The config is specific to HoodieMultiTableDeltaStreamer and overrides path determined using option `--base-path-prefix` for a table. This config is ignored for a single table deltastreamer                                                              |               |
+| [hoodie.deltastreamer.multiwriter.source.checkpoint.id](#hoodiedeltastreamermultiwritersourcecheckpointid)                   | N/A **(Required)** | Unique Id to be used for multi-writer deltastreamer scenario. This is the scenario when multiple deltastreamers are used to write to the same target table. If you are just using a single deltastreamer for a table then you do not need to set this config.                                               |               |
+| [hoodie.deltastreamer.source.kafka.append.offsets](#hoodiedeltastreamersourcekafkaappendoffsets)                             | false (Optional)   | When enabled, appends kafka offset info like source offset(_hoodie_kafka_source_offset), partition (_hoodie_kafka_source_partition) and timestamp (_hoodie_kafka_source_timestamp) to the records. By default its disabled and no kafka offsets are added                                                   |               |
+| [hoodie.deltastreamer.source.sanitize.invalid.char.mask](#hoodiedeltastreamersourcesanitizeinvalidcharmask)                  | __ (Optional)      | Defines the character sequence that replaces invalid characters in schema field names if hoodie.deltastreamer.source.sanitize.invalid.schema.field.names is enabled.                                                                                                                                        |               |
+| [hoodie.deltastreamer.source.sanitize.invalid.schema.field.names](#hoodiedeltastreamersourcesanitizeinvalidschemafieldnames) | false (Optional)   | Sanitizes names of invalid schema fields both in the data read from source and also in the schema Replaces invalid characters with hoodie.deltastreamer.source.sanitize.invalid.char.mask. Invalid characters are by goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names). |               |
 ---
 
-> ### hoodie.aws.session.token
-> AWS session token<br></br>
-> `Default Value: N/A `**(Required)**<br></br>
-> `Config Param: AWS_SESSION_TOKEN`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
+### DeltaStreamer SQL Transformer Configs {#DeltaStreamer-SQL-Transformer-Configs}
+Configurations controlling the behavior of SQL transformer in Deltastreamer.
+
+
+
+[**Basic Configs**](#DeltaStreamer-SQL-Transformer-Configs-basic-configs)
+
+
+| Config Name                                                                         | Default            | Description                                        | Since Version |
+| ----------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.transformer.sql](#hoodiedeltastreamertransformersql)          | N/A **(Required)** | SQL Query to be executed during write              |               |
+| [hoodie.deltastreamer.transformer.sql.file](#hoodiedeltastreamertransformersqlfile) | N/A **(Required)** | File with a SQL script to be executed during write |               |
+---
+
+
+### DeltaStreamer Source Configs {#DELTA_STREAMER_SOURCE}
+Configurations controlling the behavior of reading source data.
+
+
+#### Cloud Source Configs {#Cloud-Source-Configs}
+Configs that are common during ingestion across different cloud stores
+
+
+
+[**Advanced Configs**](#Cloud-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                  | Default            | Description                                                                                                                                                                                                                                           | Since Version |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.cloud.data.datasource.options](#hoodiedeltastreamersourceclouddatadatasourceoptions)            | N/A **(Required)** | A JSON string passed to the Spark DataFrameReader while loading the dataset. Example: hoodie.deltastreamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}                                                                          |               |
+| [hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix](#hoodiedeltastreamersourceclouddataignorerelpathprefix)       | N/A **(Required)** | Ignore objects in the bucket whose relative path matches this prefix                                                                                                                                                                                  |               |
+| [hoodie.deltastreamer.source.cloud.data.ignore.relpath.substring](#hoodiedeltastreamersourceclouddataignorerelpathsubstring) | N/A **(Required)** | Ignore objects in the bucket whose relative path contains this substring                                                                                                                                                                              |               |
+| [hoodie.deltastreamer.source.cloud.data.select.file.extension](#hoodiedeltastreamersourceclouddataselectfileextension)       | N/A **(Required)** | Only match files with this extension. By default, this is the same as hoodie.deltastreamer.source.hoodieincr.file.format                                                                                                                              |               |
+| [hoodie.deltastreamer.source.cloud.data.select.relpath.prefix](#hoodiedeltastreamersourceclouddataselectrelpathprefix)       | N/A **(Required)** | Only selects objects in the bucket whose relative path matches this prefix                                                                                                                                                                            |               |
+| [hoodie.deltastreamer.source.cloud.data.check.file.exists](#hoodiedeltastreamersourceclouddatacheckfileexists)               | false (Optional)   | If true, checks whether file exists before attempting to pull it                                                                                                                                                                                      |               |
+| [hoodie.deltastreamer.source.cloud.data.datafile.format](#hoodiedeltastreamersourceclouddatadatafileformat)                  | parquet (Optional) | Format of the data file. By default, this will be the same as hoodie.deltastreamer.source.hoodieincr.file.format                                                                                                                                      |               |
+| [hoodie.deltastreamer.source.cloud.meta.ack](#hoodiedeltastreamersourcecloudmetaack)                                         | true (Optional)    | Whether to acknowledge Metadata messages during Cloud Ingestion or not. This is useful during dev and testing.  In Prod this should always be true. In case of Cloud Pubsub, not acknowledging means Pubsub will keep redelivering the same messages. |               |
+| [hoodie.deltastreamer.source.cloud.meta.batch.size](#hoodiedeltastreamersourcecloudmetabatchsize)                            | 10 (Optional)      | Number of metadata messages to pull at a time                                                                                                                                                                                                         |               |
+---
+
+
+#### DFS Path Selector Configs {#DFS-Path-Selector-Configs}
+Configurations controlling the behavior of path selector for DFS source in Deltastreamer.
+
+
+
+[**Basic Configs**](#DFS-Path-Selector-Configs-basic-configs)
+
+
+| Config Name                                                               | Default            | Description                    | Since Version |
+| ------------------------------------------------------------------------- | ------------------ | ------------------------------ | ------------- |
+| [hoodie.deltastreamer.source.dfs.root](#hoodiedeltastreamersourcedfsroot) | N/A **(Required)** | Root path of the source on DFS |               |
+
+[**Advanced Configs**](#DFS-Path-Selector-Configs-advanced-configs)
+
+
+| Config Name                                                                           | Default            | Description           | Since Version |
+| ------------------------------------------------------------------------------------- | ------------------ | --------------------- | ------------- |
+| [hoodie.deltastreamer.source.input.selector](#hoodiedeltastreamersourceinputselector) | N/A **(Required)** | Source input selector |               |
+---
+
+
+#### Date Partition Path Selector Configs {#Date-Partition-Path-Selector-Configs}
+Configurations controlling the behavior of date partition path selector for DFS source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#Date-Partition-Path-Selector-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                                | Default               | Description                                                | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | ---------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.dfs.datepartitioned.selector.currentdate](#hoodiedeltastreamersourcedfsdatepartitionedselectorcurrentdate)    | N/A **(Required)**    | Current date.                                              |               |
+| [hoodie.deltastreamer.source.dfs.datepartitioned.date.format](#hoodiedeltastreamersourcedfsdatepartitioneddateformat)                      | yyyy-MM-dd (Optional) | Date format.                                               |               |
+| [hoodie.deltastreamer.source.dfs.datepartitioned.selector.depth](#hoodiedeltastreamersourcedfsdatepartitionedselectordepth)                | 0 (Optional)          | Depth of the files to scan. 0 implies no (date) partition. |               |
+| [hoodie.deltastreamer.source.dfs.datepartitioned.selector.lookback.days](#hoodiedeltastreamersourcedfsdatepartitionedselectorlookbackdays) | 2 (Optional)          | The maximum look-back days for scanning.                   |               |
+| [hoodie.deltastreamer.source.dfs.datepartitioned.selector.parallelism](#hoodiedeltastreamersourcedfsdatepartitionedselectorparallelism)    | 20 (Optional)         | Parallelism for listing partitions.                        |               |
+---
+
+
+#### GCS Events Source Configs {#GCS-Events-Source-Configs}
+Configurations controlling the behavior of GCS Events Source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#GCS-Events-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                    | Default            | Description                                                                                                           | Since Version |
+| ---------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.gcs.project.id](#hoodiedeltastreamersourcegcsprojectid)           | N/A **(Required)** | The GCP Project Id where the Pubsub Subscription to ingest from resides. Needed to connect to the Pubsub subscription |               |
+| [hoodie.deltastreamer.source.gcs.subscription.id](#hoodiedeltastreamersourcegcssubscriptionid) | N/A **(Required)** | The GCP Pubsub subscription id for the GCS Notifications. Needed to connect to the Pubsub subscription                |               |
+---
+
+
+#### Hive Incremental Pulling Source Configs {#Hive-Incremental-Pulling-Source-Configs}
+Configurations controlling the behavior of incremental pulling from a Hive table as a source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#Hive-Incremental-Pulling-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                         | Default            | Description                                       | Since Version |
+| ----------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.incrpull.root](#hoodiedeltastreamersourceincrpullroot) | N/A **(Required)** | The root path of Hive incremental pulling source. |               |
+---
+
+
+#### Hudi Incremental Source Configs {#Hudi-Incremental-Source-Configs}
+Configurations controlling the behavior of incremental pulling from a Hudi table as a source in Deltastreamer.
+
+
+
+[**Basic Configs**](#Hudi-Incremental-Source-Configs-basic-configs)
+
+
+| Config Name                                                                             | Default            | Description                         | Since Version |
+| --------------------------------------------------------------------------------------- | ------------------ | ----------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.hoodieincr.path](#hoodiedeltastreamersourcehoodieincrpath) | N/A **(Required)** | Base-path for the source Hudi table |               |
+
+[**Advanced Configs**](#Hudi-Incremental-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                                | Default            | Description                                                                                                                                                                                                                            | Since Version |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy](#hoodiedeltastreamersourcehoodieincrmissingcheckpointstrategy)        | N/A **(Required)** | Allows delta-streamer to decide the instant to consume from when checkpoint is not set.  Possible values: [READ_LATEST (Read from latest commit in hoodie source table), READ_UPTO_LATEST_COMMIT (Read everything upto latest commit)] |               |
+| [hoodie.deltastreamer.source.hoodieincr.partition.extractor.class](#hoodiedeltastreamersourcehoodieincrpartitionextractorclass)            | N/A **(Required)** | PartitionValueExtractor class to extract partition fields from _hoodie_partition_path                                                                                                                                                  |               |
+| [hoodie.deltastreamer.source.hoodieincr.partition.fields](#hoodiedeltastreamersourcehoodieincrpartitionfields)                             | N/A **(Required)** | Specifies partition fields that needs to be added to source table after parsing _hoodie_partition_path.                                                                                                                                |               |
+| [hoodie.deltastreamer.source.hoodieincr.drop.all.meta.fields.from.source](#hoodiedeltastreamersourcehoodieincrdropallmetafieldsfromsource) | false (Optional)   | Drops all meta fields from the source hudi table while ingesting into sink hudi table.                                                                                                                                                 |               |
+| [hoodie.deltastreamer.source.hoodieincr.file.format](#hoodiedeltastreamersourcehoodieincrfileformat)                                       | parquet (Optional) | This config is passed to the reader while loading dataset. Default value is parquet.                                                                                                                                                   |               |
+| [hoodie.deltastreamer.source.hoodieincr.num_instants](#hoodiedeltastreamersourcehoodieincrnum_instants)                                    | 5 (Optional)       | Max number of instants whose changes can be incrementally fetched                                                                                                                                                                      |               |
+| [hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt](#hoodiedeltastreamersourcehoodieincrread_latest_on_missing_ckpt)      | false (Optional)   | If true, allows delta-streamer to incrementally fetch from latest committed instant when checkpoint is not provided. This config is deprecated. Please refer to hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy     |               |
+---
+
+
+#### JDBC Source Configs {#JDBC-Source-Configs}
+Configurations controlling the behavior of JDBC source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#JDBC-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                              | Default            | Description                                                                         | Since Version |
+| -------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.jdbc.driver.class](#hoodiedeltastreamerjdbcdriverclass)                            | N/A **(Required)** | Driver class used for JDBC connection                                               |               |
+| [hoodie.deltastreamer.jdbc.extra.options.](#hoodiedeltastreamerjdbcextraoptions)                         | N/A **(Required)** | Used to set any extra options the user specifies for jdbc                           |               |
+| [hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch](#hoodiedeltastreamerjdbcincrfallbacktofullfetch) | N/A **(Required)** | If set true, makes incremental fetch to fallback to full fetch in case of any error |               |
+| [hoodie.deltastreamer.jdbc.incr.pull](#hoodiedeltastreamerjdbcincrpull)                                  | N/A **(Required)** | Will the JDBC source do an incremental pull?                                        |               |
+| [hoodie.deltastreamer.jdbc.password](#hoodiedeltastreamerjdbcpassword)                                   | N/A **(Required)** | Password used for JDBC connection                                                   |               |
+| [hoodie.deltastreamer.jdbc.password.file](#hoodiedeltastreamerjdbcpasswordfile)                          | N/A **(Required)** | Base-path for the JDBC password file.                                               |               |
+| [hoodie.deltastreamer.jdbc.storage.level](#hoodiedeltastreamerjdbcstoragelevel)                          | N/A **(Required)** | Used to control the persistence level. Default value: MEMORY_AND_DISK_SER           |               |
+| [hoodie.deltastreamer.jdbc.table.incr.column.name](#hoodiedeltastreamerjdbctableincrcolumnname)          | N/A **(Required)** | If run in incremental mode, this field is to pull new data incrementally            |               |
+| [hoodie.deltastreamer.jdbc.table.name](#hoodiedeltastreamerjdbctablename)                                | N/A **(Required)** | RDBMS table to pull                                                                 |               |
+| [hoodie.deltastreamer.jdbc.url](#hoodiedeltastreamerjdbcurl)                                             | N/A **(Required)** | JDBC url for the Hoodie datasource.                                                 |               |
+| [hoodie.deltastreamer.jdbc.user](#hoodiedeltastreamerjdbcuser)                                           | N/A **(Required)** | Username used for JDBC connection                                                   |               |
+---
+
+
+#### Json Kafka Post Processor Configs {#Json-Kafka-Post-Processor-Configs}
+Configurations controlling the post processor of Json Kafka Source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#Json-Kafka-Post-Processor-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                                                           | Default                        | Description                                                                                                                        | Since Version |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex](#hoodiedeltastreamersourcejsonkafkapostprocessormaxwelldatabaseregex)                  | N/A **(Required)**             | Database name regex                                                                                                                |               |
+| [hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.table.regex](#hoodiedeltastreamersourcejsonkafkapostprocessormaxwelltableregex)                        | N/A **(Required)**             | Table name regex                                                                                                                   |               |
+| [hoodie.deltastreamer.source.json.kafka.processor.class](#hoodiedeltastreamersourcejsonkafkaprocessorclass)                                                           | N/A **(Required)**             | Json kafka source post processor class name, post process data after consuming fromsource and before giving it to deltastreamer.   |               |
+| [hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.format](#hoodiedeltastreamersourcejsonkafkapostprocessormaxwellprecombinefieldformat) | yyyy-MM-dd HH:mm:ss (Optional) | When the preCombine filed is in DATE_STRING format, use should tell hoodiewhat format it is. 'yyyy-MM-dd HH:mm:ss' by default      |               |
+| [hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type](#hoodiedeltastreamersourcejsonkafkapostprocessormaxwellprecombinefieldtype)     | DATE_STRING (Optional)         | Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATE_STRING by default |               |
+---
+
+
+#### Kafka Source Configs {#Kafka-Source-Configs}
+Configurations controlling the behavior of Kafka source in Deltastreamer.
+
+
+
+[**Basic Configs**](#Kafka-Source-Configs-basic-configs)
+
+
+| Config Name                                                                     | Default            | Description       | Since Version |
+| ------------------------------------------------------------------------------- | ------------------ | ----------------- | ------------- |
+| [hoodie.deltastreamer.source.kafka.topic](#hoodiedeltastreamersourcekafkatopic) | N/A **(Required)** | Kafka topic name. |               |
+
+[**Advanced Configs**](#Kafka-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                         | Default            | Description                                                                     | Since Version |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------- | ------------- |
+| [auto.offset.reset](#autooffsetreset)                                                                               | LATEST (Optional)  | Kafka consumer strategy for reading data.                                       |               |
+| [hoodie.deltastreamer.kafka.source.maxEvents](#hoodiedeltastreamerkafkasourcemaxEvents)                             | 5000000 (Optional) | Maximum number of records obtained in each batch.                               |               |
+| [hoodie.deltastreamer.source.kafka.checkpoint.type](#hoodiedeltastreamersourcekafkacheckpointtype)                  | string (Optional)  | Kafka checkpoint type.                                                          |               |
+| [hoodie.deltastreamer.source.kafka.enable.commit.offset](#hoodiedeltastreamersourcekafkaenablecommitoffset)         | false (Optional)   | Automatically submits offset to kafka.                                          |               |
+| [hoodie.deltastreamer.source.kafka.enable.failOnDataLoss](#hoodiedeltastreamersourcekafkaenablefailOnDataLoss)      | false (Optional)   | Fail when checkpoint goes out of bounds instead of seeking to earliest offsets. |               |
+| [hoodie.deltastreamer.source.kafka.fetch_partition.time.out](#hoodiedeltastreamersourcekafkafetch_partitiontimeout) | 300000 (Optional)  | Time out for fetching partitions. 5min by default                               |               |
+---
+
+
+#### Pulsar Source Configs {#Pulsar-Source-Configs}
+Configurations controlling the behavior of Pulsar source in Deltastreamer.
+
+
+
+[**Basic Configs**](#Pulsar-Source-Configs-basic-configs)
+
+
+| Config Name                                                                                                   | Default                            | Description                                                         | Since Version |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.pulsar.topic](#hoodiedeltastreamersourcepulsartopic)                             | N/A **(Required)**                 | Name of the target Pulsar topic to source data from                 |               |
+| [hoodie.deltastreamer.source.pulsar.endpoint.admin.url](#hoodiedeltastreamersourcepulsarendpointadminurl)     | http://localhost:8080 (Optional)   | URL of the target Pulsar endpoint (of the form 'pulsar://host:port' |               |
+| [hoodie.deltastreamer.source.pulsar.endpoint.service.url](#hoodiedeltastreamersourcepulsarendpointserviceurl) | pulsar://localhost:6650 (Optional) | URL of the target Pulsar endpoint (of the form 'pulsar://host:port' |               |
+
+[**Advanced Configs**](#Pulsar-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                            | Default            | Description                                                                                                   | Since Version |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.pulsar.maxRecords](#hoodiedeltastreamersourcepulsarmaxRecords)                            | 5000000 (Optional) | Max number of records obtained in a single each batch                                                         |               |
+| [hoodie.deltastreamer.source.pulsar.offset.autoResetStrategy](#hoodiedeltastreamersourcepulsaroffsetautoResetStrategy) | LATEST (Optional)  | Policy determining how offsets shall be automatically reset in case there's no checkpoint information present |               |
+---
+
+
+#### S3 Event-based Hudi Incremental Source Configs {#S3-Event-based-Hudi-Incremental-Source-Configs}
+Configurations controlling the behavior of incremental pulling from S3 events meta information from Hudi table as a source in Deltastreamer.
+
+
+
+[**Advanced Configs**](#S3-Event-based-Hudi-Incremental-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                           | Default            | Description                                                                                                                                                                                           | Since Version |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.s3incr.ignore.key.prefix](#hoodiedeltastreamersources3incrignorekeyprefix)               | N/A **(Required)** | Control whether to ignore the s3 objects starting with this prefix                                                                                                                                    |               |
+| [hoodie.deltastreamer.source.s3incr.ignore.key.substring](#hoodiedeltastreamersources3incrignorekeysubstring)         | N/A **(Required)** | Control whether to ignore the s3 objects with this substring                                                                                                                                          |               |
+| [hoodie.deltastreamer.source.s3incr.key.prefix](#hoodiedeltastreamersources3incrkeyprefix)                            | N/A **(Required)** | Control whether to filter the s3 objects starting with this prefix                                                                                                                                    |               |
+| [hoodie.deltastreamer.source.s3incr.spark.datasource.options](#hoodiedeltastreamersources3incrsparkdatasourceoptions) | N/A **(Required)** | Json string, passed to the reader while loading dataset. Example delta streamer conf   --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={"header":"true","encoding":"UTF-8"} |               |
+| [hoodie.deltastreamer.source.s3incr.check.file.exists](#hoodiedeltastreamersources3incrcheckfileexists)               | false (Optional)   | Control whether we do existence check for files before consuming them                                                                                                                                 |               |
+| [hoodie.deltastreamer.source.s3incr.fs.prefix](#hoodiedeltastreamersources3incrfsprefix)                              | s3 (Optional)      | The file system prefix.                                                                                                                                                                               |               |
+---
+
+
+#### S3 Source Configs {#S3-Source-Configs}
+Configurations controlling the behavior of S3 source in Deltastreamer.
+
+
+
+[**Basic Configs**](#S3-Source-Configs-basic-configs)
+
+
+| Config Name                                                                      | Default            | Description                       | Since Version |
+| -------------------------------------------------------------------------------- | ------------------ | --------------------------------- | ------------- |
+| [hoodie.deltastreamer.s3.source.queue.url](#hoodiedeltastreamers3sourcequeueurl) | N/A **(Required)** | Queue url for cloud object events |               |
+
+[**Advanced Configs**](#S3-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                                                             | Default            | Description                                                                                                                                                                                                 | Since Version |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.s3.source.queue.fs](#hoodiedeltastreamers3sourcequeuefs)                                          | N/A **(Required)** | File system corresponding to queue. For example, for AWS SQS it is s3/s3a.                                                                                                                                  |               |
+| [hoodie.deltastreamer.s3.source.queue.long.poll.wait](#hoodiedeltastreamers3sourcequeuelongpollwait)                    | N/A **(Required)** | Long poll wait time in seconds, If set as 0 then client will fetch on short poll basis.                                                                                                                     |               |
+| [hoodie.deltastreamer.s3.source.queue.max.messages.per.batch](#hoodiedeltastreamers3sourcequeuemaxmessagesperbatch)     | N/A **(Required)** | Max messages for each batch of delta streamer run. Source will process these maximum number of message at a time.                                                                                           |               |
+| [hoodie.deltastreamer.s3.source.queue.max.messages.per.request](#hoodiedeltastreamers3sourcequeuemaxmessagesperrequest) | N/A **(Required)** | Max messages for each request                                                                                                                                                                               |               |
+| [hoodie.deltastreamer.s3.source.queue.region](#hoodiedeltastreamers3sourcequeueregion)                                  | N/A **(Required)** | Case-sensitive region name of the cloud provider for the queue. For example, "us-east-1".                                                                                                                   |               |
+| [hoodie.deltastreamer.s3.source.queue.visibility.timeout](#hoodiedeltastreamers3sourcequeuevisibilitytimeout)           | N/A **(Required)** | Visibility timeout for messages in queue. After we consume the message, queue will move the consumed messages to in-flight state, these messages can't be consumed again by source for this timeout period. |               |
+---
+
+
+#### SQL Source Configs {#SQL-Source-Configs}
+Configurations controlling the behavior of SQL source in Deltastreamer.
+
+
+
+[**Basic Configs**](#SQL-Source-Configs-basic-configs)
+
+
+| Config Name                                                                        | Default            | Description                         | Since Version |
+| ---------------------------------------------------------------------------------- | ------------------ | ----------------------------------- | ------------- |
+| [hoodie.deltastreamer.source.sql.sql.query](#hoodiedeltastreamersourcesqlsqlquery) | N/A **(Required)** | SQL query for fetching source data. |               |
+---
+
+
+### DeltaStreamer Schema Provider Configs {#SCHEMA_PROVIDER}
+Configurations that control the schema provider for DeltaStreamer.
+
+
+#### DeltaStreamer Schema Provider Configs {#DeltaStreamer-Schema-Provider-Configs}
+
+
+
+
+[**Basic Configs**](#DeltaStreamer-Schema-Provider-Configs-basic-configs)
+
+
+| Config Name                                                                                                   | Default            | Description                                                                           | Since Version |
+| ------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.registry.targetUrl](#hoodiedeltastreamerschemaproviderregistrytargetUrl) | N/A **(Required)** | The schema of the target you are writing to e.g. https://foo:bar@schemaregistry.org   |               |
+| [hoodie.deltastreamer.schemaprovider.registry.url](#hoodiedeltastreamerschemaproviderregistryurl)             | N/A **(Required)** | The schema of the source you are reading from e.g. https://foo:bar@schemaregistry.org |               |
+
+[**Advanced Configs**](#DeltaStreamer-Schema-Provider-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                               | Default            | Description                                           | Since Version |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.registry.baseUrl](#hoodiedeltastreamerschemaproviderregistrybaseUrl)                                 | N/A **(Required)** | The base URL of the schema registry.                  |               |
+| [hoodie.deltastreamer.schemaprovider.registry.schemaconverter](#hoodiedeltastreamerschemaproviderregistryschemaconverter)                 | N/A **(Required)** | The class name of the custom schema converter to use. |               |
+| [hoodie.deltastreamer.schemaprovider.registry.sourceUrlSuffix](#hoodiedeltastreamerschemaproviderregistrysourceUrlSuffix)                 | N/A **(Required)** | The source URL suffix.                                |               |
+| [hoodie.deltastreamer.schemaprovider.registry.targetUrlSuffix](#hoodiedeltastreamerschemaproviderregistrytargetUrlSuffix)                 | N/A **(Required)** | The target URL suffix.                                |               |
+| [hoodie.deltastreamer.schemaprovider.registry.urlSuffix](#hoodiedeltastreamerschemaproviderregistryurlSuffix)                             | N/A **(Required)** | The suffix of the URL for the schema registry.        |               |
+| [hoodie.deltastreamer.schemaprovider.spark_avro_post_processor.enable](#hoodiedeltastreamerschemaproviderspark_avro_post_processorenable) | false (Optional)   | Whether to enable Spark Avro post processor.          |               |
+---
+
+
+#### File-based Schema Provider Configs {#File-based-Schema-Provider-Configs}
+Configurations for file-based schema provider.
+
+
+
+[**Basic Configs**](#File-based-Schema-Provider-Configs-basic-configs)
+
+
+| Config Name                                                                                                  | Default            | Description                                   | Since Version |
+| ------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.source.schema.file](#hoodiedeltastreamerschemaprovidersourceschemafile) | N/A **(Required)** | The schema of the source you are reading from |               |
+| [hoodie.deltastreamer.schemaprovider.target.schema.file](#hoodiedeltastreamerschemaprovidertargetschemafile) | N/A **(Required)** | The schema of the target you are writing to   |               |
+---
+
+
+#### Hive Schema Provider Configs {#Hive-Schema-Provider-Configs}
+Configurations for Hive schema provider.
+
+
+
+[**Advanced Configs**](#Hive-Schema-Provider-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                   | Default            | Description                                           | Since Version |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.source.schema.hive.database](#hoodiedeltastreamerschemaprovidersourceschemahivedatabase) | N/A **(Required)** | Hive database from where source schema can be fetched |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.hive.table](#hoodiedeltastreamerschemaprovidersourceschemahivetable)       | N/A **(Required)** | Hive table from where source schema can be fetched    |               |
+| [hoodie.deltastreamer.schemaprovider.target.schema.hive.database](#hoodiedeltastreamerschemaprovidertargetschemahivedatabase) | N/A **(Required)** | Hive database from where target schema can be fetched |               |
+| [hoodie.deltastreamer.schemaprovider.target.schema.hive.table](#hoodiedeltastreamerschemaprovidertargetschemahivetable)       | N/A **(Required)** | Hive table from where target schema can be fetched    |               |
+---
+
+
+#### JDBC-based Schema Provider Configs {#JDBC-based-Schema-Provider-Configs}
+Configurations for JDBC-based schema provider.
+
+
+
+[**Advanced Configs**](#JDBC-based-Schema-Provider-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                              | Default            | Description                                                                                                                                                                                                                                                                                                            | Since Version |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url](#hoodiedeltastreamerschemaprovidersourceschemajdbcconnectionurl) | N/A **(Required)** | The JDBC URL to connect to. The source-specific connection properties may be specified in the URL. e.g., jdbc:postgresql://localhost/test?user=fred&amp;password=secret                                                                                                                                                |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable](#hoodiedeltastreamerschemaprovidersourceschemajdbcdbtable)              | N/A **(Required)** | The table with the schema to reference e.g. test_database.test1_table or test1_table                                                                                                                                                                                                                                   |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type](#hoodiedeltastreamerschemaprovidersourceschemajdbcdrivertype)       | N/A **(Required)** | The class name of the JDBC driver to use to connect to this URL. e.g. org.h2.Driver                                                                                                                                                                                                                                    |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable](#hoodiedeltastreamerschemaprovidersourceschemajdbcnullable)            | N/A **(Required)** | If true, all the columns are nullable.                                                                                                                                                                                                                                                                                 |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password](#hoodiedeltastreamerschemaprovidersourceschemajdbcpassword)            | N/A **(Required)** | Password for the connection e.g. secret                                                                                                                                                                                                                                                                                |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout](#hoodiedeltastreamerschemaprovidersourceschemajdbctimeout)              | N/A **(Required)** | The number of seconds the driver will wait for a Statement object to execute. Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout, e.g., the h2 JDBC driver checks the timeout of each query instead of an entire JDBC batch. It defaults to 0. |               |
+| [hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username](#hoodiedeltastreamerschemaprovidersourceschemajdbcusername)            | N/A **(Required)** | Username for the connection e.g. fred                                                                                                                                                                                                                                                                                  |               |
+---
+
+
+#### JDBC-based Schema Provider Configs {#JDBC-based-Schema-Provider-Configs}
+Configurations for Proto schema provider.
+
+
+
+[**Advanced Configs**](#JDBC-based-Schema-Provider-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                   | Default            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Since Version |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.proto.class.name](#hoodiedeltastreamerschemaproviderprotoclassname)                      | N/A **(Required)** | The Protobuf Message class used as the source for the schema.                                                                                                                                                                                                                                                                                                                                                                                                             | 0.13.0        |
+| [hoodie.deltastreamer.schemaprovider.proto.flatten.wrappers](#hoodiedeltastreamerschemaproviderprotoflattenwrappers)          | false (Optional)   | When set to true wrapped primitives like Int64Value are translated to a record with a single 'value' field. By default, the value is false and the wrapped primitives are treated as a nullable value                                                                                                                                                                                                                                                                     | 0.13.0        |
+| [hoodie.deltastreamer.schemaprovider.proto.max.recursion.depth](#hoodiedeltastreamerschemaproviderprotomaxrecursiondepth)     | 5 (Optional)       | The max depth to unravel the Proto schema when translating into an Avro schema. Setting this depth allows the user to convert a schema that is recursive in proto into something that can be represented in their lake format like Parquet. After a given class has been seen N times within a single branch, the schema provider will create a record with a byte array to hold the remaining proto data and a string to hold the message descriptor's name for context. | 0.13.0        |
+| [hoodie.deltastreamer.schemaprovider.proto.timestamps.as.records](#hoodiedeltastreamerschemaproviderprototimestampsasrecords) | false (Optional)   | When set to true Timestamp fields are translated to a record with a seconds and nanos field. By default, the value is false and the timestamp is converted to a long with the timestamp-micros logical type                                                                                                                                                                                                                                                               | 0.13.0        |
+---
+
+
+#### Schema Post Processor Config Configs {#Schema-Post-Processor-Config-Configs}
+Configurations for Schema Post Processor
+
+
+
+[**Advanced Configs**](#Schema-Post-Processor-Config-Configs-advanced-configs)
+
+
+| Config Name                                                                                                                                               | Default            | Description                                     | Since Version |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------- | ------------- |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor](#hoodiedeltastreamerschemaproviderschema_post_processor)                                      | N/A **(Required)** | The class name of the schema post processor.    |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.default](#hoodiedeltastreamerschemaproviderschema_post_processoraddcolumndefault)   | N/A **(Required)** | New column's default value                      |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.doc](#hoodiedeltastreamerschemaproviderschema_post_processoraddcolumndoc)           | N/A **(Required)** | Docs about new column                           |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.name](#hoodiedeltastreamerschemaproviderschema_post_processoraddcolumnname)         | N/A **(Required)** | New column's name                               |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.type](#hoodiedeltastreamerschemaproviderschema_post_processoraddcolumntype)         | N/A **(Required)** | New column's type                               |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns](#hoodiedeltastreamerschemaproviderschema_post_processordeletecolumns)          | N/A **(Required)** | Columns to delete in the schema post processor. |               |
+| [hoodie.deltastreamer.schemaprovider.schema_post_processor.add.column.nullable](#hoodiedeltastreamerschemaproviderschema_post_processoraddcolumnnullable) | true (Optional)    | New column's nullable                           |               |
 ---
 
