@@ -700,11 +700,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
       .key("hoodie.rollback.instant.backup.enabled")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
 
   public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
       .key("hoodie.rollback.instant.backup.dir")
       .defaultValue(".rollback_backup")
+      .markAdvanced()
       .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
 
   public static final ConfigProperty<String> CLIENT_INIT_CALLBACK_CLASS_NAMES = ConfigProperty
