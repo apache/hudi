@@ -28,13 +28,14 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
 import scala.collection.JavaConversions._
 
 /**
  *
  */
+@Tag("functional")
 class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
