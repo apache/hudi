@@ -17,31 +17,34 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieKey, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
+
+  private val log = LoggerFactory.getLogger(classOf[HoodieCDCTestBase])
 
   var spark: SparkSession = _
 
@@ -65,6 +68,10 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initFileSystem()
+  }
+
+  @BeforeEach def printTestName(testInfo: TestInfo): Unit = {
+    log.info(s"Starting testcase: ${testInfo.getTestMethod.orElse(null)} - ${testInfo.getDisplayName}")
   }
 
   @AfterEach override def tearDown(): Unit = {
