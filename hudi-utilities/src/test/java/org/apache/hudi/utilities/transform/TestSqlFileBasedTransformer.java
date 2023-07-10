@@ -138,7 +138,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
 
     // Called distinct() and sort() to match the transformation in this file:
-    // hudi-utilities/src/test/resources/delta-streamer-config/sql-file-transformer.sql
+    // hudi-utilities/src/test/resources/streamer-config/sql-file-transformer.sql
     String[] expectedRows =
         inputDatasetRows
             .distinct()
