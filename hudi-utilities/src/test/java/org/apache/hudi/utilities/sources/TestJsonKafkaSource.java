@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -322,7 +322,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(numMessages, dfNoOffsetInfo.count());
     List<String> columns = Arrays.stream(dfNoOffsetInfo.columns()).collect(Collectors.toList());
 
-    props.put(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
+    props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
     jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(jsonSource);
     Dataset<Row> dfWithOffsetInfo = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().cache();

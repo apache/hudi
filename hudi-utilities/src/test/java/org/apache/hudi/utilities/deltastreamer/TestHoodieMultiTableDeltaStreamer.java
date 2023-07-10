@@ -24,8 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
@@ -135,7 +135,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getTableExecutionContexts().size());
     assertEquals(basePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
-    assertEquals("topic1", executionContext.getProperties().getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()));
+    assertEquals("topic1", executionContext.getProperties().getString(HoodieStreamerConfig.KAFKA_TOPIC.key()));
     assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
     assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
     assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key()));
