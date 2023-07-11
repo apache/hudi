@@ -75,6 +75,9 @@ test_spark_hadoop_mr_bundles () {
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
     change_java_runtime_version
+    echo "::warning::validate.sh Testing DFSPropertiesConfiguration..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/test_dfs_props_conf.scala
+
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
@@ -266,9 +269,9 @@ test_metaserver_bundle () {
 }
 
 run_hdfs_test_runner () {
-  change_java_runtime_version
-  $JAVA_HOME/bin/java -cp $JARS_DIR/hadoop-mr.jar org.apache.hudi.util.testrunner.TestRunner
-  use_default_java_runtime
+#  change_java_runtime_version
+#  $JAVA_HOME/bin/java -cp $JARS_DIR/hadoop-mr.jar org.apache.hudi.util.testrunner.TestRunner
+#  use_default_java_runtime
 }
 
 ############################
