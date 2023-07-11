@@ -384,6 +384,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
+
     // refresh the last txn metadata
     this.writeClient.preTxn(this.metaClient);
     // put the assignment in front of metadata generation,
@@ -407,8 +408,9 @@ public class StreamWriteOperatorCoordinator
   private void initInstant(String instant) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
     executor.execute(() -> {
+      boolean recommit = false;
       if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
-        // the last instant committed successfully
+        // We don't need to recommit for completed or failed writes
         reset();
       } else {
         LOG.info("Recommit instant {}", instant);
@@ -416,7 +418,15 @@ public class StreamWriteOperatorCoordinator
         if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
           writeClient.getHeartbeatClient().start(instant);
         }
-        commitInstant(instant);
+        recommit = commitInstant(instant);
+      }
+      if (!recommit) {
+        // Stop heartbeat for the last failed instant
+        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()
+            && !this.instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)
+            && !completedTimeline.containsInstant(this.instant)) {
+          writeClient.getHeartbeatClient().stop(this.instant);
+        }
       }
       // starts a new instant
       startInstant();

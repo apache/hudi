@@ -80,14 +80,18 @@ public class TestStreamWriteOperatorCoordinator {
 
   @BeforeEach
   public void before() throws Exception {
+    this.coordinator = constructCoordinator();
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+  }
+
+  private StreamWriteOperatorCoordinator constructCoordinator() throws Exception {
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = new StreamWriteOperatorCoordinator(
+    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(
         TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
-
-    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
-    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    return coordinator;
   }
 
   @AfterEach
@@ -186,12 +190,17 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testRecommitWithLazyFailedWritesCleanPolicy() {
+  public void testRecommitWithLazyFailedWritesCleanPolicy() throws Exception {
     coordinator.getWriteClient().getConfig().setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.LAZY.name());
     assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = coordinator.getInstant();
+    // Stop the timer first
+    coordinator.getWriteClient().getHeartbeatClient().stop(instant);
+    coordinator.close();
+    // Recreate the coordinator to monitor JM failover
+    coordinator = constructCoordinator();
     WriteMetadataEvent event1 = createOperatorEvent(0, instant, "par1", false, 0.2);
     event1.setBootstrap(true);
     WriteMetadataEvent event2 = WriteMetadataEvent.emptyBootstrap(1);
