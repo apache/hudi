@@ -36,15 +36,12 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.slf4j.LoggerFactory
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
-
-  private val log = LoggerFactory.getLogger(classOf[HoodieCDCTestBase])
 
   var spark: SparkSession = _
 
@@ -68,10 +65,6 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initFileSystem()
-  }
-
-  @BeforeEach def printTestName(testInfo: TestInfo): Unit = {
-    log.info(s"Starting testcase: ${testInfo.getTestMethod.orElse(null)} - ${testInfo.getDisplayName}")
   }
 
   @AfterEach override def tearDown(): Unit = {
