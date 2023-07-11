@@ -481,9 +481,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         props.getString("hoodie.datasource.write.keygenerator.class"));
   }
 
-  private static HoodieDeltaStreamer.Config getBaseConfig() {
+  private static HoodieStreamer.Config getBaseConfig() {
     // Base config with all required fields
-    HoodieDeltaStreamer.Config base = new HoodieDeltaStreamer.Config();
+    HoodieStreamer.Config base = new HoodieStreamer.Config();
     base.targetBasePath = TGT_BASE_PATH_VALUE;
     base.tableType = TABLE_TYPE_VALUE;
     base.targetTableName = TARGET_TABLE_VALUE;
@@ -518,33 +518,33 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> provideValidCliArgs() {
 
-    HoodieDeltaStreamer.Config base = getBaseConfig();
+    HoodieStreamer.Config base = getBaseConfig();
     // String parameter
-    HoodieDeltaStreamer.Config conf1 = getBaseConfig();
+    HoodieStreamer.Config conf1 = getBaseConfig();
     conf1.baseFileFormat = BASE_FILE_FORMAT_VALUE;
 
     // Integer parameter
-    HoodieDeltaStreamer.Config conf2 = getBaseConfig();
+    HoodieStreamer.Config conf2 = getBaseConfig();
     conf2.sourceLimit = Long.parseLong(SOURCE_LIMIT_VALUE);
 
     // Boolean Parameter
-    HoodieDeltaStreamer.Config conf3 = getBaseConfig();
+    HoodieStreamer.Config conf3 = getBaseConfig();
     conf3.enableHiveSync = true;
 
     // ArrayList Parameter with 1 value
-    HoodieDeltaStreamer.Config conf4 = getBaseConfig();
+    HoodieStreamer.Config conf4 = getBaseConfig();
     conf4.configs = Arrays.asList(HOODIE_CONF_VALUE1);
 
     // ArrayList Parameter with comma separated values
-    HoodieDeltaStreamer.Config conf5 = getBaseConfig();
+    HoodieStreamer.Config conf5 = getBaseConfig();
     conf5.configs = Arrays.asList(HOODIE_CONF_VALUE2);
 
     // Multiple ArrayList values
-    HoodieDeltaStreamer.Config conf6 = getBaseConfig();
+    HoodieStreamer.Config conf6 = getBaseConfig();
     conf6.configs = Arrays.asList(HOODIE_CONF_VALUE1, HOODIE_CONF_VALUE2);
 
     // Super set of all cases
-    HoodieDeltaStreamer.Config conf = getBaseConfig();
+    HoodieStreamer.Config conf = getBaseConfig();
     conf.baseFileFormat = BASE_FILE_FORMAT_VALUE;
     conf.sourceLimit = Long.parseLong(SOURCE_LIMIT_VALUE);
     conf.enableHiveSync = true;
@@ -590,7 +590,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @MethodSource("provideValidCliArgs")
-  public void testValidCommandLineArgs(String[] args, HoodieDeltaStreamer.Config expected) {
+  public void testValidCommandLineArgs(String[] args, HoodieStreamer.Config expected) {
     assertEquals(expected, HoodieDeltaStreamer.getConfig(args));
   }
 
