@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.hudi.bootstrap;
 
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
@@ -40,7 +40,6 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -60,7 +59,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests different layouts for bootstrap base path
  */
-@Tag("functional")
 public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @TempDir

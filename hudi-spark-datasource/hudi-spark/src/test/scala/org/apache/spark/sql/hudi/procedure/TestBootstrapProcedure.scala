@@ -18,9 +18,9 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.bootstrap.TestBootstrap
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, Row}

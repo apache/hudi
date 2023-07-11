@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.util.FileIOUtils
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_INIT = 0

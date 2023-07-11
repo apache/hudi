@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.hudi.testutils;
 
 import org.scalatest.TagAnnotation;
 
