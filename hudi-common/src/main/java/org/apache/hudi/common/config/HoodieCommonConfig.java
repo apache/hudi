@@ -97,6 +97,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("This config is used to specify the file system which supports atomic file creation . "
           + "atomic means that an operation either succeeds and has an effect or has fails and has no effect;"
           + " now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time."

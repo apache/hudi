@@ -159,6 +159,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
       .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
           + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "

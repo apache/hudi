@@ -139,6 +139,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    handleWriteErrors(writeStats, TableServiceType.COMPACT);
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
@@ -167,6 +168,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
                                        String logCompactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
@@ -249,14 +251,8 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
                                   HoodieTable table,
                                   String clusteringCommitTime,
                                   Option<HoodieData<WriteStatus>> writeStatuses) {
-    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
-        e.getValue().stream()).collect(Collectors.toList());
-
-    if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
-      throw new HoodieClusteringException("Clustering failed to write to files:"
-          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(",")));
-    }
-
+    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
@@ -289,6 +285,13 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       );
     }
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+  }
+
+  private void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
+    if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
+      throw new HoodieClusteringException(tableServiceType + " failed to write to files:"
+          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(",")));
+    }
   }
 
   private void validateClusteringCommit(HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {

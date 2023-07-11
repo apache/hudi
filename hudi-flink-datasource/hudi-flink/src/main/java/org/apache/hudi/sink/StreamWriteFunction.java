@@ -188,6 +188,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         break;
       case UPSERT:
       case DELETE: // shares the code path with UPSERT
+      case DELETE_PREPPED:
         this.writeFunction = (records, instantTime) -> this.writeClient.upsert(records, instantTime);
         break;
       case INSERT_OVERWRITE:

@@ -60,8 +60,8 @@ object DataSourceReadOptions {
     .defaultValue(QUERY_TYPE_SNAPSHOT_OPT_VAL)
     .withAlternatives("hoodie.datasource.view.type")
     .withValidValues(QUERY_TYPE_SNAPSHOT_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-    .withDocumentation("Whether data needs to be read, in incremental mode (new data since an instantTime) " +
-      "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
+    .withDocumentation("Whether data needs to be read, in `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "` mode (new data since an instantTime) " +
+      "(or) `" + QUERY_TYPE_READ_OPTIMIZED_OPT_VAL + "` mode (obtain latest view, based on base files) (or) `" + QUERY_TYPE_SNAPSHOT_OPT_VAL + "` mode " +
       "(obtain latest view, by merging base and (if any) log files)")
 
   val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
@@ -114,7 +114,7 @@ object DataSourceReadOptions {
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily "
+    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. Represents the instant time to start incrementally pulling data from. The instanttime here need not necessarily "
       + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
       + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
       + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
@@ -124,10 +124,12 @@ object DataSourceReadOptions {
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to limit incrementally fetched data to. "
-      + "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
-      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
+    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL +
+      "`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from " +
+      "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
+      "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
+      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -285,6 +287,7 @@ object DataSourceWriteOptions {
       WriteOperationType.BULK_INSERT.value,
       WriteOperationType.BULK_INSERT_PREPPED.value,
       WriteOperationType.DELETE.value,
+      WriteOperationType.DELETE_PREPPED.value,
       WriteOperationType.BOOTSTRAP.value,
       WriteOperationType.INSERT_OVERWRITE.value,
       WriteOperationType.CLUSTER.value,
