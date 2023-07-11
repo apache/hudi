@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.common
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
@@ -32,14 +32,13 @@ import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{DoubleType, StringType}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.function.Consumer
 import scala.collection.JavaConversions._
 
-@Tag("functional")
 class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
 
   var spark: SparkSession = _

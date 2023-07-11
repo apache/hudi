@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.common
 
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
@@ -32,7 +32,7 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSpark
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -41,7 +41,6 @@ import scala.collection.JavaConverters
 /**
  * Test suite for TableSchemaResolver with SparkSqlWriter.
  */
-@Tag("functional")
 class TestTableSchemaResolverWithSparkSQL {
   var spark: SparkSession = _
   var sqlContext: SQLContext = _

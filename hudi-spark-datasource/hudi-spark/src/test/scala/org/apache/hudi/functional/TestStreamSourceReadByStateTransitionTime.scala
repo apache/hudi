@@ -29,12 +29,10 @@ import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.api.java.JavaRDD
-import org.junit.jupiter.api.Tag
 
 import scala.collection.JavaConversions.asScalaBuffer
 import scala.jdk.CollectionConverters.mapAsJavaMapConverter
 
-@Tag("functional")
 class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
   override val handlingMode: HollowCommitHandling = USE_STATE_TRANSITION_TIME

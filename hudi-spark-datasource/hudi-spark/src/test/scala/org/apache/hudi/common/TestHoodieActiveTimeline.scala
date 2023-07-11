@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.common
 
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -25,14 +25,13 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.JavaConversions._
 
 /**
  * Tests on HoodieActionTimeLine using the real hudi table.
  */
-@Tag("functional")
 class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _

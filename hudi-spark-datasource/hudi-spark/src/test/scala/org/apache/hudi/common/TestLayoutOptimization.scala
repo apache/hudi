@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.common
 
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -29,15 +29,15 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.collection.JavaConversions._
 
-@Tag("functional")
 class TestLayoutOptimization extends HoodieSparkClientTestBase {
+
   var spark: SparkSession = _
 
   val sourceTableSchema =
@@ -67,7 +67,7 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
   ) ++ metadataOpts
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -76,7 +76,7 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
@@ -84,10 +84,10 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
-  def testLayoutOptimizationFunctional(tableType: String,
-                                       clusteringAsRow: String,
-                                       layoutOptimizationStrategy: String,
-                                       spatialCurveCompositionStrategy: String): Unit = {
+  def testLayoutOptimization(tableType: String,
+                             clusteringAsRow: String,
+                             layoutOptimizationStrategy: String,
+                             spatialCurveCompositionStrategy: String): Unit = {
     val curveCompositionStrategy =
       Option(spatialCurveCompositionStrategy)
         .getOrElse(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.defaultValue())

@@ -15,18 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.common
 
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-@Tag("functional")
 class TestEmptyCommit extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _

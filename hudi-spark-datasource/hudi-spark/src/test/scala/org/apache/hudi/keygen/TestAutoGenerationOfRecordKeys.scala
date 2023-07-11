@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.keygen
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
@@ -27,17 +27,16 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
-import org.apache.hudi.functional.CommonOptionUtils._
-import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
+import org.apache.hudi.testutils.CommonOptionUtils._
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -45,7 +44,6 @@ import java.util.function.Consumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
-@Tag("functional")
 class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = _

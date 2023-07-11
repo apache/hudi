@@ -17,13 +17,13 @@
  * under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi.testutils
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkRecordMerger}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkRecordMerger}
 
 object CommonOptionUtils {
 

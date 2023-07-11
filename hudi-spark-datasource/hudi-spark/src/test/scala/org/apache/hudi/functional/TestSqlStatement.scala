@@ -19,9 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Tag
 
-@Tag("functional")
 class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_INIT = 0
   val STATE_SKIP_COMMENT = 1
