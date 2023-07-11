@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
-import org.apache.hudi.bootstrap.TestBootstrap
+import org.apache.hudi.bootstrap.TestBootstrap.generateTestRawTripDataset
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
@@ -581,7 +581,7 @@ class TestHoodieSparkSqlWriter {
   def testWithDatasourceBootstrapForTableType(tableType: String): Unit = {
     val srcPath = java.nio.file.Files.createTempDirectory("hoodie_bootstrap_source_path")
     try {
-      val sourceDF = TestBootstrap.generateTestRawTripDataset(Instant.now.toEpochMilli, 0, 100, Collections.emptyList(), sc,
+      val sourceDF = generateTestRawTripDataset(Instant.now.toEpochMilli, 0, 100, Collections.emptyList(), sc,
         spark.sqlContext)
       // Write source data non-partitioned
       sourceDF.write.format("parquet").mode(SaveMode.Overwrite).save(srcPath.toAbsolutePath.toString)

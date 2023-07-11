@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hudi.bootstrap.TestBootstrap;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -41,6 +40,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.bootstrap.TestBootstrap.generateTestRawTripDataset;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,7 +72,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     partitions = Arrays.asList("2018", "2019", "2020");
     long timestamp = Instant.now().toEpochMilli();
     for (int i = 0; i < partitions.size(); i++) {
-      Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
+      Dataset<Row> df = generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);
       df.write().parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
     }

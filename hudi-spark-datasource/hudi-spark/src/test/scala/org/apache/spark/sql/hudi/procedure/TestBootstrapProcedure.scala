@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.bootstrap.TestBootstrap
+import org.apache.hudi.bootstrap.TestBootstrap.generateTestRawTripDataset
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -48,7 +48,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val partitions = util.Arrays.asList("2018", "2019", "2020")
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
-        val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+        val df: Dataset[Row] = generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
         df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
@@ -113,7 +113,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val partitions = util.Arrays.asList("2018", "2019", "2020")
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
-        val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+        val df: Dataset[Row] = generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
         df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
@@ -177,7 +177,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
       // generate test data
       val timestamp: Long = Instant.now.toEpochMilli
-      val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, 0, NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+      val df: Dataset[Row] = generateTestRawTripDataset(timestamp, 0, NUM_OF_RECORDS, null, jsc, spark.sqlContext)
       df.write.parquet(sourcePath)
 
       spark.sql("set hoodie.bootstrap.parallelism = 20")
@@ -235,7 +235,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val partitions = util.Arrays.asList("2018", "2019", "2020")
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
-        val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
+        val df: Dataset[Row] = generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
         df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
