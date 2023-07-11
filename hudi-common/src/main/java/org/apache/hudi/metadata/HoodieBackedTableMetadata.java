@@ -156,7 +156,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Can only prune partitions if the number of partition levels matches partition fields
     // Here we'll check the first selected partition to see whether the numbers match.
     if (hiveStylePartitioningEnabled
-        && getPathPartitionLevel(partitionFields, selectedPartitionPaths.get(0)) + 1 == partitionFields.fields().size()) {
+        && getPathPartitionLevel(partitionFields, selectedPartitionPaths.get(0)) == partitionFields.fields().size()) {
       return selectedPartitionPaths.stream()
           .filter(p ->
               (boolean) boundedExpr.eval(extractPartitionValues(partitionFields, p, urlEncodePartitioningEnabled)))

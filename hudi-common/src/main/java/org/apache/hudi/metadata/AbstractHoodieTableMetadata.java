@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -49,29 +50,29 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
     this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
   }
 
-  protected int getPathPartitionLevel(Types.RecordType partitionFields, String path) {
-    if (StringUtils.isNullOrEmpty(path) || partitionFields == null || partitionFields.fields().size() == 1) {
+  protected static int getPathPartitionLevel(Types.RecordType partitionFields, String path) {
+    if (StringUtils.isNullOrEmpty(path) || partitionFields == null) {
       return 0;
     }
 
-    int level = 0;
+    int level = 1;
     for (int i = 1; i < path.length() - 1; i++) {
-      if (path.charAt(i) == '/') {
+      if (path.charAt(i) == Path.SEPARATOR_CHAR) {
         level++;
       }
     }
-    if (path.startsWith("/")) {
+    if (path.startsWith(Path.SEPARATOR)) {
       level--;
     }
-    if (path.endsWith("/")) {
+    if (path.endsWith(Path.SEPARATOR)) {
       level--;
     }
     return level;
   }
 
-  protected ArrayData extractPartitionValues(Types.RecordType partitionFields,
-                                          String relativePartitionPath,
-                                          boolean urlEncodePartitioningEnabled) {
+  protected static ArrayData extractPartitionValues(Types.RecordType partitionFields,
+                                                    String relativePartitionPath,
+                                                    boolean urlEncodePartitioningEnabled) {
     if (partitionFields.fields().size() == 1) {
       // SinglePartPartitionValue, which might contain slashes.
       String partitionValue = relativePartitionPath.split("=")[1];

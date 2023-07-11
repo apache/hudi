@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
@@ -128,24 +129,27 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private List<String> getPartitionPathWithPathPrefixUsingFilterExpression(String relativePathPrefix,
                                                                            Types.RecordType partitionFields,
-                                                                           Expression expression) throws IOException {
+                                                                           Expression pushedExpr) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
         ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
-    int partitionLevel = -1;
+    int currentPartitionLevel = -1;
     boolean needPushDownExpressions;
+    Expression fullBoundExpr;
     // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here,
     // given it's possible that partition values contains `/`, which could affect
     // the result to get right `partitionValue` when listing paths, here we have
     // to make it more strict that `urlEncodePartitioningEnabled` must be enabled.
     // TODO better enable urlEncodePartitioningEnabled if hiveStylePartitioningEnabled is enabled?
     if (hiveStylePartitioningEnabled && urlEncodePartitioningEnabled
-        && expression != null && partitionFields != null) {
-      partitionLevel = getPathPartitionLevel(partitionFields, relativePathPrefix);
+        && pushedExpr != null && partitionFields != null) {
+      currentPartitionLevel = getPathPartitionLevel(partitionFields, relativePathPrefix);
       needPushDownExpressions = true;
+      fullBoundExpr = pushedExpr.accept(new BindVisitor(partitionFields, caseSensitive));
     } else {
+      fullBoundExpr = Predicates.alwaysTrue();
       needPushDownExpressions = false;
     }
 
@@ -157,39 +161,16 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add its subdirectory to queue to be processed.
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all partitions with prefix " + relativePathPrefix);
-      Expression boundedExpr;
-      if (needPushDownExpressions) {
-        // Here we assume the path level matches the number of partition columns, so we'll rebuild
-        // new schema based on current path level.
-        // e.g. partition columns are <region, date, hh>, if we're listing the second level, then
-        // currentSchema would be <region, date>
-        // `PartialBindVisitor` will bind reference if it can be found from `currentSchema`, otherwise
-        // will change the expression to `alwaysTrue`. Can see `PartialBindVisitor` for details.
-        Types.RecordType currentSchema = Types.RecordType.get(partitionFields.fields().subList(0, ++partitionLevel));
-        PartialBindVisitor partialBindVisitor = new PartialBindVisitor(currentSchema, caseSensitive);
-        boundedExpr = expression.accept(partialBindVisitor);
-      } else {
-        boundedExpr = Predicates.alwaysTrue();
-      }
       // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
       // and second entry holds optionally a directory path to be processed further.
       List<Pair<Option<String>, Option<Path>>> result = engineContext.flatMap(pathsToList, path -> {
         FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
         if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, path)) {
-          String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), path);
-          if (boundedExpr instanceof Predicates.TrueExpression
-              || (Boolean) boundedExpr.eval(
-              extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled))) {
-            return Stream.of(Pair.of(Option.of(relativePartitionPath), Option.empty()));
-          }
+          return Stream.of(Pair.of(Option.of(FSUtils.getRelativePartitionPath(dataBasePath.get(), path)), Option.empty()));
         }
         return Arrays.stream(fileSystem.listStatus(path, p -> {
           try {
-            return fileSystem.isDirectory(p) && !p.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-                && (boundedExpr instanceof Predicates.TrueExpression
-                || (Boolean) boundedExpr.eval(
-                extractPartitionValues(partitionFields,
-                    FSUtils.getRelativePartitionPath(dataBasePath.get(), p), urlEncodePartitioningEnabled)));
+            return fileSystem.isDirectory(p) && !p.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME);
           } catch (IOException e) {
             // noop
           }
@@ -198,10 +179,34 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       }, listingParallelism);
       pathsToList.clear();
 
-      partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent()).map(entry -> entry.getKey().get())
+      partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
+          .map(entry -> entry.getKey().get())
+          .filter(relativePartitionPath ->
+              partitionFields != null && (Boolean) fullBoundExpr.eval(
+                      extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
           .collect(Collectors.toList()));
 
+      Expression partialBoundExpr;
+      // If partitionPaths is nonEmpty, we're already at the last path level, and all paths
+      // are filtered already.
+      if (needPushDownExpressions && partitionPaths.isEmpty()) {
+        // Here we assume the path level matches the number of partition columns, so we'll rebuild
+        // new schema based on current path level.
+        // e.g. partition columns are <region, date, hh>, if we're listing the second level, then
+        // currentSchema would be <region, date>
+        // `PartialBindVisitor` will bind reference if it can be found from `currentSchema`, otherwise
+        // will change the expression to `alwaysTrue`. Can see `PartialBindVisitor` for details.
+        Types.RecordType currentSchema = Types.RecordType.get(partitionFields.fields().subList(0, ++currentPartitionLevel));
+        PartialBindVisitor partialBindVisitor = new PartialBindVisitor(currentSchema, caseSensitive);
+        partialBoundExpr = pushedExpr.accept(partialBindVisitor);
+      } else {
+        partialBoundExpr = Predicates.alwaysTrue();
+      }
+
       pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
+              .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
+                  || (Boolean) partialBoundExpr.eval(
+                      extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
           .collect(Collectors.toList()));
     }
     return partitionPaths;
