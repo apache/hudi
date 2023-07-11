@@ -30,11 +30,13 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConversions._
 
+@Tag("functional")
 class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
   val parallelism: Integer = 4

@@ -31,12 +31,13 @@ import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import scala.collection.JavaConversions.asScalaBuffer
 
+@Tag("functional")
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
@@ -45,7 +46,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  @BeforeEach override def setUp() {
+  @BeforeEach override def setUp(): Unit = {
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
@@ -54,7 +55,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach override def tearDown(): Unit = {
     spark = null
     cleanupResources()
   }

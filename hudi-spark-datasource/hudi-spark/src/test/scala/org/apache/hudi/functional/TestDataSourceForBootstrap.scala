@@ -35,7 +35,7 @@ import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
@@ -43,6 +43,7 @@ import java.time.Instant
 import java.util.Collections
 import scala.collection.JavaConverters._
 
+@Tag("functional")
 class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _

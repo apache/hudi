@@ -22,11 +22,13 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+@Tag("functional")
 class TestEmptyCommit extends HoodieSparkClientTestBase {
+
   var spark: SparkSession = _
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -37,7 +39,7 @@ class TestEmptyCommit extends HoodieSparkClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -45,7 +47,7 @@ class TestEmptyCommit extends HoodieSparkClientTestBase {
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()

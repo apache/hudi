@@ -26,12 +26,13 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import scala.collection.JavaConversions.asScalaBuffer
 
+@Tag("functional")
 class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase  {
 
   var spark: SparkSession = null

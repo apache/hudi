@@ -845,7 +845,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath + "/*/*")
-    recordsReadDF.printSchema()
     recordsReadDF.schema.foreach(f => {
       f.name match {
         case "timeStampValue" =>

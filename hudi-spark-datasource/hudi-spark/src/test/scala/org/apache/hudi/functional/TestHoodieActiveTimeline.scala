@@ -25,19 +25,17 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.slf4j.LoggerFactory
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
 import scala.collection.JavaConversions._
 
 /**
  * Tests on HoodieActionTimeLine using the real hudi table.
  */
+@Tag("functional")
 class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
-  var spark: SparkSession = null
-
-  private val log = LoggerFactory.getLogger(classOf[TestHoodieActiveTimeline])
+  var spark: SparkSession = _
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -49,7 +47,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
   )
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
@@ -59,7 +57,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()

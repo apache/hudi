@@ -21,18 +21,15 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.functional.CommonOptionUtils._
+import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{ComplexKeyGenerator, KeyGenUtils, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
@@ -40,16 +37,18 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAs
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
+@Tag("functional")
 class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with ScalaAssertionSupport {
-  var spark: SparkSession = null
+
+  var spark: SparkSession = _
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
@@ -59,7 +58,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -67,7 +66,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()

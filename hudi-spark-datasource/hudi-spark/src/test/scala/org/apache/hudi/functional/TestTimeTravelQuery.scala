@@ -26,14 +26,16 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.text.SimpleDateFormat
 
+@Tag("functional")
 class TestTimeTravelQuery extends HoodieSparkClientTestBase {
-  var spark: SparkSession =_
+
+  var spark: SparkSession = _
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -44,7 +46,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach override def setUp(): Unit = {
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
@@ -53,7 +55,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()

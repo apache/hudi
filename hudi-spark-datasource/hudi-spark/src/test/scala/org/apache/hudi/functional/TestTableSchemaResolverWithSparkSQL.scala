@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.functional
 
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
