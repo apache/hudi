@@ -56,6 +56,19 @@ public class HoodieMetadataWriteUtils {
   // from the metadata payload schema.
   public static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
 
+  // MDT writes are always prepped. Hence, insert and upsert shuffle parallelism are not important to be configured. Same for delete
+  // parallelism as deletes are not used.
+  // The finalize, cleaner and rollback tasks will operate on each fileGroup so their parallelism should be as large as the total file groups.
+  // But it's not possible to accurately get the file group count here so keeping these values large enough. This parallelism would
+  // any ways be limited by the executor counts.
+  private static final int MDT_DEFAULT_PARALLELISM = 512;
+
+  // File groups in each partition are fixed at creation time and we do not want them to be split into multiple files
+  // ever. Hence, we use a very large basefile size in metadata table. The actual size of the HFiles created will
+  // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
+  private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
+
+
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
    * indexer only.
@@ -67,22 +80,7 @@ public class HoodieMetadataWriteUtils {
       HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
 
-    // MDT writes are always prepped. Hence, insert and upsert shuffle parallelism are not important to be configured. Same for delete
-    // parallelism as deletes are not used.
-    // The finalize, cleaner and rollback tasks will operate on each fileGroup so their parallelism should be as large as the total file groups.
-    // But it's not possible to accurately get the file group count here so keeping these values large enough. This parallelism would
-    // any ways be limited by the executor counts.
-    final int defaultParallelism = 512;
-
-    // File groups in each partition are fixed at creation time and we do not want them to be split into multiple files
-    // ever. Hence, we use a very large basefile size in metadata table. The actual size of the HFiles created will
-    // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
-    final long maxHFileSizeBytes = 10 * 1024 * 1024 * 1024L; // 10GB
-
-    // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
-    // presence of keys.
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
-    final long maxLogBlockSizeBytes = maxLogFileSizeBytes;
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -108,7 +106,7 @@ public class HoodieMetadataWriteUtils {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
             .withAutoClean(false)
-            .withCleanerParallelism(defaultParallelism)
+            .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(2)
             .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
@@ -134,10 +132,13 @@ public class HoodieMetadataWriteUtils {
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
             .build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(maxHFileSizeBytes)
-            .logFileMaxSize(maxLogFileSizeBytes).logFileDataBlockMaxSize(maxLogBlockSizeBytes).build())
-        .withRollbackParallelism(defaultParallelism)
-        .withFinalizeWriteParallelism(defaultParallelism)
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)
+            .logFileMaxSize(maxLogFileSizeBytes)
+            // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
+            // presence of keys
+            .logFileDataBlockMaxSize(maxLogFileSizeBytes).build())
+        .withRollbackParallelism(MDT_DEFAULT_PARALLELISM)
+        .withFinalizeWriteParallelism(MDT_DEFAULT_PARALLELISM)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
