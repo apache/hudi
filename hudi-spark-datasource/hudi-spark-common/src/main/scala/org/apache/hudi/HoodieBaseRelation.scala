@@ -181,6 +181,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     (avroSchema, internalSchemaOpt)
   }
 
+  lazy val partitionSchema: StructType = {
+    fileIndex.partitionSchema
+  }
+
   protected lazy val tableStructSchema: StructType = {
     val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField

@@ -147,6 +147,47 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     if (HoodieSparkUtils.gteqSpark3_0) {
+      val (nestedSchemaPruningClass, partitionPruningClass) =
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          ("org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning", "org.apache.spark.sql.execution.dynamicpruning.Spark34PartitionPruning")
+        } else if (HoodieSparkUtils.gteqSpark3_3) {
+          ("org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning", "org.apache.spark.sql.execution.dynamicpruning.Spark33PartitionPruning")
+        } else if (HoodieSparkUtils.gteqSpark3_2) {
+          ("org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning", "org.apache.spark.sql.execution.dynamicpruning.Spark32PartitionPruning")
+        } else if (HoodieSparkUtils.gteqSpark3_1) {
+          // spark 3.1
+          ("org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning", "org.apache.spark.sql.execution.dynamicpruning.Spark31PartitionPruning")
+        } else {
+          // spark 3.0
+          ("org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning", "org.apache.spark.sql.execution.dynamicpruning.Spark30PartitionPruning")
+        }
+
+      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
+      rules += (_ => nestedSchemaPruningRule)
+      val partitionPruningRule: RuleBuilder = session => instantiateKlass(partitionPruningClass, session)
+      rules += partitionPruningRule
+    }
+
+    // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
+    //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
+    //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into
+    //       [[BaseSessionStateBuilder.customEarlyScanPushDownRules]] even though it could directly
+    //       inject into the Spark's [[Optimizer]]
+    //
+    //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
+    //          - Triggered before CBO, therefore have access to the same stats as CBO
+    //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
+    rules += (spark => HoodiePruneFileSourcePartitions(spark))
+
+    rules
+  }
+
+  /*def customOptimizerRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
+    )
+
+    if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
         if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
@@ -178,7 +219,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules += (spark => HoodiePruneFileSourcePartitions(spark))
 
     rules
-  }
+  }*/
 
   /**
    * This rule adjusts output of the [[LogicalRelation]] resolving int Hudi tables such that all of the
