@@ -124,7 +124,9 @@ object HoodieSpark30Analysis {
      * children attributes.
      */
     private def resolveExpressionTopDown(e: Expression, q: LogicalPlan): Expression = {
+      // scalastyle:off return
       if (e.resolved) return e
+      // scalastyle:on return
       e match {
         case f: LambdaFunction if !f.bound => f
         case u@UnresolvedAttribute(nameParts) =>
