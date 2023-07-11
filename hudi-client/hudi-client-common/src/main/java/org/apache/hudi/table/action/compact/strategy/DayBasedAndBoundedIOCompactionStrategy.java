@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 public class DayBasedAndBoundedIOCompactionStrategy extends DayBasedCompactionStrategy {
 
-  protected static Comparator<HoodieCompactionOperation> logSizeComparator = (op1, op2) -> {
+  private static final Comparator<HoodieCompactionOperation> LOG_SIZE_COMPARATOR = (op1, op2) -> {
     Long logSize1 = op1.getMetrics().get(TOTAL_LOG_FILE_SIZE).longValue();
     Long logSize2 = op2.getMetrics().get(TOTAL_LOG_FILE_SIZE).longValue();
     // Sorted by log file size from largest to smallest
@@ -50,7 +50,7 @@ public class DayBasedAndBoundedIOCompactionStrategy extends DayBasedCompactionSt
     // Get all operations with IO bounded
     return filterOperationsByBoundedIO(writeConfig, partitionedOperations.stream()
         .filter(op -> op.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold)
-        .sorted(logSizeComparator)
+        .sorted(LOG_SIZE_COMPARATOR)
         .collect(Collectors.toList()));
   }
 
