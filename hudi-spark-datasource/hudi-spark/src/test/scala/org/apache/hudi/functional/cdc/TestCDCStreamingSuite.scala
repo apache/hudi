@@ -44,7 +44,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
    *     and another streaming read the cdc data from user_to_country_tbl and do some aggregation
    *     and write to country_to_population_tbl.
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = "CDC streaming with different logging modes")
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def cdcStreaming(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val commonOptions = Map(

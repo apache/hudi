@@ -129,8 +129,8 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Executed testcases ordered by running-time
       - job: UT_FT_2
         condition: false
         displayName: FT client/spark-client
@@ -154,8 +154,8 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Executed testcases ordered by running-time
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '240'
@@ -178,8 +178,8 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Executed testcases ordered by running-time
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '180'
@@ -202,5 +202,5 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
-              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
-            displayName: Top 100 long-running testcases
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Executed testcases ordered by running-time

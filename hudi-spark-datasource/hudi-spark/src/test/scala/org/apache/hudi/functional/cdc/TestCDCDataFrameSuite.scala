@@ -47,7 +47,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step7: Upsert 30 With Clean
    * Step8: Bulk_Insert 20
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = "COW write with different logging modes")
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testCOWDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val options = commonOpts ++ Map(
@@ -239,7 +239,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step7,8: Insert 10 in two commits
    * Step9: Upsert 30 With Clean
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = "MOR write with different logging modes")
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testMORDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val options = commonOpts ++ Map(
@@ -458,7 +458,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step3: Delete Partition
    * Step4: Upsert
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = "COW/MOR partitioned - write with different logging modes")
   @CsvSource(Array(
     "COPY_ON_WRITE,data_before_after", "MERGE_ON_READ,data_before_after",
     "COPY_ON_WRITE,data_before", "MERGE_ON_READ,data_before",
@@ -575,7 +575,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataFrom2To3, insertedCnt2, 0, deletedCnt2 + deletedCnt3)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "CDC with multiple log blocks under different logging modes.")
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testCDCWithMultiBlocksAndLogFiles(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val (blockSize, logFileSize) = if (loggingMode == OP_KEY_ONLY) {
