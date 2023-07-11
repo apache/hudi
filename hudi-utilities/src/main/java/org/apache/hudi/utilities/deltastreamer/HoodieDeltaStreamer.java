@@ -60,4 +60,8 @@ public class HoodieDeltaStreamer extends HoodieStreamer {
                              Option<TypedProperties> propsOverride) throws IOException {
     super(cfg, jssc, fs, conf, propsOverride);
   }
+
+  @Deprecated
+  public static class Config extends HoodieStreamer.Config {
+  }
 }

@@ -34,4 +34,8 @@ public class HoodieMultiTableDeltaStreamer extends HoodieMultiTableStreamer {
   public HoodieMultiTableDeltaStreamer(Config config, JavaSparkContext jssc) throws IOException {
     super(config, jssc);
   }
+
+  @Deprecated
+  public static class Config extends HoodieMultiTableStreamer.Config {
+  }
 }
