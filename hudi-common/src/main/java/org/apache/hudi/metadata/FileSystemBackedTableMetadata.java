@@ -181,8 +181,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
           .map(entry -> entry.getKey().get())
-          .filter(relativePartitionPath ->
-              partitionFields != null && (Boolean) fullBoundExpr.eval(
+          .filter(relativePartitionPath -> fullBoundExpr instanceof Predicates.TrueExpression
+              || (Boolean) fullBoundExpr.eval(
                       extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
           .collect(Collectors.toList()));
 

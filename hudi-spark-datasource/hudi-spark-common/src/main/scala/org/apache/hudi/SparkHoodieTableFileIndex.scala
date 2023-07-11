@@ -314,15 +314,23 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         .map(colName => (colName, (staticPartitionColumnValuesMap(colName)._1, staticPartitionColumnValuesMap(colName)._2.get)))
     }
 
-    val partitionTypesOption = Try {
-      SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
-    } match {
-      case Success(partitionRecordType)
-        if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size
-          && Conversions.isPartitionSchemaSupportedConversion(partitionRecordType) =>
-        Some(partitionRecordType)
-      case _ =>
-        None
+    val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
+    val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
+
+    val partitionTypesOption =if (hiveStylePartitioning && urlEncodePartitioning) {
+      Try {
+        SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
+      } match {
+        case Success(partitionRecordType)
+          if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size
+            && Conversions.isPartitionSchemaSupportedConversion(partitionRecordType) =>
+          Some(partitionRecordType)
+        case _ =>
+          None
+      }
+    } else {
+      // Avoid convert partition schemas if hivestylePartitioning & urlEncodePartitioning is not enabled.
+      None
     }
 
     (staticPartitionColumnNameValuePairs.isEmpty, partitionTypesOption) match {

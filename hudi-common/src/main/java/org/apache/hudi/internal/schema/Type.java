@@ -113,7 +113,7 @@ public interface Type extends Serializable {
       case UUID:
         return UUID.fromString(partitionValue);
       case DATE:
-        // TODO Support zoneId and different date format
+        // TODO Support different date format
         return Math.toIntExact(ChronoUnit.DAYS.between(
             EPOCH_DAY, LocalDate.parse(partitionValue, DateTimeFormatter.ISO_LOCAL_DATE)));
       case STRING:
