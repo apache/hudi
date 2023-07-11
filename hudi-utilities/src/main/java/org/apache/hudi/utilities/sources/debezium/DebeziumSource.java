@@ -121,6 +121,10 @@ public abstract class DebeziumSource extends RowSource {
       try {
         String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
         Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
+        if (dataset.count() == 0) {
+          LOG.info("After filtering for null value messages, dataframe size is empty");
+          return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
+        }
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
         return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
@@ -151,11 +155,13 @@ public abstract class DebeziumSource extends RowSource {
     if (deserializerClassName.equals(StringDeserializer.class.getName())) {
       kafkaData = AvroConversionUtils.createDataFrame(
           KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .filter(x -> filterForNullValues(x.value()))
               .map(obj -> convertor.fromJson(obj.value()))
               .rdd(), schemaStr, sparkSession);
     } else {
       kafkaData = AvroConversionUtils.createDataFrame(
           KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .filter(x -> filterForNullValues(x.value()))
               .map(obj -> (GenericRecord) obj.value())
               .rdd(), schemaStr, sparkSession);
     }
@@ -166,6 +172,14 @@ public abstract class DebeziumSource extends RowSource {
     // Some required transformations to ensure debezium data types are converted to spark supported types.
     return convertArrayColumnsToString(convertColumnToNullable(sparkSession,
         convertDateColumns(debeziumDataset, new Schema.Parser().parse(schemaStr))));
+  }
+
+  private static Boolean filterForNullValues(Object value) {
+    if (value == null) {
+      LOG.info("Found a null value (tombstone) message, filtering it out of the dataframe.");
+      return false;
+    }
+    return true;
   }
 
   /**

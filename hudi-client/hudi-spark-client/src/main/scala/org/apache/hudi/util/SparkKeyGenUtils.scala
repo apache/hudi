@@ -35,21 +35,32 @@ object SparkKeyGenUtils {
    */
   def getPartitionColumns(props: TypedProperties): String = {
     val keyGeneratorClass = getKeyGeneratorClassName(props)
-    getPartitionColumns(keyGeneratorClass, props)
+    getPartitionColumns(keyGeneratorClass, props, false)
+  }
+
+  def getPartitionColumns(props: TypedProperties, forConfFile: Boolean=false): String = {
+    val keyGeneratorClass = getKeyGeneratorClassName(props)
+    getPartitionColumns(keyGeneratorClass, props, forConfFile)
   }
 
   /**
    * @param keyGen key generator class name
    * @return partition columns
    */
-  def getPartitionColumns(keyGenClass: String, typedProperties: TypedProperties): String = {
+  def getPartitionColumns(keyGenClass: String, typedProperties: TypedProperties, forConfFile: Boolean): String = {
     // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
     // is: "field_name: field_type", we extract the field_name from the partition path field.
     if (keyGenClass.equals(classOf[CustomKeyGenerator].getCanonicalName) || keyGenClass.equals(classOf[CustomAvroKeyGenerator].getCanonicalName)) {
-      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
-        .split(",").map(pathField => {
-        pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
-          .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${keyGenClass}")}).mkString(",")
+      if (forConfFile) {
+        // don't split the path field by ":" for the hoodie.properties file (so future runs are compatible)
+        typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).mkString(",")
+      } else {
+        // when normally getting the partitionpath, extract the field_name only
+        typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+          .split(",").map(pathField => {
+          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
+            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${keyGenClass}")}).mkString(",")
+      }
     } else if (keyGenClass.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
       || keyGenClass.equals(classOf[NonpartitionedAvroKeyGenerator].getCanonicalName)
       || keyGenClass.equals(classOf[GlobalDeleteKeyGenerator].getCanonicalName)

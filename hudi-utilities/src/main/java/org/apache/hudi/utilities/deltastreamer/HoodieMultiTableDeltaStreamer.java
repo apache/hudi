@@ -115,7 +115,7 @@ public class HoodieMultiTableDeltaStreamer {
     for (String table : tablesToBeIngested) {
       String[] tableWithDatabase = table.split("\\.");
       String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
-      String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
+      String currentTable = tableWithDatabase.length > 1 ? (tableWithDatabase.length == 3 ? tableWithDatabase[1] + "." + tableWithDatabase[2] : tableWithDatabase[1]) : table;
       String configProp = HoodieDeltaStreamerConfig.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
       String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
@@ -238,6 +238,7 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
       tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
       tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
+      tableConfig.postWriteTerminationStrategyClass = globalConfig.postWriteTerminationStrategyClass;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
     }
   }
@@ -411,6 +412,9 @@ public class HoodieMultiTableDeltaStreamer {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingMinShare = 0;
 
+    @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
+    public String postWriteTerminationStrategyClass = "";
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -426,7 +430,11 @@ public class HoodieMultiTableDeltaStreamer {
   private static String resetTarget(Config configuration, String database, String tableName) {
     String basePathPrefix = configuration.basePathPrefix;
     basePathPrefix = basePathPrefix.charAt(basePathPrefix.length() - 1) == '/' ? basePathPrefix.substring(0, basePathPrefix.length() - 1) : basePathPrefix;
-    String targetBasePath = basePathPrefix + Constants.FILE_DELIMITER + database + Constants.FILE_DELIMITER + tableName;
+    String basePathWithDatabase = basePathPrefix + Constants.FILE_DELIMITER + database;
+    String[] tableNameWithSchema = tableName.split("\\.");
+    String targetBasePath = tableNameWithSchema.length > 1 ? basePathWithDatabase + Constants.FILE_DELIMITER
+        + tableNameWithSchema[0] + Constants.FILE_DELIMITER + tableNameWithSchema[1]
+        : basePathWithDatabase + Constants.FILE_DELIMITER + tableName;
     configuration.targetTableName = database + Constants.DELIMITER + tableName;
     return targetBasePath;
   }
