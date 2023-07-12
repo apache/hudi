@@ -440,7 +440,7 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .deprecatedAfter("0.14.0")
     .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
-      "This config is deprecated as of 0.14.0. Please use " + SQL_WRITE_OPERATION.key() + " instead.")
+      "This config is deprecated as of 0.14.0. Please use hoodie.sql.write.operation instead.")
 
   @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
@@ -450,8 +450,8 @@ object DataSourceWriteOptions {
     .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
-      "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use "
-      + SQL_WRITE_OPERATION.key() + " and " + INSERT_DUP_POLICY.key() + " as you see fit.")
+      "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use " +
+      "hoodie.sql.write.operation and hoodie.datasource.insert.dup.policy as you see fit.")
 
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
@@ -466,7 +466,7 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .markAdvanced()
     .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
-    "This config is deprecated as of 0.14.0. Please use " + INSERT_DUP_POLICY.key() + " instead.");
+    "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
