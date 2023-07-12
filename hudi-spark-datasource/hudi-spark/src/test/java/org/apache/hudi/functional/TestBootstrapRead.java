@@ -120,7 +120,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void runTests(String bootstrapType,Boolean dashPartitions, String tableType, Integer nPartitions) {
+  public void runTests(String bootstrapType, Boolean dashPartitions, String tableType, Integer nPartitions) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
@@ -145,7 +145,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     compareTables();
   }
 
-  private Map<String, String> basicOptions() {
+  protected Map<String, String> basicOptions() {
     Map<String, String> options = new HashMap<>();
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
@@ -168,7 +168,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     return options;
   }
 
-  private Map<String, String> setBootstrapOptions() {
+  protected Map<String, String> setBootstrapOptions() {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
@@ -266,25 +266,33 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(hudiBasePath);
   }
 
-  public Dataset<Row> generateTestInserts() {
+  protected Dataset<Row> makeInsertDf() {
     List<String> records = dataGen.generateInserts("000", nInserts).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+    return sparkSession.read().json(rdd);
   }
 
-  public Dataset<Row> generateTestUpdates(String instantTime) {
+  protected Dataset<Row> generateTestInserts() {
+    return addPartitionColumns(makeInsertDf(), nPartitions);
+  }
+
+  protected Dataset<Row> makeUpdateDf(String instantTime) {
     try {
       List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+      return sparkSession.read().json(rdd);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
-  public static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
+  protected Dataset<Row> generateTestUpdates(String instantTime) {
+    return addPartitionColumns(makeUpdateDf(instantTime), nPartitions);
+  }
+
+  private static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
     if (nPartitions < 2) {
       return df;
     }

@@ -28,6 +28,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.types.StructType;
 
 public class SparkPartitionUtils {
 
@@ -35,18 +36,30 @@ public class SparkPartitionUtils {
                                                String partitionPath,
                                                String basePath,
                                                Schema writerSchema,
-                                               Configuration hadoopConf) {
+                                               Configuration hadoopConf,
+                                               Boolean typeInference) {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
+    return getPartitionFieldValsStruct(partitionFields.get(), partitionPath, basePath,
+        AvroConversionUtils.convertAvroSchemaToStructType(writerSchema), hadoopConf, typeInference);
+  }
+
+  public static Object[] getPartitionFieldValsStruct(String[] partitionFields,
+                                               String partitionPath,
+                                               String basePath,
+                                               StructType writerSchema,
+                                               Configuration hadoopConf,
+                                               Boolean typeInference) {
     SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
     return HoodieSparkUtils.parsePartitionColumnValues(
-        partitionFields.get(),
+        partitionFields,
         partitionPath,
         new CachingPath(basePath),
-        AvroConversionUtils.convertAvroSchemaToStructType(writerSchema),
+        writerSchema,
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
         sparkParsePartitionUtil,
-        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true));
+        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true),
+        typeInference);
   }
 }

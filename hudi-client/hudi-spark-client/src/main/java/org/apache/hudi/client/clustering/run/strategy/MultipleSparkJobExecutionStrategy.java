@@ -322,7 +322,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
-              : Option.of(getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp));
+              : Option.of(getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp,
+              tableConfig.isBootstrapPartitionColumnTypeInferenceEnabled()));
           recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getProps(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
@@ -350,6 +351,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     HoodieTableConfig  tableConfig = getHoodieTable().getMetaClient().getTableConfig();
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
+    Boolean typeInference = tableConfig.isBootstrapPartitionColumnTypeInferenceEnabled();
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
         .mapPartitions(clusteringOpsPartition -> {
@@ -357,7 +359,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp);
+              HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp, typeInference);
 
               Option<BaseKeyGenerator> keyGeneratorOp =
                   writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
@@ -378,7 +380,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }));
   }
 
-  private HoodieFileReader getBaseOrBootstrapFileReader(SerializableConfiguration hadoopConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
+  private HoodieFileReader getBaseOrBootstrapFileReader(SerializableConfiguration hadoopConf, String bootstrapBasePath,
+                                                        Option<String[]> partitionFields, ClusteringOperation clusteringOp,
+                                                        Boolean typeInference)
       throws IOException {
     HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
     // handle bootstrap path
@@ -388,12 +392,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       if (partitionFields.isPresent()) {
         int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
         String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
-        partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(), hadoopConf.get());
+        partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(), hadoopConf.get(), typeInference);
       }
       baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,
           HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(bootstrapFilePath)), partitionFields,
-          partitionValues);
+          partitionValues, typeInference);
     }
     return baseFileReader;
   }

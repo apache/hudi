@@ -85,7 +85,8 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader,
+                                                 Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
     throw new UnsupportedOperationException();
   }
 }

@@ -43,7 +43,8 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   @Override
-  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
-    return new HoodieAvroBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader,
+                                                 Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
+    return new HoodieAvroBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues, partitionInference);
   }
 }

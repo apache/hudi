@@ -24,8 +24,9 @@ import org.apache.spark.sql.catalyst.InternalRow;
 
 public class HoodieSparkBootstrapFileReader extends HoodieBootstrapFileReader<InternalRow> {
 
-  public HoodieSparkBootstrapFileReader(HoodieFileReader<InternalRow> skeletonFileReader, HoodieFileReader<InternalRow> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
-    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
+  public HoodieSparkBootstrapFileReader(HoodieFileReader<InternalRow> skeletonFileReader, HoodieFileReader<InternalRow> dataFileReader,
+                                        Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
+    super(skeletonFileReader, dataFileReader, partitionFields, partitionValues, partitionInference);
   }
 
   @Override

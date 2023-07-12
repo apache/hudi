@@ -37,11 +37,14 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   private final Option<String[]> partitionFields;
   private final Object[] partitionValues;
 
-  public HoodieBootstrapFileReader(HoodieFileReader<T> skeletonFileReader, HoodieFileReader<T> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+  protected final Boolean partitionInference;
+
+  public HoodieBootstrapFileReader(HoodieFileReader<T> skeletonFileReader, HoodieFileReader<T> dataFileReader, Option<String[]> partitionFields, Object[] partitionValues, Boolean partitionInference) {
     this.skeletonFileReader = skeletonFileReader;
     this.dataFileReader = dataFileReader;
     this.partitionFields = partitionFields;
     this.partitionValues = partitionValues;
+    this.partitionInference = partitionInference;
   }
 
   @Override
