@@ -164,7 +164,9 @@ public class CommitUtils {
    */
   public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
                                                                   String keyToLookup) {
-    return (Option<String>) timeline.getWriteTimeline().getReverseOrderedInstants().map(instant -> {
+    return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants()
+           .filter(s->(s.getAction().equals(HoodieTimeline.COMMIT_ACTION) || s.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))
+           .getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
