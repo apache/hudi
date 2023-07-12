@@ -50,7 +50,7 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
   public static final ConfigProperty<String> KAFKA_TOPIC = ConfigProperty
       .key(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.topic")
       .noDefaultValue()
-      .withDocumentation("Kafka topic name.");
+      .withDocumentation("Kafka topic name. The config is specific to HoodieMultiTableDeltaStreamer");
 
   public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
       .key(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.append.offsets")
