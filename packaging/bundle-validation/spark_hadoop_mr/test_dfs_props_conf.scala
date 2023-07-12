@@ -113,6 +113,13 @@ writePropertiesFile(filePath3, "double.prop=838.3", "include=" + "t2.props", "do
 val filePath4 = new Path(dfsBasePath + "/t4.props")
 writePropertiesFile(filePath4, "double.prop=838.3", "include = t4.props");
 
-// Run tests
-testParsing()
-testIncludes()
+try {
+  // Run tests
+  testParsing()
+  testIncludes()
+} catch {
+  case ae: AssertionError => System.exit(1)
+}
+
+
+System.exit(0)
