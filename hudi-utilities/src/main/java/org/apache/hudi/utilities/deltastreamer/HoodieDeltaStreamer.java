@@ -789,7 +789,7 @@ public class HoodieDeltaStreamer implements Serializable {
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
                 LOG.warn("Closing and shutting down ingestion service");
-                error = true;
+                waitAsyncServicesFinishAndStop();
                 onIngestionCompletes(false);
                 shutdown(true);
               } else {
@@ -809,6 +809,33 @@ public class HoodieDeltaStreamer implements Serializable {
         }
         return true;
       }, executor), executor);
+    }
+
+    /**
+     * Wait till outstanding pending compaction/clustering
+     */
+    private void waitAsyncServicesFinishAndStop() {
+      LOG.info("wait all async services finish ...");
+      if (asyncCompactService.isPresent()) {
+        LOG.info("wait all async compact service finish ...");
+        try {
+          asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(0);
+        } catch (InterruptedException e) {
+          LOG.error("Interrupted while waiting for async compact service finish ", e);
+        } finally {
+          asyncCompactService.get().shutdown(true);
+        }
+      }
+      if (asyncClusteringService.isPresent()) {
+        LOG.info("wait all async cluster service finish ...");
+        try {
+          asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(0);
+        } catch (InterruptedException e) {
+          LOG.error("Interrupted while waiting for async cluster service finish ", e);
+        } finally {
+          asyncClusteringService.get().shutdown(true);
+        }
+      }
     }
 
     private void handleUpsertException(HoodieUpsertException ue) {
