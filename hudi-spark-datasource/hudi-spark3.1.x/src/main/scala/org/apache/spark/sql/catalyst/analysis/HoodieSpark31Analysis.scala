@@ -209,7 +209,7 @@ object HoodieSpark31Analysis {
 
       containsUnresolvedInsertStar || containsUnresolvedUpdateStar
     }
-    // END custom Hudi change.
+    // END: custom Hudi change.
   }
 
 }
