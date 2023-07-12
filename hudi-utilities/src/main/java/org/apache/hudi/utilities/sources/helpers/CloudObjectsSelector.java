@@ -262,7 +262,7 @@ public class CloudObjectsSelector {
     public static final String S3_QUEUE_LONG_POLL_WAIT = S3SourceConfig.S3_QUEUE_LONG_POLL_WAIT.key();
 
     /**
-     * {@link  #S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is max messages for each batch of delta streamer
+     * {@link  #S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is max messages for each batch of Hudi Streamer
      * run. Source will process these maximum number of message at a time.
      */
     @Deprecated

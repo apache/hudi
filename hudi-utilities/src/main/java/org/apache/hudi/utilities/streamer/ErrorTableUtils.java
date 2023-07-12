@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,30 +27,29 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-
-import static org.apache.spark.sql.functions.lit;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_WRITE_FAILURE_STRATEGY;
-import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+import static org.apache.spark.sql.functions.lit;
 
 public final class ErrorTableUtils {
-  public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
+  public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieStreamer.Config cfg, SparkSession sparkSession,
                                                                  TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
 
-    Class<?>[] argClassArr = new Class[]{HoodieDeltaStreamer.Config.class,
+    Class<?>[] argClassArr = new Class[]{HoodieStreamer.Config.class,
         SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class};
     String errMsg = "Unable to instantiate ErrorTableWriter with arguments type " + Arrays.toString(argClassArr);
     ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr, false), errMsg);

@@ -17,20 +17,19 @@
 # limitations under the License.
 
 
-# Simple examples of HoodieDeltaStreamer which read data from kafka,
-# create the source topic using: kafka-topics.sh --create --zookeeper zk:2181 --replication-factor 3 --partitions 1 --topic hoodie-source-topic
-# insert data using: kafka-console-producer.sh --broker-list localhost:9092 --topic hoodie-source-topic
-# start the delta-streamer
+# Simple examples of HoodieStreamer which read data from a mock HoodieExampleDataGenerator,
+# this is an example for developers to define your own custom data source.
 
 BASE_PATH=$(cd `dirname $0`; pwd)
 
-${BASE_PATH}/hudi-delta-streamer \
---props hudi-examples/src/main/resources/delta-streamer-config/kafka/kafka-source.properties \
---target-base-path /tmp/hoodie/deltastreamertable \
+${BASE_PATH}/hudi-streamer \
+--hoodie-conf hoodie.datasource.write.recordkey.field=uuid \
+--hoodie-conf hoodie.datasource.write.partitionpath.field=driver \
+--target-base-path /tmp/hoodie/streamertable \
 --table-type MERGE_ON_READ \
---target-table deltastreamertable \
+--target-table streamertable \
 --source-ordering-field ts \
---source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+--source-class org.apache.hudi.examples.common.RandomJsonSource \
 --schemaprovider-class org.apache.hudi.examples.common.ExampleDataSchemaProvider \
 --transformer-class org.apache.hudi.examples.common.IdentityTransformer \
 --continuous

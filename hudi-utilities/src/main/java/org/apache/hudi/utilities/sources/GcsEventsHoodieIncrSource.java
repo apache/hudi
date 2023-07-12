@@ -68,8 +68,8 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
   --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
   --driver-memory 4g \
   --executor-memory 4g \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-  absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
+ --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
   --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
   --op INSERT \
   --hoodie-conf hoodie.deltastreamer.source.hoodieincr.file.format="parquet" \

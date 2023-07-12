@@ -111,15 +111,17 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 @ConfigClassProperty(name = "Write Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
-        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
+        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g Hudi Streamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
-  // It is here so that both the client and deltastreamer use the same reference
-  public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  // It is here so that both the client and Hudi Streamer use the same reference
+  public static final String STREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  @Deprecated
+  public static final String DELTASTREAMER_CHECKPOINT_KEY = STREAMER_CHECKPOINT_KEY;
 
   public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
@@ -693,7 +695,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
       .markAdvanced()
-      .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 

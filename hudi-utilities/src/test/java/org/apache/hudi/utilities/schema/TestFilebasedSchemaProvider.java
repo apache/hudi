@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithConfiguredReplacement;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
@@ -68,13 +68,13 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   @Test
   public void properlyFormattedNestedSchemaTest() throws IOException {
     this.schemaProvider = new FilebasedSchemaProvider(
-        Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_valid.avsc"), jsc);
+        Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc"), jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateProperFormattedSchema());
   }
 
   @Test
   public void renameBadlyFormattedSchemaTest() throws IOException {
-    TypedProperties props = Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_invalid.avsc");
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithDefaultReplacement());
@@ -84,13 +84,13 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   public void renameBadlyFormattedSchemaWithPropertyDisabledTest() {
     assertThrows(SchemaParseException.class, () -> {
       new FilebasedSchemaProvider(
-          Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_invalid.avsc"), jsc);
+          Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc"), jsc);
     });
   }
 
   @Test
   public void renameBadlyFormattedSchemaWithAltCharMaskConfiguredTest() throws IOException {
-    TypedProperties props = Helpers.setupSchemaOnDFS("delta-streamer-config", "file_schema_provider_invalid.avsc");
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "_");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);

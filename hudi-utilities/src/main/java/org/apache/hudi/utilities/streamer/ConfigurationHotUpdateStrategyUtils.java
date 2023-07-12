@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -25,21 +25,24 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-public class TerminationStrategyUtils {
+public class ConfigurationHotUpdateStrategyUtils {
 
   /**
-   * Create a PostWriteTerminationStrategy class via reflection,
-   * <br>
-   * if the class name of PostWriteTerminationStrategy is configured through the {@link HoodieDeltaStreamer.Config#postWriteTerminationStrategyClass}.
+   * Creates a {@link ConfigurationHotUpdateStrategy} class via reflection.
+   *
+   * <p>If the class name of {@link ConfigurationHotUpdateStrategy} is configured
+   * through the {@link HoodieStreamer.Config#configHotUpdateStrategyClass}.
    */
-  public static Option<PostWriteTerminationStrategy> createPostWriteTerminationStrategy(TypedProperties properties, String postWriteTerminationStrategyClass)
-      throws HoodieException {
+  public static Option<ConfigurationHotUpdateStrategy> createConfigurationHotUpdateStrategy(
+      String strategyClass,
+      HoodieStreamer.Config cfg,
+      TypedProperties properties) throws HoodieException {
     try {
-      return StringUtils.isNullOrEmpty(postWriteTerminationStrategyClass)
+      return StringUtils.isNullOrEmpty(strategyClass)
           ? Option.empty() :
-          Option.of((PostWriteTerminationStrategy) ReflectionUtils.loadClass(postWriteTerminationStrategyClass, properties));
+          Option.of((ConfigurationHotUpdateStrategy) ReflectionUtils.loadClass(strategyClass, cfg, properties));
     } catch (Throwable e) {
-      throw new HoodieException("Could not create PostWritTerminationStrategy class " + postWriteTerminationStrategyClass, e);
+      throw new HoodieException("Could not create configuration hot update strategy class " + strategyClass, e);
     }
   }
 }

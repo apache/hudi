@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -51,8 +51,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_F
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getInstantFromTemporalAccessor;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SAMPLE_WRITES_SIZE;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SAMPLE_WRITES_ENABLED;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SAMPLE_WRITES_SIZE;
 
 /**
  * The utilities class is dedicated to estimating average record size by writing sample incoming records

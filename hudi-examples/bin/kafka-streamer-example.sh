@@ -17,19 +17,20 @@
 # limitations under the License.
 
 
-# Simple examples of HoodieDeltaStreamer which read data from JsonDFSSource,
-# which will read data from a dfs directory for once, then write data to a hudi table which could be queried.
+# Simple examples of HoodieStreamer which read data from kafka,
+# create the source topic using: kafka-topics.sh --create --zookeeper zk:2181 --replication-factor 3 --partitions 1 --topic hoodie-source-topic
+# insert data using: kafka-console-producer.sh --broker-list localhost:9092 --topic hoodie-source-topic
+# start the streamer
 
 BASE_PATH=$(cd `dirname $0`; pwd)
 
-${BASE_PATH}/hudi-delta-streamer \
---hoodie-conf hoodie.datasource.write.recordkey.field=uuid \
---hoodie-conf hoodie.datasource.write.partitionpath.field=driver \
---hoodie-conf hoodie.deltastreamer.source.dfs.root=hudi-examples/src/main/resources/delta-streamer-config/dfs \
---target-base-path /tmp/hoodie/deltastreamertable \
+${BASE_PATH}/hudi-streamer \
+--props hudi-examples/hudi-examples-spark/src/main/resources/streamer-config/kafka/kafka-source.properties \
+--target-base-path /tmp/hoodie/streamertable \
 --table-type MERGE_ON_READ \
---target-table deltastreamertable \
+--target-table streamertable \
 --source-ordering-field ts \
---source-class org.apache.hudi.utilities.sources.JsonDFSSource \
+--source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
 --schemaprovider-class org.apache.hudi.examples.common.ExampleDataSchemaProvider \
---transformer-class org.apache.hudi.examples.common.IdentityTransformer
+--transformer-class org.apache.hudi.examples.common.IdentityTransformer \
+--continuous

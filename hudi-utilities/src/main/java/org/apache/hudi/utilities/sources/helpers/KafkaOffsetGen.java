@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 
@@ -222,7 +222,7 @@ public class KafkaOffsetGen {
       }
     }
     if (!found) {
-      throw new HoodieDeltaStreamerException(KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.key() + " config set to unknown value " + kafkaAutoResetOffsetsStr);
+      throw new HoodieStreamerException(KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.key() + " config set to unknown value " + kafkaAutoResetOffsetsStr);
     }
     if (autoResetValue.equals(KafkaSourceConfig.KafkaResetOffsetStrategies.GROUP)) {
       this.kafkaParams.put(KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.key(), KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.defaultValue().name().toLowerCase());
@@ -248,7 +248,7 @@ public class KafkaOffsetGen {
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
         fromOffsets = fetchValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-        metrics.updateDeltaStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
+        metrics.updateStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         switch (autoResetValue) {
           case EARLIEST:
@@ -317,7 +317,7 @@ public class KafkaOffsetGen {
     } while (partitionInfos == null && (System.currentTimeMillis() <= (start + timeout)));
 
     if (partitionInfos == null) {
-      throw new HoodieDeltaStreamerException(String.format("Can not find metadata for topic %s from kafka cluster", topicName));
+      throw new HoodieStreamerException(String.format("Can not find metadata for topic %s from kafka cluster", topicName));
     }
     return partitionInfos;
   }
@@ -337,12 +337,12 @@ public class KafkaOffsetGen {
         .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     if (isCheckpointOutOfBounds) {
       if (this.props.getBoolean(KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key(), KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.defaultValue())) {
-        throw new HoodieDeltaStreamerException("Some data may have been lost because they are not available in Kafka any more;"
+        throw new HoodieStreamerException("Some data may have been lost because they are not available in Kafka any more;"
             + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.");
       } else {
         LOG.warn("Some data may have been lost because they are not available in Kafka any more;"
             + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed."
-            + " If you want delta streamer to fail on such cases, set \"" + KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
+            + " If you want Hudi Streamer to fail on such cases, set \"" + KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
       }
     }
     return isCheckpointOutOfBounds ? earliestOffsets : checkpointOffsets;

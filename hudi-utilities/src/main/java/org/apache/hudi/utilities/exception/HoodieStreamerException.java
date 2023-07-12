@@ -20,13 +20,13 @@ package org.apache.hudi.utilities.exception;
 
 import org.apache.hudi.exception.HoodieException;
 
-public class HoodieDeltaStreamerException extends HoodieException {
+public class HoodieStreamerException extends HoodieException {
 
-  public HoodieDeltaStreamerException(String msg, Throwable e) {
+  public HoodieStreamerException(String msg, Throwable e) {
     super(msg, e);
   }
 
-  public HoodieDeltaStreamerException(String msg) {
+  public HoodieStreamerException(String msg) {
     super(msg);
   }
 }

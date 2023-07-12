@@ -33,7 +33,7 @@ import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFiel
  */
 @Immutable
 @ConfigClassProperty(name = "Json Kafka Post Processor Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the post processor of Json Kafka Source in Deltastreamer.")
 public class JsonKafkaPostProcessorConfig extends HoodieConfig {

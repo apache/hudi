@@ -29,14 +29,14 @@ import javax.annotation.concurrent.Immutable;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 
 /**
- * Delta Streamer related config.
+ * Hudi Streamer related config.
  */
 @Immutable
-@ConfigClassProperty(name = "DeltaStreamer Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+@ConfigClassProperty(name = "Hudi Streamer Configs",
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     areCommonConfigs = true,
     description = "")
-public class HoodieDeltaStreamerConfig extends HoodieConfig {
+public class HoodieStreamerConfig extends HoodieConfig {
 
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
   public static final String INGESTION_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "ingestion.";
@@ -93,7 +93,7 @@ public class HoodieDeltaStreamerConfig extends HoodieConfig {
       .key(INGESTION_PREFIX + "targetBasePath")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("The path to which a particular table is ingested. The config is specific to HoodieMultiTableDeltaStreamer"
+      .withDocumentation("The path to which a particular table is ingested. The config is specific to HoodieMultiTableStreamer"
           + " and overrides path determined using option `--base-path-prefix` for a table. This config is ignored for a single"
           + " table deltastreamer");
   public static final ConfigProperty<Boolean> SAMPLE_WRITES_ENABLED = ConfigProperty

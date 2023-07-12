@@ -7,16 +7,17 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.async.AsyncCompactService;
@@ -45,7 +46,7 @@ public class SchedulerConfGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(SchedulerConfGenerator.class);
 
-  public static final String DELTASYNC_POOL_NAME = HoodieDeltaStreamer.DELTASYNC_POOL_NAME;
+  public static final String DELTASYNC_POOL_NAME = HoodieStreamer.STREAMSYNC_POOL_NAME;
   public static final String COMPACT_POOL_NAME = AsyncCompactService.COMPACT_POOL_NAME;
   public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
   public static final String SPARK_SCHEDULER_FAIR_MODE = "FAIR";
@@ -81,8 +82,8 @@ public class SchedulerConfGenerator {
    * @param clusteringWeight Minshare for clustering
    * @return Spark scheduling configs
    */
-  static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
-                               Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) {
+  public static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
+                                      Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) {
     return String.format(SPARK_SCHEDULING_PATTERN, DELTASYNC_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         deltaSyncWeight.toString(), deltaSyncMinShare.toString(), COMPACT_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         compactionWeight.toString(), compactionMinShare.toString(), CLUSTERING_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
@@ -94,7 +95,7 @@ public class SchedulerConfGenerator {
    *
    * @param cfg Config for HoodieDeltaStreamer
    */
-  public static Map<String, String> getSparkSchedulingConfigs(HoodieDeltaStreamer.Config cfg) throws Exception {
+  public static Map<String, String> getSparkSchedulingConfigs(HoodieStreamer.Config cfg) throws Exception {
     scala.Option<String> scheduleModeKeyOption = new SparkConf().getOption(SPARK_SCHEDULER_MODE_KEY);
     final Option<String> sparkSchedulerMode =
         scheduleModeKeyOption.isDefined() ? Option.of(scheduleModeKeyOption.get()) : Option.empty();
