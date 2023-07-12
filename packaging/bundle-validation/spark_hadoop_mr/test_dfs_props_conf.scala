@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.config.TypedProperties;
 
@@ -5,32 +23,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 
 import java.io.PrintStream
-
-// init
-val conf = spark.sparkContext.hadoopConfiguration
-val dfsBasePath = "/tmp/hudi"
-val dfsPath = new Path(dfsBasePath)
-
-val dfs = dfsPath.getFileSystem(conf)
-
-// create some files
-val filePath1 = new Path(dfsBasePath + "/t1.props")
-writePropertiesFile(filePath1, "", "#comment", "abc",
-  "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354")
-
-val filePath2 = new Path(dfsBasePath + "/t2.props")
-writePropertiesFile(filePath2, "string.prop=ignored", "include=" + dfsBasePath + "/t1.props")
-
-val filePath3 = new Path(dfsBasePath + "/t3.props")
-writePropertiesFile(filePath3, "double.prop=838.3", "include=" + "t2.props", "double.prop=243.4", "string.prop=t3.value")
-
-val filePath4 = new Path(dfsBasePath + "/t4.props")
-writePropertiesFile(filePath4, "double.prop=838.3", "include = t4.props");
-
-// Run tests
-testParsing()
-testIncludes()
-
 
 def writePropertiesFile(path: Path, lines: String*) {
   val out: PrintStream = new PrintStream(dfs.create(path), true)
@@ -99,3 +91,28 @@ def testIncludes() {
 
   cleanUpGlobalConfig()
 }
+
+// init
+val conf = spark.sparkContext.hadoopConfiguration
+val dfsBasePath = "/tmp/hudi"
+val dfsPath = new Path(dfsBasePath)
+
+val dfs = dfsPath.getFileSystem(conf)
+
+// create some files
+val filePath1 = new Path(dfsBasePath + "/t1.props")
+writePropertiesFile(filePath1, "", "#comment", "abc",
+  "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354")
+
+val filePath2 = new Path(dfsBasePath + "/t2.props")
+writePropertiesFile(filePath2, "string.prop=ignored", "include=" + dfsBasePath + "/t1.props")
+
+val filePath3 = new Path(dfsBasePath + "/t3.props")
+writePropertiesFile(filePath3, "double.prop=838.3", "include=" + "t2.props", "double.prop=243.4", "string.prop=t3.value")
+
+val filePath4 = new Path(dfsBasePath + "/t4.props")
+writePropertiesFile(filePath4, "double.prop=838.3", "include = t4.props");
+
+// Run tests
+testParsing()
+testIncludes()
