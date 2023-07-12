@@ -91,6 +91,7 @@ class TestPartitionPruningOptimization extends HoodieSparkSqlTestBase with Spark
 
         val joinDf = spark.sql(s"select * from $tableName a INNER JOIN tmpv b ON a.id == b.id and a.dt == b.dt")
         joinDf.explain(true)
+        joinDf.show(true)
         println("here")
       }
     }

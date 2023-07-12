@@ -30,6 +30,11 @@ import org.apache.spark.sql.catalyst.trees.TreePattern.{DYNAMIC_PRUNING_EXPRESSI
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 
+
+/**
+ * Mostly taken from spark org.apache.spark.sql.execution.dynamicpruning.PartitionPruning
+ *
+ */
 class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] with PredicateHelper {
 
   private var pruned = false
@@ -274,8 +279,4 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
         appliedPP
       }
   }
-}
-
-object Spark32PartitionPruning {
-  var prevPlan: LogicalPlan = null
 }
