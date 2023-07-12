@@ -77,7 +77,7 @@ test_spark_hadoop_mr_bundles () {
     change_java_runtime_version
     echo "::warning::validate.sh Testing DFSPropertiesConfiguration..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/test_dfs_props_conf.scala
-    if [ $? -ne 0]; then
+    if [ $? -ne 0 ]; then
         echo "::error::validate.sh TestDFSPropertiesConfiguration failed"
         exit 1
     fi
