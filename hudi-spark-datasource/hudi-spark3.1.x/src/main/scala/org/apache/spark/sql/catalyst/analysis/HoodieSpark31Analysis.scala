@@ -45,7 +45,7 @@ object HoodieSpark31Analysis {
         val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
         val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
         val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
-        // END custom Hudi change.
+        // END: custom Hudi change.
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
             val newMatchedActions = m.matchedActions.map {
