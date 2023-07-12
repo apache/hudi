@@ -39,7 +39,7 @@ object HoodieSpark31Analysis {
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case mO @ MergeIntoTable(targetTableO, sourceTableO, _, _, _)
-        // START custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
+        // START: custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
         if !mO.resolved || containsUnresolvedStarAssignments(mO) =>
         lazy val analyzer = spark.sessionState.analyzer
         val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
