@@ -47,6 +47,12 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String LOOKUP_FILES_STR = "lookup_files";
   public static final String LOOKUP_BLOOM_FILTERS_METADATA_STR = "lookup_meta_index_bloom_filters";
   public static final String LOOKUP_COLUMN_STATS_METADATA_STR = "lookup_meta_index_column_ranges";
+  // Time for lookup from record index
+  public static final String LOOKUP_RECORD_INDEX_TIME_STR = "lookup_record_index_time";
+  // Number of keys looked up in a call
+  public static final String LOOKUP_RECORD_INDEX_KEYS_COUNT_STR = "lookup_record_index_key_count";
+  // Number of keys found in record index
+  public static final String LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR = "lookup_record_index_key_count";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";

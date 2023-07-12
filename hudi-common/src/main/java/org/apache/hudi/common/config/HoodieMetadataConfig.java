@@ -533,7 +533,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMaxInitParallelism(int parallelism) {
+    public Builder withRecordIndexMaxParallelism(int parallelism) {
       metadataConfig.setValue(RECORD_INDEX_MAX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
