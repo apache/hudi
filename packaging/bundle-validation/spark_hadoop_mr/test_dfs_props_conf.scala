@@ -24,6 +24,13 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 
 import java.io.PrintStream
 
+// init
+val conf = spark.sparkContext.hadoopConfiguration
+val dfsBasePath = "/tmp/hudi"
+val dfsPath = new Path(dfsBasePath)
+
+val dfs = dfsPath.getFileSystem(conf)
+
 def writePropertiesFile(path: Path, lines: String*) {
   val out: PrintStream = new PrintStream(dfs.create(path), true)
   for (line <- lines) {
@@ -91,13 +98,6 @@ def testIncludes() {
 
   cleanUpGlobalConfig()
 }
-
-// init
-val conf = spark.sparkContext.hadoopConfiguration
-val dfsBasePath = "/tmp/hudi"
-val dfsPath = new Path(dfsBasePath)
-
-val dfs = dfsPath.getFileSystem(conf)
 
 // create some files
 val filePath1 = new Path(dfsBasePath + "/t1.props")
