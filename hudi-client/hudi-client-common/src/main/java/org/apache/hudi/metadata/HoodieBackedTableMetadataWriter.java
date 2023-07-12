@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -53,6 +55,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -101,6 +104,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
@@ -910,26 +914,25 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     dataMetaClient.reloadActiveTimeline();
 
-    // Since the restore has completed on the dataset, the latest write timeline instant is the one to which the
-    // restore was performed. If this is not present, then the restore was performed to the earliest commit. This
-    // could happen in case of bootstrap followed by rollback e.g. TestBootstrap#testFullBootstrapWithRegexModeWithUpdatesMOR.
-    Option<HoodieInstant> restoreInstant = dataMetaClient.getActiveTimeline().getWriteTimeline().lastInstant();
-    final String restoreToInstantTime;
-    if (restoreInstant.isPresent()) {
-      restoreToInstantTime = restoreInstant.get().getTimestamp();
-    } else {
-      restoreToInstantTime = metadataMetaClient.getActiveTimeline().filterCompletedInstants().firstInstant().get().getTimestamp();
+    // Fetch the commit to restore to (savepointed commit time)
+    HoodieInstant restoreInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
+    HoodieInstant requested = HoodieTimeline.getRestoreRequestedInstant(restoreInstant);
+    HoodieRestorePlan restorePlan = null;
+    try {
+      restorePlan = TimelineMetadataUtils.deserializeAvroMetadata(
+          dataMetaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
+    } catch (IOException e) {
+      throw new HoodieIOException("Deserialization of rollback plan failed ", e);
     }
+    final String restoreToInstantTime = restorePlan.getSavepointToRestoreTimestamp();
 
-    // We cannot restore to before the oldest compaction on MDT as we don't have the base files before that time.
-    Option<HoodieInstant> oldestCompaction = metadataMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
-    if (oldestCompaction.isPresent()) {
-      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(restoreToInstantTime, oldestCompaction.get().getTimestamp())) {
-        String msg = String.format("Cannot restore MDT to %s because it is before the oldest compaction at %s", restoreToInstantTime,
-            oldestCompaction.get().getTimestamp()) + ". Please delete MDT and restore again";
-        LOG.error(msg);
-        throw new HoodieMetadataException(msg);
-      }
+    // fetch the earliest commit to retain and ensure the base file prior to the time to restore is present
+    List<HoodieFileGroup> filesGroups = metadata.getMetadataFileSystemView().getAllFileGroups(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
+    boolean canRestore = filesGroups.get(0).getAllFileSlices().map(fileSlice -> fileSlice.getBaseInstantTime()).anyMatch(
+        instantTime1 -> HoodieTimeline.compareTimestamps(instantTime1, LESSER_THAN_OR_EQUALS, restoreToInstantTime));
+    if (!canRestore) {
+      throw new HoodieMetadataException("Can't restore since there is no base file in MDT lesser than the commit to restore to. "
+          + "Please delete metadata table and retry");
     }
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
@@ -1023,7 +1026,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
-              dataMetaClient, rollbackMetadata, instantTime));
+          dataMetaClient, rollbackMetadata, instantTime));
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitInstantTime);

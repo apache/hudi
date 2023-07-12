@@ -459,6 +459,10 @@ public interface HoodieTimeline extends Serializable {
     return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 
+  static HoodieInstant getRestoreRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
+  }
+
   static HoodieInstant getIndexRequestedInstant(final String timestamp) {
     return new HoodieInstant(State.REQUESTED, INDEXING_ACTION, timestamp);
   }
