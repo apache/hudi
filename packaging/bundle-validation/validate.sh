@@ -268,22 +268,9 @@ test_metaserver_bundle () {
     kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
-run_hdfs_test_runner () {
-#  change_java_runtime_version
-#  $JAVA_HOME/bin/java -cp $JARS_DIR/hadoop-mr.jar org.apache.hudi.util.testrunner.TestRunner
-#  use_default_java_runtime
-}
-
 ############################
 # Execute tests
 ############################
-echo "::warning::validate.sh Running HDFS test runner"
-run_hdfs_test_runner
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh Done running HDFS test runner"
-
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
 if [ "$?" -ne 0 ]; then
