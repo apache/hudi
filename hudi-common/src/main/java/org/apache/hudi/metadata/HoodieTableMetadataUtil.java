@@ -613,10 +613,8 @@ public class HoodieTableMetadataUtil {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
     List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient);
-
-    /*List<HoodieRecord> reAddedRecords = getHoodieRecordsForLogFilesFromRollbackPlan(dataTableMetaClient, instantTime);
-    filesPartitionRecords.addAll(reAddedRecords);*/
-    final HoodieData<HoodieRecord> rollbackRecordsRDD = engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
+    final HoodieData<HoodieRecord> rollbackRecordsRDD = (filesPartitionRecords.isEmpty() || filesPartitionRecords.size() == 0) ? engineContext.emptyHoodieData()
+        : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
 
     partitionToRecordsMap.put(MetadataPartitionType.FILES, rollbackRecordsRDD);
 
