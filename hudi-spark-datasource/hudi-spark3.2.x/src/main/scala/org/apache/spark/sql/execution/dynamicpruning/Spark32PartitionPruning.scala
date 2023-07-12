@@ -249,12 +249,12 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
     case s: Subquery if s.correlated => plan
     case _ if !conf.dynamicPartitionPruningEnabled => plan
     case _ =>
-      val appliedPP = prune(plan)
+      val prunedPlan = prune(plan)
       if (pruned) {
-        val appliedPDP = PushDownPredicates.apply(appliedPP)
-        if (appliedPP.fastEquals(appliedPDP)) {
+        val pushedDownPlan = PushDownPredicates.apply(prunedPlan)
+        if (prunedPlan.fastEquals(pushedDownPlan)) {
           //Start: copied from CleanupDynamicPruningFilters
-          val appliedCDPF = appliedPDP.transformWithPruning(
+          val cleanedPlan = pushedDownPlan.transformWithPruning(
             // No-op for trees that do not contain dynamic pruning.
             _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
             // pass through anything that is pushed down into PhysicalOperation
@@ -271,12 +271,12 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
               f.copy(condition = newCondition)
           }
           //End: copied from CleanupDynamicPruningFilters
-          PruneFilters.apply(appliedCDPF)
+          PruneFilters.apply(cleanedPlan)
         } else {
-          appliedPDP
+          pushedDownPlan
         }
       } else {
-        appliedPP
+        prunedPlan
       }
   }
 }
