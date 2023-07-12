@@ -19,26 +19,23 @@ package org.apache.spark.sql.execution.dynamicpruning
 
 import org.apache.hudi.HoodieBaseRelation
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, BinaryComparison, DynamicPruningSubquery, EqualTo, Expression, In, InSet, MultiLikeBase, Not, Or, PredicateHelper, StringPredicate, StringRegexExpression, V2ExpressionUtils}
-import org.apache.spark.sql.catalyst.planning.ExtractEquiJoinKeys
-import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftOuter, LeftSemi, RightOuter}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, BinaryComparison, DynamicPruning, DynamicPruningSubquery, EqualTo, Expression, In, InSet, MultiLikeBase, Not, Or, PredicateHelper, StringPredicate, StringRegexExpression}
+import org.apache.spark.sql.catalyst.optimizer.{PruneFilters, PushDownPredicates}
+import org.apache.spark.sql.catalyst.planning.{ExtractEquiJoinKeys, PhysicalOperation}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, LogicalPlan, Subquery}
+import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.connector.read.SupportsRuntimeFiltering
+import org.apache.spark.sql.catalyst.trees.TreePattern.{DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.execution.dynamicpruning.Spark32PartitionPruning.prevPlan
-import org.apache.spark.sql.catalyst.trees.TreePattern.{DYNAMIC_PRUNING_SUBQUERY, FILTER, TRUE_OR_FALSE_LITERAL}
-
-import scala.collection.mutable
 
 class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] with PredicateHelper {
 
+  private var pruned = false
+
   /**
-   * Searches for a table scan that can be filtered for a given column in a logical plan.
-   *
-   * This methods tries to find either a v1 partitioned scan for a given partition column or
-   * a v2 scan that support runtime filtering on a given attribute.
+   * MODIFIED to match on hoodieBaseRelation
    */
   def getFilterableTableScan(a: Expression, plan: LogicalPlan): Option[LogicalPlan] = {
     val srcInfo: Option[(Expression, LogicalPlan)] = findExpressionAndTrackLineageDown(a, plan)
@@ -188,19 +185,14 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
   }
 
   private def prune(plan: LogicalPlan): LogicalPlan = {
-    var count = 0
     plan transformUp {
-      case f @ Filter(e, _) if e.containsPattern(DYNAMIC_PRUNING_SUBQUERY) =>
-        count += 1
-        f
       // skip this rule if there's already a DPP subquery on the LHS of a join
-      case j @ Join(Filter(_: DynamicPruningSubquery, _), _, _, _, _) =>
-        count += 1
-        j
-      case j @ Join(_, Filter(_: DynamicPruningSubquery, _), _, _, _) =>
-        count += 1
-        j
-      case j @ Join(left, right, joinType, Some(condition), hint) if count == 0 =>
+      case j @ Join(Filter(_: DynamicPruningSubquery, _), _, _, _, _) => j
+      case j @ Join(_, Filter(_: DynamicPruningSubquery, _), _, _, _) => j
+      //Start: modified to only hit once
+      case j @ Join(left, right, joinType, Some(condition), hint) if !pruned =>
+        pruned = true
+        //End: modified to only hit once
         var newLeft = left
         var newRight = right
 
@@ -252,8 +244,35 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
     case s: Subquery if s.correlated => plan
     case _ if !conf.dynamicPartitionPruningEnabled => plan
     case _ =>
-      val pruned = prune(plan)
-      pruned
+      val appliedPP = prune(plan)
+      if (pruned) {
+        val appliedPDP = PushDownPredicates.apply(appliedPP)
+        if (appliedPP.fastEquals(appliedPDP)) {
+          //Start: copied from CleanupDynamicPruningFilters
+          val appliedCDPF = appliedPDP.transformWithPruning(
+            // No-op for trees that do not contain dynamic pruning.
+            _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
+            // pass through anything that is pushed down into PhysicalOperation
+            case p@PhysicalOperation(_, _, LogicalRelation(_: HadoopFsRelation, _, _, _)) => p
+            case p@PhysicalOperation(_, _, _: DataSourceV2ScanRelation) => p
+            //Added: this line which I copied from 2 lines above and replaced hadoopfs relation with hoodiebase
+            case p@PhysicalOperation(_, _, LogicalRelation(_: HoodieBaseRelation, _, _, _)) => p
+            // remove any Filters with DynamicPruning that didn't get pushed down to PhysicalOperation.
+            case f@Filter(condition, _) =>
+              val newCondition = condition.transformWithPruning(
+                _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
+                case _: DynamicPruning => TrueLiteral
+              }
+              f.copy(condition = newCondition)
+          }
+          //End: copied from CleanupDynamicPruningFilters
+          PruneFilters.apply(appliedCDPF)
+        } else {
+          appliedPDP
+        }
+      } else {
+        appliedPP
+      }
   }
 }
 

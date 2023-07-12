@@ -141,7 +141,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules
   }
 
-  def customOptimizerRules: Seq[RuleBuilder] = {
+  /*def customOptimizerRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
     )
@@ -180,9 +180,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules += (spark => HoodiePruneFileSourcePartitions(spark))
 
     rules
-  }
+  }*/
 
-  /*def customOptimizerRules: Seq[RuleBuilder] = {
+  def customOptimizerRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
     )
@@ -219,7 +219,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules += (spark => HoodiePruneFileSourcePartitions(spark))
 
     rules
-  }*/
+  }
 
   /**
    * This rule adjusts output of the [[LogicalRelation]] resolving int Hudi tables such that all of the

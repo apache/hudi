@@ -26,7 +26,8 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.common.util.ReflectionUtils.loadClass
+import org.apache.hudi.common.util.{ConfigUtils, ReflectionUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieInternalConfig
@@ -34,6 +35,8 @@ import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -67,6 +70,8 @@ class DefaultSource extends RelationProvider
     }
     // Revisit EMRFS incompatibilities, for now disable
     spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
+    spark.experimental.extraOptimizations = Seq(loadClass("org.apache.spark.sql.execution.dynamicpruning.Spark32PartitionPruning", Array(classOf[SparkSession]).asInstanceOf[Array[Class[_]]], spark)
+      .asInstanceOf[Rule[LogicalPlan]])
   }
 
   private val log = LoggerFactory.getLogger(classOf[DefaultSource])
