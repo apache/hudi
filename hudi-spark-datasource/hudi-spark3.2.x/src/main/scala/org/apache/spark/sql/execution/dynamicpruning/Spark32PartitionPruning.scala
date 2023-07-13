@@ -40,7 +40,9 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
   private var pruned = false
 
   /**
-   * MODIFIED to match on hoodieBaseRelation
+   * @note MODIFIED to match on hoodieBaseRelation
+   *       Since partition pruning already took affect earlier, we don't want to
+   *       match on the other cases
    */
   def getFilterableTableScan(a: Expression, plan: LogicalPlan): Option[LogicalPlan] = {
     val srcInfo: Option[(Expression, LogicalPlan)] = findExpressionAndTrackLineageDown(a, plan)
@@ -192,12 +194,9 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
   private def prune(plan: LogicalPlan): LogicalPlan = {
     plan transformUp {
       // skip this rule if there's already a DPP subquery on the LHS of a join
-      case j @ Join(Filter(_: DynamicPruningSubquery, _), _, _, _, _) => j
-      case j @ Join(_, Filter(_: DynamicPruningSubquery, _), _, _, _) => j
-      //Start: modified to only hit once
-      case j @ Join(left, right, joinType, Some(condition), hint) if !pruned =>
-        pruned = true
-        //End: modified to only hit once
+      case j@Join(Filter(_: DynamicPruningSubquery, _), _, _, _, _) => j
+      case j@Join(_, Filter(_: DynamicPruningSubquery, _), _, _, _) => j
+      case j@Join(left, right, joinType, Some(condition), hint) =>
         var newLeft = left
         var newRight = right
 
@@ -212,6 +211,7 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
           def fromLeftRight(x: Expression, y: Expression) =
             !x.references.isEmpty && x.references.subsetOf(left.outputSet) &&
               !y.references.isEmpty && y.references.subsetOf(right.outputSet)
+
           fromLeftRight(x, y) || fromLeftRight(y, x)
         }
 
@@ -234,7 +234,7 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
             } else {
               filterableScan = getFilterableTableScan(r, right)
               if (filterableScan.isDefined && canPruneRight(joinType) &&
-                hasPartitionPruningFilter(left) ) {
+                hasPartitionPruningFilter(left)) {
                 newRight = insertPredicate(r, newRight, l, left, leftKeys, filterableScan.get)
               }
             }
@@ -244,39 +244,71 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
     }
   }
 
+  /**
+   * @note ADDED METHOD
+   * Mimics the batches below from SparkOptimizer.scala
+   *    Batch("Pushdown Filters from PartitionPruning", fixedPoint,
+   *      PushDownPredicates) :+
+   *    Batch("Cleanup filters that cannot be pushed down", Once,
+   *      CleanupDynamicPruningFilters,
+   *      PruneFilters)) ++
+   */
+  private def pushDownAndCleanup(prunedPlan: LogicalPlan): LogicalPlan = {
+    val pushedDownPlan = PushDownPredicates.apply(prunedPlan)
+    // We are spoofing the behavior of RuleExecutor.execute() so we move on to the next "batch" when they are equal
+    // see RuleExecutor.Scala line 259 in spark 3.2
+    if (prunedPlan.fastEquals(pushedDownPlan)) {
+      //START: copied from CleanupDynamicPruningFilters
+      val cleanedPlan = pushedDownPlan.transformWithPruning(
+        // No-op for trees that do not contain dynamic pruning.
+        _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
+        // pass through anything that is pushed down into PhysicalOperation
+        case p@PhysicalOperation(_, _, LogicalRelation(_: HadoopFsRelation, _, _, _)) => p
+        case p@PhysicalOperation(_, _, _: DataSourceV2ScanRelation) => p
+        //ADDITION: this line which I copied from 2 lines above and replaced hadoopfs relation with hoodiebase
+        case p@PhysicalOperation(_, _, LogicalRelation(_: HoodieBaseRelation, _, _, _)) => p
+        // remove any Filters with DynamicPruning that didn't get pushed down to PhysicalOperation.
+        case f@Filter(condition, _) =>
+          val newCondition = condition.transformWithPruning(
+            _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
+            case _: DynamicPruning => TrueLiteral
+          }
+          f.copy(condition = newCondition)
+      }
+      //END: copied from CleanupDynamicPruningFilters
+      PruneFilters.apply(cleanedPlan)
+    } else {
+      pushedDownPlan
+    }
+  }
+
   override def apply(plan: LogicalPlan): LogicalPlan = plan match {
     // Do not rewrite subqueries.
     case s: Subquery if s.correlated => plan
     case _ if !conf.dynamicPartitionPruningEnabled => plan
-    case _ =>
-      val prunedPlan = prune(plan)
-      if (pruned) {
-        val pushedDownPlan = PushDownPredicates.apply(prunedPlan)
-        if (prunedPlan.fastEquals(pushedDownPlan)) {
-          //Start: copied from CleanupDynamicPruningFilters
-          val cleanedPlan = pushedDownPlan.transformWithPruning(
-            // No-op for trees that do not contain dynamic pruning.
-            _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
-            // pass through anything that is pushed down into PhysicalOperation
-            case p@PhysicalOperation(_, _, LogicalRelation(_: HadoopFsRelation, _, _, _)) => p
-            case p@PhysicalOperation(_, _, _: DataSourceV2ScanRelation) => p
-            //Added: this line which I copied from 2 lines above and replaced hadoopfs relation with hoodiebase
-            case p@PhysicalOperation(_, _, LogicalRelation(_: HoodieBaseRelation, _, _, _)) => p
-            // remove any Filters with DynamicPruning that didn't get pushed down to PhysicalOperation.
-            case f@Filter(condition, _) =>
-              val newCondition = condition.transformWithPruning(
-                _.containsAnyPattern(DYNAMIC_PRUNING_EXPRESSION, DYNAMIC_PRUNING_SUBQUERY)) {
-                case _: DynamicPruning => TrueLiteral
-              }
-              f.copy(condition = newCondition)
-          }
-          //End: copied from CleanupDynamicPruningFilters
-          PruneFilters.apply(cleanedPlan)
-        } else {
-          pushedDownPlan
-        }
-      } else {
-        prunedPlan
-      }
+    //ADDITION START
+    // only want this to execute a single time because SparkOptimizer has the batch as
+    //
+    //    Batch("PartitionPruning", Once,
+    //      PartitionPruning) :+
+    //
+    // but this will be run in
+    //
+    //    Batch("User Provided Optimizers", fixedPoint, experimentalMethods.extraOptimizations: _*)
+    //
+    // in pushDownAndCleanup we mimic the additional batches
+    //
+    //    Batch("Pushdown Filters from PartitionPruning", fixedPoint,
+    //       PushDownPredicates) :+
+    //    Batch("Cleanup filters that cannot be pushed down", Once,
+    //      CleanupDynamicPruningFilters,
+    //      PruneFilters)) ++
+    //
+    // See SparkOptimizer.scala
+    case _ if !pruned =>
+      pruned = true
+      pushDownAndCleanup(prune(plan))
+    case _ => pushDownAndCleanup(plan)
+    //ADDITION END
   }
 }
