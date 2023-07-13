@@ -220,9 +220,9 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
-    // w/o specifying any value for insert dup policy, leagcy configs will be honored. But on all other cases (i.e when neither of the configs is set,
+    // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
     // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
-    val useLegacyInsertDropDupFlow = insertDupPolicySet && !sqlWriteOperationSet
+    val useLegacyInsertDropDupFlow = insertModeSet && !insertDupPolicySet
     val payloadClassName =  if (useLegacyInsertDropDupFlow) {
       deducePayloadClassNameLegacy(operation, tableType, insertMode)
     } else {

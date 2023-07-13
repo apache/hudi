@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
@@ -1729,9 +1729,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         val operation = WriteOperationType.BULK_INSERT
         val dupPolicy = DROP_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
-          ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
-            List("set hoodie.sql.write.operation = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
-            dupPolicy)
+          ingestAndValidateDropDupPolicyBulkInsert(tableType, tableName, tmp, operation,
+            List("set hoodie.sql.write.operation = " + operation.value(),
+              "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy))
         }
       }
     })
@@ -1806,7 +1806,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     } else {
 
-      // insert record again but w/ diff values but same primary key. Since "insert" is chosen as operation type,
+      // insert record again w/ diff values but same primary key. Since "insert" is chosen as operation type,
       // dups should be seen w/ snapshot query
       spark.sql(
         s"""
@@ -1842,6 +1842,48 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             Seq(2, "a2_2", 30.0, "2021-07-18")
           )
         }
+      }
+    }
+    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+  }
+
+  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
+                                     expectedOperationtype: WriteOperationType = WriteOperationType.BULK_INSERT,
+                                     setOptions: List[String] = List.empty) : Unit = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  dt string
+         |) using hudi
+         | tblproperties (
+         |  type = '$tableType',
+         |  primaryKey = 'id',
+         |  preCombine = 'name'
+         | )
+         | partitioned by (dt)
+         | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+    // set additional options
+    setOptions.foreach(entry => {
+      spark.sql(entry)
+    })
+
+    // drop dups is not supported in bulk_insert row writer path.
+    assertThrows[HoodieException] {
+      try {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
+      } catch {
+        case e: Exception =>
+          var root: Throwable = e
+          while (root.getCause != null) {
+            root = root.getCause
+          }
+          throw root
       }
     }
     spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
