@@ -292,8 +292,13 @@ run_docker_tests() {
     cat $HADOOP_HOME/etc/hadoop/core-site.xml
     echo "::warning::validate.sh check hadoop hdfs conf"
     cat $HADOOP_HOME/etc/hadoop/hdfs-site.xml
+    $HADOOP_HOME/bin/hdfs namenode -format
     echo "::warning::validate.sh starting hadoop hdfs"
-    bash $HADOOP_HOME/sbin/start-dfs.sh
+    $HADOOP_HOME/sbin/start-dfs.sh
+    $HADOOP_HOME/bin/hdfs dfs -mkdir /user/root
+    $HADOOP_HOME/bin/hdfs dfs -ls /user/
+    exit 1
+
     echo "::warning::validate.sh run_docker_tests Running Hudi on Docker"
     change_java_runtime_version
     mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE \

@@ -135,6 +135,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     //    hdfsTestService = new HdfsTestService();
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "1");
     fs = FileSystem.get(conf);
   }
 
