@@ -300,7 +300,7 @@ run_docker_tests() {
     $HADOOP_HOME/bin/hdfs --daemon start datanode
     echo "::warning::validate.sh starting hadoop hdfs"
     $HADOOP_HOME/sbin/start-dfs.sh
-    $HADOOP_HOME/bin/hdfs dfs -mkdir /user/root
+    $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
     $HADOOP_HOME/bin/hdfs dfs -ls /user/
     exit 1
 
