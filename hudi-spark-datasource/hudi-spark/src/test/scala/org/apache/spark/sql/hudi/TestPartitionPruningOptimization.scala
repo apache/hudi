@@ -23,7 +23,7 @@ class TestPartitionPruningOptimization extends HoodieSparkSqlTestBase with Spark
 
   test("Test PartitionPruning optimization successful") {
     withTempDir { tmp =>
-      Seq("cow").foreach { tableType =>
+      Seq("mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 

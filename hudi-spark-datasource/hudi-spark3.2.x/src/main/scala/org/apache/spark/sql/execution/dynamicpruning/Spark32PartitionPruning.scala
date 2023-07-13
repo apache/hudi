@@ -38,6 +38,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] with PredicateHelper {
 
   private var pruned = false
+  private var done = false
 
   /**
    * @note MODIFIED to match on hoodieBaseRelation
@@ -275,6 +276,7 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
           }
           f.copy(condition = newCondition)
       }
+      done = true
       //END: copied from CleanupDynamicPruningFilters
       PruneFilters.apply(cleanedPlan)
     } else {
@@ -308,7 +310,8 @@ class Spark32PartitionPruning(spark: SparkSession) extends Rule[LogicalPlan] wit
     case _ if !pruned =>
       pruned = true
       pushDownAndCleanup(prune(plan))
-    case _ => pushDownAndCleanup(plan)
+    case _ if !done => pushDownAndCleanup(plan)
+    case _ => plan
     //ADDITION END
   }
 }
