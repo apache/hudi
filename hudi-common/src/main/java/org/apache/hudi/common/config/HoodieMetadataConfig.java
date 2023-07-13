@@ -97,7 +97,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.enable")
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .sinceVersion("0.14")
       .withDocumentation("This configs enables logcompaction for the metadata table.");
@@ -105,7 +105,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
   public static final ConfigProperty<Integer> LOG_COMPACT_BLOCKS_THRESHOLD = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
-      .defaultValue(5)
+      .defaultValue(2)
       .markAdvanced()
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
@@ -235,7 +235,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key(METADATA_PREFIX + OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Optimized log blocks scanner that addresses all the multi-writer use-cases while appending to log files. "
