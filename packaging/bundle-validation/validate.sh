@@ -281,6 +281,10 @@ run_docker_tests() {
     use_default_java_runtime
     echo "::warning::validate.sh check hadoop home"
     ls -R $HADOOP_HOME
+    echo "::warning::validate.sh check hadoop core conf"
+    cat $HADOOP_HOME/etc/hadoop/core-site.xml
+    echo "::warning::validate.sh check hadoop hdfs conf"
+    cat $HADOOP_HOME/etc/hadoop/hdfs-site.xml
     exit 1
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
