@@ -277,7 +277,7 @@ test_metaserver_bundle () {
 
 run_docker_tests() {
     pushd $DOCKER_TEST_DIR
-
+    df -h
     use_default_java_runtime
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
