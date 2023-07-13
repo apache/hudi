@@ -134,7 +134,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     //    hdfsTestService = new HdfsTestService();
     Configuration conf = new Configuration();
-    conf.set("fs.defaultFS", "hdfs://localhost:8020");
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
     fs = FileSystem.get(conf);
   }
 
