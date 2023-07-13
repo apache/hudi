@@ -41,3 +41,10 @@ RUN tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.6.3
 ENV PATH=$MAVEN_HOME/bin:$PATH
 RUN mvn --version
+
+# Hadoop env
+ENV HDFS_NAMENODE_USER root
+ENV HDFS_DATANODE_USER root
+ENV HDFS_SECONDARYNAMENODE_USER root
+ENV YARN_RESOURCEMANAGER_USER root
+ENV YARN_NODEMANAGER_USER root
