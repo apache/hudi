@@ -278,7 +278,7 @@ public class TestStreamWriteOperatorCoordinator {
     instant = mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(10));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(9));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "002"));
     assertThat(completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.CLEAN_ACTION));
 

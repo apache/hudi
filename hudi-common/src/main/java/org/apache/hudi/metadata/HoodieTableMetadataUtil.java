@@ -607,9 +607,7 @@ public class HoodieTableMetadataUtil {
    * are handled by actual rollback of the deltacommit which added records to those partitions.
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
-      HoodieEngineContext engineContext, HoodieActiveTimeline metadataTableTimeline,
-      HoodieTableMetaClient dataTableMetaClient,
-      HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+      HoodieEngineContext engineContext, HoodieTableMetaClient dataTableMetaClient, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
     List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient);
@@ -630,7 +628,8 @@ public class HoodieTableMetadataUtil {
           dataTableMetaClient.reloadActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
 
       rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
-        partitionToFilesMap.computeIfAbsent(rollbackRequest.getPartitionPath(), s -> new HashMap<>());
+        final String partitionId = getPartitionIdentifier(rollbackRequest.getPartitionPath());
+        partitionToFilesMap.computeIfAbsent(partitionId, s -> new HashMap<>());
         // fetch only log files that are expected to be RB'd in DT as part of this rollback. these log files will not be deleted, but rendered
         // invalid once rollback is complete.
         if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
@@ -640,7 +639,7 @@ public class HoodieTableMetadataUtil {
             // rollback plan may not have size for log files to be rolled back. but with merging w/ original commits, the size will get adjusted.
             logFiles.put(fileName, 1L);
           });
-          partitionToFilesMap.get(rollbackRequest.getPartitionPath()).putAll(logFiles);
+          partitionToFilesMap.get(partitionId).putAll(logFiles);
         }
       });
     } catch (IOException e) {
@@ -676,6 +675,7 @@ public class HoodieTableMetadataUtil {
       // Has this rollback produced new files?
       boolean hasRollbackLogFiles = pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty();
       final String partition = pm.getPartitionPath();
+      final String partitionId = getPartitionIdentifier(partition);
 
       BiFunction<Long, Long, Long> fileMergeFn = (oldSize, newSizeCopy) -> {
         // if a file exists in both written log files and rollback log files, we want to pick the one that is higher
@@ -684,14 +684,14 @@ public class HoodieTableMetadataUtil {
       };
 
       if (hasRollbackLogFiles) {
-        if (!partitionToAppendedFiles.containsKey(partition)) {
-          partitionToAppendedFiles.put(partition, new HashMap<>());
+        if (!partitionToAppendedFiles.containsKey(partitionId)) {
+          partitionToAppendedFiles.put(partitionId, new HashMap<>());
         }
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
           String fileName = new Path(path).getName();
-          partitionToAppendedFiles.get(partition).merge(fileName, size, fileMergeFn);
+          partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
         });
       }
     });

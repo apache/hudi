@@ -60,6 +60,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -950,14 +951,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       initMetadataReader();
       HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
       Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
+
       for (String partition : metadata.fetchAllPartitionPaths()) {
-        FileStatus[] metadataFiles = metadata.getAllFilesInPartition(new Path(dataWriteConfig.getBasePath(), partition));
+        Path partitionPath = null;
+        if (StringUtils.isNullOrEmpty(partition) && !dataMetaClient.getTableConfig().isTablePartitioned()) {
+          partitionPath = new Path(dataWriteConfig.getBasePath());
+        } else {
+          partitionPath = new Path(dataWriteConfig.getBasePath(), partition);
+        }
+        final String partitionId = HoodieTableMetadataUtil.getPartitionIdentifier(partition);
+        FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
         if (!dirInfoMap.containsKey(partition)) {
           // Entire partition has been deleted
           List<String> filePaths = Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList());
-          HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partition, "", filePaths, filePaths,
+          HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partitionId, "", filePaths, filePaths,
               Collections.emptyList(), true);
-          partitionMetadata.put(partition, cleanPartitionMetadata);
+          partitionMetadata.put(partitionId, cleanPartitionMetadata);
         } else {
           // Some files cleaned in the partition
           Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
@@ -965,9 +974,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
           if (!filesDeleted.isEmpty()) {
             LOG.info("Found deleted files in partition " + partition + ": " + filesDeleted);
-            HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partition, "", filesDeleted, filesDeleted,
+            HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partitionId, "", filesDeleted, filesDeleted,
                 Collections.emptyList(), false);
-            partitionMetadata.put(partition, cleanPartitionMetadata);
+            partitionMetadata.put(partitionId, cleanPartitionMetadata);
           }
         }
       }
@@ -1025,8 +1034,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // both above list should only be added to FILES partition.
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
-          dataMetaClient, rollbackMetadata, instantTime));
+      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
