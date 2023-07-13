@@ -302,7 +302,6 @@ run_docker_tests() {
     $HADOOP_HOME/sbin/start-dfs.sh
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
     $HADOOP_HOME/bin/hdfs dfs -ls /user/
-    exit 1
 
     echo "::warning::validate.sh run_docker_tests Running Hudi on Docker"
     change_java_runtime_version
