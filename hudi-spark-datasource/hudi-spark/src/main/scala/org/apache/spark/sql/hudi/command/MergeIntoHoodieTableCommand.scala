@@ -340,7 +340,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Then we want to project the output so that we have the meta columns from the target table
     // followed by the data columns of the source table
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+    val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
     val projectedJoinPlan = Project(tableMetaCols ++ incomingDataCols, joinData)
     val projectedJoinOutput = projectedJoinPlan.output

@@ -73,7 +73,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       } else {
         throw new IllegalStateException("Impossible to be here")
       }
-
     } else {
       rules += adaptIngestionTargetLogicalRelations
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"

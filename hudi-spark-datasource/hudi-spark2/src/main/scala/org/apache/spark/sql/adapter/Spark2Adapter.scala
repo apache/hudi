@@ -187,8 +187,4 @@ class Spark2Adapter extends SparkAdapter {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
-
-  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
-    Join(left, right, joinType, condition)
-  }
 }

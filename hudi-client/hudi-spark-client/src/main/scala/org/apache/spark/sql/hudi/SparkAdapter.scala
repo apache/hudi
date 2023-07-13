@@ -203,12 +203,4 @@ trait SparkAdapter extends Serializable {
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
   def convertStorageLevelToString(level: StorageLevel): String
-
-  /**
-   * Calls fail analysis on
-   *
-   */
-  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
-
-  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 }
