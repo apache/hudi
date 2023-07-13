@@ -33,7 +33,8 @@ RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf
 RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers
 
 # install maven
-RUN apt-get update && apt-get install -y maven
+RUN wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz
+RUN tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven
 ENV PATH=$MAVEN_HOME/bin:$PATH
 RUN mvn --version
