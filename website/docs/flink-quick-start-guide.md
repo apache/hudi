@@ -11,7 +11,7 @@ This guide helps you quickly start using Flink on Hudi, and learn different mode
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](/docs/flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/flink_configuration#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](/docs/hoodie_deltastreamer#bulk-insert), [Index Bootstrap](/docs/hoodie_deltastreamer#index-bootstrap), [Changelog Mode](/docs/hoodie_deltastreamer#changelog-mode) and [Append Mode](/docs/hoodie_deltastreamer#append-mode).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streamer#cdc-ingestion), [Bulk Insert](/docs/hoodie_streamer#bulk-insert), [Index Bootstrap](/docs/hoodie_streamer#index-bootstrap), [Changelog Mode](/docs/hoodie_streamer#changelog-mode) and [Append Mode](/docs/hoodie_streamer#append-mode).
 - **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_configuration#memory-optimization) and [Write Rate Limit](/docs/flink_configuration#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).

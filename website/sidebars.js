@@ -47,7 +47,7 @@ module.exports = {
                     ],
                 },
                 'writing_data',
-                'hoodie_deltastreamer',
+                'hoodie_streamer',
                 'querying_data',
                 'flink_configuration',
                 {
