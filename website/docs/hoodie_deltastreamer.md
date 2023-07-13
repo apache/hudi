@@ -1,6 +1,6 @@
 ---
 title: Streaming Ingestion
-keywords: [hudi, deltastreamer, hoodiedeltastreamer, streamer, hoodiestreamer]
+keywords: [hudi, streamer, hoodiestreamer]
 ---
 
 ## Hudi Streamer
@@ -151,7 +151,7 @@ and then ingest it as follows.
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --target-base-path file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --target-base-path file:\/\/\/tmp/hudi-streamer-op \ 
   --target-table uber.impressions \
   --op BULK_INSERT
 ```
@@ -196,7 +196,7 @@ Sample config files for table wise overridden properties can be found under `hud
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --base-path-prefix file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --base-path-prefix file:\/\/\/tmp/hudi-streamer-op \ 
   --target-table uber.impressions \
   --op BULK_INSERT
 ```
@@ -217,7 +217,7 @@ A Hudi Streamer job can then be triggered as follows:
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --target-base-path file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --target-base-path file:\/\/\/tmp/hudi-streamer-op \ 
   --target-table uber.impressions \
   --op BULK_INSERT
 ```
@@ -361,7 +361,7 @@ Hudi can read from a JDBC source with a full fetch of a table, or Hudi can even 
 SQL Source that reads from any table, used mainly for backfill jobs which will process specific partition dates. 
 This won't update the streamer.checkpoint.key to the processed commit, instead it will fetch the latest successful 
 checkpoint key and set that value as this backfill commits checkpoint so that it won't interrupt the regular incremental 
-processing. To fetch and use the latest incremental checkpoint, you need to also set this hoodie_conf for deltastremer 
+processing. To fetch and use the latest incremental checkpoint, you need to also set this hoodie_conf for Hudi Streamer 
 jobs: `hoodie.write.meta.key.prefixes = 'streamer.checkpoint.key'`
 
 Spark SQL should be configured using this hoodie config:

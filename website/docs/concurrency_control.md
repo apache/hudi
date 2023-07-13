@@ -185,7 +185,7 @@ A Hudi Streamer job can then be triggered as follows:
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --target-base-path file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --target-base-path file:\/\/\/tmp/hudi-streamer-op \ 
   --target-table uber.impressions \
   --op BULK_INSERT
 ```
