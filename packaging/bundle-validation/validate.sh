@@ -288,6 +288,8 @@ run_docker_tests() {
     change_java_runtime_version
     mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat -DfailIfNoTests=false -pl hudi-common
+    echo "::warning::validate.sh run_docker_tests surefire report"
+    cat $DOCKER_TEST_DIR/hudi-common/target/surefire-reports
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
