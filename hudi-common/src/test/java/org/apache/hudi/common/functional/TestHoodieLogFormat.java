@@ -53,7 +53,6 @@ import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -125,7 +124,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
   private static final int BUFFER_SIZE = 4096;
 
-  private static HdfsTestService hdfsTestService;
+  //  private static HdfsTestService hdfsTestService;
   private static FileSystem fs;
   private Path partitionPath;
   private String spillableBasePath;
@@ -133,13 +132,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    hdfsTestService = new HdfsTestService();
-    fs = hdfsTestService.start(true).getFileSystem();
+    //    hdfsTestService = new HdfsTestService();
+    Configuration conf = new Configuration();
+    conf.set("fs.defaultFS", "hdfs://localhost:8020");
+    fs = FileSystem.get(conf);
   }
 
   @AfterAll
   public static void tearDownClass() {
-    hdfsTestService.stop();
+  //    hdfsTestService.stop();
   }
 
   @BeforeEach

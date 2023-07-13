@@ -26,9 +26,12 @@
 #################################################################################################
 
 JAVA_RUNTIME_VERSION=$1
+SPARK_PROFILE=$2
+SCALA_PROFILE=$3
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
+DOCKER_TEST_DIR=${WORKDIR}/docker-test
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
 ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
@@ -272,9 +275,25 @@ test_metaserver_bundle () {
     kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
+run_docker_tests() {
+    pushd $DOCKER_TEST_DIR
+    change_java_runtime_version
+    mvn test -D$SPARK_PROFILE -D$SCALA_PROFILE \
+     -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat -DfailIfNoTests=false -pl hudi-common
+    use_default_java_runtime
+    popd
+}
+
 ############################
 # Execute tests
 ############################
+echo "::warning::validate.sh Running extra Docker tests"
+run_docker_tests
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh Docker tests passed"
+
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
 if [ "$?" -ne 0 ]; then

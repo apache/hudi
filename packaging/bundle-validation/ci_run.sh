@@ -201,4 +201,5 @@ docker build \
 
 # run validation script in docker
 docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION
+  ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION $SPARK_PROFILE $SCALA_PROFILE

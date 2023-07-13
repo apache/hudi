@@ -275,7 +275,7 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
 #        run:
-#          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -Dmaven.test.failure.ignore=true -pl hudi-integ-test $MVN_ARGS
+#          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -Dmaven.test.failure.ignore=true -pl hudi-integ-test $MVN_ARGS
 #      - name: 'IT'
 #        env:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}

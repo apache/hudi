@@ -31,3 +31,9 @@ RUN if [[ $SPARK_HOME =~ 'spark-3.2' ]] || [[ $SPARK_HOME =~ 'spark-3.3' ]]; \
     then printf "\nspark.sql.catalog.spark_catalog org.apache.spark.sql.hudi.catalog.HoodieCatalog\n" >> $SPARK_HOME/conf/spark-defaults.conf; fi
 RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf.yaml
 RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers
+
+# install maven
+RUN apt-get update && apt-get install -y maven
+ENV MAVEN_HOME=/usr/share/maven
+ENV PATH=$MAVEN_HOME/bin:$PATH
+RUN mvn --version
