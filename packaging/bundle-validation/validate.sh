@@ -277,7 +277,11 @@ test_metaserver_bundle () {
 
 run_docker_tests() {
     pushd $DOCKER_TEST_DIR
+
     use_default_java_runtime
+    echo "::warning::validate.sh check hadoop home"
+    ls -R $HADOOP_HOME
+    exit 1
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
       -DskipTests=true -pl hudi-common -am
