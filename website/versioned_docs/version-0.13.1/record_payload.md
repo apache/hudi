@@ -8,7 +8,7 @@ keywords: [hudi, merge, upsert, precombine]
 One of the core features of Hudi is the ability to incrementally upsert data, deduplicate and merge records on the fly.
 Additionally, users can implement their custom logic to merge the input records with the record on storage. Record
 payload is an abstract representation of a Hudi record that allows the aforementioned capability. As we shall see below,
-Hudi provides out-of-box support for different payloads for different use cases. But, first let us understand how record
+Hudi provides out-of-the-box support for different payloads for different use cases. But, first let us understand how record
 payload is used in the Hudi upsert path.
 
 <figure>
@@ -30,7 +30,7 @@ latest-write-wins style semantics.
 
 #### DefaultHoodieRecordPayload
 While `OverwriteWithLatestAvroPayload` precombines based on an ordering field and picks the latest record while merging,
-`DefaultHoodieRecordPayload` honors the ordering field for both precombinig and merging. Let's understand the difference with an example:
+`DefaultHoodieRecordPayload` honors the ordering field for both precombining and merging. Let's understand the difference with an example:
 
 Let's say the ordering field is `ts` and record key is `id` and schema is:
 
@@ -83,8 +83,8 @@ the [payload event time field](/docs/configurations#RECORD_PAYLOAD) configuratio
 
 This payload is quite similar to `OverwriteWithLatestAvroPayload` with slight difference while merging records. For
 precombining, just like `OverwriteWithLatestAvroPayload`, it picks the latest record for a key, based on an ordering
-field. While merging, it overwrites the existing record on storage only for the specified **fields that don't equal
-default value** for that field.
+field. While merging, it overwrites the existing record on storage only for the specified **fields that do not equal
+the default value** for that field.
 
 #### PartialUpdateAvroPayload
 
