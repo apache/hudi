@@ -25,6 +25,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -57,7 +58,7 @@ public abstract class SparkHoodieIndex<T>
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) throws HoodieIndexException {
+      HoodieTable hoodieTable, Option<String> instantTime) throws HoodieIndexException {
     return HoodieJavaRDD.of(tagLocation(
         HoodieJavaRDD.getJavaRDD(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable)
         .map(r -> (HoodieRecord<R>) r));

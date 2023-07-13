@@ -21,6 +21,7 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -76,8 +77,19 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public int getId() {
+    return pairRDDData.id();
+  }
+
+  @Override
   public void persist(String storageLevel) {
     pairRDDData.persist(StorageLevel.fromString(storageLevel));
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieData.HoodieDataCacheKey cacheKey) {
+    engineContext.putCachedDataIds(cacheKey, this.getId());
+    pairRDDData.persist(StorageLevel.fromString(level));
   }
 
   @Override

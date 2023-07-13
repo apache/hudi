@@ -186,8 +186,8 @@ public class SparkRDDReadClient<T> implements Serializable {
    */
   public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(hoodieKeys.map(k -> new HoodieAvroRecord<>(k, null))),
-            context, hoodieTable))
+            index.tagLocation(HoodieJavaRDD.of(hoodieKeys.map(k -> new HoodieAvroRecord<>(k, null))),
+                context, hoodieTable, Option.empty()))
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
             : Option.empty())
@@ -214,7 +214,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    */
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) throws HoodieIndexException {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
+        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable, Option.empty()));
   }
 
   /**

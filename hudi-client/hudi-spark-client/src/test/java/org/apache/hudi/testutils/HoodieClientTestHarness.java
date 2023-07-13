@@ -444,12 +444,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   public JavaRDD<HoodieRecord> tagLocation(
       HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(records), context, table));
+        index.tagLocation(HoodieJavaRDD.of(records), context, table, Option.empty()));
   }
 
   public static JavaRDD<HoodieRecord> tagLocation(
       HoodieIndex index, HoodieEngineContext context, JavaRDD<HoodieRecord> records, HoodieTable table) {
-    return HoodieJavaRDD.getJavaRDD(index.tagLocation(HoodieJavaRDD.of(records), context, table));
+    return HoodieJavaRDD.getJavaRDD(index.tagLocation(HoodieJavaRDD.of(records), context, table, Option.empty()));
   }
 
   public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {

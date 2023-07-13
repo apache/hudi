@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -43,11 +44,21 @@ public interface HoodiePairData<K, V> extends Serializable {
   Object get();
 
   /**
+   * Get the {@link HoodiePairData}'s unique non-negative identifier. -1 indicates invalid id.
+   */
+  int getId();
+
+  /**
    * Persists the data (if applicable)
    *
    * @param cacheConfig config value for caching.
    */
   void persist(String cacheConfig);
+
+  /**
+   * Persists the data w/ provided {@code level} (if applicable), and cache the data's ids within the {@code engineContext}.
+   */
+  void persist(String level, HoodieEngineContext engineContext, HoodieData.HoodieDataCacheKey cacheKey);
 
   /**
    * Un-persists the data (if applicable)

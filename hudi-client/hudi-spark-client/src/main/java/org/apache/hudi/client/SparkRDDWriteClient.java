@@ -121,7 +121,7 @@ public class SparkRDDWriteClient<T> extends
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     JavaRDD<HoodieRecord<T>> recordsWithLocation = HoodieJavaRDD.getJavaRDD(
-        getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table));
+        getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table, Option.empty()));
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
   }

@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
@@ -47,7 +48,7 @@ public class FlinkInMemoryStateIndex extends HoodieIndex<List<HoodieRecord>, Lis
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) throws HoodieIndexException {
+      HoodieTable hoodieTable, Option<String> instantTime) throws HoodieIndexException {
     throw new UnsupportedOperationException("No need to tag location for FlinkInMemoryStateIndex");
   }
 
