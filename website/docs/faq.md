@@ -7,7 +7,7 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 
 ## General
 
-### When is Hudi useful for me or my organization? XXXXX
+### When is Hudi useful for me or my organization?
    
 If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi can provide you tools to [help](https://hudi.apache.org/docs/writing_data/). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
 
