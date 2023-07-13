@@ -278,17 +278,20 @@ test_metaserver_bundle () {
 run_docker_tests() {
     pushd $DOCKER_TEST_DIR
     use_default_java_runtime
+    echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean package -D$SPARK_PROFILE -D$SCALA_PROFILE \
       -DskipTests=true -pl hudi-common -am
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
+    echo "::warning::validate.sh run_docker_tests Running Hudi on Docker"
     change_java_runtime_version
-    mvn test -D$SPARK_PROFILE -D$SCALA_PROFILE \
+    mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat -DfailIfNoTests=false -pl hudi-common
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
+    echo "::warning::validate.sh All Docker tests passed!"
     use_default_java_runtime
     popd
 }
