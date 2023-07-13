@@ -9,7 +9,7 @@ now, the Hudi-BigQuery integration only works for hive-style partitioned Copy-On
 
 ## Configurations
 
-Hudi uses `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` to sync tables. It works with `HoodieDeltaStreamer` via
+Hudi uses `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` to sync tables. It works with `HoodieStreamer` via
 setting sync tool class. A few BigQuery-specific configurations are required.
 
 | Config                                       | Notes                                                                                                           |
@@ -33,22 +33,22 @@ hoodie.partition.metafile.use.base.format       = 'true'
 
 ## Example
 
-Below shows an example for running `BigQuerySyncTool` with `HoodieDeltaStreamer`.
+Below shows an example for running `BigQuerySyncTool` with `HoodieStreamer`.
 
 ```shell
 spark-submit --master yarn \
 --packages com.google.cloud:google-cloud-bigquery:2.10.4 \
 --jars /opt/hudi-gcp-bundle-0.13.0.jar \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 /opt/hudi-utilities-bundle_2.12-0.13.0.jar \
 --target-base-path gs://my-hoodie-table/path \
 --target-table mytable \
 --table-type COPY_ON_WRITE \
 --base-file-format PARQUET \
-# ... other deltastreamer options
+# ... other Hudi Streamer options
 --enable-sync \
 --sync-tool-classes org.apache.hudi.gcp.bigquery.BigQuerySyncTool \
---hoodie-conf hoodie.deltastreamer.source.dfs.root=gs://my-source-data/path \
+--hoodie-conf hoodie.streamer.source.dfs.root=gs://my-source-data/path \
 --hoodie-conf hoodie.gcp.bigquery.sync.project_id=hudi-bq \
 --hoodie-conf hoodie.gcp.bigquery.sync.dataset_name=rxusandbox \
 --hoodie-conf hoodie.gcp.bigquery.sync.dataset_location=asia-southeast1 \

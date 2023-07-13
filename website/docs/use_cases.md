@@ -29,7 +29,7 @@ are needed if ingestion is to keep up with the typically high update volumes.
 Even for immutable data sources like [Kafka](https://kafka.apache.org), there is often a need to de-duplicate the incoming events against what's stored on DFS.
 Hudi achieves this by [employing indexes](http://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) of different kinds, quickly and efficiently.
 
-All of this is seamlessly achieved by the Hudi DeltaStreamer tool, which is maintained in tight integration with rest of the code 
+All of this is seamlessly achieved by the Hudi Streamer tool, which is maintained in tight integration with rest of the code 
 and we are always trying to add more capture sources, to make this easier for the users. The tool also has a continuous mode, where it
 can self-manage clustering/compaction asynchronously, without blocking ingestion, significantly improving data freshness.
 

@@ -106,9 +106,9 @@ Configs to be set:
 
 | Config        | Meaning/purpose |       
 | ------------- | -------------|
-| ```hoodie.deltastreamer.keygen.timebased.timestamp.type```    | One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR) |
-| ```hoodie.deltastreamer.keygen.timebased.output.dateformat```| Output date format | 
-| ```hoodie.deltastreamer.keygen.timebased.timezone```| Timezone of the data format| 
+| ```hoodie.streamer.keygen.timebased.timestamp.type```    | One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR) |
+| ```hoodie.streamer.keygen.timebased.output.dateformat```| Output date format | 
+| ```hoodie.streamer.keygen.timebased.timezone```| Timezone of the data format| 
 | ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
 
 Let's go over some example values for TimestampBasedKeyGenerator.
@@ -117,9 +117,9 @@ Let's go over some example values for TimestampBasedKeyGenerator.
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "EPOCHMILLISECONDS"|
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
-|```hoodie.deltastreamer.keygen.timebased.timezone```| "GMT+8:00" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "EPOCHMILLISECONDS"|
+|```hoodie.streamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
+|```hoodie.streamer.keygen.timebased.timezone```| "GMT+8:00" |
 
 Input Field value: “1578283932000L” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -131,10 +131,10 @@ Partition path generated from key generator: “1970-01-01 08”
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```|  "DATE_STRING"  |
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```|  "yyyy-MM-dd hh" | 
-|```hoodie.deltastreamer.keygen.timebased.timezone```|  "GMT+8:00" |
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat```|  "yyyy-MM-dd hh:mm:ss" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```|  "DATE_STRING"  |
+|```hoodie.streamer.keygen.timebased.output.dateformat```|  "yyyy-MM-dd hh" | 
+|```hoodie.streamer.keygen.timebased.timezone```|  "GMT+8:00" |
+|```hoodie.streamer.keygen.timebased.input.dateformat```|  "yyyy-MM-dd hh:mm:ss" |
 
 Input field value: “2020-01-06 12:12:12” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -147,10 +147,10 @@ Partition path generated from key generator: “1970-01-01 12:00:00”
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "SCALAR"|
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyy-MM-dd hh" |
-|```hoodie.deltastreamer.keygen.timebased.timezone```| "GMT" |
-|```hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit```| "days" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "SCALAR"|
+|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyy-MM-dd hh" |
+|```hoodie.streamer.keygen.timebased.timezone```| "GMT" |
+|```hoodie.streamer.keygen.timebased.timestamp.scalar.time.unit```| "days" |
 
 Input field value: “20000L” <br/>
 Partition path generated from key generator: “2024-10-04 12”
@@ -162,12 +162,12 @@ Partition path generated from key generator: “1970-01-02 12”
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "GMT" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.streamer.keygen.timebased.output.timezone```| "GMT" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
@@ -176,12 +176,12 @@ Partition path generated from key generator: "2020040113"
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
@@ -190,12 +190,12 @@ Partition path generated from key generator: "2020040113"
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
 
 Input field value: "2020-04-01T13:01:33-**05:00**" <br/>
 Partition path generated from key generator: "2020040118"
@@ -204,12 +204,12 @@ Partition path generated from key generator: "2020040118"
 
 | Config field | Value |
 | ------------- | -------------|
-|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
-|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "UTC" |
-|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "MM/dd/yyyy" |
-|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
+|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.streamer.keygen.timebased.input.timezone```| "UTC" |
+|```hoodie.streamer.keygen.timebased.output.dateformat```| "MM/dd/yyyy" |
+|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
 
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"

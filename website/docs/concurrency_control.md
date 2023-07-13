@@ -5,7 +5,7 @@ toc: true
 last_modified_at: 2021-03-19T15:59:57-04:00
 ---
 
-In this section, we will cover Hudi's concurrency model and describe ways to ingest data into a Hudi Table from multiple writers; using the [DeltaStreamer](#deltastreamer) tool as well as 
+In this section, we will cover Hudi's concurrency model and describe ways to ingest data into a Hudi Table from multiple writers; using the [Hudi Streamer](#hudi-streamer) tool as well as 
 using the [Hudi datasource](#datasource-writer).
 
 ## Supported Concurrency Controls
@@ -19,7 +19,7 @@ between multiple table service writers and readers. Additionally, using MVCC, Hu
 the same Hudi Table. Hudi supports `file level OCC`, i.e., for any 2 commits (or writers) happening to the same table, if they do not have writes to overlapping files being changed, both writers are allowed to succeed. 
   This feature is currently *experimental* and requires either Zookeeper or HiveMetastore to acquire locks.
 
-It may be helpful to understand the different guarantees provided by [write operations](/docs/write_operations/) via Hudi datasource or the delta streamer.
+It may be helpful to understand the different guarantees provided by [write operations](/docs/write_operations/) via Hudi datasource or the Hudi Streamer.
 
 ## Single Writer Guarantees
 
@@ -171,17 +171,17 @@ inputDF.write.format("hudi")
        .save(basePath)
 ```
 
-## DeltaStreamer
+## Hudi Streamer
 
-The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The `HoodieStreamer` utility (part of hudi-utilities-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
-Using optimistic_concurrency_control via delta streamer requires adding the above configs to the properties file that can be passed to the
-job. For example below, adding the configs to kafka-source.properties file and passing them to deltastreamer will enable optimistic concurrency.
-A deltastreamer job can then be triggered as follows:
+Using optimistic_concurrency_control via Hudi Streamer requires adding the above configs to the properties file that can be passed to the
+job. For example below, adding the configs to kafka-source.properties file and passing them to Hudi Streamer will enable optimistic concurrency.
+A Hudi Streamer job can then be triggered as follows:
 
 ```java
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
-  --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
+[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+  --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \

@@ -283,17 +283,17 @@ hoodie.clustering.execution.strategy.class=org.apache.hudi.client.clustering.run
 hoodie.clustering.plan.strategy.sort.columns=column1,column2
 ```
 
-### HoodieDeltaStreamer
+### HoodieStreamer
 
-This brings us to our users' favorite utility in Hudi. Now, we can trigger asynchronous clustering with DeltaStreamer.
+This brings us to our users' favorite utility in Hudi. Now, we can trigger asynchronous clustering with Hudi Streamer.
 Just set the `hoodie.clustering.async.enabled` config to true and specify other clustering config in properties file
-whose location can be pased as `—props` when starting the deltastreamer (just like in the case of HoodieClusteringJob).
+whose location can be pased as `—props` when starting the Hudi Streamer (just like in the case of HoodieClusteringJob).
 
-A sample spark-submit command to setup HoodieDeltaStreamer is as below:
+A sample spark-submit command to setup HoodieStreamer is as below:
 
 ```bash
 spark-submit \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 /path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.9.0-SNAPSHOT.jar \
 --props /path/to/config/clustering_kafka.properties \
 --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \

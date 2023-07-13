@@ -12,12 +12,12 @@ You can pass a SQL Query to be executed during write.
 
 ```scala
 --transformer-class org.apache.hudi.utilities.transform.SqlQueryBasedTransformer
---hoodie-conf hoodie.deltastreamer.transformer.sql=SELECT a.col1, a.col3, a.col4 FROM <SRC> a
+--hoodie-conf hoodie.streamer.transformer.sql=SELECT a.col1, a.col3, a.col4 FROM <SRC> a
 ```
 
 ### SQL File Transformer
 You can specify a File with a SQL script to be executed during write. The SQL file is configured with this hoodie property:
-hoodie.deltastreamer.transformer.sql.file
+hoodie.streamer.transformer.sql.file
 
 The query should reference the source as a table named "\<SRC\>"
  
@@ -51,7 +51,7 @@ If you wish to use multiple transformers together, you can use the Chained trans
 Example below first flattens the incoming records and then does sql projection based on the query specified:
 ```scala
 --transformer-class org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.SqlQueryBasedTransformer   
---hoodie-conf hoodie.deltastreamer.transformer.sql=SELECT a.col1, a.col3, a.col4 FROM <SRC> a
+--hoodie-conf hoodie.streamer.transformer.sql=SELECT a.col1, a.col3, a.col4 FROM <SRC> a
 ```
 
 ### AWS DMS Transformer
