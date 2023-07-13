@@ -418,9 +418,9 @@ public class StreamWriteOperatorCoordinator
         if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
           writeClient.getHeartbeatClient().start(instant);
         }
-        recommit = commitInstant(instant);
+        recommitted = commitInstant(instant);
       }
-      if (!recommit) {
+      if (!recommitted) {
         // Stop heartbeat for the last failed instant
         if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()
             && !this.instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)
