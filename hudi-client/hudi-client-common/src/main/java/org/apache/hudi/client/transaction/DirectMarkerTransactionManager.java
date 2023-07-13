@@ -51,7 +51,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
       LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
       lockManager.lock();
 
-      reset(currentTxnOwnerInstant, Option.of(getInstant(newTxnOwnerInstantTime)), Option.empty());
+      reset(currentTxnOwnerInstant, Option.of(getInstant(newTxnOwnerInstantTime)));
       LOG.info("Transaction started for " + newTxnOwnerInstantTime + " and " + filePath);
     }
   }
@@ -60,7 +60,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
     if (isLockRequired) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstantTime
           + " for " + filePath);
-      if (reset(Option.of(getInstant(currentTxnOwnerInstantTime)), Option.empty(), Option.empty())) {
+      if (reset(Option.of(getInstant(currentTxnOwnerInstantTime)), Option.empty())) {
         lockManager.unlock();
         LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstantTime
             + " for " + filePath);

@@ -128,12 +128,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
-
   protected transient Timer.Context writeTimer = null;
-
-  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
-
   protected BaseHoodieTableServiceClient<O> tableServiceClient;
 
   /**
@@ -227,8 +223,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    this.txnManager.beginTransaction(Option.of(inflightInstant),
-        lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+    this.txnManager.beginTransaction(Option.of(inflightInstant));
     try {
       preCommit(inflightInstant, metadata);
       if (extraPreCommitFunc.isPresent()) {
@@ -507,11 +502,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
-        ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
-    this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
-    this.pendingInflightAndRequestedInstants.remove(instantTime);
-    tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
+    if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsRequiredBeforeWrite()) {
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, instantTime);
+      tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
+    }
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
   }
@@ -970,7 +964,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config, hadoopConf);
     String dropInstant = HoodieActiveTimeline.createNewInstantTime();
     HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
+    this.txnManager.beginTransaction(Option.of(ownerInstant));
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       table.getMetadataWriter(dropInstant).ifPresent(w -> {
@@ -1181,7 +1175,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
-    this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    this.txnManager.beginTransaction(ownerInstant);
     try {
       tryUpgrade(metaClient, instantTime);
       initMetadataTable(instantTime);

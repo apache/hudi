@@ -393,7 +393,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
         tableServiceType.getAction(), instantTime));
     try {
-      this.txnManager.beginTransaction(inflightInstant, Option.empty());
+      this.txnManager.beginTransaction(inflightInstant);
       LOG.info("Scheduling table service " + tableServiceType);
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
@@ -809,7 +809,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
             .collect(Collectors.toList());
     LOG.info("Rollback completed instants {}", rollbackCompletedInstants);
     try {
-      this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      this.txnManager.beginTransaction(Option.empty());
       rollbackCompletedInstants.forEach(instant -> {
         // remove pending commit files.
         HoodieInstant hoodieInstant = activeTimeline
@@ -920,17 +920,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       table.rollbackBootstrap(context, HoodieActiveTimeline.createNewInstantTime());
       LOG.info("Finished rolling back pending bootstrap");
     }
-  }
-
-  /**
-   * Some writers use SparkAllowUpdateStrategy and treat replacecommit plan as revocable plan.
-   * In those cases, their ConflictResolutionStrategy implementation should run conflict resolution
-   * even for clustering operations.
-   *
-   * @return boolean
-   */
-  protected boolean isPreCommitRequired() {
-    return this.config.getWriteConflictResolutionStrategy().isPreCommitRequired();
   }
 
   private Option<String> delegateToTableServiceManager(TableServiceType tableServiceType, HoodieTable table) {

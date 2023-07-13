@@ -151,7 +151,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
    */
   private void writeToMetadata(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
     try {
-      this.txnManager.beginTransaction(Option.of(restoreInflightInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(restoreInflightInstant));
       writeTableMetadata(restoreMetadata);
     } finally {
       this.txnManager.endTransaction(Option.of(restoreInflightInstant));

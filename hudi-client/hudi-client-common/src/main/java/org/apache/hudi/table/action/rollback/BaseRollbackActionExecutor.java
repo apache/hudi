@@ -247,7 +247,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     boolean enableLocking = (!skipLocking && !skipTimelinePublish);
     try {
       if (enableLocking) {
-        this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
+        this.txnManager.beginTransaction(Option.of(inflightInstant));
       }
 
       // If publish the rollback to the timeline, we first write the rollback metadata to metadata table

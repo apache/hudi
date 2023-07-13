@@ -47,91 +47,55 @@ public class TransactionUtils {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionUtils.class);
 
   /**
-   * Resolve any write conflicts when committing data.
+   * Resolve any write conflicts when committing data, need reload active timeline before calling
    *
    * @param table
    * @param currentTxnOwnerInstant
    * @param thisCommitMetadata
    * @param config
-   * @param lastCompletedTxnOwnerInstant
    * @param pendingInstants
-   *
-   * @return
-   * @throws HoodieWriteConflictException
    */
-  public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
+  public static void resolveWriteConflictIfAny(
       final HoodieTable table,
       final Option<HoodieInstant> currentTxnOwnerInstant,
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
-      Option<HoodieInstant> lastCompletedTxnOwnerInstant,
-      boolean reloadActiveTimeline,
-      Set<String> pendingInstants) throws HoodieWriteConflictException {
+      Set<String> pendingInstants
+      ) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      // deal with pendingInstants
-      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      if (reloadActiveTimeline) {
-        table.getMetaClient().reloadActiveTimeline();
-      }
-      Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
-          table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
-              completedInstantsDuringCurrentWriteOperation);
 
-      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
+      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(
+          table.getMetaClient(), currentTxnOwnerInstant.get(), Option.of(pendingInstants));
+
+      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(),
+          thisCommitMetadata.orElse(new HoodieCommitMetadata()));
+
       instantStream.forEach(instant -> {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");
-            resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
+            resolutionStrategy.resolveConflict(thisOperation, otherOperation);
           }
         } catch (IOException io) {
           throw new HoodieWriteConflictException("Unable to resolve conflict, if present", io);
         }
       });
       LOG.info("Successfully resolved conflicts, if any");
-
-      return thisOperation.getCommitMetadataOption();
-    }
-    return thisCommitMetadata;
-  }
-
-  /**
-   * Get the last completed transaction hoodie instant and {@link HoodieCommitMetadata#getExtraMetadata()}.
-   *
-   * @param metaClient
-   * @return
-   */
-  public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
-      HoodieTableMetaClient metaClient) {
-    Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
-    return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
-  }
-
-  private static Option<Pair<HoodieInstant, Map<String, String>>> getHoodieInstantAndMetaDataPair(HoodieTableMetaClient metaClient, Option<HoodieInstant> hoodieInstantOption) {
-    try {
-      if (hoodieInstantOption.isPresent()) {
-        HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(hoodieInstantOption.get(), metaClient.getActiveTimeline());
-        return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
-      } else {
-        return Option.empty();
-      }
-    } catch (IOException io) {
-      throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
     }
   }
 
   /**
-   * Get InflightAndRequest instants.
+   * Get InflightAndRequest instants and without current
    *
-   * @param metaClient
-   * @return
+   * @param metaClient meta client
+   * @param currentTimestamp current instant's timestamp
+   * @return set of picked instants' timestamp
    */
-  public static Set<String> getInflightAndRequestedInstants(HoodieTableMetaClient metaClient) {
+  public static Set<String> getInflightAndRequestedInstantsWithoutCurrent(HoodieTableMetaClient metaClient, String currentTimestamp) {
     // collect InflightAndRequest instants for deltaCommit/commit/compaction/clustering
     Set<String> timelineActions = CollectionUtils
         .createImmutableSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMMIT_ACTION);
@@ -139,6 +103,7 @@ public class TransactionUtils {
         .getActiveTimeline()
         .getTimelineOfActions(timelineActions)
         .filterInflightsAndRequested()
+        .filter(i -> !i.getTimestamp().equals(currentTimestamp))
         .getInstantsAsStream()
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
@@ -149,7 +114,6 @@ public class TransactionUtils {
     // some pending instants maybe finished during current write operation,
     // we should check the conflict of those pending operation
     return metaClient
-        .reloadActiveTimeline()
         .getCommitsTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()

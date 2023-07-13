@@ -18,8 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.StateTransitionTimeBasedConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -141,14 +140,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       InProcessLockProvider.class,
       FileSystemBasedLockProvider.class);
 
-  private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
-      new SimpleConcurrentFileWritesConflictResolutionStrategy(),
-      new IngestionPrimaryWriterBasedConflictResolutionStrategy());
+  private static final List<String> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
+      SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName(),
+      StateTransitionTimeBasedConflictResolutionStrategy.class.getName());
 
   private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
     List<Object[]> opts = new ArrayList<>();
     for (Object providerClass : LOCK_PROVIDER_CLASSES) {
-      for (ConflictResolutionStrategy resolutionStrategy: CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
+      for (String resolutionStrategy: CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
         opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
         opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
       }
@@ -265,7 +264,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("providerClassResolutionStrategyAndTableType")
   public void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass,
-                                               ConflictResolutionStrategy resolutionStrategy) throws Exception {
+                                               String resolutionStrategy) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
@@ -422,7 +421,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("providerClassResolutionStrategyAndTableType")
   public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class providerClass,
-                                                                ConflictResolutionStrategy resolutionStrategy) throws Exception {
+                                                                String resolutionStrategy) throws Exception {
     // create inserts X 1
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
@@ -681,7 +680,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
             .build()).withAutoCommit(false).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();

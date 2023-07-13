@@ -29,62 +29,82 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.index.HoodieIndex;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
+public class TestConflictResolutionStrategyWithBucketIndex extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
     initMetaClient();
   }
 
-  @Test
-  public void testNoConcurrentWrites() throws Exception {
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanMetaClient();
+  }
+
+  private static Stream<Arguments> additionalProps() {
+    return Arrays.stream(new Properties[]{new Properties() {{
+      setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
+      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
+    }}, new Properties() {{
+      setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
+      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), StateTransitionTimeBasedConflictResolutionStrategy.class.getName());
+    }}}).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testNoConcurrentWrites(Properties props) throws Exception {
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime);
-    // consider commits before this are all successful
-
-    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
     newInstantTime = HoodieTestTable.makeNewCommitTime();
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
 
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
-    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+    metaClient.reloadActiveTimeline();
+    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), Option.empty());
     Assertions.assertEquals(0, candidateInstants.count());
   }
 
-  @Test
-  public void testConcurrentWrites() throws Exception {
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testConcurrentWrites(Properties props) throws Exception {
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime);
-    // consider commits before this are all successful
     // writer 1
     createInflightCommit(HoodieTestTable.makeNewCommitTime(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     // writer 2
     createInflightCommit(HoodieTestTable.makeNewCommitTime(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
     newInstantTime = HoodieTestTable.makeNewCommitTime();
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
-    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+    metaClient.reloadActiveTimeline();
+    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), Option.empty());
     Assertions.assertEquals(0, candidateInstants.count());
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testConcurrentWritesWithInterleavingSuccessfulCommit(Properties props) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-    // consider commits before this are all successful
-    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
@@ -93,10 +113,10 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     metaClient.reloadActiveTimeline();
-    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), Option.empty()).collect(
         Collectors.toList());
     // writer 1 conflicts with writer 2
     Assertions.assertEquals(1, candidateInstants.size());
@@ -104,19 +124,17 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
     }
   }
 
-  @Test
-  public void testConcurrentWritesWithDifferentPartition() throws Exception {
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testConcurrentWritesWithDifferentPartition(Properties props) throws Exception {
     createCommit(HoodieActiveTimeline.createNewInstantTime());
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-    // consider commits before this are all successful
-    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH);
@@ -125,10 +143,10 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH);
     metaClient.reloadActiveTimeline();
-    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), Option.empty()).collect(
         Collectors.toList());
 
     // there should be 1 candidate instant

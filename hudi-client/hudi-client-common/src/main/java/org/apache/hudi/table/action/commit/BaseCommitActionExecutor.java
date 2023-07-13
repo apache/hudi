@@ -63,7 +63,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -81,8 +80,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected final Option<Map<String, String>> extraMetadata;
   protected final WriteOperationType operationType;
   protected final TaskContextSupplier taskContextSupplier;
-  protected final Option<TransactionManager> txnManagerOption;
-  protected final Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
+  protected final TransactionManager txnManager;
   protected final Set<String> pendingInflightAndRequestedInstants;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
@@ -92,17 +90,20 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
-    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
-    this.txnManagerOption = config.shouldAutoCommit() ? Option.of(new TransactionManager(config, table.getMetaClient().getFs())) : Option.empty();
-    if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
-      // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
-      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
-      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
-      this.pendingInflightAndRequestedInstants.remove(instantTime);
+    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager
+    //  is held in {@link BaseHoodieWriteClient}, https://issues.apache.org/jira/browse/HUDI-6566
+    if (config.shouldAutoCommit()) {
+      this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+      if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsRequiredBeforeWrite()) {
+        this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(table.getMetaClient(), instantTime);
+      } else {
+        this.pendingInflightAndRequestedInstants = null;
+      }
     } else {
-      this.lastCompletedTxn = Option.empty();
-      this.pendingInflightAndRequestedInstants = Collections.emptySet();
+      this.txnManager = null;
+      this.pendingInflightAndRequestedInstants = null;
     }
+
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
@@ -189,15 +190,16 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(State.INFLIGHT,
         getCommitActionType(), instantTime));
-    ValidationUtils.checkState(this.txnManagerOption.isPresent(), "The transaction manager has not been initialized");
-    TransactionManager txnManager = this.txnManagerOption.get();
-    txnManager.beginTransaction(inflightInstant,
-        lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
+    ValidationUtils.checkState(this.txnManager != null, "The transaction manager has not been initialized");
+    txnManager.beginTransaction(inflightInstant);
     try {
       setCommitMetadata(result);
-      // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
-      TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
+      if (result.getCommitMetadata().isPresent() && config.getWriteConflictResolutionStrategy().
+          isConflictResolveRequired(result.getCommitMetadata().get().getOperationType())) {
+        table.getMetaClient().reloadActiveTimeline();
+        TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
+            result.getCommitMetadata(), config, pendingInflightAndRequestedInstants);
+      }
       commit(extraMetadata, result);
     } finally {
       txnManager.endTransaction(inflightInstant);

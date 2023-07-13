@@ -28,6 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.List;
+import java.util.Set;
 
 /**
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
@@ -39,7 +41,6 @@ public class TransactionManager implements Serializable {
   protected final LockManager lockManager;
   protected final boolean isLockRequired;
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
-  private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
     this(new LockManager(config, fs), config.isLockRequired());
@@ -50,22 +51,19 @@ public class TransactionManager implements Serializable {
     this.isLockRequired = isLockRequired;
   }
 
-  public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
-                               Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+  public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant) {
     if (isLockRequired) {
-      LOG.info("Transaction starting for " + newTxnOwnerInstant
-          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
+      LOG.info("Transaction starting for " + newTxnOwnerInstant);
       lockManager.lock();
-      reset(currentTxnOwnerInstant, newTxnOwnerInstant, lastCompletedTxnOwnerInstant);
-      LOG.info("Transaction started for " + newTxnOwnerInstant
-          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
+      reset(currentTxnOwnerInstant, newTxnOwnerInstant);
+      LOG.info("Transaction started for " + newTxnOwnerInstant);
     }
   }
 
   public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
     if (isLockRequired) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
-      if (reset(currentTxnOwnerInstant, Option.empty(), Option.empty())) {
+      if (reset(currentTxnOwnerInstant, Option.empty())) {
         lockManager.unlock();
         LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
       }
@@ -73,11 +71,9 @@ public class TransactionManager implements Serializable {
   }
 
   protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
-                                       Option<HoodieInstant> newTxnOwnerInstant,
-                                       Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+                                       Option<HoodieInstant> newTxnOwnerInstant) {
     if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
       this.currentTxnOwnerInstant = newTxnOwnerInstant;
-      this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
       return true;
     }
     return false;
@@ -92,10 +88,6 @@ public class TransactionManager implements Serializable {
 
   public LockManager getLockManager() {
     return lockManager;
-  }
-
-  public Option<HoodieInstant> getLastCompletedTransactionOwner() {
-    return lastCompletedTxnOwnerInstant;
   }
 
   public Option<HoodieInstant> getCurrentTransactionOwner() {

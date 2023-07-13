@@ -236,7 +236,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
-        txnManager.beginTransaction(Option.empty(), Option.empty());
+        txnManager.beginTransaction(Option.empty());
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       verifyLastMergeArchiveFilesIfNecessary(context);

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -41,9 +41,12 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -79,13 +82,10 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
     cleanupResources();
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType) throws Exception {
+  @Test
+  public void testMultiWriterWithAsyncTableServicesWithCompaction() throws Exception {
     // create inserts X 1
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
-      setUpMORTestTable();
-    }
+    setUpMORTestTable();
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     // Disabling embedded timeline server, it doesn't work with multiwriter
@@ -99,10 +99,12 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
         .withEmbeddedTimelineServerEnabled(false)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
             FileSystemViewStorageType.MEMORY).build())
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withInlineClusteringNumCommits(1)
+            .withClusteringUpdatesStrategy(SparkAllowUpdateStrategy.class.getName()).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+            .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
             .build()).withAutoCommit(false).withProperties(properties).build();
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
@@ -126,11 +128,11 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = instantTime2;
       try {
-        // For both COW and MOR table types the commit should not be blocked, since we are giving preference to ingestion.
+        // For MOR table types the commit should be blocked, since compaction has the highest priority
         createCommitWithUpserts(cfg, client1, instantTime3, commitTimeBetweenPrevAndNew, instant4, numRecords);
         validInstants.add(instant4);
       } catch (Exception e1) {
-        throw new RuntimeException(e1);
+        Assertions.assertTrue(e1 instanceof HoodieWriteConflictException);
       }
     });
     String instant5 = HoodieActiveTimeline.createNewInstantTime();
@@ -138,9 +140,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
       try {
         client2.scheduleTableService(instant5, Option.empty(), TableServiceType.COMPACT);
       } catch (Exception e2) {
-        if (tableType == HoodieTableType.MERGE_ON_READ) {
-          throw new RuntimeException(e2);
-        }
+        throw new RuntimeException(e2);
       }
     });
     String instant6 = HoodieActiveTimeline.createNewInstantTime();
@@ -162,7 +162,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
         createCommitWithInserts(cfg, client1, instantTime3, instant7, numRecords);
         validInstants.add(instant7);
       } catch (Exception e1) {
-        throw new RuntimeException(e1);
+        Assertions.assertTrue(e1 instanceof HoodieWriteConflictException);
       }
     });
     future2 = executors.submit(() -> {
@@ -171,9 +171,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
         client2.commitCompaction(instant5, compactionMetadata.getCommitMetadata().get(), Option.empty());
         validInstants.add(instant5);
       } catch (Exception e2) {
-        if (tableType == HoodieTableType.MERGE_ON_READ) {
-          Assertions.assertTrue(e2 instanceof HoodieWriteConflictException);
-        }
+        throw new RuntimeException(e2);
       }
     });
     future3 = executors.submit(() -> {
@@ -204,10 +202,12 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withInlineClusteringNumCommits(1)
+            .withClusteringUpdatesStrategy(SparkAllowUpdateStrategy.class.getName()).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+            .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
             .build()).withAutoCommit(false).withProperties(properties).build();
     // Create the first commit
     String instant1 = HoodieActiveTimeline.createNewInstantTime();
@@ -238,7 +238,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
 
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                        String prevCommitTime, String newCommitTime, int numRecords) throws Exception {
-    // Finish first base commmit
+    // Finish first base commit
     JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
         false, false, numRecords);
     assertTrue(client.commit(newCommitTime, result), "Commit should succeed");

@@ -28,9 +28,11 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.StateTransitionTimeBasedConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -2686,7 +2688,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
         .withLockProvider(FileSystemBasedLockProviderTestClass.class)
-        .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+        .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
         .build();
     HoodieCleanConfig cleanConfig = HoodieCleanConfig.newBuilder()
         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build();
@@ -2713,9 +2715,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
         2, false);
 
-    // Schedule and execute a clustering plan on the same partition. During conflict resolution the commit should fail.
+    // Schedule and execute a clustering plan on the same partition with SparkAllowUpdateStrategy, during conflict
+    // resolution the commit should fail.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1)
+        .withClusteringUpdatesStrategy(SparkAllowUpdateStrategy.class.getName())
         .build();
     HoodiePreCommitValidatorConfig preCommitValidatorConfig = HoodiePreCommitValidatorConfig.newBuilder()
         .withPreCommitValidator(StringUtils.nullToEmpty(SqlQuerySingleResultPreCommitValidator.class.getName()))
@@ -2731,7 +2735,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .build();
 
     // create client with new config.
-    String clusteringCommitTime = HoodieActiveTimeline.createNewInstantTime();// HoodieActiveTimeline.createNewInstantTime();
+    String clusteringCommitTime = HoodieActiveTimeline.createNewInstantTime();
     SparkRDDWriteClient clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
 
     // Schedule and execute clustering, this should fail since there is a conflict between ingestion inflight commit.
@@ -2754,7 +2758,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
         .withLockProvider(FileSystemBasedLockProviderTestClass.class)
-        .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+        .withConflictResolutionStrategy(StateTransitionTimeBasedConflictResolutionStrategy.class.getName())
         .build();
     HoodieCleanConfig cleanConfig = HoodieCleanConfig.newBuilder()
         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build();
@@ -2792,7 +2796,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // To create a successful commit.
     HoodieLockConfig clusteringLockConfig = HoodieLockConfig.newBuilder()
         .withLockProvider(FileSystemBasedLockProviderTestClass.class)
-        .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+        .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
         .build();
     HoodiePreCommitValidatorConfig preCommitValidatorConfig = HoodiePreCommitValidatorConfig.newBuilder()
         .withPreCommitValidator(StringUtils.nullToEmpty(SqlQuerySingleResultPreCommitValidator.class.getName()))

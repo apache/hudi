@@ -2421,7 +2421,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
+    return (ConflictResolutionStrategy) ReflectionUtils.loadClass(
+        getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME), this);
   }
 
   public Long getAsyncConflictDetectorInitialDelayMs() {

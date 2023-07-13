@@ -20,13 +20,13 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIMethod;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.table.HoodieTable;
 
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -40,7 +40,9 @@ public interface ConflictResolutionStrategy {
    * Stream of instants to check conflicts against.
    * @return
    */
-  Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                             Option<Set<String>> pendingInstantsBeforeWritten);
 
   /**
    * Implementations of this method will determine whether a conflict exists between 2 commits.
@@ -58,14 +60,17 @@ public interface ConflictResolutionStrategy {
    * @return
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
-      ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
+  void resolveConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
 
   /**
-   * Write clients uses their preCommit API to run conflict resolution.
-   * This method determines whether to execute preCommit for table services like clustering.
-   * @return boolean
+   * Whether to record the pending instants before write.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  boolean isPreCommitRequired();
+  boolean isPendingInstantsRequiredBeforeWrite();
+
+  /**
+   * Whether the write operation needs to do conflict detection.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  boolean isConflictResolveRequired(WriteOperationType operationType);
 }

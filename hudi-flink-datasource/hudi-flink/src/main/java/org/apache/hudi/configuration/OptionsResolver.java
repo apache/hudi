@@ -19,7 +19,6 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
-import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -328,15 +327,6 @@ public class OptionsResolver {
    */
   public static String[] getIndexKeys(Configuration conf) {
     return getIndexKeyField(conf).split(",");
-  }
-
-  /**
-   * Returns the conflict resolution strategy.
-   */
-  public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {
-    return isBucketIndexType(conf)
-        ? new BucketIndexConcurrentFileWritesConflictResolutionStrategy()
-        : new SimpleConcurrentFileWritesConflictResolutionStrategy();
   }
 
   /**
