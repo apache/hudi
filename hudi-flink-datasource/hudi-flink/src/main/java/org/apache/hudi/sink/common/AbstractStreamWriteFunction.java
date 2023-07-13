@@ -220,7 +220,6 @@ public abstract class AbstractStreamWriteFunction<I>
       if (this.currentInstant != null) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
         this.currentInstant = null;
-        return;
       }
       // the JM may have also been rebooted, sends the bootstrap event either
     }
