@@ -277,9 +277,18 @@ test_metaserver_bundle () {
 
 run_docker_tests() {
     pushd $DOCKER_TEST_DIR
+    use_default_java_runtime
+    mvn clean package -D$SPARK_PROFILE -D$SCALA_PROFILE \
+      -DskipTests=true -pl hudi-common -am
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
     change_java_runtime_version
     mvn test -D$SPARK_PROFILE -D$SCALA_PROFILE \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat -DfailIfNoTests=false -pl hudi-common
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
     use_default_java_runtime
     popd
 }
