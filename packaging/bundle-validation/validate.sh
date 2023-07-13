@@ -292,7 +292,12 @@ run_docker_tests() {
     cat $HADOOP_HOME/etc/hadoop/core-site.xml
     echo "::warning::validate.sh check hadoop hdfs conf"
     cat $HADOOP_HOME/etc/hadoop/hdfs-site.xml
+    cat $HADOOP_HOME/libexec/hadoop-config.sh
+    whoami
+
     $HADOOP_HOME/bin/hdfs namenode -format
+    $HADOOP_HOME/bin/hdfs --daemon start namenode
+    $HADOOP_HOME/bin/hdfs --daemon start datanode
     echo "::warning::validate.sh starting hadoop hdfs"
     $HADOOP_HOME/sbin/start-dfs.sh
     $HADOOP_HOME/bin/hdfs dfs -mkdir /user/root
