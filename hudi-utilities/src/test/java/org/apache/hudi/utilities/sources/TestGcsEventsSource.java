@@ -63,7 +63,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @BeforeEach
   public void beforeEach() throws Exception {
-    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("delta-streamer-config", "gcs-metadata.avsc"), jsc);
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("streamer-config", "gcs-metadata.avsc"), jsc);
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
