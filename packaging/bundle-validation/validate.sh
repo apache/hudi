@@ -304,8 +304,6 @@ run_docker_tests() {
         exit 1
     fi
 
-
-
     echo "::warning::validate.sh run_docker_tests Running Hudi on Docker"
     change_java_runtime_version
 #    mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE \

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -50,7 +51,7 @@ public class TestDFSPropertiesConfiguration {
   private static String dfsBasePath;
   //  private static HdfsTestService hdfsTestService;
   //  private static MiniDFSCluster dfsCluster;
-  private static FileSystem dfs;
+  private static DistributedFileSystem dfs;
 
   @Rule
   public static final EnvironmentVariables ENVIRONMENT_VARIABLES
@@ -64,7 +65,7 @@ public class TestDFSPropertiesConfiguration {
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
     conf.set("dfs.replication", "1");
-    dfs = FileSystem.get(conf);
+    dfs = (DistributedFileSystem) DistributedFileSystem.get(conf);
     //    dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
