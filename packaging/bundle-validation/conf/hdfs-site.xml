@@ -19,4 +19,11 @@
     <name>dfs.replication</name>
     <value>1</value>
   </property>
+  <property>
+    <name>dfs.datanode.du.reserved</name>
+    <value>3221225472</value>
+    <description>3GB of disk space reserved for non DFS usage.
+      This space will be left unconsumed by the Datanode.
+    </description>
+  </property>
 </configuration>
