@@ -26,6 +26,24 @@ To contribute, you would need to do the following
  
 - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide)
 
+- In `Project Structure`, select Java 1.8 as the Project SDK
+
+  ![IDE setup java](/assets/images/contributing/IDE_setup_java.png)
+
+- Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
+  * Enable annotation processing in compiler
+
+    ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
+  * Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly
+
+    ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
+    ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
+
+- If you switch maven build profile, e.g., from Spark 3.2 to Spark 3.3, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
+so that IntelliJ re-indexes the code
+
+   ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
+
 - \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
     * Open Project Preferences in IDE
     * Install and activate CheckStyle plugin
@@ -54,13 +72,6 @@ To contribute, you would need to do the following
 
 ![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
 ![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
-
-- \[Optional\] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
-
-- \[Optional\] You may configure IntelliJ to respect maven CLI and pom.xml settings.
-
-![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
-![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
 
 ## Accounts and Permissions
 
