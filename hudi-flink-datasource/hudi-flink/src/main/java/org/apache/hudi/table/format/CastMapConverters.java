@@ -2,6 +2,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericArrayData;
@@ -36,8 +37,13 @@ import static org.apache.flink.table.types.logical.LogicalTypeRoot.MAP;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.ROW;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
 
+/**
+ * Tool class used to perform supported casts from a {@link LogicalType} to another as defined in Hudi Comprehensive Schema Evolution's scope.
+ */
+@Internal
 public class CastMapConverters {
 
+  @FunctionalInterface
   public interface CastMapConverter extends Serializable {
     Object getConversion(Object val);
   }
@@ -306,8 +312,8 @@ public class CastMapConverters {
         .range(0, fromChildren.size())
         .mapToObj(i -> RowData.createFieldGetter(fromChildren.get(i), i))
         .toArray(FieldGetter[]::new);
-    final CastMapConverter[] converters = IntStream.
-        range(0, fromChildren.size())
+    final CastMapConverter[] converters = IntStream
+        .range(0, fromChildren.size())
         .mapToObj(i -> {
           LogicalType fromChild = fromChildren.get(i);
           LogicalType toChild = toChildren.get(i);
