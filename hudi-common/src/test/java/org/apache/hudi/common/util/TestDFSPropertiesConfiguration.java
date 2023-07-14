@@ -18,16 +18,14 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
@@ -50,9 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestDFSPropertiesConfiguration {
 
   private static String dfsBasePath;
-  private static HdfsTestService hdfsTestService;
-  private static MiniDFSCluster dfsCluster;
-  private static DistributedFileSystem dfs;
+//  private static HdfsTestService hdfsTestService;
+//  private static MiniDFSCluster dfsCluster;
+  private static FileSystem dfs;
 
   @Rule
   public static final EnvironmentVariables ENVIRONMENT_VARIABLES
@@ -60,10 +58,14 @@ public class TestDFSPropertiesConfiguration {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    hdfsTestService = new HdfsTestService();
-    dfsCluster = hdfsTestService.start(true);
+//    hdfsTestService = new HdfsTestService();
+//    dfsCluster = hdfsTestService.start(true);
     // Create a temp folder as the base path
-    dfs = dfsCluster.getFileSystem();
+    Configuration conf = new Configuration();
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "1");
+    dfs = FileSystem.get(conf);
+//    dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
 
@@ -85,9 +87,9 @@ public class TestDFSPropertiesConfiguration {
 
   @AfterAll
   public static void cleanupClass() {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-    }
+//    if (hdfsTestService != null) {
+//      hdfsTestService.stop();
+//    }
   }
 
   @AfterEach
