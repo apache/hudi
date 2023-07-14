@@ -276,6 +276,25 @@ test_metaserver_bundle () {
     kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
+start_datanode () {
+  DN_DIR_PREFIX=$DOCKER_TEST_DIR/additional_datanode/
+
+  if [ -z $DN_DIR_PREFIX ]; then
+    echo $0: DN_DIR_PREFIX is not set. set it to something like "/hadoopTmp/dn"
+    exit 1
+  fi
+
+  DN=$1
+  export HADOOP_LOG_DIR=$DN_DIR_PREFIX$DN/logs
+  export HADOOP_PID_DIR=$HADOOP_LOG_DIR
+  DN_CONF_OPTS="\
+  -Dhadoop.tmp.dir=$DN_DIR_PREFIX$DN\
+  -Ddfs.datanode.address=0.0.0.0:5001$DN \
+  -Ddfs.datanode.http.address=0.0.0.0:5008$DN \
+  -Ddfs.datanode.ipc.address=0.0.0.0:5002$DN"
+  bin/hadoop-daemon.sh --script bin/hdfs start datanode $DN_CONF_OPTS
+}
+
 run_docker_tests() {
     pushd $DOCKER_TEST_DIR
     df -h
@@ -291,14 +310,19 @@ run_docker_tests() {
     whoami
 
     $HADOOP_HOME/bin/hdfs namenode -format
-    $HADOOP_HOME/bin/hdfs --daemon start namenode
-    $HADOOP_HOME/bin/hdfs --daemon start datanode
-    $HADOOP_HOME/bin/hdfs --daemon start datanode
-    $HADOOP_HOME/bin/hdfs --workers --daemon start datanode
+#    $HADOOP_HOME/bin/hdfs --daemon start namenode
     echo "::warning::validate.sh starting hadoop hdfs"
     $HADOOP_HOME/sbin/start-dfs.sh
+    echo "::warning::validate.sh starting hadoop hdfs, hdfs report 1"
+    $HADOOP_HOME/bin/hdfs dfsadmin -report
+
+    for i in 3
+    do
+      start_datanode $i
+    done
 
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
+    echo "::warning::validate.sh starting hadoop hdfs, hdfs report 2"
     $HADOOP_HOME/bin/hdfs dfsadmin -report
 
     exit 1
