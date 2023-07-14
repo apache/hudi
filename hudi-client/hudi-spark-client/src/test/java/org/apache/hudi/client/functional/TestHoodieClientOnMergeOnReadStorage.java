@@ -18,14 +18,17 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -41,6 +44,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
@@ -53,6 +58,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -535,6 +541,62 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       logCompactionInstantArchived = true;
     }
     assertTrue(logCompactionInstantArchived);
+  }
+
+  @Test
+  public void testLogCompactionOnMetadataTable() throws Exception {
+    String metadataBasepath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    HoodieMetadataConfig metadataConfig = new HoodieMetadataConfig.Builder()
+        .withLogCompactionEnabled(true)
+        .withLogCompactBlocksThreshold(2)
+        .withOptimizedLogBlocksScan(true)
+        .build();
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY).withAutoCommit(false).withMetadataConfig(metadataConfig).build();
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
+
+    // Create first commit
+    String currentCommit = HoodieActiveTimeline.createNewInstantTime();
+    final Function2<List<HoodieRecord>, String, Integer> insertsRecordGenFunction =
+        generateWrapRecordsFn(false, writeConfig, dataGen::generateInserts);
+    writeBatch(writeClient, currentCommit, "000", Option.empty(), "000", 20,
+        insertsRecordGenFunction, SparkRDDWriteClient::insert, false, 20, 20, 1,
+        true, false);
+    String prevCommit = currentCommit;
+
+    // Create another commit
+    currentCommit = HoodieActiveTimeline.createNewInstantTime();
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(false, writeConfig, dataGen::generateUniqueUpdates);
+    writeBatch(writeClient, currentCommit, prevCommit, Option.empty(), "000", 10,
+        insertsRecordGenFunction, SparkRDDWriteClient::upsert, false, 10, 20, 2,
+        true, false);
+    prevCommit = currentCommit;
+
+    // Validate metadata table.
+    validateMetadata(testTable, Collections.EMPTY_LIST, writeConfig, metadataBasepath, true);
+
+    // Create pending commit and this will trigger logcompaction on the metadata table.
+    currentCommit = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(writeClient, currentCommit, prevCommit, Option.empty(), "000",
+        10, recordGenFunction, SparkRDDWriteClient::upsert, false,
+        10, 20, 2, false, false);
+
+    // Verify logcompaction completed
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+        .setConf(hadoopConf).build();
+    assertTrue(HoodieTableMetadataUtil.isLogCompactionInstant(metadataMetaClient.reloadActiveTimeline().lastInstant().get()));
+
+    // Rollback pending commit
+    writeClient.rollback(currentCommit);
+    assertEquals(HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().lastInstant().get().getAction());
+
+    // Now rollback the completed commit
+    writeClient.rollback(prevCommit);
+
+    // Validate metadata table again.
+    validateMetadata(testTable, Collections.EMPTY_LIST, writeConfig, metadataBasepath, true);
   }
 
   @Override

@@ -462,16 +462,6 @@ public class FileCreateUtils {
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
   }
 
-  public static List<Path> getPartitionPaths(Path basePath) throws IOException {
-    if (Files.notExists(basePath)) {
-      return Collections.emptyList();
-    }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-            && !isBaseOrLogFilename(entry.getFileName().toString())
-            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
-        .collect(Collectors.toList());
-  }
-
   public static boolean isBaseOrLogFilename(String filename) {
     for (HoodieFileFormat format : HoodieFileFormat.values()) {
       if (filename.contains(format.getFileExtension())) {

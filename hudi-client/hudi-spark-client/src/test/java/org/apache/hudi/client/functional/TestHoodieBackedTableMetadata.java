@@ -159,9 +159,13 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
         context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuseMetadataReaders);
     assertTrue(tableMetadata.enabled());
-    List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
+    List<Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
-    fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
+    fsPartitionPaths.forEach(entry -> {
+      int index = entry.toString().indexOf(basePath + Path.SEPARATOR);
+      int len = (basePath + Path.SEPARATOR).length();
+      fsPartitions.add(entry.toString().substring(index + len));
+    });
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
     Collections.sort(fsPartitions);
