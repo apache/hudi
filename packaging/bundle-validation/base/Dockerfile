@@ -41,14 +41,14 @@ RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HI
     && rm $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz
 ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
-#RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
-#    && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
-#    && rm $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz
+RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
+    && rm $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz
 ENV DERBY_HOME=$WORKDIR/db-derby-$DERBY_VERSION-bin
 
-#RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz -P "$WORKDIR" \
-#    && tar -xf $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz -C $WORKDIR/ \
-#    && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
+RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz -P "$WORKDIR" \
+    && tar -xf $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz -C $WORKDIR/ \
+    && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
 ENV FLINK_HOME=$WORKDIR/flink-$FLINK_VERSION
 
 RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
