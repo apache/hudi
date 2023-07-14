@@ -402,15 +402,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsInstant(String ts) {
-    return containsInstant(ts, true);
-  }
-
-  //TODO: probably this API can be removed.
-  @Override
-  public boolean containsInstant(String ts, boolean includePendingInstants) {
     // Check for 0.10.0+ timestamps which have msec granularity
-    if (getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts)
-        && (includePendingInstants || s.isCompleted()))) {
+    if (getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts))) {
       return true;
     }
 

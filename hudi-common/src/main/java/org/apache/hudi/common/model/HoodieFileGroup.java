@@ -176,7 +176,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Option<FileSlice> getLatestFileSlice() {
     // there should always be one
-    return Option.fromJavaOptional(getAllFileSlices(false).findFirst());
+    return Option.fromJavaOptional(getAllFileSlices().findFirst());
   }
 
   /**
@@ -217,7 +217,7 @@ public class HoodieFileGroup implements Serializable {
    * Stream of committed data files, sorted reverse commit time.
    */
   public Stream<HoodieBaseFile> getAllBaseFiles() {
-    return getAllFileSlices(false).filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
+    return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
   @Override

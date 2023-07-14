@@ -398,7 +398,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(fakeToken)));
       SyncableFileSystemView unCommittedFsView = getFileSystemViewWithUnCommittedSlices(metaClient);
       // check fake log generated
-      assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath())
+      assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath(), true)
           .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
           .anyMatch(path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
       writeClient.commit(newCommitTime, statuses);
