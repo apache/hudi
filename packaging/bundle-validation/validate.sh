@@ -279,12 +279,6 @@ run_docker_tests() {
     pushd $DOCKER_TEST_DIR
     df -h
     use_default_java_runtime
-    echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
-    mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
-      -DskipTests=true -pl hudi-common -am
-    if [ "$?" -ne 0 ]; then
-        exit 1
-    fi
 
     echo "::warning::validate.sh check hadoop home"
     ls -R $HADOOP_HOME
@@ -302,6 +296,15 @@ run_docker_tests() {
     $HADOOP_HOME/sbin/start-dfs.sh
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
     $HADOOP_HOME/bin/hdfs dfsadmin -report
+
+    echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
+    mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
+      -DskipTests=true -pl hudi-common -am
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
+
+
 
     echo "::warning::validate.sh run_docker_tests Running Hudi on Docker"
     change_java_runtime_version
