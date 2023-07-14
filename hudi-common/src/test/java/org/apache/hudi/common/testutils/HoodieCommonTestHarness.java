@@ -113,7 +113,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
-    return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndRewriteInstants());
+    return getFileSystemView(metaClient, metaClient.getActiveTimeline());
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
