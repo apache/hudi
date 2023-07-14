@@ -1578,6 +1578,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         )
       }
     }
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
   /**
@@ -1633,6 +1634,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   def ingestAndValidateData(tableType: String, tableName: String, tmp: File,
                             expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,
                             setOptions: List[String] = List.empty) : Unit = {
+    setOptions.foreach(entry => {
+      spark.sql(entry)
+    })
+
     spark.sql(
       s"""
          |create table $tableName (
@@ -1649,9 +1654,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | location '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
-    setOptions.foreach(entry => {
-      spark.sql(entry)
-    })
 
     spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
 
@@ -1692,6 +1694,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
     spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
   test("Test insert dup policy with INSERT_INTO explicit new configs INSERT operation ") {
@@ -1755,6 +1759,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                             expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,
                             setOptions: List[String] = List.empty, insertDupPolicy : String = NONE_INSERT_DUP_POLICY,
                                     expectExceptionOnSecondBatch: Boolean = false) : Unit = {
+
+    // set additional options
+    setOptions.foreach(entry => {
+      spark.sql(entry)
+    })
+
     spark.sql(
       s"""
          |create table $tableName (
@@ -1771,10 +1781,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | location '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
-    // set additional options
-    setOptions.foreach(entry => {
-      spark.sql(entry)
-    })
 
     spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
 
@@ -1847,11 +1853,17 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
   def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
                                      expectedOperationtype: WriteOperationType = WriteOperationType.BULK_INSERT,
                                      setOptions: List[String] = List.empty) : Unit = {
+
+    // set additional options
+    setOptions.foreach(entry => {
+      spark.sql(entry)
+    })
     spark.sql(
       s"""
          |create table $tableName (
@@ -1868,10 +1880,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | location '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
-    // set additional options
-    setOptions.foreach(entry => {
-      spark.sql(entry)
-    })
 
     // drop dups is not supported in bulk_insert row writer path.
     assertThrows[HoodieException] {
@@ -1889,5 +1897,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 }
