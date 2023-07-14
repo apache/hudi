@@ -1585,6 +1585,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
    * When neither of strict mode nor sql.write.operation is set, sql write operation takes precedence and default value is chosen.
    */
   test("Test sql write operation with INSERT_INTO No explicit configs") {
+    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
       withRecordType()(withTempDir { tmp =>
         Seq("cow","mor").foreach {tableType =>
           withTable(generateTableName) { tableName =>
@@ -1621,6 +1625,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test sql write operation with INSERT_INTO override only strict mode") {
+    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+    spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
+    spark.sessionState.conf.unsetConf("hoodie.sql.bulk.insert.enable")
     withRecordType()(withTempDir { tmp =>
       Seq("cow","mor").foreach {tableType =>
         withTable(generateTableName) { tableName =>
@@ -1664,8 +1673,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       Seq(1, "a1", 10.0, "2021-07-18")
     )
 
-    // insert record again but w/ diff values but same primary key. Since "insert" is chosen as operation type,
-    // dups should be seen w/ snapshot query
+    // insert record again but w/ diff values but same primary key.
     spark.sql(
       s"""
          | insert into $tableName values
