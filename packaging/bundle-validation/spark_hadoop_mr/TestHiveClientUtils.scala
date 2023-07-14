@@ -25,7 +25,7 @@ import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 * as original test couldn't run on Java 17
 */
 
-spark.conf.get(CATALOG_IMPLEMENTATION.key) == "hive"
+assert(spark.conf.get(CATALOG_IMPLEMENTATION.key) == "hive")
 val hiveClient1 = HiveClientUtils.getSingletonClientForMetadata(spark)
 val hiveClient2 = HiveClientUtils.getSingletonClientForMetadata(spark)
 assert(hiveClient1 == hiveClient2)
