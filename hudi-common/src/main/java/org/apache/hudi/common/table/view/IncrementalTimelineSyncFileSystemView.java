@@ -94,7 +94,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
   protected void maySyncIncrementally() {
     HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedAndRewriteInstants();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline();
     try {
       if (incrementalTimelineSyncEnabled) {
         TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
