@@ -292,7 +292,7 @@ start_datanode () {
   -Ddfs.datanode.address=localhost:5001$DN \
   -Ddfs.datanode.http.address=localhost:5008$DN \
   -Ddfs.datanode.ipc.address=localhost:5002$DN"
-  $HADOOP_HOME/sbin/hadoop-daemon.sh --script $HADOOP_HOME/bin/hdfs start datanode $DN_CONF_OPTS
+  $HADOOP_HOME/bin/hdfs --daemon start datanode $DN_CONF_OPTS
 }
 
 run_docker_tests() {
