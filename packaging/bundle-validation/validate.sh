@@ -78,12 +78,13 @@ test_spark_hadoop_mr_bundles () {
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
     change_java_runtime_version
-    echo "::warning::validate.sh Testing DFSPropertiesConfiguration..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/test_dfs_props_conf.scala
+    echo "::warning::validate.sh Testing HiveClientUtils..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/TestHiveClientUtils.scala
     if [ $? -ne 0 ]; then
-        echo "::error::validate.sh TestDFSPropertiesConfiguration failed"
+        echo "::error::validate.sh HiveClientUtils failed"
         exit 1
     fi
+    echo "::warning::validate.sh estHiveClientUtils Passed"
 
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
