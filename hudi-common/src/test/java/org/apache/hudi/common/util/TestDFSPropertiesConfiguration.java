@@ -48,8 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestDFSPropertiesConfiguration {
 
   private static String dfsBasePath;
-//  private static HdfsTestService hdfsTestService;
-//  private static MiniDFSCluster dfsCluster;
+  //  private static HdfsTestService hdfsTestService;
+  //  private static MiniDFSCluster dfsCluster;
   private static FileSystem dfs;
 
   @Rule
@@ -58,14 +58,14 @@ public class TestDFSPropertiesConfiguration {
 
   @BeforeAll
   public static void initClass() throws Exception {
-//    hdfsTestService = new HdfsTestService();
-//    dfsCluster = hdfsTestService.start(true);
+    //    hdfsTestService = new HdfsTestService();
+    //    dfsCluster = hdfsTestService.start(true);
     // Create a temp folder as the base path
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
     conf.set("dfs.replication", "1");
     dfs = FileSystem.get(conf);
-//    dfs = dfsCluster.getFileSystem();
+    //    dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
 
@@ -87,9 +87,9 @@ public class TestDFSPropertiesConfiguration {
 
   @AfterAll
   public static void cleanupClass() {
-//    if (hdfsTestService != null) {
-//      hdfsTestService.stop();
-//    }
+    //    if (hdfsTestService != null) {
+    //      hdfsTestService.stop();
+    //    }
   }
 
   @AfterEach
