@@ -180,11 +180,6 @@ public class CastMapConverters {
             public Object getConversion(Object val) {
               return (int) LocalDate.parse(val.toString()).toEpochDay();
             }
-
-//            @Override
-//            public Function<Object, Object> getConversion() {
-//              return val -> (int) LocalDate.parse(val.toString()).toEpochDay();
-//            }
           };
         }
         break;
@@ -220,8 +215,8 @@ public class CastMapConverters {
           try {
             // note: InternalSchema.merge guarantees that the schema to be read fromType is orientated in the same order as toType
             // hence, we can match types by position as it is guaranteed that it is referencing the same field
-            ValidationUtils.checkArgument(fromType.getChildren().size() == toType.getChildren().size(),
-                "fromType [" + fromType + "] size: != toType [" + toType + "] size");
+            // ignoring error messages here as the calling function's checked exception will ignore it
+            ValidationUtils.checkArgument(fromType.getChildren().size() == toType.getChildren().size());
             return createRowConverter(fromType, toType);
           } catch (IllegalStateException ise) {
             return null;
@@ -240,7 +235,8 @@ public class CastMapConverters {
     final CastMapConverter converter = createConverter(fromType, toType);
 
     // need to handle nulls to prevent NullPointerException in #getConversion()
-    ValidationUtils.checkState(converter != null, String.format("Failed to perform ARRAY conversion when casting %s => %s", fromType, toType));
+    // ignoring error messages here as the calling function's checked exception will ignore it
+    ValidationUtils.checkState(converter != null);
 
     return new CastMapConverter() {
       private static final long serialVersionUID = 1L;
@@ -268,8 +264,10 @@ public class CastMapConverters {
     final ArrayData.ElementGetter keyElementGetter = ArrayData.createElementGetter(keyType);
     final ArrayData.ElementGetter valueElementGetter = ArrayData.createElementGetter(fromValueType);
     final CastMapConverter converter = createConverter(fromValueType, toValueType);
+
     // need to handle nulls to prevent NullPointerException in #getConversion()
-    ValidationUtils.checkState(converter != null, String.format("Failed to perform MAP conversion when cast %s => %s", fromType, toType));
+    // ignoring error messages here as the calling function's checked exception will ignore it
+    ValidationUtils.checkState(converter != null);
 
     return new CastMapConverter() {
       private static final long serialVersionUID = 1L;
@@ -322,8 +320,8 @@ public class CastMapConverters {
         .toArray(CastMapConverter[]::new);
 
     // need to handle nulls to prevent NullPointerException in #getConversion()
-    ValidationUtils.checkState(Arrays.stream(converters).noneMatch(Objects::isNull),
-        String.format("Failed to perform ROW conversion when casting %s => %s", fromType, toType));
+    // ignoring error messages here as the calling function's checked exception will ignore it
+    ValidationUtils.checkState(Arrays.stream(converters).noneMatch(Objects::isNull));
 
     return new CastMapConverter() {
       private static final long serialVersionUID = 1L;
