@@ -508,7 +508,6 @@ public class HoodieTableMetadataUtil {
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
           Option.of(new ArrayList<>(deletedFiles)));
-
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
       boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
@@ -524,6 +523,46 @@ public class HoodieTableMetadataUtil {
     LOG.info("Updating at " + instantTime + " from Clean. #partitions_updated=" + records.size()
         + ", #files_deleted=" + fileDeleteCount[0] + ", #partitions_deleted=" + deletedPartitions.size());
     return records;
+  }
+
+  public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMissingPartitionRecords(HoodieEngineContext engineContext,
+                                                                        List<String> deletedPartitions, Map<String, Map<String, Long>> filesAdded,
+                                                                        Map<String, List<String>> filesDeleted, String instantTime) {
+    List<HoodieRecord> records = new LinkedList<>();
+    int[] fileDeleteCount = {0};
+    int[] filesAddedCount = {0};
+
+    filesAdded.forEach((k,v) -> {
+      String partition = k;
+      Map<String, Long> filestoAdd = v;
+      filesAddedCount[0] += filestoAdd.size();
+      Option<List<String>> filesToDelete = filesDeleted.containsKey(k) ? Option.of(filesDeleted.get(k)) : Option.empty();
+      if (filesToDelete.isPresent()) {
+        fileDeleteCount[0] += filesToDelete.get().size();
+      }
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(filestoAdd), filesToDelete);
+      records.add(record);
+    });
+
+    // there could be partitions which only has missing deleted files.
+    filesDeleted.forEach((k,v) -> {
+      String partition = k;
+      Option<List<String>> filesToDelete = Option.of(v);
+      if (!filesAdded.containsKey(partition)) {
+        fileDeleteCount[0] += filesToDelete.get().size();
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(), filesToDelete);
+        records.add(record);
+      }
+    });
+
+    if (!deletedPartitions.isEmpty()) {
+      // if there are partitions to be deleted, add them to delete list
+      records.add(HoodieMetadataPayload.createPartitionListRecord(deletedPartitions, true));
+    }
+
+    LOG.info("Re-adding missing records at " + instantTime + " during Restore. #partitions_updated=" + records.size()
+        + ", #files_added=" + filesAddedCount[0] + ", #files_deleted=" + fileDeleteCount[0] + ", #partitions_deleted=" + deletedPartitions.size());
+    return Collections.singletonMap(MetadataPartitionType.FILES, engineContext.parallelize(records, 1));
   }
 
   /**

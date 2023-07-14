@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -926,6 +925,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       throw new HoodieIOException("Deserialization of rollback plan failed ", e);
     }
     final String restoreToInstantTime = restorePlan.getSavepointToRestoreTimestamp();
+    LOG.info("Triggering restore to " + restoreToInstantTime + " in metadata table");
 
     // fetch the earliest commit to retain and ensure the base file prior to the time to restore is present
     List<HoodieFileGroup> filesGroups = metadata.getMetadataFileSystemView().getAllFileGroups(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
@@ -942,15 +942,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
-    LOG.info("Restoring MDT to " + restoreToInstantTime + " at " + instantTime);
     getWriteClient().restoreToInstant(restoreToInstantTime, false);
 
     // At this point we have also reverted the cleans which have occurred after the restoreToInstantTime. Hence, a sync
     // is required to bring back those cleans.
     try {
       initMetadataReader();
-      HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
-      Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
+      Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
+      Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
+      List<String> partitionsToDelete = new ArrayList<>();
 
       for (String partition : metadata.fetchAllPartitionPaths()) {
         Path partitionPath = null;
@@ -963,32 +963,39 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
         if (!dirInfoMap.containsKey(partition)) {
           // Entire partition has been deleted
-          List<String> filePaths = Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList());
-          HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partitionId, "", filePaths, filePaths,
-              Collections.emptyList(), true);
-          partitionMetadata.put(partitionId, cleanPartitionMetadata);
+          partitionsToDelete.add(partitionId);
+          if (metadataFiles != null && metadataFiles.length > 0) {
+            partitionFilesToDelete.put(partitionId, Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList()));
+          }
         } else {
-          // Some files cleaned in the partition
+          // Some files need to be cleaned and some to be added in the partition
           Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
+          List<String> mdtFiles = Arrays.stream(metadataFiles).map(mdtFile -> mdtFile.getPath().getName()).collect(Collectors.toList());
           List<String> filesDeleted = Arrays.stream(metadataFiles).map(f -> f.getPath().getName())
               .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
+          Map<String, Long> filesToAdd = new HashMap<>();
+          // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.
+          dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k,v) -> {
+            if (!mdtFiles.contains(k)) {
+              filesToAdd.put(k,v);
+            }
+          });
+          if (!filesToAdd.isEmpty()) {
+            partitionFilesToAdd.put(partitionId, filesToAdd);
+          }
           if (!filesDeleted.isEmpty()) {
-            LOG.info("Found deleted files in partition " + partition + ": " + filesDeleted);
-            HoodieCleanPartitionMetadata cleanPartitionMetadata = new HoodieCleanPartitionMetadata(partitionId, "", filesDeleted, filesDeleted,
-                Collections.emptyList(), false);
-            partitionMetadata.put(partitionId, cleanPartitionMetadata);
+            partitionFilesToDelete.put(partitionId, filesDeleted);
           }
         }
       }
-      cleanMetadata.setPartitionMetadata(partitionMetadata);
 
       // Even if we don't have any deleted files to sync, we still create an empty commit so that we can track the restore has completed.
       // We cannot create a deltaCommit at instantTime now because a future block (rollback) has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
       String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
-      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, cleanMetadata, getRecordsGenerationParams(),
-          syncCommitTime));
+      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
+          partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
