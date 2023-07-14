@@ -1,0 +1,377 @@
+package org.apache.hudi.table.format;
+
+import org.apache.hudi.common.util.ValidationUtils;
+
+import org.apache.flink.table.data.ArrayData;
+import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.GenericArrayData;
+import org.apache.flink.table.data.GenericMapData;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.MapData;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.RowData.FieldGetter;
+import org.apache.flink.table.data.binary.BinaryStringData;
+import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.IntStream;
+
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.ARRAY;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.BIGINT;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.DATE;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.DECIMAL;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.DOUBLE;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.FLOAT;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.MAP;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.ROW;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
+
+public class CastMapConverters {
+
+  public interface CastMapConverter extends Serializable {
+    Object getConversion(Object val);
+  }
+
+  public static CastMapConverter createConverter(LogicalType fromType, LogicalType toType) {
+    LogicalTypeRoot from = fromType.getTypeRoot();
+    LogicalTypeRoot to = toType.getTypeRoot();
+
+    switch (to) {
+      case BIGINT: {
+        if (from == INTEGER) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return ((Number) val).longValue();
+            }
+          };
+        }
+        break;
+      }
+
+      case FLOAT: {
+        if (from == INTEGER || from == BIGINT) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return ((Number) val).floatValue();
+            }
+          };
+        }
+        break;
+      }
+
+      case DOUBLE: {
+        if (from == INTEGER || from == BIGINT) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return ((Number) val).doubleValue();
+            }
+          };
+        }
+        if (from == FLOAT) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return Double.parseDouble(val.toString());
+            }
+          };
+        }
+        break;
+      }
+
+      case DECIMAL: {
+        if (from == INTEGER || from == BIGINT || from == DOUBLE) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return toDecimalData((Number) val, toType);
+            }
+          };
+        }
+        if (from == FLOAT) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return toDecimalData(Double.parseDouble(val.toString()), toType);
+            }
+          };
+        }
+        if (from == VARCHAR) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return toDecimalData(Double.parseDouble(val.toString()), toType);
+            }
+          };
+        }
+        if (from == DECIMAL) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return toDecimalData(((DecimalData) val).toBigDecimal(), toType);
+            }
+          };
+        }
+        break;
+      }
+
+      case VARCHAR: {
+        if (from == INTEGER
+            || from == BIGINT
+            || from == FLOAT
+            || from == DOUBLE
+            || from == DECIMAL) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return new BinaryStringData(String.valueOf(val));
+            }
+          };
+        }
+        if (from == DATE) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return new BinaryStringData(LocalDate.ofEpochDay(((Integer) val).longValue()).toString());
+            }
+          };
+        }
+        break;
+      }
+
+      case DATE: {
+        if (from == VARCHAR) {
+          return new CastMapConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getConversion(Object val) {
+              return (int) LocalDate.parse(val.toString()).toEpochDay();
+            }
+
+//            @Override
+//            public Function<Object, Object> getConversion() {
+//              return val -> (int) LocalDate.parse(val.toString()).toEpochDay();
+//            }
+          };
+        }
+        break;
+      }
+
+      case ARRAY: {
+        if (from == ARRAY) {
+          try {
+            LogicalType fromElementType =  fromType.getChildren().get(0);
+            LogicalType toElementType = toType.getChildren().get(0);
+            return createArrayConverter(fromElementType, toElementType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
+        }
+        break;
+      }
+
+      case MAP: {
+        if (from == MAP) {
+          try {
+            return createMapConverter(fromType, toType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
+        }
+        break;
+      }
+
+      case ROW: {
+        if (from == ROW) {
+          // Assumption: InternalSchemaManager should produce a cast that is of the same size
+          try {
+            // note: InternalSchema.merge guarantees that the schema to be read fromType is orientated in the same order as toType
+            // hence, we can match types by position as it is guaranteed that it is referencing the same field
+            ValidationUtils.checkArgument(fromType.getChildren().size() == toType.getChildren().size(),
+                "fromType [" + fromType + "] size: != toType [" + toType + "] size");
+            return createRowConverter(fromType, toType);
+          } catch (IllegalStateException ise) {
+            return null;
+          }
+        }
+        break;
+      }
+
+      default:
+    }
+    return null;
+  }
+
+  private static CastMapConverter createArrayConverter(LogicalType fromType, LogicalType toType) {
+    final ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(fromType);
+    final CastMapConverter converter = createConverter(fromType, toType);
+
+    // need to handle nulls to prevent NullPointerException in #getConversion()
+    ValidationUtils.checkState(converter != null, String.format("Failed to perform ARRAY conversion when casting %s => %s", fromType, toType));
+
+    return new CastMapConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object getConversion(Object val) {
+        ArrayData array = (ArrayData) val;
+        Object[] objects = new Object[array.size()];
+        for (int i = 0; i < array.size(); i++) {
+          Object fromObj = elementGetter.getElementOrNull(array, i);
+          // need to handle nulls to prevent NullPointerException in #getConversion()
+          Object toObj = fromObj != null ? converter.getConversion(fromObj) : null;
+          objects[i] = toObj;
+        }
+        return new GenericArrayData(objects);
+      }
+    };
+  }
+
+  private static CastMapConverter createMapConverter(LogicalType fromType, LogicalType toType) {
+    // no schema evolution is allowed on the keyType, hence, we only need to care about the valueType
+    final LogicalType keyType = fromType.getChildren().get(0);
+    final LogicalType fromValueType = fromType.getChildren().get(1);
+    final LogicalType toValueType = toType.getChildren().get(1);
+    final ArrayData.ElementGetter keyElementGetter = ArrayData.createElementGetter(keyType);
+    final ArrayData.ElementGetter valueElementGetter = ArrayData.createElementGetter(fromValueType);
+    final CastMapConverter converter = createConverter(fromValueType, toValueType);
+    // need to handle nulls to prevent NullPointerException in #getConversion()
+    ValidationUtils.checkState(converter != null, String.format("Failed to perform MAP conversion when cast %s => %s", fromType, toType));
+
+    return new CastMapConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object getConversion(Object val) {
+        final Map<Object, Object> result = new HashMap<>();
+        MapData map = (MapData) val;
+        for (int i = 0; i < map.size(); i++) {
+          Object keyObj = keyElementGetter.getElementOrNull(map.keyArray(), i);
+          Object fromObj = valueElementGetter.getElementOrNull(map.valueArray(), i);
+          // need to handle nulls to prevent NullPointerException in #getConversion()
+          Object toObj = fromObj != null ? converter.getConversion(fromObj) : null;
+          result.put(keyObj, toObj);
+        }
+        return new GenericMapData(result);
+      }
+    };
+  }
+
+  private static CastMapConverter createNoOpConverter() {
+    return new CastMapConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object getConversion(Object val) {
+        return val;
+      }
+    };
+  }
+
+  private static CastMapConverter createRowConverter(LogicalType fromType, LogicalType toType) {
+    final List<LogicalType> fromChildren = fromType.getChildren();
+    final List<LogicalType> toChildren = toType.getChildren();
+    final RowData.FieldGetter[] fieldGetters = IntStream
+        .range(0, fromChildren.size())
+        .mapToObj(i -> RowData.createFieldGetter(fromChildren.get(i), i))
+        .toArray(FieldGetter[]::new);
+    final CastMapConverter[] converters = IntStream.
+        range(0, fromChildren.size())
+        .mapToObj(i -> {
+          LogicalType fromChild = fromChildren.get(i);
+          LogicalType toChild = toChildren.get(i);
+          if (isPrimitiveTypeRootEqual(fromChild.getTypeRoot(), toChild.getTypeRoot())) {
+            return createNoOpConverter();
+          } else {
+            return createConverter(fromChild, toChild);
+          }
+        })
+        .toArray(CastMapConverter[]::new);
+
+    // need to handle nulls to prevent NullPointerException in #getConversion()
+    ValidationUtils.checkState(Arrays.stream(converters).noneMatch(Objects::isNull),
+        String.format("Failed to perform ROW conversion when casting %s => %s", fromType, toType));
+
+    return new CastMapConverter() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public Object getConversion(Object val) {
+        RowData row = (RowData) val;
+        GenericRowData rowData = new GenericRowData(toType.getChildren().size());
+        for (int i = 0; i < toChildren.size(); i++) {
+          Object fromObj = fieldGetters[i].getFieldOrNull(row);
+          // need to handle nulls to prevent NullPointerException in #getConversion()
+          Object toObj = fromObj != null ? converters[i].getConversion(fromObj) : null;
+          rowData.setField(i, toObj);
+        }
+        return rowData;
+      }
+    };
+  }
+
+  private static boolean isPrimitiveTypeRootEqual(LogicalTypeRoot fromType, LogicalTypeRoot toType) {
+    // not-null constraints will be ignored when TypeRoot is used
+    boolean isComplex = fromType.equals(ARRAY) || fromType.equals(MAP) || fromType.equals(ROW);
+    return !isComplex && fromType.equals(toType);
+  }
+
+  /**
+   * Helper function to convert a Number object to Flink's DecimalData format.
+   *
+   * @param val         Number object to be converted
+   * @param decimalType DecimalType containing the output decimal's precision and scale specifications
+   * @return Converted decimal that is wrapped in Flink's DecimalData object.
+   */
+  private static DecimalData toDecimalData(Number val, LogicalType decimalType) {
+    BigDecimal valAsDecimal = BigDecimal.valueOf(val.doubleValue());
+    return toDecimalData(valAsDecimal, decimalType);
+  }
+
+  /**
+   * Helper function to convert a BigDecimal object to Flink's DecimalData format.
+   *
+   * @param valAsDecimal BigDecimal object to be converted
+   * @param decimalType  DecimalType containing the output decimal's precision and scale specifications
+   * @return Converted decimal that is wrapped in Flink's DecimalData object.
+   */
+  private static DecimalData toDecimalData(BigDecimal valAsDecimal, LogicalType decimalType) {
+    return DecimalData.fromBigDecimal(
+        valAsDecimal,
+        ((DecimalType) decimalType).getPrecision(),
+        ((DecimalType) decimalType).getScale());
+  }
+}

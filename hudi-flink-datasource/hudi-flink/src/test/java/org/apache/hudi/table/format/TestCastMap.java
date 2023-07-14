@@ -58,14 +58,17 @@ public class TestCastMap {
         Arrays.asList(
             new RowType.RowField("inner_f0", new IntType()),
             new RowType.RowField("inner_f1", new IntType()),
-            new RowType.RowField("inner_f2", new IntType())));
+            new RowType.RowField("inner_f2", new IntType()),
+            new RowType.RowField("inner_f3", new IntType())));
 
+    // adding not nulls to test handling of not-null constraints
     RowType innerEvolvedRowType = new RowType(
         true,
         Arrays.asList(
             new RowType.RowField("inner_f0", new DoubleType()),
-            new RowType.RowField("inner_f1", new DoubleType()),
-            new RowType.RowField("inner_f2", new BigIntType())));
+            new RowType.RowField("inner_f1", new IntType(false)),
+            new RowType.RowField("inner_f2", new DoubleType()),
+            new RowType.RowField("inner_f3", new BigIntType())));
 
     RowType fromRowType = new RowType(true,
         Arrays.asList(
@@ -81,19 +84,21 @@ public class TestCastMap {
     castMap.add(0, fromRowType, toRowType);
 
     // initialise row data to perform cast on
-    GenericRowData innerRowData = new GenericRowData(3);
+    GenericRowData innerRowData = new GenericRowData(4);
     innerRowData.setField(0, 333);
-    innerRowData.setField(1, null);
-    innerRowData.setField(2, 555);
+    innerRowData.setField(1, 444);
+    innerRowData.setField(2, null);
+    innerRowData.setField(3, 555);
     GenericRowData inputRowData = new GenericRowData(2);
     inputRowData.setField(0, innerRowData);
     inputRowData.setField(1, 2);
 
     // initialise row data as ground-truth to check against
-    GenericRowData evolvedInnerRowData = new GenericRowData(3);
+    GenericRowData evolvedInnerRowData = new GenericRowData(4);
     evolvedInnerRowData.setField(0, 333.0);
-    evolvedInnerRowData.setField(1, null);
-    evolvedInnerRowData.setField(2, 555L);
+    evolvedInnerRowData.setField(1, 444);
+    evolvedInnerRowData.setField(2, null);
+    evolvedInnerRowData.setField(3, 555L);
     GenericRowData expectedRowData = new GenericRowData(2);
     expectedRowData.setField(0, evolvedInnerRowData);
     expectedRowData.setField(1, 2.0);
