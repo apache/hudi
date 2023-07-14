@@ -289,9 +289,9 @@ start_datanode () {
   export HADOOP_PID_DIR=$HADOOP_LOG_DIR
   DN_CONF_OPTS="\
   -Dhadoop.tmp.dir=$DN_DIR_PREFIX$DN\
-  -Ddfs.datanode.address=0.0.0.0:5001$DN \
-  -Ddfs.datanode.http.address=0.0.0.0:5008$DN \
-  -Ddfs.datanode.ipc.address=0.0.0.0:5002$DN"
+  -Ddfs.datanode.address=localhost:5001$DN \
+  -Ddfs.datanode.http.address=localhost:5008$DN \
+  -Ddfs.datanode.ipc.address=localhost:5002$DN"
   bin/hadoop-daemon.sh --script bin/hdfs start datanode $DN_CONF_OPTS
 }
 
@@ -310,7 +310,7 @@ run_docker_tests() {
     whoami
 
     $HADOOP_HOME/bin/hdfs namenode -format
-#    $HADOOP_HOME/bin/hdfs --daemon start namenode
+    $HADOOP_HOME/bin/hdfs --daemon start namenode
     echo "::warning::validate.sh starting hadoop hdfs"
     $HADOOP_HOME/sbin/start-dfs.sh
     echo "::warning::validate.sh starting hadoop hdfs, hdfs report 1"

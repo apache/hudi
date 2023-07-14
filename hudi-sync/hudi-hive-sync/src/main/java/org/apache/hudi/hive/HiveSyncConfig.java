@@ -100,6 +100,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     super(props, hadoopConf);
     HiveConf hiveConf = hadoopConf instanceof HiveConf
         ? (HiveConf) hadoopConf : new HiveConf(hadoopConf, HiveConf.class);
+    hiveConf.addResource(getHadoopConf());
     setHadoopConf(hiveConf);
     validateParameters();
   }
