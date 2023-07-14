@@ -29,15 +29,15 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSTestUtil;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
-import org.apache.hadoop.hdfs.server.datanode.DataNode;
+import org.apache.hadoop.hdfs.tools.DFSAdmin;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,12 +45,10 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
@@ -59,7 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;
-  private static MiniDFSCluster cluster;
+  private static DistributedFileSystem dfs;
+  private static DFSAdmin dfsAdmin;
+  //  private static MiniDFSCluster cluster;
 
   @BeforeAll
   public static void setUpClass() throws IOException {
@@ -69,16 +69,24 @@ public class TestHoodieLogFormatAppendFailure {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     Configuration conf = new Configuration();
     // lower heartbeat interval for fast recognition of DN
-    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, baseDir.getAbsolutePath());
+    //    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, baseDir.getAbsolutePath());
     conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 1000);
     conf.setInt(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 3000);
-    cluster = new MiniDFSCluster.Builder(conf).checkExitOnShutdown(true).numDataNodes(4).build();
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "3");
+
+    dfsAdmin = new DFSAdmin(conf);
+    dfs = (DistributedFileSystem) DistributedFileSystem.get(conf);
+
+    //    cluster = new MiniDFSCluster.Builder(conf).checkExitOnShutdown(true).numDataNodes(4).build();
   }
 
   @AfterAll
-  public static void tearDownClass() {
-    cluster.shutdown(true);
+  public static void tearDownClass() throws IOException {
+    dfsAdmin.close();
+    dfs.close();
+    //    cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created
     FileUtil.fullyDelete(baseDir);
   }
@@ -86,14 +94,14 @@ public class TestHoodieLogFormatAppendFailure {
   @Test
   @Timeout(60)
   public void testFailedToGetAppendStreamFromHDFSNameNode()
-      throws IOException, URISyntaxException, InterruptedException, TimeoutException {
+      throws Exception {
 
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
     Path localPartitionPath = new Path("/tmp/");
-    FileSystem fs = cluster.getFileSystem();
+    //    FileSystem fs = cluster.getFileSystem();
     Path testPath = new Path(localPartitionPath, uuid);
-    fs.mkdirs(testPath);
+    dfs.mkdirs(testPath);
 
     // Some data & append.
     List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 10).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
@@ -104,7 +112,7 @@ public class TestHoodieLogFormatAppendFailure {
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .overBaseCommit("").withFs(fs).build();
+        .overBaseCommit("").withFs(dfs).build();
 
     writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -113,29 +121,34 @@ public class TestHoodieLogFormatAppendFailure {
     writer.close();
 
     // Wait for 3 times replication of file
-    DFSTestUtil.waitReplication(fs, logFilePath, (short) 3);
+    DFSTestUtil.waitReplication(dfs, logFilePath, (short) 3);
     // Shut down all DNs that have the last block location for the file
-    LocatedBlocks lbs = cluster.getFileSystem().getClient().getNamenode()
+    //    DistributedFileSystem dfs = cluster.getFileSystem();
+    //    LocatedBlocks lbs = cluster.getFileSystem().getClient().getNamenode()
+    //        .getBlockLocations("/tmp/" + uuid + "/" + logFilePath.getName(), 0, Long.MAX_VALUE);
+    LocatedBlocks lbs = dfs.getClient().getNamenode()
         .getBlockLocations("/tmp/" + uuid + "/" + logFilePath.getName(), 0, Long.MAX_VALUE);
-    List<DataNode> dnsOfCluster = cluster.getDataNodes();
+
+    //    List<DataNode> dnsOfCluster = cluster.getDataNodes();
     DatanodeInfo[] dnsWithLocations = lbs.getLastLocatedBlock().getLocations();
-    for (DataNode dn : dnsOfCluster) {
+    DatanodeInfo[] dnsOfCluster = dfs.getDataNodeStats();
+
+    for (DatanodeInfo dn : dnsOfCluster) {
       for (DatanodeInfo loc : dnsWithLocations) {
-        if (dn.getDatanodeId().equals(loc)) {
-          dn.shutdown();
-          cluster.stopDataNode(dn.getDisplayName());
-          DFSTestUtil.waitForDatanodeDeath(dn);
+        if (dn.equals(loc)) {
+          String[] decommissionArgs = new String[]{"-startDecommission", dn.getDatanodeUuid()};
+          dfsAdmin.run(decommissionArgs);
         }
       }
     }
     // Wait for the replication of this file to go down to 0
-    DFSTestUtil.waitReplication(fs, logFilePath, (short) 0);
+    DFSTestUtil.waitReplication(dfs, logFilePath, (short) 0);
 
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .overBaseCommit("").withFs(fs).build();
+        .overBaseCommit("").withFs(dfs).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
