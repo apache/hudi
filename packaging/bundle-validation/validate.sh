@@ -293,11 +293,15 @@ run_docker_tests() {
     $HADOOP_HOME/bin/hdfs namenode -format
     $HADOOP_HOME/bin/hdfs --daemon start namenode
     $HADOOP_HOME/bin/hdfs --daemon start datanode
+    $HADOOP_HOME/bin/hdfs --daemon start datanode
+    $HADOOP_HOME/bin/hdfs --workers --daemon start datanode
     echo "::warning::validate.sh starting hadoop hdfs"
     $HADOOP_HOME/sbin/start-dfs.sh
+
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
     $HADOOP_HOME/bin/hdfs dfsadmin -report
 
+    exit 1
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
       -DskipTests=true -pl hudi-common -am
