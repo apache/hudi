@@ -342,7 +342,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedJoinPlan = Project(tableMetaCols ++ incomingDataCols, joinData)
+    val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_MERGE_WRITES.key(), ENABLE_OPTIMIZED_MERGE_WRITES.defaultValue()) == "true") {
+      Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else {
+      Project(incomingDataCols, joinData)
+    }
+
     val projectedJoinOutput = projectedJoinPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
@@ -649,6 +654,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       CANONICALIZE_NULLABLE.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key -> "true",
+      HoodieInternalConfig.ENABLE_PREPPED_MERGE_WRITES.key -> sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_MERGE_WRITES.key(), ENABLE_OPTIMIZED_MERGE_WRITES.defaultValue()),
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 

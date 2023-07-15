@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieInternalConfig
-import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
+import org.apache.hudi.config.HoodieInternalConfig.{ENABLE_PREPPED_MERGE_WRITES, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
@@ -146,8 +146,10 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               rawDf: DataFrame): BaseRelation = {
+    // AKL_TODO: check if this function is called before ENABLE_PREPPED_MERGE_WRITES is set, but for now
+    // the default is always true, so sequence should not make a difference.
     val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY,
-      optParams.getOrDefault(SQL_MERGE_INTO_WRITES.key(), SQL_MERGE_INTO_WRITES.defaultValue().toString))
+      optParams.getOrDefault(ENABLE_PREPPED_MERGE_WRITES.key(), ENABLE_PREPPED_MERGE_WRITES.defaultValue().toString))
       .equalsIgnoreCase("true")) {
       rawDf // Don't remove meta columns for prepped write.
     } else {

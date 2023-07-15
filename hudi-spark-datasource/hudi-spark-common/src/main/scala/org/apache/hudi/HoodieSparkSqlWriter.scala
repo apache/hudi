@@ -45,7 +45,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
+import org.apache.hudi.config.HoodieInternalConfig.{ENABLE_PREPPED_MERGE_WRITES, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.HoodieIndex
@@ -349,8 +349,7 @@ object HoodieSparkSqlWriter {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val mergeIntoWrites = parameters.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
-               SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
+            val mergeIntoWrites = parameters.getOrDefault(ENABLE_PREPPED_MERGE_WRITES.key(), ENABLE_PREPPED_MERGE_WRITES.defaultValue.toString).toBoolean
             val processedDataSchema = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
