@@ -347,6 +347,7 @@ run_docker_tests() {
          -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormatAppendFailure -DfailIfNoTests=false -pl hudi-common
     echo "::warning::validate.sh run_docker_tests surefire report"
     ls $DOCKER_TEST_DIR/hudi-common/target/surefire-reports
+    exit 1
 #    cat $DOCKER_TEST_DIR/hudi-common/target/surefire-reports/*
     if [ "$?" -ne 0 ]; then
         exit 1

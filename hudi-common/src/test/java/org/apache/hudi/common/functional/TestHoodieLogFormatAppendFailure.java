@@ -134,8 +134,8 @@ public class TestHoodieLogFormatAppendFailure {
     DatanodeInfo[] dnsOfCluster = dfs.getDataNodeStats();
 
     for (DatanodeInfo dn : dnsOfCluster) {
-      for (DatanodeInfo loc : lbs.getLastLocatedBlock().getLocations()) {
-        if (dn.equals(loc)) {
+      for (Object loc : lbs.getLastLocatedBlock().getLocations()) {
+        if (dn.equals((DatanodeInfo) loc)) {
           String[] decommissionArgs = new String[]{"-startDecommission", dn.getDatanodeUuid()};
           dfsAdmin.run(decommissionArgs);
         }
