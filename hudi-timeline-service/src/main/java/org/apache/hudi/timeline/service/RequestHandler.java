@@ -326,7 +326,7 @@ public class RequestHandler {
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_INCLUDE_PENDING_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("LATEST_PARTITION_SLICES", 1);
+      metricsRegistry.add("LATEST_PARTITION_SLICES_INCLUDE_PENDING", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlices(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
@@ -359,8 +359,8 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.ALL_SLICES_URL_INCLUDE_PENDING, new ViewHandler(ctx -> {
-      metricsRegistry.add("ALL_SLICES_URL_INCLUDE_PENDING", 1);
+    app.get(RemoteHoodieTableFileSystemView.ALL_SLICES_INCLUDE_PENDING_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_SLICES_INCLUDE_PENDING", 1);
       List<FileSliceDTO> dtos = sliceHandler.getAllFileSlices(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
@@ -386,7 +386,7 @@ public class RequestHandler {
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("LATEST_SLICES_MERGED_BEFORE_ON_INSTANT", 1);
+      metricsRegistry.add("LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSlicesBeforeOrOn(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),

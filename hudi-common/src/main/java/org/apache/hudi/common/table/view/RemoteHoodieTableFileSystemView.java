@@ -70,7 +70,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
       String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
   public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all/");
-  public static final String ALL_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/all/includepending/");
+  public static final String ALL_SLICES_INCLUDE_PENDING_URL = String.format("%s/%s", BASE_URL, "slices/all/includepending/");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL =
@@ -409,7 +409,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime, boolean includePending) {
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
+                                                               boolean includePending) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
         new String[] {MAX_INSTANT_PARAM, INCLUDE_PENDING},
         new String[] {maxInstantTime, String.valueOf(includePending)});
@@ -452,7 +453,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING, "true");
       List<FileSliceDTO> dataFiles =
-          executeRequest(ALL_SLICES_URL_INCLUDE_PENDING, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+          executeRequest(ALL_SLICES_INCLUDE_PENDING_URL, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
