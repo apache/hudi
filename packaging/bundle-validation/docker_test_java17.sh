@@ -54,26 +54,6 @@ use_default_java_runtime () {
   export JAVA_HOME=${DEFAULT_JAVA_HOME}
 }
 
-setup_hdfs () {
-  $HADOOP_HOME/bin/hdfs namenode -format
-  $HADOOP_HOME/bin/hdfs --daemon start namenode
-  echo "::warning::docker_test_java17.sh starting hadoop hdfs"
-  $HADOOP_HOME/sbin/start-dfs.sh
-
-  # start 3 datanodes
-  for i in 1 2 3
-  do
-    start_datanode $i
-  done
-
-  echo "::warning::docker_test_java17.sh starting hadoop hdfs, hdfs report"
-  $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
-  if [ "$?" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh Failed setting up HDFS!"
-    exit 1
-  fi
-}
-
 start_datanode () {
   DN=$1
 
@@ -100,10 +80,35 @@ start_datanode () {
   $HADOOP_HOME/bin/hdfs dfsadmin -report
 }
 
+setup_hdfs () {
+  $HADOOP_HOME/bin/hdfs namenode -format
+  $HADOOP_HOME/bin/hdfs --daemon start namenode
+  echo "::warning::docker_test_java17.sh starting hadoop hdfs"
+  $HADOOP_HOME/sbin/start-dfs.sh
+
+  # start 3 datanodes
+  for i in 1 2 3
+  do
+    start_datanode $i
+  done
+
+  echo "::warning::docker_test_java17.sh starting hadoop hdfs, hdfs report"
+  $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
+  $HADOOP_HOME/bin/hdfs dfs -ls /user/
+  if [ "$?" -ne 0 ]; then
+    echo "::error::docker_test_java17.sh Failed setting up HDFS!"
+    exit 1
+  fi
+}
+
 build_hudi_java8 () {
   use_default_java_runtime
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
-    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
+    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
+    -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
+    -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn \
+    -pl packaging/hudi-spark-bundle -am
+
   if [ "$?" -ne 0 ]; then
     echo "::error::docker_test_java17.sh Failed building Hudi with Java 8!"
     exit 1
@@ -115,8 +120,7 @@ build_hudi_java8 () {
 run_docker_tests() {
   echo "::warning::docker_test_java17.sh run_docker_tests Running Hudi maven tests on Docker"
   change_java_runtime_version
-  setup_hdfs
-  echo $MVN_ARGS
+
   mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration \
      -DfailIfNoTests=false -pl hudi-common
@@ -147,6 +151,8 @@ cd $DOCKER_TEST_DIR
 echo "::warning::docker_test_java17.sh Building Hudi with Java 8"
 build_hudi_java8
 echo "::warning::docker_test_java17.sh Done building Hudi with Java 8"
+
+setup_hdfs
 
 echo "::warning::docker_test_java17.sh Running tests with Java 17"
 run_docker_tests
