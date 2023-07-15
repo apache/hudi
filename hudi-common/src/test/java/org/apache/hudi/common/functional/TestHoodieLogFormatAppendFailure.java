@@ -130,11 +130,11 @@ public class TestHoodieLogFormatAppendFailure {
         .getBlockLocations("/tmp/" + uuid + "/" + logFilePath.getName(), 0, Long.MAX_VALUE);
 
     //    List<DataNode> dnsOfCluster = cluster.getDataNodes();
-    DatanodeInfo[] dnsWithLocations = lbs.getLastLocatedBlock().getLocations();
+    //    DatanodeInfo[] dnsWithLocations = lbs.getLastLocatedBlock().getLocations();
     DatanodeInfo[] dnsOfCluster = dfs.getDataNodeStats();
 
     for (DatanodeInfo dn : dnsOfCluster) {
-      for (DatanodeInfo loc : dnsWithLocations) {
+      for (DatanodeInfo loc : lbs.getLastLocatedBlock().getLocations()) {
         if (dn.equals(loc)) {
           String[] decommissionArgs = new String[]{"-startDecommission", dn.getDatanodeUuid()};
           dfsAdmin.run(decommissionArgs);
