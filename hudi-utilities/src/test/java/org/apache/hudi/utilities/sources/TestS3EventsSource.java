@@ -51,7 +51,7 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
     fs.mkdirs(new Path(dfsRoot));
-    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("delta-streamer-config", "s3-metadata.avsc"), jsc);
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("streamer-config", "s3-metadata.avsc"), jsc);
   }
 
   @AfterEach
