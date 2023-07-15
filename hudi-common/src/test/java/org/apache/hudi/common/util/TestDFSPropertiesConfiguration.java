@@ -29,7 +29,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 
-import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
@@ -63,13 +62,19 @@ public class TestDFSPropertiesConfiguration {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
-    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+    // For Java 17, this unit test has to run in Docker
+    if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      Configuration conf = new Configuration();
+      conf.set("fs.defaultFS", "hdfs://localhost:9000");
+      conf.set("dfs.replication", "3");
+      dfs = (DistributedFileSystem) DistributedFileSystem.get(conf);
+    } else {
+      hdfsTestService = new HdfsTestService();
+      dfsCluster = hdfsTestService.start(true);
+      dfs = dfsCluster.getFileSystem();
+    }
 
-    hdfsTestService = new HdfsTestService();
-    dfsCluster = hdfsTestService.start(true);
     // Create a temp folder as the base path
-    dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
 

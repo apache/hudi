@@ -35,6 +35,8 @@ class TestHiveClientUtils {
   @BeforeAll
   def setUp(): Unit = {
     // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    // for Java 17 test coverage this test has been converted to scala script here:
+    // packaging/bundle-validation/spark_hadoop_mr/TestHiveClientUtils.scala
     Assume.assumeFalse(getJavaVersion == 11 || getJavaVersion == 17)
 
     spark = TestHive.sparkSession

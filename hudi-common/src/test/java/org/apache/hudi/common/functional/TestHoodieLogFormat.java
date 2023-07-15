@@ -74,7 +74,6 @@ import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
 
-import org.junit.Assume;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -134,21 +133,25 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private String spillableBasePath;
 
   @BeforeAll
-  public static void setUpClass() throws IOException, InterruptedException {
-    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
-    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
-
-    // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    hdfsTestService = new HdfsTestService();
-    fs = hdfsTestService.start(true).getFileSystem();
+  public static void setUpClass() throws IOException {
+    // For Java 17, this unit test has to run in Docker
+    if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      Configuration conf = new Configuration();
+      conf.set("fs.defaultFS", "hdfs://localhost:9000");
+      conf.set("dfs.replication", "3");
+      fs = FileSystem.get(conf);
+    } else {
+      // Append is not supported in LocalFileSystem. HDFS needs to be setup.
+      hdfsTestService = new HdfsTestService();
+      fs = hdfsTestService.start(true).getFileSystem();
+    }
   }
 
   @AfterAll
   public static void tearDownClass() {
-    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
-    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
-
-    hdfsTestService.stop();
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+    }
   }
 
   @BeforeEach
@@ -2548,7 +2551,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           new HashMap<HoodieLogBlockType, Integer>() {{
             put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
             put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
-            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, HoodieAvroUtils.gteqAvro1_9() ? 1802 : 1809);
+            put(HoodieLogBlockType.PARQUET_DATA_BLOCK,
+                HoodieAvroUtils.gteqAvro1_9()
+                    ? getJavaVersion() == 17 || getJavaVersion() == 11 ? 1803 : 1802
+                    : 1809);
           }};
 
       List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
