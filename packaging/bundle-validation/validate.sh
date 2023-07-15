@@ -277,22 +277,29 @@ test_metaserver_bundle () {
 }
 
 start_datanode () {
+  DN=$1
+
+  echo "::warning::validate.sh starting datanode:"$DN
+
   DN_DIR_PREFIX=$DOCKER_TEST_DIR/additional_datanode/
+  PID_DIR=$DOCKER_TEST_DIR/pid/$1
 
   if [ -z $DN_DIR_PREFIX ]; then
-    echo $0: DN_DIR_PREFIX is not set. set it to something like "/hadoopTmp/dn"
-    exit 1
+    mkdir -p $DN_DIR_PREFIX
   fi
 
-  DN=$1
-  export HADOOP_LOG_DIR=$DN_DIR_PREFIX$DN/logs
-  export HADOOP_PID_DIR=$HADOOP_LOG_DIR
+  if [ -z $PID_DIR ]; then
+    mkdir -p $PID_DIR
+  fi
+
+  export HADOOP_PID_DIR=$PID_PREFIX
   DN_CONF_OPTS="\
   -Dhadoop.tmp.dir=$DN_DIR_PREFIX$DN\
   -Ddfs.datanode.address=localhost:5001$DN \
   -Ddfs.datanode.http.address=localhost:5008$DN \
   -Ddfs.datanode.ipc.address=localhost:5002$DN"
   $HADOOP_HOME/bin/hdfs --daemon start datanode $DN_CONF_OPTS
+  $HADOOP_HOME/bin/hdfs dfsadmin -report
 }
 
 run_docker_tests() {
@@ -322,8 +329,6 @@ run_docker_tests() {
     done
 
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
-    echo "::warning::validate.sh starting hadoop hdfs, hdfs report 2"
-    $HADOOP_HOME/bin/hdfs dfsadmin -report
 
     exit 1
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
