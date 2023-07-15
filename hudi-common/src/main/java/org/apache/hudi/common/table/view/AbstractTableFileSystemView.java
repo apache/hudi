@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -494,8 +495,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param statuses List of File-Status
    */
   private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+    Predicate<FileStatus> roFilePredicate = fileStatus ->
+        !fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
+            && fileStatus.getPath().getName().contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
     return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
   }
 
@@ -914,6 +916,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
+    return getLatestMergedFileSlicesBeforeOrOn(partitionStr, maxInstantTime, false);
+  }
+
+  @Override
+  public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime,
+                                                                     boolean includePending) {
     try {
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
@@ -921,7 +929,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
-            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime, includePending);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
