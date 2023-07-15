@@ -179,7 +179,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
-    return getLatestFileSlices(partitionPath, false);
+    return execute(partitionPath, preferredView::getLatestFileSlices, secondaryView::getLatestFileSlices);
   }
 
   @Override
@@ -209,7 +209,8 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
-    return getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime, false);
+    return execute(partitionPath, maxInstantTime, preferredView::getLatestMergedFileSlicesBeforeOrOn,
+        secondaryView::getLatestMergedFileSlicesBeforeOrOn);
   }
 
   @Override
@@ -227,7 +228,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
-    return getAllFileSlices(partitionPath, false);
+    return execute(partitionPath, preferredView::getAllFileSlices, secondaryView::getAllFileSlices);
   }
 
   @Override
