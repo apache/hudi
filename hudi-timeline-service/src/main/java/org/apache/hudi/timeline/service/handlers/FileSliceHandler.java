@@ -64,7 +64,13 @@ public class FileSliceHandler extends Handler {
 
   public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOn(String basePath, String partitionPath,
       String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath).getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime)
+    return getLatestMergedFileSlicesBeforeOrOn(basePath, partitionPath, maxInstantTime, false);
+  }
+
+  public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOn(String basePath, String partitionPath,
+                                                                String maxInstantTime, boolean includePending) {
+    return viewManager.getFileSystemView(basePath)
+        .getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includePending)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 

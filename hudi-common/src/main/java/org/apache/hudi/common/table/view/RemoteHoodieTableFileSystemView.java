@@ -65,7 +65,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
-  public static final String LATEST_PARTITION_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/partition/latest/includepending/");
+  public static final String LATEST_PARTITION_SLICES_INCLUDE_PENDING_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/includepending/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
       String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
@@ -73,6 +73,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String ALL_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/all/includepending/");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
+  public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL =
+      String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/includepending/");
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
   public static final String LATEST_SLICES_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
@@ -134,7 +136,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
-  public static final String INCLUDE_PENDING_FILE_SLICES = "includePendingFileSlices";
+  public static final String INCLUDE_PENDING = "includePending";
 
 
   private static final Logger LOG = LoggerFactory.getLogger(RemoteHoodieTableFileSystemView.class);
@@ -328,9 +330,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending) {
-    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING_FILE_SLICES, String.valueOf(includePending));
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING, String.valueOf(includePending));
     try {
-      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_URL_INCLUDE_PENDING, paramsMap,
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_INCLUDE_PENDING_URL, paramsMap,
           new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
@@ -407,6 +409,20 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime, boolean includePending) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
+        new String[] {MAX_INSTANT_PARAM, INCLUDE_PENDING},
+        new String[] {maxInstantTime, String.valueOf(includePending)});
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     Map<String, String> paramsMap =
         getParams(INSTANTS_PARAM, StringUtils.join(commitsToReturn.toArray(new String[0]), ","));
@@ -434,7 +450,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending) {
     try {
-      Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING_FILE_SLICES, "true");
+      Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING, "true");
       List<FileSliceDTO> dataFiles =
           executeRequest(ALL_SLICES_URL_INCLUDE_PENDING, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);

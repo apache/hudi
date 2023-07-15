@@ -203,7 +203,15 @@ public class HoodieFileGroup implements Serializable {
    * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
-    return Option.fromJavaOptional(getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
+    return getLatestFileSliceBeforeOrOn(maxInstantTime, false);
+  }
+
+  /**
+   * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
+   */
+  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime, boolean includePending) {
+    Stream<FileSlice> fileSliceStream = getAllFileSlices(includePending);
+    return Option.fromJavaOptional(fileSliceStream.filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**
