@@ -323,7 +323,7 @@ run_docker_tests() {
     echo "::warning::validate.sh starting hadoop hdfs, hdfs report 1"
     $HADOOP_HOME/bin/hdfs dfsadmin -report
 
-    for i in 3
+    for i in 1 2 3
     do
       start_datanode $i
     done
