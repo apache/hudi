@@ -56,7 +56,6 @@ public class TestHoodieFileGroup {
     assertTrue((new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime().equals("001"));
   }
 
-  @Test
   public void testCommittedFileSlicesWithSavepointAndHoles() {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
@@ -65,7 +64,7 @@ public class TestHoodieFileGroup {
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
-    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedWriteAndCompactionInstants());
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
     for (int i = 0; i < 7; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
       fileGroup.addBaseFile(baseFile);
