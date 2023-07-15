@@ -65,11 +65,12 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
+  public static final String LATEST_PARTITION_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/partition/latest/includepending/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
       String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
-  public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all");
-  public static final String ALL_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/all/includepending");
+  public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all/");
+  public static final String ALL_SLICES_URL_INCLUDE_PENDING = String.format("%s/%s", BASE_URL, "slices/all/includepending/");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
@@ -326,6 +327,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING_FILE_SLICES, String.valueOf(includePending));
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_URL_INCLUDE_PENDING, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, FILEID_PARAM, fileId);
     try {
@@ -369,7 +382,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(BASEPATH_PARAM, basePath);
     paramsMap.put(MAX_INSTANT_PARAM, maxCommitTime);
-
     try {
       Map<String, List<FileSliceDTO>> fileSliceMap = executeRequest(ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
           new TypeReference<Map<String, List<FileSliceDTO>>>() {}, RequestMethod.GET);
@@ -409,23 +421,22 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
-    return getAllFileSlices(partitionPath, false);
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileSliceDTO> dataFiles =
+          executeRequest(ALL_SLICES_URL, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
   }
 
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending) {
     try {
-      String urlToExecute;
-      Map<String, String> paramsMap;
-      if (includePending) {
-        paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING_FILE_SLICES, "true");
-        urlToExecute = ALL_SLICES_URL_INCLUDE_PENDING;
-      } else {
-        paramsMap = getParamsWithPartitionPath(partitionPath);
-        urlToExecute = ALL_SLICES_URL;
-      }
+      Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING_FILE_SLICES, "true");
       List<FileSliceDTO> dataFiles =
-          executeRequest(urlToExecute, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+          executeRequest(ALL_SLICES_URL_INCLUDE_PENDING, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);

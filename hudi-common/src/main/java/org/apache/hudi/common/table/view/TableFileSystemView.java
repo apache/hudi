@@ -108,6 +108,11 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Stream all the latest file slices in the given partition.
+     */
+    Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending);
+
+    /**
      * Get Latest File Slice for a given fileId in a given partition.
      */
     Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);

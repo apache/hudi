@@ -84,11 +84,11 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit2FileGroups.size());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices(true).collect(Collectors.toList()));
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
     //3. assert file group and get the second partition file slice
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionCommit2FileGroups.size());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices(true).collect(Collectors.toList()));
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
 
     //4. assert file slice
     HoodieTableType tableType = this.getTableType();
@@ -149,10 +149,10 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)
         .filter(fg -> !partition1Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices(true).collect(Collectors.toList()));
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH)
         .filter(fg -> !partition2Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices(true).collect(Collectors.toList()));
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
 
     assertEquals(1, firstPartitionCommit2FileSlices.size());
     assertEquals(1, secondPartitionCommit2FileSlices.size());
