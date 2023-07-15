@@ -183,6 +183,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending) {
+    return execute(partitionPath, (partition) -> preferredView.getLatestFileSlices(partition, includePending),
+        (partition) -> secondaryView.getLatestFileSlices(partition, includePending));
+  }
+
+  @Override
   public Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getLatestUnCompactedFileSlices,
         secondaryView::getLatestUnCompactedFileSlices);

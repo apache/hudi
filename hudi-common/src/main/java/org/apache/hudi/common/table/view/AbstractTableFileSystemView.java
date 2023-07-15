@@ -803,6 +803,21 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  @Override
+  public final Stream<FileSlice> getLatestFileSlices(String partitionStr, boolean includePending) {
+    try {
+      readLock.lock();
+      String partitionPath = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partitionPath);
+      return fetchLatestFileSlices(partitionPath, includePending)
+          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+          .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
+          .map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   /**
    * Get Latest File Slice for a given fileId in a given partition.
    */
@@ -1348,6 +1363,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   Stream<FileSlice> fetchLatestFileSlices(String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath).map(HoodieFileGroup::getLatestFileSlice).filter(Option::isPresent)
+        .map(Option::get);
+  }
+
+  /**
+   * Default implementation for fetching latest file-slices for a partition path.
+   */
+  Stream<FileSlice> fetchLatestFileSlices(String partitionPath, boolean includePending) {
+    return fetchAllStoredFileGroups(partitionPath).map(fileGroup -> fileGroup.getLatestFileSlice(includePending)).filter(Option::isPresent)
         .map(Option::get);
   }
 

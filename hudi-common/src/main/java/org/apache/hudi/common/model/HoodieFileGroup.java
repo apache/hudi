@@ -157,7 +157,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Stream<FileSlice> getAllFileSlices(boolean includePending) {
     if (includePending) {
-      return fileSlices.values().stream();
+      return getAllFileSlicesIncludingInflight();
     }
     if (!timeline.empty()) {
       return fileSlices.values().stream().filter(this::isFileSliceCommitted);
@@ -177,6 +177,19 @@ public class HoodieFileGroup implements Serializable {
   public Option<FileSlice> getLatestFileSlice() {
     // there should always be one
     return Option.fromJavaOptional(getAllFileSlices().findFirst());
+  }
+
+  /**
+   * Gets the latest slice - this can contain either.
+   * <p>
+   * - just the log files without data file - (or) data file with 0 or more log files
+   */
+  public Option<FileSlice> getLatestFileSlice(boolean includePending) {
+    if (includePending) {
+      // there should always be one
+      return Option.fromJavaOptional(getAllFileSlicesIncludingInflight().findFirst());
+    }
+    return getLatestFileSlice();
   }
 
   /**

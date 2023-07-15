@@ -325,6 +325,15 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_URL_INCLUDE_PENDING, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_PARTITION_SLICES", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlices(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INCLUDE_PENDING_FILE_SLICES, Boolean.class).getOrDefault(false));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_SLICE", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlice(

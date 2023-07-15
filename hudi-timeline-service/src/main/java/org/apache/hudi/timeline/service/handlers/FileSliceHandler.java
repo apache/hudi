@@ -95,6 +95,11 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<FileSliceDTO> getLatestFileSlices(String basePath, String partitionPath, boolean includePending) {
+    return viewManager.getFileSystemView(basePath).getLatestFileSlices(partitionPath, includePending).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
+  }
+
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
         .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(new ArrayList<>());
