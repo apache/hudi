@@ -330,7 +330,6 @@ run_docker_tests() {
 
     $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
 
-    exit 1
     echo "::warning::validate.sh run_docker_tests Building Hudi on Docker"
     mvn clean install -D$SPARK_PROFILE -D$SCALA_PROFILE \
       -DskipTests=true -pl hudi-common -am
