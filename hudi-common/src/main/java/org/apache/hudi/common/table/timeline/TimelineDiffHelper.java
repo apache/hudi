@@ -50,7 +50,6 @@ public class TimelineDiffHelper {
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
                                                                     HoodieTimeline oldTimeline,
                                                                     HoodieTimeline newTimeline) {
-
     HoodieTimeline oldCompletedAndRewriteTimeline = oldTimeline.filterCompletedAndRewriteInstants(metaClient);
     HoodieTimeline newCompletedAndRewriteTimeline = newTimeline.filterCompletedAndRewriteInstants(metaClient);
 

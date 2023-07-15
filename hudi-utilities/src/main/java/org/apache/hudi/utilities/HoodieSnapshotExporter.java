@@ -277,7 +277,7 @@ public class HoodieSnapshotExporter {
         .setBasePath(cfg.sourceBasePath)
         .build();
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata
-        .getActiveTimeline().getWriteTimeline().filterCompletedInstants());
+        .getActiveTimeline());
   }
 
   public static void main(String[] args) throws IOException {
