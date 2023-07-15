@@ -77,7 +77,8 @@ public class ClusteringUtils {
    * Checks if the replacecommit is clustering commit.
    */
   public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
-    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+    return HoodieTimeline.REPLACE_COMMIT_ACTION.equals(pendingReplaceInstant.getAction())
+        && getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
   }
 
   /**
