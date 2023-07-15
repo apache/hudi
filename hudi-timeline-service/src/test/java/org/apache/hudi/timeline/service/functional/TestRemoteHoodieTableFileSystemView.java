@@ -176,6 +176,6 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     Stream<String> inflight = Stream.of("002");
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
     return new HoodieFileGroup("", "data",
-        activeTimeline.getCommitsTimeline().filterCompletedInstants());
+        activeTimeline.filterCompletedWriteAndCompactionInstants());
   }
 }

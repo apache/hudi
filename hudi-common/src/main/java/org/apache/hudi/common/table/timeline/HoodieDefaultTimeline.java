@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -28,6 +30,7 @@ import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -129,9 +132,17 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieDefaultTimeline filterCompletedAndRewriteInstants() {
-    Set<String> validActions = CollectionUtils.createSet(COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted() || validActions.contains(s.getAction())), details);
+  public HoodieTimeline filterCompletedWriteAndCompactionInstants() {
+    return getWriteTimeline().filterCompletedAndCompactionInstants();
+  }
+
+  @Override
+  public HoodieDefaultTimeline filterCompletedAndRewriteInstants(HoodieTableMetaClient metaClient) {
+    List<String> validActions = Arrays.asList(COMPACTION_ACTION, LOG_COMPACTION_ACTION);
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(s -> s.isCompleted()
+            || validActions.contains(s.getAction())
+            || ClusteringUtils.isClusteringCommit(metaClient, s)), details);
   }
 
   @Override
