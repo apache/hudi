@@ -194,7 +194,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         }
       }
     } catch (Throwable t) {
-      String msg = "Error upsetting bucketType " + bucketType + " for partition :" + partitionPath;
+      String msg = "Error upserting bucketType " + bucketType + " for partition :" + partitionPath;
       LOG.error(msg, t);
       throw new HoodieUpsertException(msg, t);
     }
