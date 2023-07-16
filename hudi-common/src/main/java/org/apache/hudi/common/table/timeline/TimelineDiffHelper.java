@@ -42,19 +42,14 @@ public class TimelineDiffHelper {
    * It performs validation to see if the incremental sync is possible. Once it determines it is safe to do,
    * It tracks both the instants that are newly added and also instants that have transitioned from pending
    * state to completed or removed.
-   * @param metaClient metaClient of the table
-   * @param oldTimeline old active timeline
-   * @param newTimeline new active timeline
+   * @param oldCompletedAndRewriteTimeline old completed and rewrite timeline
+   * @param newCompletedAndRewriteTimeline new completed and rewrite  timeline
    * @return TimelineDiffResult object which is useful for incrementally syncing the timeline.
    */
-  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
-                                                                    HoodieTimeline oldTimeline,
-                                                                    HoodieTimeline newTimeline) {
-    // Old timeline's rewrite timeline should not be fetched, since it can contain instants
-    // that are removed due to rollback
-    HoodieTimeline newCompletedAndRewriteTimeline = newTimeline.filterCompletedAndRewriteInstants(metaClient);
+  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldCompletedAndRewriteTimeline ,
+                                                                    HoodieTimeline newCompletedAndRewriteTimeline) {
 
-    Option<HoodieInstant> lastSeenInstant = oldTimeline.lastInstant();
+    Option<HoodieInstant> lastSeenInstant = oldCompletedAndRewriteTimeline.lastInstant();
     Option<HoodieInstant> firstInstantInNewTimeline = newCompletedAndRewriteTimeline.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
@@ -63,11 +58,11 @@ public class TimelineDiffHelper {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      Set<HoodieInstant> oldTimelineInstants = oldTimeline.getInstantsAsStream().collect(Collectors.toSet());
+      Set<HoodieInstant> oldTimelineInstants = oldCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
       List<Pair<HoodieInstant, HoodieInstant>> compactionInstants =
-          getPendingCompactionTransitions(oldTimeline, newCompletedAndRewriteTimeline);
+          getPendingCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
@@ -91,7 +86,7 @@ public class TimelineDiffHelper {
 
       // Check for log compaction commits completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants =
-          getPendingLogCompactionTransitions(oldTimeline, newCompletedAndRewriteTimeline);
+          getPendingLogCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
@@ -100,7 +95,7 @@ public class TimelineDiffHelper {
 
       // Check if replacecommits are completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> replaceCommitInstants =
-          getPendingReplaceCommitTransitions(oldTimeline, newCompletedAndRewriteTimeline);
+          getPendingReplaceCommitTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedReplaceCommitInstants = replaceCommitInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))

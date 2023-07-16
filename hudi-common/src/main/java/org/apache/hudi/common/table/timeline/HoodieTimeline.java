@@ -163,20 +163,19 @@ public interface HoodieTimeline extends Serializable {
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
 
-  HoodieTimeline filterCompletedOrMajorOrMinorCompactionInstants();
-
   /**
-   * This is the filtered write timeline that contains only completed and pending compaction instants.
-   * This is the timeline that is used in constructing file groups.
+   * File system view that is used for constructing file groups.
+   * This is the filtered timeline contains completed instants that are part of either
+   * write timeline or savepoint timeline. Along with this it also includes any pending compaction commits.
    */
-  HoodieTimeline filterCompletedWriteAndCompactionInstants();
+  HoodieTimeline getFileSystemViewTimeline();
 
   /**
    * Timeline to just include completed commits or all rewrites like compaction, logcompaction and replace actions.
    *
    * @return
    */
-  HoodieTimeline filterCompletedAndRewriteInstants(HoodieTableMetaClient metaClient);
+  HoodieTimeline filterCompletedAndRewriteInstants();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.

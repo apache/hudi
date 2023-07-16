@@ -576,7 +576,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   private Stream<HoodieFileGroup> getFileGroups(Stream<FileSlice> sliceStream) {
     // HoodieFileGroup using timeline to determine whether a file slice is committed or not so passing
     // completedAndCompactionTimeline object while creating HoodieFileGroup.
-    HoodieTimeline completedWriteAndCompactionTimeline = getVisibleCompletedWriteAndCompactionTimeline();
+    HoodieTimeline completedWriteAndCompactionTimeline = getVisibleFileSystemViewTimeline();
     return sliceStream.map(s -> Pair.of(Pair.of(s.getPartitionPath(), s.getFileId()), s))
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream().map(slicePair -> {
           HoodieFileGroup fg = new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(),

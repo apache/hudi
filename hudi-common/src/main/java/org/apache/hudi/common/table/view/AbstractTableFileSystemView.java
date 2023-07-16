@@ -95,7 +95,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // to each HoodieFileGroup. Using this timeline object HoodieFileGroup determines whether a fileSlice
   // is committed or not. This is a filtered write timeline where in it contains only completed
   // and pending compaction instants.
-  private HoodieTimeline visibleCompletedWriteAndCompactionTimeline;
+  private HoodieTimeline visibleFileSystemViewTimeline;
 
   // Used to concurrently load and populate partition views
   private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
@@ -118,7 +118,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
-    resetFileGroupsReplaced(visibleCompletedWriteAndCompactionTimeline);
+    resetFileGroupsReplaced(visibleFileSystemViewTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
@@ -137,8 +137,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param visibleActiveTimeline Visible Active Timeline
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
-    this.visibleCompletedWriteAndCompactionTimeline = visibleActiveTimeline
-        .filterCompletedWriteAndCompactionInstants();
+    this.visibleFileSystemViewTimeline = visibleActiveTimeline
+        .getFileSystemViewTimeline();
   }
 
   /**
@@ -146,7 +146,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCompletedWriteAndCompactionTimeline, true);
+    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleFileSystemViewTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased structures.
@@ -176,10 +176,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Build FileGroups from passed in file-status.
    * Always make sure that the timeline that is passed is completedWriteAndCompactionTimeline
    */
-  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline completedWriteAndCompactionTimeline,
+  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline fileSystemViewTimeline,
                                                   boolean addPendingCompactionFileSlice) {
     return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses),
-        completedWriteAndCompactionTimeline, addPendingCompactionFileSlice);
+        fileSystemViewTimeline, addPendingCompactionFileSlice);
   }
 
   /**
@@ -187,7 +187,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Always make sure that the timeline that is passed is completedWriteAndCompactionTimeline
    */
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
-                                                  Stream<HoodieLogFile> logFileStream, HoodieTimeline completedWriteAndCompactionTimeline,
+                                                  Stream<HoodieLogFile> logFileStream, HoodieTimeline fileSystemViewTimeline,
                                                   boolean addPendingCompactionFileSlice) {
     Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
@@ -208,7 +208,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     fileIdSet.forEach(pair -> {
       String fileId = pair.getValue();
       String partitionPath = pair.getKey();
-      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, completedWriteAndCompactionTimeline);
+      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, fileSystemViewTimeline);
       if (baseFiles.containsKey(pair)) {
         baseFiles.get(pair).forEach(group::addBaseFile);
       }
@@ -275,7 +275,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       writeLock.lock();
       this.metaClient = null;
-      this.visibleCompletedWriteAndCompactionTimeline = null;
+      this.visibleFileSystemViewTimeline = null;
       clear();
     } finally {
       writeLock.unlock();
@@ -777,7 +777,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllBaseFiles(partitionPath)
           .filter(df -> !isFileGroupReplaced(partitionPath, df.getFileId()))
-          .filter(df -> visibleCompletedWriteAndCompactionTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
+          .filter(df -> visibleFileSystemViewTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
           .filter(df -> !isBaseFileDueToPendingCompaction(df) && !isBaseFileDueToPendingClustering(df))
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
     } finally {
@@ -1516,7 +1516,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public HoodieTimeline getTimeline() {
-    return visibleCompletedWriteAndCompactionTimeline;
+    return visibleFileSystemViewTimeline;
   }
 
   /**
@@ -1543,7 +1543,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @return {@code HoodieTimeline}
    */
-  public HoodieTimeline getVisibleCompletedWriteAndCompactionTimeline() {
-    return visibleCompletedWriteAndCompactionTimeline;
+  public HoodieTimeline getVisibleFileSystemViewTimeline() {
+    return visibleFileSystemViewTimeline;
   }
 }

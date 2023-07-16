@@ -54,6 +54,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   protected transient Function<HoodieInstant, Option<byte[]>> details;
   private List<HoodieInstant> instants;
   private String timelineHash;
+  private static final Set<String> validWriteActions =
+      CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
     this.details = details;
@@ -125,18 +127,16 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieTimeline filterCompletedOrMajorOrMinorCompactionInstants() {
-    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
-        || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) || s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)), details);
+  public HoodieTimeline getFileSystemViewTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream()
+        .filter(x ->
+            (x.isCompleted() && (HoodieTimeline.SAVEPOINT_ACTION.equals(x.getAction()) || validWriteActions.contains(x.getAction())))
+                || HoodieTimeline.COMPACTION_ACTION.equals(x.getAction())
+        ), details);
   }
 
   @Override
-  public HoodieTimeline filterCompletedWriteAndCompactionInstants() {
-    return getWriteTimeline().filterCompletedAndCompactionInstants();
-  }
-
-  @Override
-  public HoodieDefaultTimeline filterCompletedAndRewriteInstants(HoodieTableMetaClient metaClient) {
+  public HoodieDefaultTimeline filterCompletedAndRewriteInstants() {
     List<String> validActions = Arrays.asList(COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> s.isCompleted() || validActions.contains(s.getAction())), details);
@@ -144,8 +144,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validWriteActions.contains(s.getAction())), details);
   }
 
   @Override

@@ -98,7 +98,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     try {
       if (incrementalTimelineSyncEnabled) {
         TimelineDiffResult diffResult = TimelineDiffHelper
-            .getNewInstantsForIncrementalSync(metaClient, oldTimeline, newTimeline);
+            .getNewInstantsForIncrementalSync(
+                oldTimeline.filterCompletedAndRewriteInstants(),
+                newTimeline.filterCompletedAndRewriteInstants());
         if (diffResult.canSyncIncrementally()) {
           LOG.info("Doing incremental sync");
           runIncrementalSync(newTimeline, diffResult);
@@ -155,8 +157,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       }
     });
 
-    HoodieTimeline newCompletedWriteAndCompactionTimeline =
-        newActiveTimeline.filterCompletedWriteAndCompactionInstants();
+    HoodieTimeline newFileSystemViewTimeline =
+        newActiveTimeline.getFileSystemViewTimeline();
     // Add new completed instants found in the latest timeline,
     // this also contains inflight instants from rewrite timeline.
     diffResult.getNewlySeenCompletedAndRewriteInstants()
@@ -164,13 +166,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           try {
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
                 || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
-              addCommitInstant(newCompletedWriteAndCompactionTimeline, instant);
+              addCommitInstant(newFileSystemViewTimeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
               addRestoreInstant(newActiveTimeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.CLEAN_ACTION)) {
               addCleanInstant(newActiveTimeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-              addPendingCompactionInstant(newCompletedWriteAndCompactionTimeline, instant);
+              addPendingCompactionInstant(newFileSystemViewTimeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)) {
               addPendingLogCompactionInstant(instant);
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
@@ -180,7 +182,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
               if (isClusteringCommit && !instant.isCompleted()) {
                 addPendingClusteringInstant(instant);
               } else {
-                addReplaceInstant(newCompletedWriteAndCompactionTimeline, instant);
+                addReplaceInstant(newFileSystemViewTimeline, instant);
               }
             }
           } catch (IOException ioe) {
@@ -230,10 +232,10 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   /**
    * Add newly found compaction instant.
    *
-   * @param completedWriteAndCompactionTimeline Hoodie completedWriteAndCompactionTimeline
+   * @param fileSystemViewTimeline file system view used for constructing file groups.
    * @param instant Compaction Instant
    */
-  private void addPendingCompactionInstant(HoodieTimeline completedWriteAndCompactionTimeline, HoodieInstant instant) throws IOException {
+  private void addPendingCompactionInstant(HoodieTimeline fileSystemViewTimeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing pending compaction instant (" + instant + ")");
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp());
     List<Pair<String, CompactionOperation>> pendingOps =
@@ -246,7 +248,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     Map<String, List<Pair<String, HoodieFileGroup>>> partitionToFileGroups = pendingOps.stream().map(opPair -> {
       String compactionInstantTime = opPair.getKey();
-      HoodieFileGroup fileGroup = new HoodieFileGroup(opPair.getValue().getFileGroupId(), completedWriteAndCompactionTimeline);
+      HoodieFileGroup fileGroup = new HoodieFileGroup(opPair.getValue().getFileGroupId(), fileSystemViewTimeline);
       fileGroup.addNewFileSliceAtInstant(compactionInstantTime);
       return Pair.of(compactionInstantTime, fileGroup);
     }).collect(Collectors.groupingBy(x -> x.getValue().getPartitionPath()));
@@ -279,19 +281,19 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   /**
    * Add newly found commit/delta-commit instant.
    *
-   * @param completedWriteAndCompactionTimeline Hoodie Timeline that is used for constructing file groups.
+   * @param fileSystemViewTimeline Hoodie Timeline that is used for constructing file groups.
    * @param instant Instant
    */
-  private void addCommitInstant(HoodieTimeline completedWriteAndCompactionTimeline, HoodieInstant instant) throws IOException {
+  private void addCommitInstant(HoodieTimeline fileSystemViewTimeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing committed instant (" + instant + ")");
     HoodieCommitMetadata commitMetadata =
-        HoodieCommitMetadata.fromBytes(completedWriteAndCompactionTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-    updatePartitionWriteFileGroups(commitMetadata.getPartitionToWriteStats(), completedWriteAndCompactionTimeline, instant);
+        HoodieCommitMetadata.fromBytes(fileSystemViewTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+    updatePartitionWriteFileGroups(commitMetadata.getPartitionToWriteStats(), fileSystemViewTimeline, instant);
     LOG.info("Done Syncing committed instant (" + instant + ")");
   }
 
   private void updatePartitionWriteFileGroups(Map<String, List<HoodieWriteStat>> partitionToWriteStats,
-                                              HoodieTimeline completedWriteAndCompactionTimeline,
+                                              HoodieTimeline fileSystemViewTimeline,
                                               HoodieInstant instant) {
     partitionToWriteStats.entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();
@@ -303,7 +305,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           return status;
         }).toArray(FileStatus[]::new);
         List<HoodieFileGroup> fileGroups =
-            buildFileGroups(statuses, completedWriteAndCompactionTimeline, false);
+            buildFileGroups(statuses, fileSystemViewTimeline, false);
         applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.ADD);
       } else {
         LOG.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");
@@ -404,15 +406,15 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   /**
    * Add newly found REPLACE instant.
    *
-   * @param completedWriteAndCompactionTimeline Hoodie Timeline used for constructing file groups.
+   * @param fileSystemViewTimeline Hoodie Timeline used for constructing file groups.
    * @param instant REPLACE Instant is a completed instant
    */
-  private void addReplaceInstant(HoodieTimeline completedWriteAndCompactionTimeline, HoodieInstant instant) throws IOException {
+  private void addReplaceInstant(HoodieTimeline fileSystemViewTimeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing replace instant (" + instant + ")");
     HoodieReplaceCommitMetadata replaceMetadata =
-        HoodieReplaceCommitMetadata.fromBytes(completedWriteAndCompactionTimeline.getInstantDetails(instant).get(),
+        HoodieReplaceCommitMetadata.fromBytes(fileSystemViewTimeline.getInstantDetails(instant).get(),
             HoodieReplaceCommitMetadata.class);
-    updatePartitionWriteFileGroups(replaceMetadata.getPartitionToWriteStats(), completedWriteAndCompactionTimeline, instant);
+    updatePartitionWriteFileGroups(replaceMetadata.getPartitionToWriteStats(), fileSystemViewTimeline, instant);
     replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();
       Map<HoodieFileGroupId, HoodieInstant> replacedFileIds = entry.getValue().stream()
@@ -456,7 +458,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         return status;
       }).toArray(FileStatus[]::new);
       List<HoodieFileGroup> fileGroups =
-          buildFileGroups(statuses, activeTimeline.filterCompletedWriteAndCompactionInstants(), false);
+          buildFileGroups(statuses, activeTimeline.getFileSystemViewTimeline(), false);
       applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.REMOVE);
     } else {
       LOG.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");
@@ -524,9 +526,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     }
 
     // Here timeline is fetched from the existing file groups so it is automatically completedWriteAndCompactionTimeline
-    HoodieTimeline completedWriteAndCompactionTimeline = deltaFileGroups.stream().map(df -> df.getTimeline()).findAny().get();
+    HoodieTimeline fileSystemViewTimeline = deltaFileGroups.stream().map(df -> df.getTimeline()).findAny().get();
     List<HoodieFileGroup> fgs =
-        buildFileGroups(viewDataFiles.values().stream(), viewLogFiles.values().stream(), completedWriteAndCompactionTimeline, true);
+        buildFileGroups(viewDataFiles.values().stream(), viewLogFiles.values().stream(), fileSystemViewTimeline, true);
     storePartitionView(partition, fgs);
   }
 
