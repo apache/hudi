@@ -106,6 +106,9 @@ public class HoodieFlinkStreamer {
       pipeline = Pipelines.append(conf, rowType, dataStream, false);
       if (OptionsResolver.needsAsyncClustering(conf)) {
         Pipelines.cluster(conf, rowType, pipeline);
+      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        // add clean function to rollback failed writes for lazy failed writes cleaning policy
+        Pipelines.clean(conf, pipeline);
       } else {
         Pipelines.dummySink(pipeline);
       }

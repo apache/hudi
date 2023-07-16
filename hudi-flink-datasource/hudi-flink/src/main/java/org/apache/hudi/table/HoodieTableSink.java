@@ -95,6 +95,9 @@ public class HoodieTableSink implements
         DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
+        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+          // add clean function to rollback failed writes for lazy failed writes cleaning policy
+          return Pipelines.clean(conf, pipeline);
         } else {
           return Pipelines.dummySink(pipeline);
         }

@@ -20,6 +20,7 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -61,10 +62,25 @@ public class FlinkClusteringConfig extends Configuration {
   @Parameter(names = {"--clustering-tasks"}, description = "Parallelism of tasks that do actual clustering, default is -1")
   public Integer clusteringTasks = -1;
 
+  @Parameter(names = {"--clean-policy"},
+      description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          + "Default is KEEP_LATEST_COMMITS.")
+  public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
+
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
+
+  @Parameter(names = {"--clean-retain-hours"},
+      description = "Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned. default 24")
+  public Integer cleanRetainHours = 24;
+
+  @Parameter(names = {"--clean-retain-file-versions"},
+      description = "Number of file versions to retain. Each file group will be retained for this number of version. default 5")
+  public Integer cleanRetainFileVersions = 5;
 
   @Parameter(names = {"--archive-min-commits"},
       description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.")
@@ -165,7 +181,10 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setString(FlinkOptions.PATH, config.path);
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
     conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
+    conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, config.clusteringDeltaCommits);
     conf.setInteger(FlinkOptions.CLUSTERING_TASKS, config.clusteringTasks);
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, config.planStrategyClass);

@@ -236,7 +236,6 @@ public class FlinkWriteClients {
           .build());
     }
 
-    // do not configure cleaning strategy as LAZY until multi-writers is supported.
     HoodieWriteConfig writeConfig = builder.build();
     if (loadFsViewStorageConfig && !conf.containsKey(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key())) {
       // do not use the builder to give a change for recovering the original fs view storage config
