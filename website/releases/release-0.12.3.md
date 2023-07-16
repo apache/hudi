@@ -48,7 +48,7 @@ shown below.
 ## Long Term Support
 
 We aim to maintain 0.12 for a longer period of time and provide a stable release through the latest 0.12.x release for
-users to migrate to.  This release (0.12.2) is the latest 0.12 release.
+users to migrate to.  The latest 0.12 release is [0.12.3](/releases/release-0.12.3).
 
 ## Migration Guide
 
