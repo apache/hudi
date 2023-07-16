@@ -26,11 +26,15 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+
+import org.junit.Assume;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieWrapperFileSystem {
@@ -40,11 +44,28 @@ class TestHoodieWrapperFileSystem {
   private static MiniDFSCluster dfsCluster;
 
   @BeforeAll
-  public static void prepareFs() throws IOException {
-    hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
-    dfsCluster = hdfsTestService.start(true);
-    fs = dfsCluster.getFileSystem();
+  public static void setUp() throws IOException {
+    if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      // For Java 17, this unit test has to run in Docker due to issues with MiniDFSCluster
+      // Need to set -Drun.docker.java17.test=true in mvn command to run this test
+      Assume.assumeTrue(Boolean.valueOf(System.getProperty("run.docker.java17.test", "false")));
+      Configuration conf = new Configuration();
+      conf.set("fs.defaultFS", "hdfs://localhost:9000");
+      conf.set("dfs.replication", "3");
+      fs = FileSystem.get(conf);
+    } else {
+      hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
+      dfsCluster = hdfsTestService.start(true);
+      fs = dfsCluster.getFileSystem();
+    }
     basePath = fs.getWorkingDirectory().toString();
+  }
+
+  @AfterAll
+  public static void cleanUp() {
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+    }
   }
 
   @Test

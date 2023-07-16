@@ -101,6 +101,12 @@ setup_hdfs () {
   fi
 }
 
+stop_hdfs() {
+  use_default_java_runtime
+  echo "::warning::docker_test_java17.sh stopping hadoop hdfs"
+  $HADOOP_HOME/sbin/stop-dfs.sh
+}
+
 build_hudi_java8 () {
   use_default_java_runtime
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
@@ -122,7 +128,7 @@ run_docker_tests() {
   change_java_runtime_version
 
   mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 -Drun.docker.java17.test=true \
-     -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration \
+     -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration,org.apache.hudi.common.fs.TestHoodieWrapperFileSystem \
      -DfailIfNoTests=false -pl hudi-common
 
   if [ "$?" -ne 0 ]; then
@@ -161,3 +167,4 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::docker_test_java17.sh Done running tests with Java 17"
 
+stop_hdfs
