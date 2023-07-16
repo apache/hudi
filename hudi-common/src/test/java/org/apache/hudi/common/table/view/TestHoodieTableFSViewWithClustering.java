@@ -78,7 +78,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
   protected void refreshFsView() throws IOException {
     super.refreshFsView();
     closeFsView();
-    fsView = (IncrementalTimelineSyncFileSystemView) getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    fsView = (IncrementalTimelineSyncFileSystemView) getFileSystemView(metaClient.getActiveTimeline());
     roView = fsView;
   }
 

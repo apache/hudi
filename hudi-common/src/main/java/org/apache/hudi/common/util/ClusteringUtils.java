@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,6 +152,9 @@ public class ClusteringUtils {
 
   public static Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClusteringInstant(
       HoodieInstant instant, HoodieClusteringPlan clusteringPlan) {
+    if (clusteringPlan == null || clusteringPlan.getInputGroups() == null || clusteringPlan.getInputGroups().isEmpty()) {
+      return Stream.empty();
+    }
     Stream<HoodieFileGroupId> partitionToFileIdLists = clusteringPlan.getInputGroups().stream().flatMap(ClusteringUtils::getFileGroupsFromClusteringGroup);
     return partitionToFileIdLists.map(e -> Pair.of(e, instant));
   }

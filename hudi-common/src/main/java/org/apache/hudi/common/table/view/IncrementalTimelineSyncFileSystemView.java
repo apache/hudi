@@ -146,8 +146,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       }
     });
 
-    // Now remove pending clustering instants which were completed or removed
-    diffResult.getFinishedOrRemovedClusteringInstants().stream().forEach(instantPair -> {
+    // Now remove pending replace instants which were completed or removed
+    diffResult.getFinishedOrRemovedReplaceInstants().stream().forEach(instantPair -> {
       try {
         removePendingFileGroupsInPendingClustering(instantPair.getKey(), instantPair.getValue());
       } catch (IOException e) {
@@ -381,12 +381,17 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void removePendingFileGroupsInPendingClustering(HoodieInstant clusteringInstant, boolean isSuccessful) throws IOException {
     if (isSuccessful) {
-      // If the clustering commit is successful use the clustering plan to remove
-      // the file groups under pending clustering.
-      LOG.info("Removing completed clustering instant (" + clusteringInstant + ")");
-      Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupStreamToInstant =
-          ClusteringUtils.getFileGroupEntriesFromClusteringInstant(clusteringInstant, metaClient);
-      removeFileGroupsInPendingClustering(fileGroupStreamToInstant);
+      if (ClusteringUtils.isClusteringCommit(metaClient, clusteringInstant)) {
+        // If the clustering commit is successful use the clustering plan to remove
+        // the file groups under pending clustering.
+        LOG.info("Removing completed clustering instant (" + clusteringInstant + ")");
+        Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupStreamToInstant =
+            ClusteringUtils.getFileGroupEntriesFromClusteringInstant(clusteringInstant, metaClient);
+        removeFileGroupsInPendingClustering(fileGroupStreamToInstant);
+      } else {
+        // If it is not clustering commit then it is insert-overwrite commit
+        // no need to remove file groups under pending clustering.
+      }
     } else {
       // If the clustering's replace-commit is removed then there is no commit in the timeline
       // in that case iterate over all the file groups under pending clustering and remove them.

@@ -129,7 +129,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   protected void refreshFsView() throws IOException {
     super.refreshFsView();
     closeFsView();
-    fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    fsView = getFileSystemView(metaClient.getActiveTimeline());
     roView = fsView;
     rtView = fsView;
   }

@@ -172,7 +172,7 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedWriteAndCompactionInstants();
 
   /**
-   * Timeline to just include completed commits or all rewrites like compaction, logcompaction and clustering actions.
+   * Timeline to just include completed commits or all rewrites like compaction, logcompaction and replace actions.
    *
    * @return
    */

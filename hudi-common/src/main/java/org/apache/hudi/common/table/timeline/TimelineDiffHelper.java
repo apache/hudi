@@ -50,10 +50,11 @@ public class TimelineDiffHelper {
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
                                                                     HoodieTimeline oldTimeline,
                                                                     HoodieTimeline newTimeline) {
-    HoodieTimeline oldCompletedAndRewriteTimeline = oldTimeline.filterCompletedAndRewriteInstants(metaClient);
+    // Old timeline's rewrite timeline should not be fetched, since it can contain instants
+    // that are removed due to rollback
     HoodieTimeline newCompletedAndRewriteTimeline = newTimeline.filterCompletedAndRewriteInstants(metaClient);
 
-    Option<HoodieInstant> lastSeenInstant = oldCompletedAndRewriteTimeline.lastInstant();
+    Option<HoodieInstant> lastSeenInstant = oldTimeline.lastInstant();
     Option<HoodieInstant> firstInstantInNewTimeline = newCompletedAndRewriteTimeline.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
@@ -62,11 +63,11 @@ public class TimelineDiffHelper {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      Set<HoodieInstant> oldTimelineCompletedAndRewriteInstants = oldCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
+      Set<HoodieInstant> oldTimelineInstants = oldTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
       List<Pair<HoodieInstant, HoodieInstant>> compactionInstants =
-          getPendingCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getPendingCompactionTransitions(oldTimeline, newCompletedAndRewriteTimeline);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
@@ -85,21 +86,21 @@ public class TimelineDiffHelper {
       // but are present in new active timeline.
       List<HoodieInstant> newCompletedAndRewriteInstants = new ArrayList<>();
       newCompletedAndRewriteTimeline.getInstantsAsStream()
-          .filter(instant -> !oldTimelineCompletedAndRewriteInstants.contains(instant))
+          .filter(instant -> !oldTimelineInstants.contains(instant))
           .forEach(newCompletedAndRewriteInstants::add);
 
       // Check for log compaction commits completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants =
-          getPendingLogCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getPendingLogCompactionTransitions(oldTimeline, newCompletedAndRewriteTimeline);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
           .map(instantPair -> Pair.of(instantPair.getKey(), instantPair.getValue() != null))
           .collect(Collectors.toList());
 
-      // Check if clustering replacecommits are completed or removed.
+      // Check if replacecommits are completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> replaceCommitInstants =
-          getPendingClusteringCommitTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getPendingReplaceCommitTransitions(oldTimeline, newCompletedAndRewriteTimeline);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedReplaceCommitInstants = replaceCommitInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
@@ -119,14 +120,13 @@ public class TimelineDiffHelper {
   }
 
   /**
-   * Get pending clustering's replacecommit transitions. The timeline used is a rewrite timeline,
-   * so it is already filtered to contain clustering commits but not insert-overwrite's replacecommits.
+   * Get pending replacecommit transitions.
    */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingClusteringCommitTransitions(
-      HoodieTimeline oldCompletedAndRewriteTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingReplaceCommitTransitions(
+      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
     Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
-    return oldCompletedAndRewriteTimeline.filterPendingReplaceTimeline().getInstantsAsStream().map(instant -> {
+    return oldTimeline.filterPendingReplaceTimeline().getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
@@ -149,10 +149,10 @@ public class TimelineDiffHelper {
    * Getting pending log compaction transitions.
    */
   private static List<Pair<HoodieInstant, HoodieInstant>> getPendingLogCompactionTransitions(
-      HoodieTimeline oldCompletedAndRewriteTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
+      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
     Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
-    return oldCompletedAndRewriteTimeline.filterPendingLogCompactionTimeline().getInstantsAsStream().map(instant -> {
+    return oldTimeline.filterPendingLogCompactionTimeline().getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
@@ -175,10 +175,10 @@ public class TimelineDiffHelper {
    * Getting pending compaction transitions.
    */
   private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(
-      HoodieTimeline oldCompletedAndRewriteTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
+      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
     Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
-    return oldCompletedAndRewriteTimeline.filterPendingCompactionTimeline().getInstantsAsStream().map(instant -> {
+    return oldTimeline.filterPendingCompactionTimeline().getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
@@ -207,7 +207,7 @@ public class TimelineDiffHelper {
     // Completed instants will have true as the value where as instants removed due to rollback will have false as value.
     private final List<Pair<HoodieInstant, Boolean>> finishedOrRemovedLogCompactionInstants;
     // Completed instants will have true as the value where as instants removed due to rollback will have false as value.
-    private final List<Pair<HoodieInstant, Boolean>> finishedOrRemovedClusteringInstants;
+    private final List<Pair<HoodieInstant, Boolean>> finishedOrRemovedReplaceInstants;
     private final boolean canSyncIncrementally;
 
     public static final TimelineDiffResult UNSAFE_SYNC_RESULT =
@@ -215,11 +215,11 @@ public class TimelineDiffHelper {
 
     public TimelineDiffResult(List<HoodieInstant> newlySeenCompletedAndRewriteInstants, List<HoodieInstant> finishedCompactionInstants,
                               List<Pair<HoodieInstant, Boolean>> finishedOrRemovedLogCompactionInstants,
-                              List<Pair<HoodieInstant, Boolean>> finishedOrRemovedClusteringInstants, boolean canSyncIncrementally) {
+                              List<Pair<HoodieInstant, Boolean>> finishedOrRemovedReplaceInstants, boolean canSyncIncrementally) {
       this.newlySeenCompletedAndRewriteInstants = newlySeenCompletedAndRewriteInstants;
       this.finishedCompactionInstants = finishedCompactionInstants;
       this.finishedOrRemovedLogCompactionInstants = finishedOrRemovedLogCompactionInstants;
-      this.finishedOrRemovedClusteringInstants = finishedOrRemovedClusteringInstants;
+      this.finishedOrRemovedReplaceInstants = finishedOrRemovedReplaceInstants;
       this.canSyncIncrementally = canSyncIncrementally;
     }
 
@@ -235,8 +235,8 @@ public class TimelineDiffHelper {
       return finishedOrRemovedLogCompactionInstants;
     }
 
-    public List<Pair<HoodieInstant, Boolean>> getFinishedOrRemovedClusteringInstants() {
-      return finishedOrRemovedClusteringInstants;
+    public List<Pair<HoodieInstant, Boolean>> getFinishedOrRemovedReplaceInstants() {
+      return finishedOrRemovedReplaceInstants;
     }
 
     public boolean canSyncIncrementally() {
@@ -249,7 +249,7 @@ public class TimelineDiffHelper {
           + "newlySeenCompletedAndRewriteInstants=" + newlySeenCompletedAndRewriteInstants
           + ", finishedCompactionInstants=" + finishedCompactionInstants
           + ", finishedOrRemovedLogCompactionInstants=" + finishedOrRemovedLogCompactionInstants
-          + ", finishedOrRemovedClusteringInstants=" + finishedOrRemovedClusteringInstants
+          + ", finishedOrRemovedReplaceInstants=" + finishedOrRemovedReplaceInstants
           + ", canSyncIncrementally=" + canSyncIncrementally
           + '}';
     }

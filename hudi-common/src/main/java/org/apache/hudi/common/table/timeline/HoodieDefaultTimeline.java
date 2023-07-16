@@ -138,11 +138,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline filterCompletedAndRewriteInstants(HoodieTableMetaClient metaClient) {
-    List<String> validActions = Arrays.asList(COMPACTION_ACTION, LOG_COMPACTION_ACTION);
+    List<String> validActions = Arrays.asList(COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstantsAsStream()
-        .filter(s -> s.isCompleted()
-            || validActions.contains(s.getAction())
-            || ClusteringUtils.isClusteringCommit(metaClient, s)), details);
+        .filter(s -> s.isCompleted() || validActions.contains(s.getAction())), details);
   }
 
   @Override
