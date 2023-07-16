@@ -121,7 +121,7 @@ run_docker_tests() {
   echo "::warning::docker_test_java17.sh run_docker_tests Running Hudi maven tests on Docker"
   change_java_runtime_version
 
-  mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 \
+  mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 -Drun.docker.java17.test=true \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration \
      -DfailIfNoTests=false -pl hudi-common
 

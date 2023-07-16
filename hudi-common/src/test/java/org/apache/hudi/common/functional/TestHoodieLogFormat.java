@@ -74,6 +74,7 @@ import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
 
+import org.junit.Assume;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -134,8 +135,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @BeforeAll
   public static void setUpClass() throws IOException {
-    // For Java 17, this unit test has to run in Docker
     if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      // For Java 17, this unit test has to run in Docker
+      // Need to set -Drun.docker.java17.test=true in mvn command to run this test
+      Assume.assumeTrue(Boolean.valueOf(System.getProperty("run.docker.java17.test", "false")));
       Configuration conf = new Configuration();
       conf.set("fs.defaultFS", "hdfs://localhost:9000");
       conf.set("dfs.replication", "3");
