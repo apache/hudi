@@ -91,10 +91,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected HoodieTableMetaClient metaClient;
 
-  // Timeline determines whether a file slice is committed or not. This timeline object is attached
-  // to each HoodieFileGroup. Using this timeline object HoodieFileGroup determines whether a fileSlice
-  // is committed or not. This is a filtered write timeline where in it contains only completed
-  // and pending compaction instants.
+  // This is the commits timeline that will be visible for all views extending this view.
+  // This timeline contains completed write instants, all compaction instants(including pending)
+  // and committed savepoint instants. This timeline object is attached to each HoodieFileGroup.
+  // Using this timeline object, HoodieFileGroup determines whether a fileSlice is committed or not.
   private HoodieTimeline visibleFileSystemViewTimeline;
 
   // Used to concurrently load and populate partition views
@@ -145,7 +145,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
   public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleFileSystemViewTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
