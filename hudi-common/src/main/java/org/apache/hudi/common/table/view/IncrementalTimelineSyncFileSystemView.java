@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
@@ -537,6 +538,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     return visibleActiveTimeline;
   }
 
+  @VisibleForTesting
   public boolean isLastIncrementalSyncSuccessful() {
     return isLastIncrementalSyncSuccessful;
   }

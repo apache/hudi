@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -54,7 +53,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   protected transient Function<HoodieInstant, Option<byte[]>> details;
   private List<HoodieInstant> instants;
   private String timelineHash;
-  private static final Set<String> validWriteActions =
+  private static final Set<String> VALID_WRITE_ACTIONS =
       CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
@@ -130,7 +129,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieTimeline getFileSystemViewTimeline() {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(x ->
-            (x.isCompleted() && (HoodieTimeline.SAVEPOINT_ACTION.equals(x.getAction()) || validWriteActions.contains(x.getAction())))
+            (x.isCompleted() && (HoodieTimeline.SAVEPOINT_ACTION.equals(x.getAction()) || VALID_WRITE_ACTIONS.contains(x.getAction())))
                 || HoodieTimeline.COMPACTION_ACTION.equals(x.getAction())
         ), details);
   }
@@ -144,7 +143,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validWriteActions.contains(s.getAction())), details);
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> VALID_WRITE_ACTIONS.contains(s.getAction())), details);
   }
 
   @Override

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -46,7 +45,7 @@ public class TimelineDiffHelper {
    * @param newCompletedAndRewriteTimeline new completed and rewrite  timeline
    * @return TimelineDiffResult object which is useful for incrementally syncing the timeline.
    */
-  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldCompletedAndRewriteTimeline ,
+  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldCompletedAndRewriteTimeline,
                                                                     HoodieTimeline newCompletedAndRewriteTimeline) {
 
     Option<HoodieInstant> lastSeenInstant = oldCompletedAndRewriteTimeline.lastInstant();

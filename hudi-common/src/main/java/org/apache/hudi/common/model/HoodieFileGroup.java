@@ -55,7 +55,7 @@ public class HoodieFileGroup implements Serializable {
    * Timeline, based on which all getters work.
    * This should be a write timeline that contains either completed instants or pending compaction instants.
    */
-  private final HoodieTimeline completedAndCompactionWriteTimeline;
+  private final HoodieTimeline fileSystemViewTimeline;
 
   /**
    * The last completed instant, that acts as a high watermark for all getters.
@@ -63,7 +63,7 @@ public class HoodieFileGroup implements Serializable {
   private final Option<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
-    this.completedAndCompactionWriteTimeline = fileGroup.completedAndCompactionWriteTimeline;
+    this.fileSystemViewTimeline = fileGroup.fileSystemViewTimeline;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
@@ -73,11 +73,11 @@ public class HoodieFileGroup implements Serializable {
     this(new HoodieFileGroupId(partitionPath, id), completedAndCompactionWriteTimeline);
   }
 
-  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline completedAndCompactionWriteTimeline) {
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline fileSystemViewTimeline) {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
-    this.completedAndCompactionWriteTimeline = completedAndCompactionWriteTimeline;
-    this.lastInstant = completedAndCompactionWriteTimeline.lastInstant();
+    this.fileSystemViewTimeline = fileSystemViewTimeline;
+    this.lastInstant = this.fileSystemViewTimeline.lastInstant();
   }
 
   /**
@@ -127,7 +127,7 @@ public class HoodieFileGroup implements Serializable {
       return false;
     }
 
-    return completedAndCompactionWriteTimeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
+    return fileSystemViewTimeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
   }
 
   /**
@@ -159,7 +159,7 @@ public class HoodieFileGroup implements Serializable {
     if (includePending) {
       return getAllFileSlicesIncludingInflight();
     }
-    if (!completedAndCompactionWriteTimeline.empty()) {
+    if (!fileSystemViewTimeline.empty()) {
       return fileSlices.values().stream().filter(this::isFileSliceCommitted);
     }
     return Stream.empty();
@@ -260,6 +260,6 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public HoodieTimeline getTimeline() {
-    return completedAndCompactionWriteTimeline;
+    return fileSystemViewTimeline;
   }
 }
