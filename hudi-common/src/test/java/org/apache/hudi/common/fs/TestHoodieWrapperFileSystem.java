@@ -58,7 +58,8 @@ class TestHoodieWrapperFileSystem {
       dfsCluster = hdfsTestService.start(true);
       fs = dfsCluster.getFileSystem();
     }
-    basePath = fs.getWorkingDirectory().toString();
+    basePath = fs.getWorkingDirectory() + "/TestHoodieWrapperFileSystem/";
+    fs.mkdirs(new Path(basePath));
   }
 
   @AfterAll
@@ -79,6 +80,6 @@ class TestHoodieWrapperFileSystem {
     fs.createImmutableFileInPath(testFile, Option.of(testContent.getBytes()));
 
     assertEquals(1, fs.listStatus(new Path(basePath)).length,
-        "create same file twice should only have on file exists");
+        "create same file twice should only have one file exists, files: " + fs.listStatus(new Path(basePath)));
   }
 }
