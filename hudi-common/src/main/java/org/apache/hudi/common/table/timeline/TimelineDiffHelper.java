@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -57,11 +58,11 @@ public class TimelineDiffHelper {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      Set<HoodieInstant> oldTimelineInstants = oldCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
+      Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
       List<Pair<HoodieInstant, HoodieInstant>> compactionInstants =
-          getPendingCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getStateTransitionsForCompaction(oldCompletedAndRewriteTimeline, newTimelineInstants);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
@@ -78,6 +79,7 @@ public class TimelineDiffHelper {
 
       // Collect new instants that are not present in oldCompletedAndRewriteTimeline
       // but are present in new active timeline.
+      Set<HoodieInstant> oldTimelineInstants = oldCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
       List<HoodieInstant> newCompletedAndRewriteInstants = new ArrayList<>();
       newCompletedAndRewriteTimeline.getInstantsAsStream()
           .filter(instant -> !oldTimelineInstants.contains(instant))
@@ -85,7 +87,7 @@ public class TimelineDiffHelper {
 
       // Check for log compaction commits completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants =
-          getPendingLogCompactionTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getStateTransitionsForLogCompaction(oldCompletedAndRewriteTimeline, newTimelineInstants);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
@@ -94,7 +96,7 @@ public class TimelineDiffHelper {
 
       // Check if replacecommits are completed or removed.
       List<Pair<HoodieInstant, HoodieInstant>> replaceCommitInstants =
-          getPendingReplaceCommitTransitions(oldCompletedAndRewriteTimeline, newCompletedAndRewriteTimeline);
+          getStateTransitionsForReplaceCommit(oldCompletedAndRewriteTimeline, newTimelineInstants);
       List<Pair<HoodieInstant, Boolean>> finishedOrRemovedReplaceCommitInstants = replaceCommitInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
@@ -114,77 +116,51 @@ public class TimelineDiffHelper {
   }
 
   /**
-   * Get pending replacecommit transitions.
+   * Getting pending compaction transitions.
    */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingReplaceCommitTransitions(
-      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
-    Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
-
-    return oldTimeline.filterPendingReplaceTimeline().getInstantsAsStream().map(instant -> {
-      if (newTimelineInstants.contains(instant)) {
-        return Pair.of(instant, instant);
-      } else {
-        HoodieInstant completedReplaceCommit =
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(completedReplaceCommit)) {
-          return Pair.of(instant, completedReplaceCommit);
-        }
-        HoodieInstant inflightRepaceCommit =
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(inflightRepaceCommit)) {
-          return Pair.of(instant, inflightRepaceCommit);
-        }
-        return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
-      }
-    }).collect(Collectors.toList());
+  private static List<Pair<HoodieInstant, HoodieInstant>> getStateTransitionsForCompaction(
+      HoodieTimeline oldCompletedAndRewriteTimelineInstants, Set<HoodieInstant> newCompletedAndRewriteTimelineInstants) {
+    return getStateTransitionsForAnAction(HoodieTimeline::filterPendingCompactionTimeline, oldCompletedAndRewriteTimelineInstants,
+        newCompletedAndRewriteTimelineInstants, HoodieTimeline.COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION);
   }
 
   /**
    * Getting pending log compaction transitions.
    */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingLogCompactionTransitions(
-      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
-    Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
-
-    return oldTimeline.filterPendingLogCompactionTimeline().getInstantsAsStream().map(instant -> {
-      if (newTimelineInstants.contains(instant)) {
-        return Pair.of(instant, instant);
-      } else {
-        HoodieInstant logCompacted =
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(logCompacted)) {
-          return Pair.of(instant, logCompacted);
-        }
-        HoodieInstant inflightLogCompacted =
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(inflightLogCompacted)) {
-          return Pair.of(instant, inflightLogCompacted);
-        }
-        return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
-      }
-    }).collect(Collectors.toList());
+  private static List<Pair<HoodieInstant, HoodieInstant>> getStateTransitionsForLogCompaction(
+      HoodieTimeline oldCompletedAndRewriteTimelineInstants, Set<HoodieInstant> newCompletedAndRewriteTimelineInstants) {
+    return getStateTransitionsForAnAction(HoodieTimeline::filterPendingLogCompactionTimeline, oldCompletedAndRewriteTimelineInstants,
+        newCompletedAndRewriteTimelineInstants, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
   }
 
   /**
-   * Getting pending compaction transitions.
+   * Get pending replacecommit transitions.
    */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(
-      HoodieTimeline oldTimeline, HoodieTimeline newCompletedAndRewriteTimeline) {
-    Set<HoodieInstant> newTimelineInstants = newCompletedAndRewriteTimeline.getInstantsAsStream().collect(Collectors.toSet());
+  private static List<Pair<HoodieInstant, HoodieInstant>> getStateTransitionsForReplaceCommit(
+      HoodieTimeline oldCompletedAndRewriteTimelineInstants, Set<HoodieInstant> newCompletedAndRewriteTimelineInstants) {
+    return getStateTransitionsForAnAction(HoodieTimeline::filterPendingReplaceTimeline, oldCompletedAndRewriteTimelineInstants,
+        newCompletedAndRewriteTimelineInstants, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
+  }
 
-    return oldTimeline.filterPendingCompactionTimeline().getInstantsAsStream().map(instant -> {
-      if (newTimelineInstants.contains(instant)) {
+  /**
+   * Util method used by compaction, logcompaction and replacecommit to find the state transitions happened between two timelines.
+   */
+  private static List<Pair<HoodieInstant, HoodieInstant>> getStateTransitionsForAnAction(
+      Function<HoodieTimeline, HoodieTimeline> pendingTimelineActionFunction, HoodieTimeline oldCompletedAndRewriteTimeline,
+      Set<HoodieInstant> newCompletedAndRewriteTimelineInstants, String completedAction, String inflightAction) {
+    return pendingTimelineActionFunction.apply(oldCompletedAndRewriteTimeline).getInstantsAsStream().map(instant -> {
+      if (newCompletedAndRewriteTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
-        HoodieInstant compacted =
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(compacted)) {
-          return Pair.of(instant, compacted);
+        HoodieInstant completedInstant =
+            new HoodieInstant(State.COMPLETED, completedAction, instant.getTimestamp());
+        if (newCompletedAndRewriteTimelineInstants.contains(completedInstant)) {
+          return Pair.of(instant, completedInstant);
         }
-        HoodieInstant inflightCompacted =
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(inflightCompacted)) {
-          return Pair.of(instant, inflightCompacted);
+        HoodieInstant inflightInstant =
+            new HoodieInstant(State.INFLIGHT, inflightAction, instant.getTimestamp());
+        if (newCompletedAndRewriteTimelineInstants.contains(inflightInstant)) {
+          return Pair.of(instant, inflightInstant);
         }
         return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
       }
