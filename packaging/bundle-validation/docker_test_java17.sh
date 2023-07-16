@@ -81,6 +81,8 @@ start_datanode () {
 }
 
 setup_hdfs () {
+  use_default_java_runtime
+
   $HADOOP_HOME/bin/hdfs namenode -format
   $HADOOP_HOME/bin/hdfs --daemon start namenode
   echo "::warning::docker_test_java17.sh starting hadoop hdfs"
