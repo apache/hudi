@@ -18,15 +18,14 @@
 
 package org.apache.hudi.client.utils;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.ReplaceArchivalHelper;
+import org.apache.hudi.client.timeline.ActiveAction;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -35,11 +34,18 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
@@ -135,6 +141,42 @@ public class MetadataConversionUtils {
       }
     }
     return archivedMetaWrapper;
+  }
+
+  public static HoodieLSMTimelineInstant createLSMTimelineInstant(ActiveAction activeAction, HoodieTableMetaClient metaClient) {
+    HoodieLSMTimelineInstant lsmTimelineInstant = new HoodieLSMTimelineInstant();
+    lsmTimelineInstant.setInstantTime(activeAction.getInstantTime());
+    lsmTimelineInstant.setCompletionTime(activeAction.getCompletionTime());
+    lsmTimelineInstant.setAction(activeAction.getAction());
+    activeAction.getCommitMetadata(metaClient).ifPresent(commitMetadata -> lsmTimelineInstant.setMetadata(ByteBuffer.wrap(commitMetadata)));
+    lsmTimelineInstant.setVersion(LSMTimeline.LSM_TIMELINE_INSTANT_VERSION_1);
+    switch (activeAction.getPendingAction()) {
+      case HoodieTimeline.CLEAN_ACTION: {
+        lsmTimelineInstant.setPlan(ByteBuffer.wrap(activeAction.getCleanPlan(metaClient)));
+        break;
+      }
+      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+        // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
+        // without clustering. However, we should revisit the requested commit file standardization
+        activeAction.getRequestedCommitMetadata(metaClient).ifPresent(metadata -> lsmTimelineInstant.setPlan(ByteBuffer.wrap(metadata)));
+        // inflight replacecommit files have the same metadata body as HoodieCommitMetadata,
+        // so we could re-use it without further creating an inflight extension.
+        // Or inflight replacecommit files are empty under clustering circumstance.
+        activeAction.getInflightCommitMetadata(metaClient).ifPresent(metadata -> lsmTimelineInstant.setPlan(ByteBuffer.wrap(metadata)));
+        break;
+      }
+      case HoodieTimeline.COMPACTION_ACTION: {
+        lsmTimelineInstant.setPlan(ByteBuffer.wrap(activeAction.getCompactionPlan(metaClient)));
+        break;
+      }
+      case HoodieTimeline.LOG_COMPACTION_ACTION: {
+        lsmTimelineInstant.setPlan(ByteBuffer.wrap(activeAction.getLogCompactionPlan(metaClient)));
+        break;
+      }
+      default:
+        // no operation
+    }
+    return lsmTimelineInstant;
   }
 
   public static HoodieArchivedMetaEntry createMetaWrapperForEmptyInstant(HoodieInstant hoodieInstant) {

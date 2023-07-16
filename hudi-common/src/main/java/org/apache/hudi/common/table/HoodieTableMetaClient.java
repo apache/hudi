@@ -982,7 +982,7 @@ public class HoodieTableMetaClient implements Serializable {
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
-          .setArchiveLogFolder(metaClient.getArchivePath())
+          .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
           .setRecordMergerStrategy(metaClient.getTableConfig().getRecordMergerStrategy());
     }

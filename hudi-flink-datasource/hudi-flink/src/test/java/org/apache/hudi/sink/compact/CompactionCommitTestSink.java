@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.exception.HoodieException;

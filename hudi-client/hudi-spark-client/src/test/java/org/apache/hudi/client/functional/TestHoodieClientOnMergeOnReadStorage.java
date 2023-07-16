@@ -524,14 +524,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       if (instants == null) {
         continue;
       }
-      assertEquals(3, instants.size());
-      for (HoodieInstant instant: instants) {
-        if (instant.isCompleted()) {
-          assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, instant.getAction());
-        } else {
-          assertEquals(HoodieTimeline.LOG_COMPACTION_ACTION, instant.getAction());
-        }
-      }
+      assertEquals(1, instants.size());
+      assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(0).getAction());
       logCompactionInstantArchived = true;
     }
     assertTrue(logCompactionInstantArchived);
