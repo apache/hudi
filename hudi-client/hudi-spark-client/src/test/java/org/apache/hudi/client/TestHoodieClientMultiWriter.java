@@ -299,7 +299,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future1 = executors.submit(() -> {
       try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        final String nextCommitTime = client1.createNewInstantTime();
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
 
         // Wait for the 2nd writer to start the commit
@@ -320,7 +320,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future2 = executors.submit(() -> {
       try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        final String nextCommitTime = client2.createNewInstantTime();
 
         // Wait for the 1st writer to make progress with the commit
         cyclicBarrier.await(60, TimeUnit.SECONDS);

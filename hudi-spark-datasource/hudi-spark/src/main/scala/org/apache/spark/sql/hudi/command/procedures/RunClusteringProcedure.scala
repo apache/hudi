@@ -152,7 +152,7 @@ class RunClusteringProcedure extends BaseProcedure
         tableName.asInstanceOf[Option[String]])
 
       if (operation.isSchedule) {
-        val instantTime = HoodieActiveTimeline.createNewInstantTime
+        val instantTime = client.createNewInstantTime
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {
           filteredPendingClusteringInstants = Seq(instantTime)
         }

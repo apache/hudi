@@ -24,7 +24,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.internal.schema.InternalSchema
@@ -225,7 +225,7 @@ object Spark30AlterTableCommand extends Logging {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
+    val instantTime = client.createNewInstantTime
     client.startCommitWithTime(instantTime, commitActionType)
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)

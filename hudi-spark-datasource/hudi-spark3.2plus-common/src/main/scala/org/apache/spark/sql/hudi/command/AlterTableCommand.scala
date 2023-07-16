@@ -260,7 +260,7 @@ object AlterTableCommand extends Logging {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
+    val instantTime = client.createNewInstantTime
     client.startCommitWithTime(instantTime, commitActionType)
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)

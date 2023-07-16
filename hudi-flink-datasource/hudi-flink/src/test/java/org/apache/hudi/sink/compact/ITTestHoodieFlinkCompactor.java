@@ -513,7 +513,7 @@ public class ITTestHoodieFlinkCompactor {
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
     boolean scheduled = false;
     // judge whether there are any compaction operations.
-    Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+    Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient, writeClient);
     if (compactionInstantTimeOption.isPresent()) {
       scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
     }

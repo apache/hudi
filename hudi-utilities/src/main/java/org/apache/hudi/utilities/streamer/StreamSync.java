@@ -942,7 +942,7 @@ public class StreamSync implements Serializable, Closeable {
           // No-Op
         }
       }
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = writeClient.createNewInstantTime();
     }
     throw lastException;
   }
