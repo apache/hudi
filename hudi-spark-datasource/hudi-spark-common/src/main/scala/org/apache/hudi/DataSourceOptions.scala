@@ -609,13 +609,13 @@ object DataSourceWriteOptions {
   val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
   val ENABLE_OPTIMIZED_SQL_WRITES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.spark.sql.writes.optimized.enable")
+    .key("hoodie.spark.sql.optimized.writes.enable")
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("Controls whether spark sql prepped update and delete is enabled.")
 
-  val ENABLE_OPTIMIZED_MERGE_WRITES: ConfigProperty[String] = ConfigProperty
+  val ENABLE_OPTIMIZED_SQL_MERGE_WRITES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.optimized.merge.enable")
     .defaultValue("true")
     .markAdvanced()

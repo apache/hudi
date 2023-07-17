@@ -50,7 +50,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
           // update data
           spark.sql(s"update $tableName set price = 20 where id = 1")
@@ -95,7 +95,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=true")
 
         // update data
         spark.sql(s"update $tableName set price = 20 where id = 1")
@@ -283,7 +283,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
         spark.sql(s"update $tableName set price = 22 where id = 1")
         checkAnswer(s"select id, name, price, ts from $tableName")(

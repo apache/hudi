@@ -144,8 +144,6 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               rawDf: DataFrame): BaseRelation = {
-    // AKL_TODO: check if this function is called before ENABLE_PREPPED_MERGE_WRITES is set, but for now
-    // the default is always true, so sequence should not make a difference.
     val df = if (optParams.getOrDefault(DATASOURCE_WRITE_PREPPED_KEY, "false").toBoolean || optParams.getOrDefault(WRITE_PREPPED_MERGE_KEY, "false").toBoolean) {
       rawDf // Don't remove meta columns for prepped write.
     } else {

@@ -47,7 +47,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
           // insert data to table
           spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
@@ -97,7 +97,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
    """.stripMargin)
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=true")
 
         // insert data to table
         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
@@ -308,7 +308,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
                |""".stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
           // delete 2021-10-01 partition
           if (urlencode) {
