@@ -49,4 +49,6 @@ ENV HDFS_DATANODE_USER root
 ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
-RUN apk add --no-cache libstdc++
+
+RUN apk add --no-cache libstdc++ # for RocksDb
+RUN apk add --no-cache add procps # alpine image doesn't support -p for ps command
