@@ -45,7 +45,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import static org.apache.hudi.config.HoodieInternalConfig.ENABLE_PREPPED_MERGE_WRITES;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY;
 import static org.apache.hudi.config.HoodieWriteConfig.KEYGENERATOR_TYPE;
 import static org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType;
 
@@ -80,7 +80,7 @@ public class HoodieSparkKeyGeneratorFactory {
     boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props)
         //Need to prevent overwriting the keygen for spark sql merge into because we need to extract
         //the recordkey from the meta cols if it exists. Sql keygen will use pkless keygen if needed.
-        && !props.getBoolean(ENABLE_PREPPED_MERGE_WRITES.key(), ENABLE_PREPPED_MERGE_WRITES.defaultValue());
+        && !props.getBoolean(WRITE_PREPPED_MERGE_KEY, false);
     try {
       KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
       if (autoRecordKeyGen) {

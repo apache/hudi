@@ -25,7 +25,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
-import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -653,8 +653,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
-      HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key -> "true",
-      HoodieInternalConfig.ENABLE_PREPPED_MERGE_WRITES.key -> sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_MERGE_WRITES.key(), ENABLE_OPTIMIZED_MERGE_WRITES.defaultValue()),
+      HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY -> sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_MERGE_WRITES.key(), ENABLE_OPTIMIZED_MERGE_WRITES.defaultValue()),
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 

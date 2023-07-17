@@ -46,21 +46,6 @@ public class HoodieInternalConfig extends HoodieConfig {
       .withDocumentation("For SQL operations, if enables bulk_insert operation, "
           + "this configure will take effect to decide overwrite whole table or partitions specified");
 
-  public static final ConfigProperty<Boolean> ENABLE_PREPPED_MERGE_WRITES = ConfigProperty
-      .key("hoodie.internal.sql.prepped.merge.enabled")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("Controls whether spark sql optimized merge is enabled.");
-
-  public static final ConfigProperty<Boolean> SQL_MERGE_INTO_WRITES = ConfigProperty
-      .key("hoodie.internal.sql.merge.into.writes")
-      .defaultValue(false)
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("This internal config is used by Merge Into SQL logic only to mark such use case "
-          + "and let the core components know it should handle the write differently");
-
   /**
    * Returns if partition records are sorted or not.
    *
