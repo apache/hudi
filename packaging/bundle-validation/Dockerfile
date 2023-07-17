@@ -52,5 +52,3 @@ ENV YARN_NODEMANAGER_USER root
 
 # for RocksDb
 RUN apk add --no-cache libstdc++
-# alpine image doesn't support -p for ps command
-RUN apk add --no-cache add procps
