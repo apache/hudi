@@ -189,7 +189,6 @@ test_flink_bundle() {
     echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
 
-
 ##
 # Function to test the kafka-connect bundle.
 # It runs zookeeper, kafka broker, schema registry, and connector worker.
