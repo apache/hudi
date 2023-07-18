@@ -103,7 +103,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     String[] bootstrapType = {"full", "metadata", "mixed"};
     Boolean[] dashPartitions = {true,false};
     HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
-    Integer[] nPartitions = {1, 2};
+    Integer[] nPartitions = {0, 1, 2};
     for (HoodieTableType tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
@@ -255,18 +255,16 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void verifyMetaColOnlyRead(Integer iteration) {
-    Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath)
-        .select("_hoodie_commit_time", "_hoodie_record_key");
-    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath)
-        .select("_hoodie_commit_time", "_hoodie_record_key");
+    Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath).select("_hoodie_commit_time", "_hoodie_record_key");
+    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath).select("_hoodie_commit_time", "_hoodie_record_key");
+    hudiDf.show(100,false);
+    bootstrapDf.show(100,false);
     if (iteration > 0) {
       assertEquals(sparkSession.sql("select * from hudi_iteration_" + (iteration - 1)).intersect(hudiDf).count(),
           sparkSession.sql("select * from bootstrap_iteration_" + (iteration - 1)).intersect(bootstrapDf).count());
     }
     hudiDf.createOrReplaceTempView("hudi_iteration_" + iteration);
-    hudiDf.cache();
     bootstrapDf.createOrReplaceTempView("bootstrap_iteration_" + iteration);
-    bootstrapDf.cache();
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
