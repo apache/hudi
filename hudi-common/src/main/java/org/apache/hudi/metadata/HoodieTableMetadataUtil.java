@@ -852,8 +852,7 @@ public class HoodieTableMetadataUtil {
     HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
 
     List<Pair<String, String>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet().stream().flatMap(entry -> {
-      List<String> filesList = entry.getValue();
-      return filesList.stream().map(file -> Pair.of(entry.getKey(), file));
+      return entry.getValue().stream().map(file -> Pair.of(entry.getKey(), file));
     }).collect(Collectors.toList());
 
     int parallelism = Math.max(Math.min(partitionToDeletedFilesList.size(), recordsGenerationParams.getBloomIndexParallelism()), 1);
