@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
@@ -35,6 +36,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +67,7 @@ $ bin/spark-submit \
 --driver-memory 4g \
 --executor-memory 4g \
 --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --source-class org.apache.hudi.utilities.sources.GcsEventsSource \
 --op INSERT \
@@ -96,6 +98,7 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 public class GcsEventsSource extends RowSource {
 
   private final PubsubMessagesFetcher pubsubMessagesFetcher;
+  private final SchemaProvider schemaProvider;
   private final boolean ackMessages;
 
   private final List<String> messagesToAck = new ArrayList<>();
@@ -121,6 +124,7 @@ public class GcsEventsSource extends RowSource {
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
     this.ackMessages = props.getBoolean(ACK_MESSAGES.key(), ACK_MESSAGES.defaultValue());
+    this.schemaProvider = schemaProvider;
 
     LOG.info("Created GcsEventsSource");
   }
@@ -146,7 +150,12 @@ public class GcsEventsSource extends RowSource {
 
     LOG.info("Returning checkpoint value: " + CHECKPOINT_VALUE_ZERO);
 
-    return Pair.of(Option.of(sparkSession.read().json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
+    if (sourceSchema != null) {
+      return Pair.of(Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    } else {
+      return Pair.of(Option.of(sparkSession.read().json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    }
   }
 
   @Override

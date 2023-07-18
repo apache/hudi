@@ -74,6 +74,13 @@ public class ClusteringUtils {
   }
 
   /**
+   * Checks if the replacecommit is clustering commit.
+   */
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+  }
+
+  /**
    * Get requested replace metadata from timeline.
    * @param metaClient
    * @param pendingReplaceInstant
@@ -256,7 +263,12 @@ public class ClusteringUtils {
           retainLowerBound = earliestInstantToRetain.getTimestamp();
         } else {
           // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
-          // retain first instant after clean instant
+          // retain first instant after clean instant.
+          // For KEEP_LATEST_FILE_VERSIONS cleaner policy, file versions are only maintained for active file groups
+          // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
+          // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
+          // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
+          // TODO: This case has to be handled. HUDI-6352
           retainLowerBound = cleanInstant.getTimestamp();
         }
 

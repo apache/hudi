@@ -72,7 +72,6 @@ public class TestHoodieMetrics {
   @Test
   public void testTimerCtx() throws InterruptedException {
     Random rand = new Random();
-
     // Index metrics
     Timer.Context timer = hoodieMetrics.getIndexCtx();
     Thread.sleep(5); // Ensure timer duration is > 0
@@ -141,42 +140,50 @@ public class TestHoodieMetrics {
       when(metadata.getTotalLogFilesCompacted()).thenReturn(randomValue + 12);
       when(metadata.getTotalLogFilesSize()).thenReturn(randomValue + 13);
       when(metadata.getTotalRecordsDeleted()).thenReturn(randomValue + 14);
+      when(metadata.getTotalCorruptLogBlocks()).thenReturn(randomValue + 15);
+      when(metadata.getTotalRollbackLogBlocks()).thenReturn(randomValue + 16);
       when(metadata.getMinAndMaxEventTime()).thenReturn(Pair.of(Option.empty(), Option.empty()));
-      hoodieMetrics.updateCommitMetrics(randomValue + 15, commitTimer.stop(), metadata, action);
+      when(config.isCompactionLogBlockMetricsOn()).thenReturn(true);
+
+      hoodieMetrics.updateCommitMetrics(randomValue + 17, commitTimer.stop(), metadata, action);
 
       String metricname = hoodieMetrics.getMetricsName(action, "duration");
       long duration = (Long)metrics.getRegistry().getGauges().get(metricname).getValue();
       assertTrue(duration > 0);
-      metricname = hoodieMetrics.getMetricsName(action, "totalPartitionsWritten");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_PARTITIONS_WRITTEN_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalPartitionsWritten());
-      metricname = hoodieMetrics.getMetricsName(action, "totalFilesInsert");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_FILES_INSERT_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalFilesInsert());
-      metricname = hoodieMetrics.getMetricsName(action, "totalFilesUpdate");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_FILES_UPDATE_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalFilesUpdated());
-      metricname = hoodieMetrics.getMetricsName(action, "totalRecordsWritten");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_RECORDS_WRITTEN_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalRecordsWritten());
-      metricname = hoodieMetrics.getMetricsName(action, "totalUpdateRecordsWritten");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_UPDATE_RECORDS_WRITTEN_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalUpdateRecordsWritten());
-      metricname = hoodieMetrics.getMetricsName(action, "totalInsertRecordsWritten");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_INSERT_RECORDS_WRITTEN_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalInsertRecordsWritten());
-      metricname = hoodieMetrics.getMetricsName(action, "totalBytesWritten");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_BYTES_WRITTEN_STR);
       assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.fetchTotalBytesWritten());
       metricname = hoodieMetrics.getMetricsName(action, "commitTime");
-      assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), randomValue + 15);
-      metricname = hoodieMetrics.getMetricsName(action, "totalScanTime");
+      assertEquals((long)metrics.getRegistry().getGauges().get(metricname).getValue(), randomValue + 17);
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_SCAN_TIME_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalScanTime());
-      metricname = hoodieMetrics.getMetricsName(action, "totalCreateTime");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_CREATE_TIME_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalCreateTime());
-      metricname = hoodieMetrics.getMetricsName(action, "totalUpsertTime");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_UPSERT_TIME_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalUpsertTime());
-      metricname = hoodieMetrics.getMetricsName(action, "totalCompactedRecordsUpdated");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_COMPACTED_RECORDS_UPDATED_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalCompactedRecordsUpdated());
-      metricname = hoodieMetrics.getMetricsName(action, "totalLogFilesCompacted");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_LOG_FILES_COMPACTED_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalLogFilesCompacted());
-      metricname = hoodieMetrics.getMetricsName(action, "totalLogFilesSize");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_LOG_FILES_SIZE_STR);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalLogFilesSize());
-      metricname = hoodieMetrics.getMetricsName(action, "totalRecordsDeleted");
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_RECORDS_DELETED);
       assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalRecordsDeleted());
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_CORRUPTED_LOG_BLOCKS_STR);
+      assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalCorruptLogBlocks());
+      metricname = hoodieMetrics.getMetricsName(action, HoodieMetrics.TOTAL_ROLLBACK_LOG_BLOCKS_STR);
+      assertEquals(metrics.getRegistry().getGauges().get(metricname).getValue(), metadata.getTotalRollbackLogBlocks());
     });
   }
 }

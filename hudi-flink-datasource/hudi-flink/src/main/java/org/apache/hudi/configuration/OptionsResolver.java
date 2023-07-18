@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,6 +44,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -132,6 +136,26 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
   }
 
+  public static HoodieIndex.BucketIndexEngineType getBucketEngineType(Configuration conf) {
+    String bucketEngineType = conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE);
+    return HoodieIndex.BucketIndexEngineType.valueOf(bucketEngineType);
+  }
+
+  /**
+   * Returns whether the table index is consistent bucket index.
+   */
+  public static boolean isConsistentHashingBucketIndexType(Configuration conf) {
+    return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING);
+  }
+
+  /**
+   * Returns the default plan strategy class.
+   */
+  public static String getDefaultPlanStrategyClassName(Configuration conf) {
+    return OptionsResolver.isConsistentHashingBucketIndexType(conf) ? FlinkConsistentBucketClusteringPlanStrategy.class.getName() :
+        FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS.defaultValue();
+  }
+
   /**
    * Returns whether the source should emit changelog.
    *
@@ -178,7 +202,19 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleClustering(Configuration conf) {
-    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
+    if (!conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED)) {
+      return false;
+    }
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+      // Write pipelines for table with consistent bucket index would detect whether clustering service occurs,
+      // and automatically adjust the partitioner and write function if clustering service happens.
+      // So it could handle UPSERT.
+      // But it could not handle INSERT case, because insert write would not take index into consideration currently.
+      return operationType == WriteOperationType.UPSERT;
+    } else {
+      return operationType == WriteOperationType.INSERT;
+    }
   }
 
   /**
@@ -192,8 +228,8 @@ public class OptionsResolver {
    * Returns whether the operation is INSERT OVERWRITE (table or partition).
    */
   public static boolean isInsertOverwrite(Configuration conf) {
-    return conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
-        || conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE.value());
+    return conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+        || conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE.value());
   }
 
   /**
@@ -268,7 +304,9 @@ public class OptionsResolver {
    * in scenarios like multiple writers.
    */
   public static boolean isReadByTxnCompletionTime(Configuration conf) {
-    return conf.getBoolean(HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key(), HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.defaultValue());
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
+        .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
+    return handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME;
   }
 
   /**

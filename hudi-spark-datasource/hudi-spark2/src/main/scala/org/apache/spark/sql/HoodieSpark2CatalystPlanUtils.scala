@@ -80,4 +80,8 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
         Some((c.tableName, true, false, c.cmd))
     }
   }
+
+  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
+    Join(left, right, joinType, condition)
+  }
 }

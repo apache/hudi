@@ -21,8 +21,12 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -30,6 +34,7 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
+import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -57,6 +62,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -102,6 +108,11 @@ public class Pipelines {
   public static DataStreamSink<Object> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
     if (OptionsResolver.isBucketIndexType(conf)) {
+      // TODO support bulk insert for consistent bucket index
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+        throw new HoodieException(
+            "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
+      }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
       int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
 
@@ -326,14 +337,41 @@ public class Pipelines {
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
-      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperator.getFactory(conf);
-      int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-      String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
-      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
-      return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
-          .transform(opName("bucket_write", conf), TypeInformation.of(Object.class), operatorFactory)
-          .uid(opUID("bucket_write", conf))
-          .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+      HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
+      switch (bucketIndexEngineType) {
+        case SIMPLE:
+          int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+          String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
+          BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
+          return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
+              .transform(
+                  opName("bucket_write", conf),
+                  TypeInformation.of(Object.class),
+                  BucketStreamWriteOperator.getFactory(conf))
+              .uid(opUID("bucket_write", conf))
+              .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        case CONSISTENT_HASHING:
+          if (OptionsResolver.isInsertOverwrite(conf)) {
+            // TODO support insert overwrite for consistent bucket index
+            throw new HoodieException("Consistent hashing bucket index does not work with insert overwrite using FLINK engine. Use simple bucket index or Spark engine.");
+          }
+          return dataStream
+              .transform(
+                  opName("consistent_bucket_assigner", conf),
+                  TypeInformation.of(HoodieRecord.class),
+                  new ProcessOperator<>(new ConsistentBucketAssignFunction(conf)))
+              .uid(opUID("consistent_bucket_assigner", conf))
+              .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
+              .keyBy(record -> record.getCurrentLocation().getFileId())
+              .transform(
+                  opName("consistent_bucket_write", conf),
+                  TypeInformation.of(Object.class),
+                  BucketStreamWriteOperator.getFactory(conf))
+              .uid(opUID("consistent_bucket_write", conf))
+              .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        default:
+          throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
+      }
     } else {
       WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);
       return dataStream
@@ -447,11 +485,17 @@ public class Pipelines {
   }
 
   public static String opName(String operatorN, Configuration conf) {
-    return operatorN + ": " + conf.getString(FlinkOptions.TABLE_NAME);
+    return operatorN + ": " + getTablePath(conf);
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    return "uid_" + operatorN + "_" + conf.getString(FlinkOptions.TABLE_NAME);
+    return "uid_" + operatorN + "_" + getTablePath(conf);
+  }
+
+  public static String getTablePath(Configuration conf) {
+    String databaseName = conf.getString(FlinkOptions.DATABASE_NAME);
+    return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
+        : databaseName + "." + conf.getString(FlinkOptions.TABLE_NAME);
   }
 
   /**

@@ -21,7 +21,6 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -98,8 +96,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Delete 5 records
     String prevCommitTime = commitTime;
     commitTime = HoodieActiveTimeline.createNewInstantTime();
-    deleteBatch(config, client, commitTime, prevCommitTime,
-        "000", 25, SparkRDDWriteClient::delete, false, false,
+    deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
         0, 100);
 
     // Verify all the records.
@@ -224,8 +221,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Delete 3 records
     newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-    deleteBatch(config, client, newCommitTime, prevCommitTime,
-        "000", 30, SparkRDDWriteClient::delete, false, false,
+    deleteBatch(config, client, newCommitTime, prevCommitTime, "000", 30, false, false,
         0, 70);
 
     String lastCommitBeforeLogCompaction = newCommitTime;
@@ -448,7 +444,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withLatestInstantTime(instant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withOptimizedLogBlocksScan(true)
-            .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner.scan(true);
         List<String> prevInstants = scanner.getValidBlockInstants();
@@ -462,7 +457,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             .withLatestInstantTime(currentInstant)
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withOptimizedLogBlocksScan(true)
-            .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
             .build();
         scanner2.scan(true);
         List<String> currentInstants = scanner2.getValidBlockInstants();

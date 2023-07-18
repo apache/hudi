@@ -33,7 +33,7 @@ import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA
  */
 @Immutable
 @ConfigClassProperty(name = "File-based Schema Provider Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
     description = "Configurations for file-based schema provider.")
 public class FilebasedSchemaProviderConfig extends HoodieConfig {

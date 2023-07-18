@@ -290,26 +290,4 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
       return this.updateKeys.contains(key);
     }
   }
-
-  private static class ScalaCollector<T> implements Collector<T> {
-    private T val;
-
-    public static <T> ScalaCollector<T> getInstance() {
-      return new ScalaCollector<>();
-    }
-
-    @Override
-    public void collect(T t) {
-      this.val = t;
-    }
-
-    @Override
-    public void close() {
-      this.val = null;
-    }
-
-    public T getVal() {
-      return val;
-    }
-  }
 }

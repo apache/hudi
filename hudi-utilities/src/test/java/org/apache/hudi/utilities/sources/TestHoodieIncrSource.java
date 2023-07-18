@@ -47,7 +47,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -66,6 +65,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
@@ -329,13 +329,13 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
-    Assertions.assertNotNull(batchCheckPoint.getValue());
+    assertNotNull(batchCheckPoint.getValue());
     if (expectedCount == 0) {
       assertFalse(batchCheckPoint.getKey().isPresent());
     } else {
       assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
     }
-    Assertions.assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
+    assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,

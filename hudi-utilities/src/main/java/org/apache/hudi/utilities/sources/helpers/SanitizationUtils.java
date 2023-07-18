@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,21 +53,21 @@ public class SanitizationUtils {
   public static class Config {
     @Deprecated
     public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES =
-        HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
+        HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 
     @Deprecated
     public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK =
-        HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+        HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
   }
 
   private static final String AVRO_FIELD_NAME_KEY = "name";
 
   public static boolean getShouldSanitize(TypedProperties props) {
-    return props.getBoolean(HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.defaultValue());
+    return props.getBoolean(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.defaultValue());
   }
 
   public static String getInvalidCharMask(TypedProperties props) {
-    return props.getString(HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
+    return props.getString(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
   }
 
   private static DataType sanitizeDataTypeForAvro(DataType dataType, String invalidCharMask) {

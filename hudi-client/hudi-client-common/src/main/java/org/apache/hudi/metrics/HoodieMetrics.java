@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -36,6 +37,23 @@ public class HoodieMetrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetrics.class);
 
+  public static final String TOTAL_PARTITIONS_WRITTEN_STR = "totalPartitionsWritten";
+  public static final String TOTAL_FILES_INSERT_STR = "totalFilesInsert";
+  public static final String TOTAL_FILES_UPDATE_STR = "totalFilesUpdate";
+  public static final String TOTAL_RECORDS_WRITTEN_STR = "totalRecordsWritten";
+  public static final String TOTAL_UPDATE_RECORDS_WRITTEN_STR = "totalUpdateRecordsWritten";
+  public static final String TOTAL_INSERT_RECORDS_WRITTEN_STR = "totalInsertRecordsWritten";
+  public static final String TOTAL_BYTES_WRITTEN_STR = "totalBytesWritten";
+  public static final String TOTAL_SCAN_TIME_STR = "totalScanTime";
+  public static final String TOTAL_CREATE_TIME_STR = "totalCreateTime";
+  public static final String TOTAL_UPSERT_TIME_STR = "totalUpsertTime";
+  public static final String TOTAL_COMPACTED_RECORDS_UPDATED_STR = "totalCompactedRecordsUpdated";
+  public static final String TOTAL_LOG_FILES_COMPACTED_STR = "totalLogFilesCompacted";
+  public static final String TOTAL_LOG_FILES_SIZE_STR = "totalLogFilesSize";
+  public static final String TOTAL_RECORDS_DELETED = "totalRecordsDeleted";
+  public static final String TOTAL_CORRUPTED_LOG_BLOCKS_STR = "totalCorruptedLogBlocks";
+  public static final String TOTAL_ROLLBACK_LOG_BLOCKS_STR = "totalRollbackLogBlocks";
+
   private Metrics metrics;
   // Some timers
   public String rollbackTimerName = null;
@@ -50,6 +68,8 @@ public class HoodieMetrics {
   private String conflictResolutionTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
+  private String compactionRequestedCounterName = null;
+  private String compactionCompletedCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -64,6 +84,8 @@ public class HoodieMetrics {
   private Timer conflictResolutionTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
+  private Counter compactionRequestedCounter = null;
+  private Counter compactionCompletedCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -82,6 +104,8 @@ public class HoodieMetrics {
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
+      this.compactionRequestedCounterName = getMetricsName("counter", "compaction.requested");
+      this.compactionCompletedCounterName = getMetricsName("counter", "compaction.completed");
     }
   }
 
@@ -168,20 +192,20 @@ public class HoodieMetrics {
       // No-op if metrics are not of type PROMETHEUS_PUSHGATEWAY.
       return;
     }
-    metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), 0);
-    metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_PARTITIONS_WRITTEN_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_FILES_INSERT_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_FILES_UPDATE_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_WRITTEN_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_UPDATE_RECORDS_WRITTEN_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_INSERT_RECORDS_WRITTEN_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_DELETED), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_BYTES_WRITTEN_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_SCAN_TIME_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_CREATE_TIME_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_UPSERT_TIME_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_COMPACTED_RECORDS_UPDATED_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_COMPACTED_STR), 0);
+    metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_SIZE_STR), 0);
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
@@ -202,20 +226,26 @@ public class HoodieMetrics {
       long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
-      metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
-      metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
-      metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
-      metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), totalRecordsWritten);
-      metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
-      metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
-      metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
-      metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
-      metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
-      metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), totalTimeTakenForUpsert);
-      metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
-      metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
-      metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
-      metrics.registerGauge(getMetricsName(actionType, "totalRecordsDeleted"), totalRecordsDeleted);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_PARTITIONS_WRITTEN_STR), totalPartitionsWritten);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_FILES_INSERT_STR), totalFilesInsert);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_FILES_UPDATE_STR), totalFilesUpdate);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_WRITTEN_STR), totalRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_UPDATE_RECORDS_WRITTEN_STR), totalUpdateRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_INSERT_RECORDS_WRITTEN_STR), totalInsertRecordsWritten);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_BYTES_WRITTEN_STR), totalBytesWritten);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_SCAN_TIME_STR), totalTimeTakenByScanner);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_CREATE_TIME_STR), totalTimeTakenForInsert);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_UPSERT_TIME_STR), totalTimeTakenForUpsert);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_COMPACTED_RECORDS_UPDATED_STR), totalCompactedRecordsUpdated);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_COMPACTED_STR), totalLogFilesCompacted);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_LOG_FILES_SIZE_STR), totalLogFilesSize);
+      metrics.registerGauge(getMetricsName(actionType, TOTAL_RECORDS_DELETED), totalRecordsDeleted);
+      if (config.isCompactionLogBlockMetricsOn()) {
+        long totalCorruptedLogBlocks = metadata.getTotalCorruptLogBlocks();
+        long totalRollbackLogBlocks = metadata.getTotalRollbackLogBlocks();
+        metrics.registerGauge(getMetricsName(actionType, TOTAL_CORRUPTED_LOG_BLOCKS_STR), totalCorruptedLogBlocks);
+        metrics.registerGauge(getMetricsName(actionType, TOTAL_ROLLBACK_LOG_BLOCKS_STR), totalRollbackLogBlocks);
+      }
     }
   }
 
@@ -270,7 +300,8 @@ public class HoodieMetrics {
     }
   }
 
-  String getMetricsName(String action, String metric) {
+  @VisibleForTesting
+  public String getMetricsName(String action, String metric) {
     return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
@@ -305,6 +336,20 @@ public class HoodieMetrics {
       LOG.info("Sending conflict resolution failure metric");
       conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
       conflictResolutionFailureCounter.inc();
+    }
+  }
+
+  public void emitCompactionRequested() {
+    if (config.isMetricsOn()) {
+      compactionRequestedCounter = getCounter(compactionRequestedCounter, compactionRequestedCounterName);
+      compactionRequestedCounter.inc();
+    }
+  }
+
+  public void emitCompactionCompleted() {
+    if (config.isMetricsOn()) {
+      compactionCompletedCounter = getCounter(compactionCompletedCounter, compactionCompletedCounterName);
+      compactionCompletedCounter.inc();
     }
   }
 

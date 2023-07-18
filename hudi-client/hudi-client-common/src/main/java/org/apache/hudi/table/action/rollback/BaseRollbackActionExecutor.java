@@ -26,6 +26,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -70,8 +71,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                     String instantTime,
                                     HoodieInstant instantToRollback,
                                     boolean deleteInstants,
-                                    boolean skipLocking) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
+                                    boolean skipLocking,
+                                    boolean isRestore) {
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking, isRestore);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -81,7 +83,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean skipLocking) {
+      boolean skipLocking, boolean isRestore) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.resolvedInstant = instantToRollback;
@@ -153,6 +155,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     });
   }
 
+  /**
+   * Validate commit sequence for rollback commits.
+   */
   private void validateRollbackCommitSequence() {
     // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
     // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
@@ -162,9 +167,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
       HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      // Check validity of completed commit timeline.
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
-      // this condition may not hold good for metadata table. since the order of commits applied to MDT is data table commits and the ordering could be different.
+      // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
       if ((instantTimeToRollback != null) && !commitTimeline.empty()
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
@@ -244,22 +250,21 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
 
-      // If publish the rollback to the timeline, we first write the rollback metadata
-      // to metadata table
+      // If publish the rollback to the timeline, we first write the rollback metadata to metadata table
+      // Then transition the inflight rollback to completed state.
       if (!skipTimelinePublish) {
         writeTableMetadata(rollbackMetadata);
-      }
-
-      // Then we delete the inflight instant in the data table timeline if enabled
-      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
-
-      // If publish the rollback to the timeline, we finally transition the inflight rollback
-      // to complete in the data table timeline
-      if (!skipTimelinePublish) {
         table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
             TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
+
+      // Commit to rollback instant files are deleted after the rollback commit is transitioned from inflight to completed
+      // If job were to fail after transitioning rollback from inflight to complete and before delete the instant files,
+      // then subsequent retries of the rollback for this instant will see if there is a completed rollback present for this instant
+      // and then directly delete the files and abort.
+      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), table.getMetaClient(), resolvedInstant);
+
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
@@ -271,19 +276,17 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
   /**
    * Delete Inflight instant if enabled.
-   *
    * @param deleteInstant Enable Deletion of Inflight instant
    * @param activeTimeline Hoodie active timeline
    * @param instantToBeDeleted Instant to be deleted
    */
-  protected void deleteInflightAndRequestedInstant(boolean deleteInstant,
-      HoodieActiveTimeline activeTimeline,
-      HoodieInstant instantToBeDeleted) {
+  public static void deleteInflightAndRequestedInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
+                                                       HoodieTableMetaClient metaClient, HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
       LOG.info("Deleting instant=" + instantToBeDeleted);
       activeTimeline.deletePending(instantToBeDeleted);
-      if (instantToBeDeleted.isInflight() && !table.getMetaClient().getTimelineLayoutVersion().isNullVersion()) {
+      if (instantToBeDeleted.isInflight() && !metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Delete corresponding requested instant
         instantToBeDeleted = new HoodieInstant(HoodieInstant.State.REQUESTED, instantToBeDeleted.getAction(),
             instantToBeDeleted.getTimestamp());

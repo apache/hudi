@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -85,6 +84,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
+
+  // The `shouldListLazily` variable controls how we initialize/refresh the TableFileIndex:
+  //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
+  //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
+  //        columns. And file slices fetching only happens for partitions satisfying the given filter.
+  //
+  // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
+  // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
   private final Path basePath;
@@ -145,18 +152,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    // The `shouldListLazily` variable controls how we initialize the TableFileIndex:
-    //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
-    //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
-    //        columns. And file slices fetching only happens for partitions satisfying the given filter.
-    //
-    // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
-    // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
-    if (shouldListLazily) {
-      this.tableMetadata = createMetadataTable(engineContext, metadataConfig, basePath);
-    } else {
-      doRefresh();
-    }
+    doRefresh();
   }
 
   protected abstract Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath);
@@ -379,7 +375,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
-    ensurePreloadedPartitions(getAllQueryPartitionPaths());
+    if (!shouldListLazily) {
+      ensurePreloadedPartitions(getAllQueryPartitionPaths());
+    }
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
@@ -450,8 +448,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       HoodieMetadataConfig metadataConfig,
       Path basePath
   ) {
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(), true);
     return newTableMetadata;
   }
 

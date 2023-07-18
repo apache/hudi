@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -38,6 +40,7 @@ import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,8 +79,8 @@ public class SparkValidatorUtils {
       SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
-      Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table);
-      Dataset<Row> afterState  = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
+      Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
+      Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
@@ -116,16 +119,34 @@ public class SparkValidatorUtils {
   /**
    * Get records from partitions modified as a dataset.
    * Note that this only works for COW tables.
+   *
+   * @param sqlContext          Spark {@link SQLContext} instance.
+   * @param partitionsAffected  A set of affected partitions.
+   * @param table               {@link HoodieTable} instance.
+   * @param newStructTypeSchema The {@link StructType} schema from after state.
+   * @return The records in Dataframe from committed files.
    */
   public static Dataset<Row> getRecordsFromCommittedFiles(SQLContext sqlContext,
-                                                          Set<String> partitionsAffected, HoodieTable table) {
-
+                                                          Set<String> partitionsAffected,
+                                                          HoodieTable table,
+                                                          StructType newStructTypeSchema) {
     List<String> committedFiles = partitionsAffected.stream()
         .flatMap(partition -> table.getBaseFileOnlyView().getLatestBaseFiles(partition).map(BaseFile::getPath))
         .collect(Collectors.toList());
 
     if (committedFiles.isEmpty()) {
-      return sqlContext.emptyDataFrame();
+      try {
+        return sqlContext.createDataFrame(
+            sqlContext.emptyDataFrame().rdd(),
+            AvroConversionUtils.convertAvroSchemaToStructType(
+                new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema()));
+      } catch (Exception e) {
+        LOG.warn("Cannot get table schema from before state.", e);
+        LOG.warn("Use the schema from after state (current transaction) to create the empty Spark "
+            + "dataframe: " + newStructTypeSchema);
+        return sqlContext.createDataFrame(
+            sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
+      }
     }
     return readRecordsForBaseFiles(sqlContext, committedFiles);
   }

@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -81,6 +82,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -92,6 +94,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -121,7 +124,7 @@ public class HiveTestUtil {
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
-  private static HiveSyncConfig hiveSyncConfig;
+  public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
@@ -261,6 +264,32 @@ public class HiveTestUtil {
     partitionToReplaceFileIds.put(partitions, new ArrayList<>());
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     createReplaceCommitFile(replaceCommitMetadata, instantTime);
+  }
+
+  public static void addRollbackInstantToTable(String instantTime, String commitToRollback)
+      throws IOException {
+    HoodieRollbackMetadata rollbackMetadata = HoodieRollbackMetadata.newBuilder()
+        .setVersion(1)
+        .setStartRollbackTime(instantTime)
+        .setTotalFilesDeleted(1)
+        .setTimeTakenInMillis(1000)
+        .setCommitsRollback(Collections.singletonList(commitToRollback))
+        .setPartitionMetadata(Collections.emptyMap())
+        .setInstantsRollback(Collections.emptyList())
+        .build();
+
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeRequestedRollbackFileName(instantTime),
+        "".getBytes());
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeInflightRollbackFileName(instantTime),
+        "".getBytes());
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeRollbackFileName(instantTime),
+        serializeRollbackMetadata(rollbackMetadata).get());
   }
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
@@ -521,21 +550,17 @@ public class HiveTestUtil {
   }
 
   public static void createCommitFile(HoodieCommitMetadata commitMetadata, String instantTime, String basePath) throws IOException {
-    byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeCommitFileName(instantTime));
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeCommitFileName(instantTime),
+        commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
-    byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeReplaceFileName(instantTime));
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeReplaceFileName(instantTime),
+        commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
   public static void createCommitFileWithSchema(HoodieCommitMetadata commitMetadata, String instantTime, boolean isSimpleSchema) throws IOException {
@@ -545,19 +570,23 @@ public class HiveTestUtil {
 
   private static void createCompactionCommitFile(HoodieCommitMetadata commitMetadata, String instantTime)
       throws IOException {
-    byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeCommitFileName(instantTime));
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeCommitFileName(instantTime),
+        commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
   private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
       throws IOException {
-    byte[] bytes = deltaCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeDeltaFileName(deltaCommitTime));
+    createMetaFile(
+        basePath,
+        HoodieTimeline.makeDeltaFileName(deltaCommitTime),
+        deltaCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static void createMetaFile(String basePath, String fileName, byte[] bytes)
+      throws IOException {
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();

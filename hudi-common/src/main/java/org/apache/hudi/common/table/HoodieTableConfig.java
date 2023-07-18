@@ -265,12 +265,17 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
+  // Number of retries while reading the properties file to deal with parallel updates
+  private static final int MAX_READ_RETRIES = 5;
+  // Delay between retries while reading the properties file
+  private static final int READ_RETRY_DELAY_MSEC = 1000;
+
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      fetchConfigs(fs, metaPath);
+      this.props = fetchConfigs(fs, metaPath);
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
@@ -291,8 +296,6 @@ public class HoodieTableConfig extends HoodieConfig {
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
     }
-    ValidationUtils.checkArgument(contains(TYPE) && contains(NAME),
-        "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
   }
 
   private static Properties getOrderedPropertiesWithTableChecksum(Properties props) {
@@ -334,21 +337,42 @@ public class HoodieTableConfig extends HoodieConfig {
     super();
   }
 
-  private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
+  private static TypedProperties fetchConfigs(FileSystem fs, String metaPath) throws IOException {
     Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    try (FSDataInputStream is = fs.open(cfgPath)) {
-      props.load(is);
-    } catch (IOException ioe) {
-      if (!fs.exists(cfgPath)) {
-        LOG.warn("Run `table recover-configs` if config update/delete failed midway. Falling back to backed up configs.");
-        // try the backup. this way no query ever fails if update fails midway.
-        Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
-        try (FSDataInputStream is = fs.open(backupCfgPath)) {
+    Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
+    int readRetryCount = 0;
+    boolean found = false;
+
+    TypedProperties props = new TypedProperties();
+    while (readRetryCount++ < MAX_READ_RETRIES) {
+      for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
+        // Read the properties and validate that it is a valid file
+        try (FSDataInputStream is = fs.open(path)) {
+          props.clear();
           props.load(is);
+          found = true;
+          ValidationUtils.checkArgument(validateChecksum(props));
+          return props;
+        } catch (IOException e) {
+          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
+        } catch (IllegalArgumentException e) {
+          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
         }
-      } else {
-        throw ioe;
       }
+
+      // Failed to read all files so wait before retrying. This can happen in cases of parallel updates to the properties.
+      try {
+        Thread.sleep(READ_RETRY_DELAY_MSEC);
+      } catch (InterruptedException e) {
+        LOG.warn("Interrupted while waiting");
+      }
+    }
+
+    // If we are here then after all retries either no hoodie.properties was found or only an invalid file was found.
+    if (found) {
+      throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+    } else {
+      throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
   }
 
@@ -385,25 +409,27 @@ public class HoodieTableConfig extends HoodieConfig {
       // 0. do any recovery from prior attempts.
       recoverIfNeeded(fs, cfgPath, backupCfgPath);
 
-      // 1. backup the existing properties.
-      try (FSDataInputStream in = fs.open(cfgPath);
-           FSDataOutputStream out = fs.create(backupCfgPath, false)) {
-        FileIOUtils.copy(in, out);
+      // 1. Read the existing config
+      TypedProperties props = fetchConfigs(fs, metadataFolder.toString());
+
+      // 2. backup the existing properties.
+      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+        storeProperties(props, out);
       }
-      /// 2. delete the properties file, reads will go to the backup, until we are done.
+
+      // 3. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
-      // 3. read current props, upsert and save back.
+
+      // 4. Upsert and save back.
       String checksum;
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, true)) {
-        Properties props = new TypedProperties();
-        props.load(in);
+      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
+
       // 4. verify and remove backup.
       try (FSDataInputStream in = fs.open(cfgPath)) {
-        Properties props = new TypedProperties();
+        props.clear();
         props.load(in);
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
@@ -412,6 +438,8 @@ public class HoodieTableConfig extends HoodieConfig {
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
+
+      // 5. delete the backup properties file
       fs.delete(backupCfgPath, false);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
@@ -710,8 +738,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns true if metadata table has been created and is being used for this dataset, else returns false.
    */
-  public boolean isMetadataTableEnabled() {
-    return isMetadataPartitionEnabled(MetadataPartitionType.FILES);
+  public boolean isMetadataTableAvailable() {
+    return isMetadataPartitionAvailable(MetadataPartitionType.FILES);
   }
 
   /**
@@ -720,7 +748,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @param partition The partition to check
    * @returns true if the specific partition has been initialized, else returns false.
    */
-  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
     return getMetadataPartitions().contains(partition.getPartitionPath());
   }
 
@@ -769,6 +797,18 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
     LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
+  }
+
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {
+    setMetadataPartitionsInflight(metaClient, Arrays.stream(partitionTypes).collect(Collectors.toList()));
+  }
+
+  /**
+   * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
+   * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
+   */
+  public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
+    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, false);
   }
 
   /**

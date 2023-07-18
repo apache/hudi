@@ -54,6 +54,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.HBASE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
+import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 
 /**
@@ -74,7 +75,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name())
+          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name())
       .withDocumentation(HoodieIndex.IndexType.class);
 
 
@@ -257,6 +258,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
+  public static final ConfigProperty<String> RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
+      .key("hoodie.record.index.update.partition.path")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for record index.");
+
   public static final ConfigProperty<String> GLOBAL_INDEX_RECONCILE_PARALLELISM = ConfigProperty
       .key("hoodie.global.index.reconcile.parallelism")
       .defaultValue("60")
@@ -341,6 +348,21 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Control if buckets should be merged when using consistent hashing bucket index"
           + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
           + "as a merge candidate.");
+
+  public static final ConfigProperty<String> RECORD_INDEX_USE_CACHING = ConfigProperty
+      .key("hoodie.record.index.use.caching")
+      .defaultValue("true")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is RECORD_INDEX."
+          + "When true, the input RDD will be cached to speed up index lookup by reducing IO "
+          + "for computing parallelism or affected partitions");
+
+  public static final ConfigProperty<String> RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE = ConfigProperty
+      .key("hoodie.record.index.input.storage.level")
+      .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
+      .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -633,7 +655,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
+    public Builder withGlobalBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
       return this;
     }
@@ -660,6 +682,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
       hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
+    public Builder withRecordIndexUpdatePartitionPath(boolean updatePartitionPath) {
+      hoodieIndexConfig.setValue(RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
       return this;
     }
 
@@ -695,6 +722,16 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withRecordKeyField(String keyField) {
       hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      return this;
+    }
+
+    public Builder recordIndexUseCaching(boolean useCaching) {
+      hoodieIndexConfig.setValue(RECORD_INDEX_USE_CACHING, String.valueOf(useCaching));
+      return this;
+    }
+
+    public Builder withRecordIndexInputStorageLevel(String level) {
+      hoodieIndexConfig.setValue(RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE, level);
       return this;
     }
 

@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
@@ -28,7 +27,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.{getLastCleanMetadata, getLastCommitMetadata}
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -418,6 +417,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+          Seq(2, "l4", "v1", "2021", "10", "02"),
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
 

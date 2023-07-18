@@ -18,17 +18,20 @@
 
 package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,23 +51,26 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
+  private final Option<Schema> sourceSchemaOpt;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
     for (Transformer transformer : transformersList) {
       this.transformers.add(new TransformerInfo(transformer));
     }
+    this.sourceSchemaOpt = Option.empty();
   }
 
   /**
-   * Creates a chained transformer using the input transformer class names. Refer {@link HoodieDeltaStreamer.Config#transformerClassNames}
+   * Creates a chained transformer using the input transformer class names. Refer {@link HoodieStreamer.Config#transformerClassNames}
    * for more information on how the transformers can be configured.
    *
-   * @param configuredTransformers List of configured transformer class names.
-   * @param ignore Added for avoiding two methods with same erasure. Ignored.
+   * @param sourceSchemaOpt                   Schema from the dataset the transform is applied to
+   * @param configuredTransformers            List of configured transformer class names.
    */
-  public ChainedTransformer(List<String> configuredTransformers, int... ignore) {
+  public ChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt) {
     this.transformers = new ArrayList<>(configuredTransformers.size());
+    this.sourceSchemaOpt = sourceSchemaOpt;
 
     Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
@@ -110,6 +116,30 @@ public class ChainedTransformer implements Transformer {
     } else {
       identifiers.add(id);
     }
+  }
+
+  private StructType getExpectedTransformedSchema(TransformerInfo transformerInfo, JavaSparkContext jsc, SparkSession sparkSession,
+                                                  Option<StructType> incomingStructOpt, Option<Dataset<Row>> rowDatasetOpt, TypedProperties properties) {
+    if (!sourceSchemaOpt.isPresent() && !rowDatasetOpt.isPresent()) {
+      throw new HoodieTransformPlanException("Either source schema or source dataset should be available to fetch the schema");
+    }
+    StructType incomingStruct = incomingStructOpt
+        .orElse(sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
+    try {
+      return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
+    } catch (Exception e) {
+      throw e;
+    }
+  }
+
+  @Override
+  public StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    Option<StructType> expectedTargetStructOpt = Option.ofNullable(incomingStruct);
+    for (TransformerInfo transformerInfo : transformers) {
+      expectedTargetStructOpt = Option.of(
+          getExpectedTransformedSchema(transformerInfo, jsc, sparkSession, expectedTargetStructOpt, Option.empty(), properties));
+    }
+    return expectedTargetStructOpt.get();
   }
 
   protected static class TransformerInfo {

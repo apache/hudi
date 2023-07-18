@@ -19,7 +19,10 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
+
+import org.apache.hadoop.conf.Configuration
 
 class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
@@ -170,7 +173,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}')").collect().length)
 
       checkException(s"call run_compaction(op => 'run', path => '${tmp.getCanonicalPath}', timestamp => 12345L)")(
-        s"Compaction instant: 12345 is not found in ${tmp.getCanonicalPath}, Available pending compaction instants are:  "
+        s"specific 12345 instants is not exist"
       )
     }
   }
@@ -196,13 +199,9 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a2', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a3', 10, 1000)")
-
-      spark.sql(s"insert into $tableName1 values(1, 'a4', 10, 1000)")
-
+      spark.sql(s"update $tableName1 set name = 'a2' where id = 1")
+      spark.sql(s"update $tableName1 set name = 'a3' where id = 1")
+      spark.sql(s"update $tableName1 set name = 'a4' where id = 1")
       assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
     }
   }
@@ -228,8 +227,8 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a3', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
         val result1 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
@@ -239,7 +238,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           .collect()
         assertResult(0)(result1.length)
 
-        spark.sql(s"insert into $tableName values(1, 'a4', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a4' where id = 1")
         val result2 = spark.sql(
           s"""call run_compaction(table => '$tableName', op => 'run', options => "
              | hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,
@@ -247,6 +246,80 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
              |")""".stripMargin)
           .collect()
         assertResult(1)(result2.length)
+      }
+    }
+  }
+
+  test("Test Call run_compaction Procedure with specific instants") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+
+        spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
+
+        val metaClient = HoodieTableMetaClient.builder.setConf(new Configuration).setBasePath(tmp.getCanonicalPath).build
+        val instants = metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants
+        assertResult(1)(instants.size())
+        val ts = instants.get(0).getTimestamp
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute', instants => '$ts')").collect().length)
+
+        checkExceptionContain(
+          s"call run_compaction(table => '$tableName', op => 'execute', instants => '000000')"
+        )("specific 000000 instants is not exist")
+      }
+    }
+  }
+
+  test("Test Call run_compaction Procedure with operation") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+
+        assertResult(0)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')").collect().length)
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
+
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'scheduleAndExecute')").collect().length)
       }
     }
   }

@@ -113,12 +113,12 @@ public class BootstrapExecutorUtils implements Serializable {
 
   private final String bootstrapBasePath;
 
-  public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
+  public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
 
   /**
    * Bootstrap Executor.
    *
-   * @param cfg        DeltaStreamer Config
+   * @param cfg        Hudi Streamer Config
    * @param jssc       Java Spark Context
    * @param fs         File System
    * @param properties Bootstrap Writer Properties

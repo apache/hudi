@@ -319,18 +319,18 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         .mode(SaveMode.Overwrite)
         .save(basePath)
 
+      fileIndex.refresh()
+
+      val partitionFilter2 = And(
+        EqualTo(attribute("dt"), literal("2021/03/01")),
+        EqualTo(attribute("hh"), literal("10"))
+      )
+
       // NOTE: That if file-index is in lazy-listing mode and we can't parse partition values, there's no way
       //       to recover from this since Spark by default have to inject partition values parsed from the partition paths.
       if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) {
-        assertThrows(classOf[HoodieException]) { fileIndex.refresh() }
+        assertThrows(classOf[HoodieException]) { fileIndex.listFiles(Seq(partitionFilter2), Seq.empty) }
       } else {
-        fileIndex.refresh()
-
-        val partitionFilter2 = And(
-          EqualTo(attribute("dt"), literal("2021/03/01")),
-          EqualTo(attribute("hh"), literal("10"))
-        )
-
         val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
 
         assertEquals(1, partitionAndFilesNoPruning.size)
@@ -483,8 +483,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     // Test getting partition paths in a subset of directories
     val metadata = HoodieTableMetadata.create(context,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
-      metaClient.getBasePathV2.toString,
-      metaClient.getBasePathV2.getParent.toString)
+      metaClient.getBasePathV2.toString)
     assertEquals(
       Seq("1/2023/01/01", "1/2023/01/02"),
       metadata.getPartitionPathWithPathPrefixes(Seq("1")).sorted)

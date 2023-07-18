@@ -27,11 +27,11 @@ import org.apache.hudi.common.config.HoodieConfig;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * DeltaStreamer SQL Transformer Configs
+ * Hudi Streamer SQL Transformer Configs
  */
 @Immutable
-@ConfigClassProperty(name = "DeltaStreamer SQL Transformer Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+@ConfigClassProperty(name = "Hudi Streamer SQL Transformer Configs",
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     description = "Configurations controlling the behavior of SQL transformer in Deltastreamer.")
 public class SqlTransformerConfig extends HoodieConfig {
   public static final ConfigProperty<String> TRANSFORMER_SQL_FILE = ConfigProperty

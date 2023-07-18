@@ -31,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 @ConfigClassProperty(name = "S3 Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of S3 source in Deltastreamer.")
 public class S3SourceConfig extends HoodieConfig {
@@ -65,7 +65,7 @@ public class S3SourceConfig extends HoodieConfig {
       .key(S3_SOURCE_PREFIX + "queue.max.messages.per.batch")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Max messages for each batch of delta streamer run. Source will process these maximum number of message at a time.");
+      .withDocumentation("Max messages for each batch of Hudi Streamer run. Source will process these maximum number of message at a time.");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.max.messages.per.request")

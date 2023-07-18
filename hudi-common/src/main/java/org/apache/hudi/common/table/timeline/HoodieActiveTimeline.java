@@ -76,7 +76,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
 
-  private static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
+  public static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
       add(HoodieTimeline.INIT_INSTANT_TS);
       add(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
@@ -480,7 +480,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
   }
-
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT

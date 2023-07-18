@@ -48,7 +48,6 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -145,7 +144,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -160,7 +158,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithWriterFinishingFirst() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
     // is inflight, while the regular writer is updating metadata table.
@@ -187,8 +184,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
@@ -209,7 +205,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);
 
-    upsertToTable(metadataConfig, tableName);
+    HoodieMetadataConfig metadataConfigColStats = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(true).build();
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should not be rolled back
@@ -218,7 +215,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // Simulate heartbeat timeout
     heartbeatClient.stop(mdtCommitTime);
-    upsertToTable(metadataConfig, tableName);
+    upsertToTable(metadataConfigColStats, tableName);
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should be rolled back now
@@ -233,7 +230,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerWithWriterFinishingLast() throws IOException {
     // Test the case where a regular write updating the metadata table is in progress,
     // i.e., a delta commit in the metadata table is inflight, and the async indexer
@@ -253,8 +249,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString(),
-        getWriteConfigBuilder(basePath(), tableName).build().getSpillableMapBasePath());
+        context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
         .filter(i -> i.getTimestamp().equals(commitTime))
@@ -264,7 +259,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // Run async indexer, creating a new indexing instant in the data table and a new delta commit
     // in the metadata table, with the suffix "004"
     HoodieIndexer.Config config = new HoodieIndexer.Config();
-    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
     config.tableName = tableName;
     config.indexTypes = COLUMN_STATS.name();
@@ -306,7 +301,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
   @ParameterizedTest
   @MethodSource("colStatsFileGroupCountParams")
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testColStatsFileGroupCount(int colStatsFileGroupCount) {
     TestHoodieIndexer.colStatsFileGroupCount = colStatsFileGroupCount;
     String tableName = "indexer_test";
@@ -335,7 +329,6 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
    * with regular writers.
    */
   @Test
-  @Disabled("HUDI-6332") // Investigate and fix async indexer colstats index initialization
   public void testIndexerForExceptionWithNonFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -346,7 +339,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // build indexer config which has only column stats enabled. expected to throw exception.
     HoodieIndexer.Config config = new HoodieIndexer.Config();
-    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
     config.tableName = tableName;
     config.indexTypes = COLUMN_STATS.name();
@@ -392,7 +385,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
   private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName) {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
-    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
     config.tableName = tableName;
     config.indexTypes = partitionTypeToIndex.name();
@@ -448,7 +441,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // build indexer config which has only column_stats enabled (files is enabled by default)
     HoodieIndexer.Config config = new HoodieIndexer.Config();
-    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("streamer-config/indexer.properties")).getPath();
     config.basePath = basePath();
     config.tableName = tableName;
     config.indexTypes = COLUMN_STATS.name();
@@ -498,7 +491,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metadataPartitionExists(basePath(), context(), FILES));
 
     // build indexer config which has only bloom_filters enabled
-    HoodieIndexer.Config config = getHoodieIndexConfig(BLOOM_FILTERS.name(), SCHEDULE_AND_EXECUTE, "delta-streamer-config/indexer-only-bloom.properties", tableName);
+    HoodieIndexer.Config config = getHoodieIndexConfig(BLOOM_FILTERS.name(), SCHEDULE_AND_EXECUTE, "streamer-config/indexer-only-bloom.properties", tableName);
     // start the indexer and validate bloom_filters index is also complete
     HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
     assertEquals(0, indexer.start(0));
@@ -510,7 +503,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(bloomIndexInstant.isPresent());
 
     // build indexer config which has only column_stats enabled
-    config = getHoodieIndexConfig(COLUMN_STATS.name(), SCHEDULE, "delta-streamer-config/indexer.properties", tableName);
+    config = getHoodieIndexConfig(COLUMN_STATS.name(), SCHEDULE, "streamer-config/indexer.properties", tableName);
 
     // schedule indexing and validate column_stats index is also initialized
     // and indexing.requested instant is present
@@ -522,7 +515,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // drop column_stats and validate indexing.requested is also removed from the timeline
     // and completed indexing instant corresponding to bloom_filters index is still present
-    dropIndexAndAssert(COLUMN_STATS, "delta-streamer-config/indexer.properties", Option.empty(), tableName);
+    dropIndexAndAssert(COLUMN_STATS, "streamer-config/indexer.properties", Option.empty(), tableName);
 
     // check other partitions are intact
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -531,7 +524,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metadataPartitionExists(basePath(), context(), BLOOM_FILTERS));
 
     // drop bloom filter partition. timeline files should not be deleted since the index building is complete.
-    dropIndexAndAssert(BLOOM_FILTERS, "delta-streamer-config/indexer-only-bloom.properties", bloomIndexInstant, tableName);
+    dropIndexAndAssert(BLOOM_FILTERS, "streamer-config/indexer-only-bloom.properties", bloomIndexInstant, tableName);
   }
 
   private void dropIndexAndAssert(MetadataPartitionType indexType, String resourceFilePath, Option<HoodieInstant> completedIndexInstant, String tableName) {

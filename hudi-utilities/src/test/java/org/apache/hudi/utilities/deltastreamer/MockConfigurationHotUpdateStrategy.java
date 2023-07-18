@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.streamer.ConfigurationHotUpdateStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

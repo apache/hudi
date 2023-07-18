@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -46,6 +47,7 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
 /**
@@ -66,8 +68,8 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
   --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
   --driver-memory 4g \
   --executor-memory 4g \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-  absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
+ --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
   --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
   --op INSERT \
   --hoodie-conf hoodie.deltastreamer.source.hoodieincr.file.format="parquet" \
@@ -147,7 +149,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     if (cloudObjectMetadataDF.isEmpty()) {
       LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-              + queryInfo.getEndInstant());
+          + queryInfo.getEndInstant());
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
@@ -163,12 +165,15 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private QueryInfo getQueryInfo(Option<String> lastCkptStr) {
     Option<String> beginInstant = getBeginInstant(lastCkptStr);
 
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     Pair<String, Pair<String, String>> queryInfoPair = calculateBeginAndEndInstants(
-        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy
-    );
+        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
 
-    QueryInfo queryInfo = new QueryInfo(queryInfoPair.getLeft(), queryInfoPair.getRight().getLeft(),
-            queryInfoPair.getRight().getRight());
+    QueryInfo queryInfo = new QueryInfo(
+        queryInfoPair.getLeft(),
+        queryInfoPair.getRight().getLeft(),
+        queryInfoPair.getRight().getRight(),
+        handlingMode);
 
     if (LOG.isDebugEnabled()) {
       queryInfo.logDetails();

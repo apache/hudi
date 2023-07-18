@@ -60,6 +60,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
+import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -105,6 +106,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 
 /**
  * Bunch of helper methods.
@@ -192,11 +194,21 @@ public class UtilHelpers {
 
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, boolean isErrorTableWriterEnabled) throws IOException {
+  public static StructType getSourceSchema(SchemaProvider schemaProvider) {
+    if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
+      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema());
+    }
+    return null;
+  }
+
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Option<Schema> sourceSchema,
+                                                      boolean isErrorTableWriterEnabled) throws IOException {
+
     try {
-      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : 
-          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames) : new ChainedTransformer(classNames)
-      );
+      Function<List<String>, Transformer> chainedTransformerFunction = classNames ->
+          isErrorTableWriterEnabled ? new ErrorTableAwareChainedTransformer(classNames, sourceSchema)
+              : new ChainedTransformer(classNames, sourceSchema);
+      return classNamesOpt.map(classNames -> classNames.isEmpty() ? null : chainedTransformerFunction.apply(classNames));
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNamesOpt.get(), e);
     }
@@ -336,7 +348,9 @@ public class UtilHelpers {
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
-    sparkConf.set("spark.executor.memory", sparkMemory);
+    if (sparkMemory != null) {
+      sparkConf.set("spark.executor.memory", sparkMemory);
+    }
     return new JavaSparkContext(sparkConf);
   }
 
@@ -583,9 +597,6 @@ public class UtilHelpers {
 
   public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run clustering without any completed commits");
-    }
     Schema schema = schemaResolver.getTableAvroSchema(false);
     return schema.toString();
   }

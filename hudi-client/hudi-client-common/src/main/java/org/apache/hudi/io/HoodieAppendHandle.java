@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
@@ -258,6 +257,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsWritten++;
       } else {
         finalRecordOpt = Option.empty();
+        // Clear the new location as the record was deleted
+        hoodieRecord.unseal();
+        hoodieRecord.clearNewLocation();
+        hoodieRecord.seal();
         recordsDeleted++;
       }
 
@@ -305,7 +308,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
     this.writeStatus.setFileId(fileId);
     this.writeStatus.setPartitionPath(partitionPath);
     this.writeStatus.setStat(stat);
@@ -560,7 +563,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     // update the new location of the record, so we know where to find it next
     if (needsUpdateLocation()) {
       record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.setNewLocation(newRecordLocation);
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.

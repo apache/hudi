@@ -190,7 +190,7 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(true)
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
-      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
@@ -424,6 +424,13 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+      .stringType()
+      .defaultValue("SIMPLE")
+      .withDescription("Type of bucket index engine. Available options: [SIMPLE | CONSISTENT_HASHING]");
 
   @AdvancedConfig
   public static final ConfigOption<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigOptions

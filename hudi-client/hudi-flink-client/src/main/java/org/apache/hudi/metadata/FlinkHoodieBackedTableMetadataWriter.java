@@ -32,14 +32,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,49 +50,37 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
  * Flink hoodie backed table metadata writer.
  */
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
-
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
-
   private transient BaseHoodieWriteClient writeClient;
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty());
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty());
   }
 
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, actionMetadata, Option.empty());
-  }
-
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inFlightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, actionMetadata, inFlightInstantTimestamp);
+        conf, writeConfig, EAGER, context, inFlightInstantTimestamp);
   }
 
-  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
-                                                                                HoodieWriteConfig writeConfig,
-                                                                                HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                                HoodieEngineContext context,
-                                                                                Option<T> actionMetadata,
-                                                                                Option<String> inFlightInstantTimestamp) {
+  public static HoodieTableMetadataWriter create(Configuration conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, actionMetadata, inFlightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, inFlightInstantTimestamp);
   }
 
-  <T extends SpecificRecordBase> FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
-                                                                      HoodieWriteConfig writeConfig,
-                                                                      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                      HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata,
-                                                                      Option<String> inFlightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, actionMetadata, inFlightInstantTimestamp);
+  FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inFlightInstantTimestamp) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
   }
 
   @Override
@@ -107,6 +96,17 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+    doCommit(instantTime, partitionRecordsMap, false);
+  }
+
+  @Override
+  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
+    partitionRecordsMap.put(partitionType, records);
+    doCommit(instantTime, partitionRecordsMap, true);
+  }
+
+  private void doCommit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
@@ -122,36 +122,34 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
-        writeClient.startCommitWithTime(instantTime);
-        metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+        LOG.info("New commit at " + instantTime + " being applied to MDT.");
       } else {
-        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
-        if (alreadyCompletedInstant.isPresent()) {
-          // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
-          // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-          // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-          // are upserts to metadata table and so only a new delta commit will be created.
-          // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
-          // already part of completed commit. So, we have to manually remove the completed instant and proceed.
-          // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-          HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant.get());
-          metadataMetaClient.reloadActiveTimeline();
-        }
-        // If the alreadyCompletedInstant is empty, that means there is a requested or inflight
-        // instant with the same instant time.  This happens for data table clean action which
-        // reuses the same instant time without rollback first.  It is a no-op here as the
-        // clean plan is the same, so we don't need to delete the requested and inflight instant
-        // files in the active timeline.
+        // this code path refers to a re-attempted commit that:
+        //   1. got committed to metadata table, but failed in datatable.
+        //   2. failed while committing to metadata table
+        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+        // are upserts to metadata table and so only a new delta commit will be created.
+        // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
+        // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+            .lastInstant();
+        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
+            alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
 
-        // The metadata writer uses LAZY cleaning strategy without auto commit,
-        // write client then checks the heartbeat expiration when committing the instant,
-        // sets up the heartbeat explicitly to make the check pass.
-        writeClient.getHeartbeatClient().start(instantTime);
+        // Rollback the previous commit
+        if (!writeClient.rollback(instantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
+        }
+        metadataMetaClient.reloadActiveTimeline();
       }
 
-      List<WriteStatus> statuses = preppedRecordList.size() > 0
-          ? writeClient.upsertPreppedRecords(preppedRecordList, instantTime)
-          : Collections.emptyList();
+      writeClient.startCommitWithTime(instantTime);
+      metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+
+      List<WriteStatus> statuses = isInitializing
+          ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
+          : writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
       // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
       writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
