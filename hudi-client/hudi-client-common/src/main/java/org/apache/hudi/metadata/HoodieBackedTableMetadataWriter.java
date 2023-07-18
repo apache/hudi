@@ -431,6 +431,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             + " bootstrap failed for " + metadataMetaClient.getBasePath(), e);
       }
 
+      LOG.info(String.format("Initializing %s index with %d mappings and %d file groups.", partitionType.name(), fileGroupCountAndRecordsPair.getKey(),
+          fileGroupCountAndRecordsPair.getValue().count()));
+
       // Generate the file groups
       final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
       ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionType.name() + " should be > 0");
