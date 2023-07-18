@@ -4,6 +4,23 @@ keywords: [hudi, streamer, hoodiestreamer]
 ---
 
 ## Hudi Streamer
+:::danger Breaking Change
+
+The following classes were renamed and relocated to org.apache.hudi.utilities.streamer package.
+- DeltastreamerMultiWriterCkptUpdateFunc is renamed to StreamerMultiWriterCkptUpdateFunc
+- DeltaSync is renamed to StreamSync
+- HoodieDeltaStreamer is renamed to HoodieStreamer
+- HoodieDeltaStreamerMetrics is renamed to HoodieStreamerMetrics
+- HoodieMultiTableDeltaStreamer is renamed to HoodieMultiTableStreamer
+
+The following classes were relocated to org.apache.hudi.utilities.streamer package
+- NoNewDataTerminationStrategy.
+- PostWriteTerminationStrategy.
+
+To maintain backward compatiblity, the original classes corresponding to the classes listed above are still present in
+the org.apache.hudi.utilities.deltastreamer package.
+
+:::
 
 The `HoodieStreamer` utility (part of `hudi-utilities-bundle`) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
