@@ -32,7 +32,7 @@ public class TestSlashEncodedMonthPartitionValueExtractor {
   public void testExtractPartitionValuesInPath_ValidPath() {
     // Given
     String validPartitionPath = "2021/07";
-    SlashEncodedYearMonthPartitionValueExtractor extractor = new SlashEncodedYearMonthPartitionValueExtractor();
+    SlashEncodedMonthPartitionValueExtractor extractor = new SlashEncodedMonthPartitionValueExtractor();
 
     // When
     List<String> result = extractor.extractPartitionValuesInPath(validPartitionPath);
@@ -45,7 +45,7 @@ public class TestSlashEncodedMonthPartitionValueExtractor {
   public void testExtractPartitionValuesInPath_InvalidPath() {
     // Given
     String invalidPartitionPath = "2021";
-    SlashEncodedYearMonthPartitionValueExtractor extractor = new SlashEncodedYearMonthPartitionValueExtractor();
+    SlashEncodedMonthPartitionValueExtractor extractor = new SlashEncodedMonthPartitionValueExtractor();
 
     // Then
     assertThrows(IllegalArgumentException.class, () -> {
