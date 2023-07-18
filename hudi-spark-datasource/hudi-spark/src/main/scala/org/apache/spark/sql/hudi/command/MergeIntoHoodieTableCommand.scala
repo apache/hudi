@@ -622,6 +622,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
+    val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_MERGE_WRITES.key(),
+      ENABLE_OPTIMIZED_SQL_MERGE_WRITES.defaultValue())
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -630,7 +632,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      KEYGENERATOR_CLASS_NAME.key -> classOf[MergeIntoKeyGenerator].getCanonicalName,
+      KEYGENERATOR_CLASS_NAME.key -> (if (enableOptimizedMerge == "true") {
+        classOf[MergeIntoKeyGenerator].getCanonicalName
+      } else {
+        classOf[SqlKeyGenerator].getCanonicalName
+      }),
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
@@ -653,7 +659,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
-      HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY -> sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_MERGE_WRITES.key(), ENABLE_OPTIMIZED_SQL_MERGE_WRITES.defaultValue()),
+      HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY -> enableOptimizedMerge,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 
