@@ -74,6 +74,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.sql.write.operation=upsert")
           spark.sql("set hoodie.schema.on.read.enable=true")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
@@ -134,6 +135,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
           spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
           spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
+          spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
         }
       }
     })
@@ -235,6 +237,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set hoodie.sql.write.operation=upsert")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
           spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
@@ -327,6 +330,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
+      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     })
   }
 
@@ -337,6 +341,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set hoodie.sql.write.operation=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -353,7 +358,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(
             s"""
                | insert into $tableName values
-               | (1,3,'李明', '读书', 100,180.0001,99.0001,'2021-12-25', '2021-12-26')
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
                |""".stripMargin)
           spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
 
@@ -361,7 +366,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(
             s"""
                | insert into $tableName values
-               | (1,3,'李明', '读书', 100,180.0001,99.0001,'2021-12-26', '2021-12-26')
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
                |""".stripMargin)
 
           // alter date to string
@@ -377,6 +382,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
+      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     })
   }
 
@@ -516,6 +522,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set hoodie.sql.write.operation=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -594,6 +601,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
+      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
     })
   }
 

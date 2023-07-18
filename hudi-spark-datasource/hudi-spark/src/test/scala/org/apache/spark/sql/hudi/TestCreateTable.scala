@@ -409,6 +409,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val parentPath = tmp.getCanonicalPath
       val tableName1 = generateTableName
+      spark.sql("set hoodie.sql.write.operation=upsert")
       spark.sql(
         s"""
            |create table $tableName1 (
@@ -467,6 +468,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         Seq(1, "a2", 1100)
       )
     }
+    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
   }
 
   test("Test Create ro/rt Table In The Wrong Way") {

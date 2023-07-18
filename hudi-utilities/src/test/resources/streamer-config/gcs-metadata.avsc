@@ -22,11 +22,13 @@
     "fields": [
         {
             "name": "_row_key",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "partition_path",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "timestamp",
@@ -34,75 +36,93 @@
         },
         {
             "name": "bucket",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "contentLanguage",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "contentType",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "crc32c",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "etag",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "generation",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "id",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "kind",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "md5Hash",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "mediaLink",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "metageneration",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "name",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "selfLink",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "size",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "storageClass",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "timeCreated",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "timeStorageClassUpdated",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         },
         {
             "name": "updated",
-            "type": "string"
+            "type": ["null", "string"],
+            "default": null
         }
     ]
 }

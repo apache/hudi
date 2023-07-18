@@ -78,8 +78,8 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
     Path basePath = new Path(datasetBasePath);
-    FileSystem fs = basePath.getFileSystem(hadoopConf.get());
     if (assumeDatePartitioning) {
+      FileSystem fs = basePath.getFileSystem(hadoopConf.get());
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
