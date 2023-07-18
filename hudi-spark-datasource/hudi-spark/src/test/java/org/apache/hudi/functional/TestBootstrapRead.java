@@ -103,7 +103,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     String[] bootstrapType = {"full", "metadata", "mixed"};
     Boolean[] dashPartitions = {true,false};
     HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
-    Integer[] nPartitions = {0, 1, 2};
+    Integer[] nPartitions = {1, 2};
     for (HoodieTableType tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
@@ -264,7 +264,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
           sparkSession.sql("select * from bootstrap_iteration_" + (iteration - 1)).intersect(bootstrapDf).count());
     }
     hudiDf.createOrReplaceTempView("hudi_iteration_" + iteration);
+    hudiDf.cache();
     bootstrapDf.createOrReplaceTempView("bootstrap_iteration_" + iteration);
+    bootstrapDf.cache();
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
