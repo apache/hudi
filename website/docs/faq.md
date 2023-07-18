@@ -111,7 +111,7 @@ for even more flexibility and get away from Hive-style partition evol route.
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [Hudi Streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -135,13 +135,13 @@ Limitations:
 Note that currently the reading realtime view natively out of the Spark datasource is not supported. Please use the Hive path below
 ```
 
-if Hive Sync is enabled in the [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable), the dataset is available in Hive as a couple of tables, that can now be read using HiveQL, Presto or SparkSQL. See [here](https://hudi.apache.org/docs/querying_data/) for more.
+if Hive Sync is enabled in the [Hudi Streamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable), the dataset is available in Hive as a couple of tables, that can now be read using HiveQL, Presto or SparkSQL. See [here](https://hudi.apache.org/docs/querying_data/) for more.
 
 ### How does Hudi handle duplicate record keys in an input?
 
 When issuing an `upsert` operation on a dataset and the batch of records provided contains multiple entries for a given key, then all of them are reduced into a single final value by repeatedly calling payload class's [preCombine()](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java#L40) method . By default, we pick the record with the greatest value (determined by calling .compareTo()) giving latest-write-wins style semantics. [This FAQ entry](https://hudi.apache.org/learn/faq#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) shows the interface for HoodieRecordPayload if you are interested.
 
-For an insert or bulk_insert operation, no such pre-combining is performed. Thus, if your input contains duplicates, the dataset would also contain duplicates. If you don't want duplicate records either issue an upsert or consider specifying option to de-duplicate input in either [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) or [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L229).
+For an insert or bulk_insert operation, no such pre-combining is performed. Thus, if your input contains duplicates, the dataset would also contain duplicates. If you don't want duplicate records either issue an upsert or consider specifying option to de-duplicate input in either [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) or [Hudi Streamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L229).
 
 ### Can I implement my own logic for how input records are merged with record on storage?
 
@@ -214,7 +214,7 @@ Hudi provides built in support for rewriting your entire dataset into Hudi one-t
 
 ### How can I pass hudi configurations to my spark job?
 
-Hudi configuration options covering the datasource and low level Hudi write client (which both deltastreamer & datasource internally call) are [here](https://hudi.apache.org/docs/configurations/). Invoking *--help* on any tool such as DeltaStreamer would print all the usage options. A lot of the options that control upsert, file sizing behavior are defined at the write client level and below is how we pass them to different options available for writing data.
+Hudi configuration options covering the datasource and low level Hudi write client (which both Hudi Streamer & datasource internally call) are [here](https://hudi.apache.org/docs/configurations/). Invoking *--help* on any tool such as Hudi Streamer would print all the usage options. A lot of the options that control upsert, file sizing behavior are defined at the write client level and below is how we pass them to different options available for writing data.
 
  - For Spark DataSource, you can use the "options" API of DataFrameWriter to pass in these configs. 
 
@@ -227,7 +227,7 @@ inputDF.write().format("org.apache.hudi")
 
  - When using `HoodieWriteClient` directly, you can simply construct HoodieWriteConfig object with the configs in the link you mentioned.
 
- - When using HoodieDeltaStreamer tool to ingest, you can set the configs in properties file and pass the file as the cmdline argument "*--props*"
+ - When using HoodieStreamer tool to ingest, you can set the configs in properties file and pass the file as the cmdline argument "*--props*"
 
 ### How to create Hive style partition folder structure?
 
@@ -253,7 +253,7 @@ set hive.input.format=org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat
 
 ### Can I register my Hudi dataset with Apache Hive metastore?
 
-Yes. This can be performed either via the standalone [Hive Sync tool](https://hudi.apache.org/docs/syncing_metastore#hive-sync-tool) or using options in [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable).
+Yes. This can be performed either via the standalone [Hive Sync tool](https://hudi.apache.org/docs/syncing_metastore#hive-sync-tool) or using options in [Hudi Streamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable).
 
 ### How does the Hudi indexing work & what are its benefits? 
 
@@ -277,13 +277,13 @@ The Hudi cleaner process often runs right after a commit and deltacommit and goe
 
 ### What's Hudi's schema evolution story?
 
-Hudi uses Avro as the internal canonical representation for records, primarily due to its nice [schema compatibility & evolution](https://docs.confluent.io/platform/current/schema-registry/avro.html) properties. This is a key aspect of having reliability in your ingestion or ETL pipelines. As long as the schema passed to Hudi (either explicitly in DeltaStreamer schema provider configs or implicitly by Spark Datasource's Dataset schemas) is backwards compatible (e.g no field deletes, only appending new fields to schema), Hudi will seamlessly handle read/write of old and new data and also keep the Hive schema up-to date.
+Hudi uses Avro as the internal canonical representation for records, primarily due to its nice [schema compatibility & evolution](https://docs.confluent.io/platform/current/schema-registry/avro.html) properties. This is a key aspect of having reliability in your ingestion or ETL pipelines. As long as the schema passed to Hudi (either explicitly in Hudi Streamer schema provider configs or implicitly by Spark Datasource's Dataset schemas) is backwards compatible (e.g no field deletes, only appending new fields to schema), Hudi will seamlessly handle read/write of old and new data and also keep the Hive schema up-to date.
 
 ### How do I run compaction for a MOR dataset?
 
 Simplest way to run compaction on MOR dataset is to run the [compaction inline](https://hudi.apache.org/docs/configurations#hoodiecompactinline), at the cost of spending more time ingesting; This could be particularly useful, in common cases where you have small amount of late arriving data trickling into older partitions. In such a scenario, you may want to just aggressively compact the last N partitions while waiting for enough logs to accumulate for older partitions. The net effect is that you have converted most of the recent data, that is more likely to be queried to optimized columnar format.
 
-That said, for obvious reasons of not blocking ingesting for compaction, you may want to run it asynchronously as well. This can be done either via a separate [compaction job](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java) that is scheduled by your workflow scheduler/notebook independently. If you are using delta streamer, then you can run in [continuous mode](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L241) where the ingestion and compaction are both managed concurrently in a single spark run time.
+That said, for obvious reasons of not blocking ingesting for compaction, you may want to run it asynchronously as well. This can be done either via a separate [compaction job](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java) that is scheduled by your workflow scheduler/notebook independently. If you are using Hudi Streamer, then you can run in [continuous mode](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L241) where the ingestion and compaction are both managed concurrently in a single spark run time.
 
 ### What options do I have for asynchronous/offline compactions on MOR dataset?
 
@@ -292,7 +292,7 @@ There are a couple of options depending on how you write to Hudi. But first let 
 - Execution: In this step the compaction plan is read and file slices are compacted. Execution doesnt need the same level of coordination with other writers as Scheduling step and can be decoupled from ingestion job easily.
 
 Depending on how you write to Hudi these are the possible options currently.
-- DeltaStreamer:
+- Hudi Streamer:
    - In Continuous mode, asynchronous compaction is achieved by default. Here scheduling is done by the ingestion job inline and compaction execution is achieved asynchronously by a separate parallel thread.
    - In non continuous mode, only inline compaction is possible. 
    - Please note in either mode, by passing --disable-compaction compaction is completely disabled
@@ -359,7 +359,7 @@ b) **[Clustering](https://hudi.apache.org/blog/2021/01/27/hudi-clustering-intro)
 
 Hudi runs cleaner to remove old file versions as part of writing data either in inline or in asynchronous mode (0.6.0 onwards). Hudi Cleaner retains at-least one previous commit when cleaning old file versions. This is to prevent the case when concurrently running queries which are reading the latest file versions suddenly  see those files getting deleted by cleaner because a new file version got added . In other words, retaining at-least one previous commit is needed for ensuring snapshot isolation for readers.
 
-### How do I use DeltaStreamer or Spark DataSource API to write to a Non-partitioned Hudi dataset ?
+### How do I use Hudi Streamer or Spark DataSource API to write to a Non-partitioned Hudi dataset ?
 
 Hudi supports writing to non-partitioned datasets. For writing to a non-partitioned Hudi dataset and performing hive table syncing, you need to set the below configurations in the properties passed:
 
@@ -483,8 +483,8 @@ sudo ln -sf hudi-timeline-server-bundle-0.7.0.jar hudi-timeline-server-bundle.ja
 sudo ln -sf hudi-utilities-bundle_2.12-0.7.0.jar hudi-utilities-bundle.jar
 ```
 
-**Using the overriden jar in Deltastreamer:**
-When invoking DeltaStreamer specify the above jar location as part of spark-submit command.
+**Using the overriden jar in Hudi Streamer:**
+When invoking Hudi Streamer specify the above jar location as part of spark-submit command.
 
 ### Why partition fields are also stored in parquet files in addition to the partition path ?
 

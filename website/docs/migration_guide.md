@@ -36,15 +36,15 @@ Import your existing table into a Hudi managed table. Since all the data is Hudi
 There are a few options when choosing this approach.
 
 **Option 1**
-Use the HoodieDeltaStreamer tool. HoodieDeltaStreamer supports bootstrap with --run-bootstrap command line option. There are two types of bootstrap,
+Use the HoodieStreamer tool. HoodieStreamer supports bootstrap with --run-bootstrap command line option. There are two types of bootstrap,
 METADATA_ONLY and FULL_RECORD. METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset.
 FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.
 
-Here is an example for running FULL_RECORD bootstrap and keeping hive style partition with HoodieDeltaStreamer.
+Here is an example for running FULL_RECORD bootstrap and keeping hive style partition with HoodieStreamer.
 ```
 spark-submit --master local \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
 --run-bootstrap \
 --target-base-path /tmp/hoodie/bootstrap_table \
 --target-table bootstrap_table \

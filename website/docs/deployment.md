@@ -16,19 +16,19 @@ Specifically, we will cover the following aspects.
 ## Deploying
 
 All in all, Hudi deploys with no long running servers or additional infrastructure cost to your data lake. In fact, Hudi pioneered this model of building a transactional distributed storage layer
-using existing infrastructure and its heartening to see other systems adopting similar approaches as well. Hudi writing is done via Spark jobs (DeltaStreamer or custom Spark datasource jobs), deployed per standard Apache Spark [recommendations](https://spark.apache.org/docs/latest/cluster-overview).
+using existing infrastructure and its heartening to see other systems adopting similar approaches as well. Hudi writing is done via Spark jobs (Hudi Streamer or custom Spark datasource jobs), deployed per standard Apache Spark [recommendations](https://spark.apache.org/docs/latest/cluster-overview).
 Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or PrestoDB and hence no additional infrastructure is necessary. 
 
 A typical Hudi data ingestion can be achieved in 2 modes. In a single run mode, Hudi ingestion reads next batch of data, ingest them to Hudi table and exits. In continuous mode, Hudi ingestion runs as a long-running service executing ingestion in a loop.
 
 With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting delta files. Again, compaction can be performed in an asynchronous-mode by letting compaction run concurrently with ingestion or in a serial fashion with one after another.
 
-### DeltaStreamer
+### Hudi Streamer
 
-[DeltaStreamer](/docs/hoodie_deltastreamer#deltastreamer) is the standalone utility to incrementally pull upstream changes 
+[Hudi Streamer](/docs/hoodie_deltastreamer#hudi-streamer) is the standalone utility to incrementally pull upstream changes 
 from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables.  It runs as a spark application in two modes.
 
-To use DeltaStreamer in Spark, the `hudi-utilities-bundle` is required, by adding
+To use Hudi Streamer in Spark, the `hudi-utilities-bundle` is required, by adding
 `--packages org.apache.hudi:hudi-utilities-bundle_2.11:0.13.0` to the `spark-submit` command. From 0.11.0 release, we start
 to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can cause conflicts and compatibility
 issues with different versions of Spark.  The `hudi-utilities-slim-bundle` should be used along with a Hudi Spark bundle 
@@ -36,7 +36,7 @@ corresponding to the Spark version used, e.g.,
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.13.0,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.13.0`,
 if using `hudi-utilities-bundle` solely in Spark encounters compatibility issues.
 
- - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/hoodie_deltastreamer#deltastreamer) for running the spark application.
+ - **Run Once Mode** : In this mode, Hudi Streamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/hoodie_deltastreamer#hudi-streamer) for running the spark application.
 
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 
@@ -74,7 +74,7 @@ Here is an example invocation for reading from kafka topic in a single-run mode 
  --conf spark.sql.catalogImplementation=hive \
  --conf spark.sql.shuffle.partitions=100 \
  --driver-class-path $HADOOP_CONF_DIR \
- --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+ --class org.apache.hudi.utilities.streamer.HoodieStreamer \
  --table-type MERGE_ON_READ \
  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
  --source-ordering-field ts  \
@@ -84,7 +84,7 @@ Here is an example invocation for reading from kafka topic in a single-run mode 
  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 ```
 
- - **Continuous Mode** :  Here, deltastreamer runs an infinite loop with each round performing one ingestion round as described in **Run Once Mode**. The frequency of data ingestion can be controlled by the configuration "--min-sync-interval-seconds". For Merge-On-Read tables, Compaction is run in asynchronous fashion concurrently with ingestion unless disabled by passing the flag "--disable-compaction". Every ingestion run triggers a compaction request asynchronously and this frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". As both ingestion and compaction is running in the same spark context, you can use resource allocation configuration in DeltaStreamer CLI such as ("--delta-sync-scheduling-weight", "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare") to control executor allocation between ingestion and compaction.
+ - **Continuous Mode** :  Here, Hudi Streamer runs an infinite loop with each round performing one ingestion round as described in **Run Once Mode**. The frequency of data ingestion can be controlled by the configuration "--min-sync-interval-seconds". For Merge-On-Read tables, Compaction is run in asynchronous fashion concurrently with ingestion unless disabled by passing the flag "--disable-compaction". Every ingestion run triggers a compaction request asynchronously and this frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". As both ingestion and compaction is running in the same spark context, you can use resource allocation configuration in Hudi Streamer CLI such as ("--delta-sync-scheduling-weight", "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare") to control executor allocation between ingestion and compaction.
 
 Here is an example invocation for reading from kafka topic in a continuous mode and writing to Merge On Read table type in a yarn cluster.
 
@@ -122,7 +122,7 @@ Here is an example invocation for reading from kafka topic in a continuous mode 
  --conf spark.sql.catalogImplementation=hive \
  --conf spark.sql.shuffle.partitions=100 \
  --driver-class-path $HADOOP_CONF_DIR \
- --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+ --class org.apache.hudi.utilities.streamer.HoodieStreamer \
  --table-type MERGE_ON_READ \
  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
  --source-ordering-field ts  \
@@ -161,7 +161,7 @@ As general guidelines,
  - We strive to keep all changes backwards compatible (i.e new code can read old data/timeline files) and when we cannot, we will provide upgrade/downgrade tools via the CLI
  - We cannot always guarantee forward compatibility (i.e old code being able to read data/timeline files written by a greater version). This is generally the norm, since no new features can be built otherwise.
    However any large such changes, will be turned off by default, for smooth transition to newer release. After a few releases and once enough users deem the feature stable in production, we will flip the defaults in a subsequent release.
- - Always upgrade the query bundles (mr-bundle, presto-bundle, spark-bundle) first and then upgrade the writers (deltastreamer, spark jobs using datasource). This often provides the best experience and it's easy to fix 
+ - Always upgrade the query bundles (mr-bundle, presto-bundle, spark-bundle) first and then upgrade the writers (Hudi Streamer, spark jobs using datasource). This often provides the best experience and it's easy to fix 
    any issues by rolling forward/back the writer code (which typically you might have more control over)
  - With large, feature rich releases we recommend migrating slowly, by first testing in staging environments and running your own tests. Upgrading Hudi is no different than upgrading any database system.
 

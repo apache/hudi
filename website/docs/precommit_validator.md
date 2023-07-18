@@ -5,7 +5,7 @@ keywords: [ hudi, quality, expectations, pre-commit validator]
 
 Data quality refers to the overall accuracy, completeness, consistency, and validity of data. Ensuring data quality is vital for accurate analysis and reporting, as well as for compliance with regulations and maintaining trust in your organization's data infrastructure.
 
-Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with DeltaStreamer or Spark Datasource writers.
+Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with Hudi Streamer or Spark Datasource writers.
 
 To configure pre-commit validators, use this setting `hoodie.precommit.validators=<comma separated list of validator class names>`.
 

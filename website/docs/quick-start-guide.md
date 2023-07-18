@@ -328,7 +328,7 @@ location '/tmp/hudi/hudi_cow_pt_tbl';
 
 **Create Table for an existing Hudi Table**
 
-We can create a table on an existing hudi table(created with spark-shell or deltastreamer). This is useful to
+We can create a table on an existing hudi table(created with spark-shell or Hudi Streamer). This is useful to
 read/write to/from a pre-existing hudi table.
 
 ```sql

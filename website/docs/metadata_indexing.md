@@ -25,7 +25,7 @@ feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-
 
 ## Setup Async Indexing
 
-First, we will generate a continuous workload. In the below example, we are going to start a [deltastreamer](/docs/hoodie_deltastreamer#deltastreamer) which will continuously write data
+First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_deltastreamer#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
 <details>
   <summary>Ingestion write config</summary>
@@ -35,9 +35,9 @@ from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](h
 hoodie.datasource.write.recordkey.field=VendorID
 hoodie.datasource.write.partitionpath.field=tpep_dropoff_datetime
 hoodie.datasource.write.precombine.field=tpep_dropoff_datetime
-hoodie.deltastreamer.source.dfs.root=/Users/home/path/to/data/parquet_files/
-hoodie.deltastreamer.schemaprovider.target.schema.file=/Users/home/path/to/schema/schema.avsc
-hoodie.deltastreamer.schemaprovider.source.schema.file=/Users/home/path/to/schema/schema.avsc
+hoodie.streamer.source.dfs.root=/Users/home/path/to/data/parquet_files/
+hoodie.streamer.schemaprovider.target.schema.file=/Users/home/path/to/schema/schema.avsc
+hoodie.streamer.schemaprovider.source.schema.file=/Users/home/path/to/schema/schema.avsc
 // set lock provider configs
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
 hoodie.write.lock.zookeeper.url=<zk_url>
@@ -50,12 +50,12 @@ hoodie.write.lock.zookeeper.base_path=<zk_base_path>
 </details>
 
 <details>
-  <summary>Run deltastreamer</summary>
+  <summary>Run Hudi Streamer</summary>
 <p>
 
 ```bash
 spark-submit \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0.jar` \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer `ls /Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0.jar` \
 --props `ls /Users/home/path/to/write/config.properties` \
 --source-class org.apache.hudi.utilities.sources.ParquetDFSSource  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --source-ordering-field tpep_dropoff_datetime   \
@@ -71,7 +71,7 @@ spark-submit \
 </p>
 </details>
 
-From version 0.11.0 onwards, Hudi metadata table is enabled by default and the files index will be automatically created. While the deltastreamer is running in continuous mode, let
+From version 0.11.0 onwards, Hudi metadata table is enabled by default and the files index will be automatically created. While the Hudi Streamer is running in continuous mode, let
 us schedule the indexing for COLUMN_STATS index. First we need to define a properties file for the indexer.
 
 ### Configurations

@@ -249,7 +249,7 @@ kcat -b kafkabroker -L -J | jq .
 
 ### Step 2: Incrementally ingest data from Kafka topic
 
-Hudi comes with a tool named DeltaStreamer. This tool can connect to variety of data sources (including Kafka) to
+Hudi comes with a tool named Hudi Streamer. This tool can connect to variety of data sources (including Kafka) to
 pull changes and apply to Hudi table using upsert/insert primitives. Here, we will use the tool to download
 json data from kafka topic and ingest to both COW and MOR tables we initialized in the previous step. This tool
 automatically initializes the tables in the file-system if they do not exist yet.
@@ -257,9 +257,9 @@ automatically initializes the tables in the file-system if they do not exist yet
 ```java
 docker exec -it adhoc-2 /bin/bash
 
-# Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow table in HDFS
+# Run the following spark-submit command to execute the Hudi Streamer and ingest to stock_ticks_cow table in HDFS
 spark-submit \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer $HUDI_UTILITIES_BUNDLE \
   --table-type COPY_ON_WRITE \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --source-ordering-field ts  \
@@ -267,9 +267,9 @@ spark-submit \
   --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 
-# Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor table in HDFS
+# Run the following spark-submit command to execute the Hudi Streamer and ingest to stock_ticks_mor table in HDFS
 spark-submit \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer $HUDI_UTILITIES_BUNDLE \
   --table-type MERGE_ON_READ \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --source-ordering-field ts \
@@ -279,7 +279,7 @@ spark-submit \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --disable-compaction
 
-# As part of the setup (Look at setup_demo.sh), the configs needed for DeltaStreamer is uploaded to HDFS. The configs
+# As part of the setup (Look at setup_demo.sh), the configs needed for Hudi Streamer is uploaded to HDFS. The configs
 # contain mostly Kafa connectivity settings, the avro-schema to be used for ingesting along with key and partitioning fields.
 
 exit
@@ -743,9 +743,9 @@ Splits: 17 total, 17 done (100.00%)
 trino:default> exit
 ```
 
-### Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest
+### Step 5: Upload second batch to Kafka and run Hudi Streamer to ingest
 
-Upload the second batch of data and ingest this batch using delta-streamer. As this batch does not bring in any new
+Upload the second batch of data and ingest this batch using Hudi Streamer. As this batch does not bring in any new
 partitions, there is no need to run hive-sync
 
 ```java
@@ -754,9 +754,9 @@ cat docker/demo/data/batch_2.json | kcat -b kafkabroker -t stock_ticks -P
 # Within Docker container, run the ingestion command
 docker exec -it adhoc-2 /bin/bash
 
-# Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow table in HDFS
+# Run the following spark-submit command to execute the Hudi Streamer and ingest to stock_ticks_cow table in HDFS
 spark-submit \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer $HUDI_UTILITIES_BUNDLE \
   --table-type COPY_ON_WRITE \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --source-ordering-field ts \
@@ -765,9 +765,9 @@ spark-submit \
   --props /var/demo/config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 
-# Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor table in HDFS
+# Run the following spark-submit command to execute the Hudi Streamer and ingest to stock_ticks_mor table in HDFS
 spark-submit \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer $HUDI_UTILITIES_BUNDLE \
   --table-type MERGE_ON_READ \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --source-ordering-field ts \
@@ -780,7 +780,7 @@ spark-submit \
 exit
 ```
 
-With Copy-On-Write table, the second ingestion by DeltaStreamer resulted in a new version of Parquet file getting created.
+With Copy-On-Write table, the second ingestion by Hudi Streamer resulted in a new version of Parquet file getting created.
 See `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
 
 With Merge-On-Read table, the second ingestion merely appended the batch to an unmerged delta (log) file.

@@ -45,14 +45,14 @@ import org.apache.spark.sql.streaming.ProcessingTime;
  writer.trigger(new ProcessingTime(30000)).start(tablePath);
 ```
 
-### DeltaStreamer Continuous Mode
-Hudi DeltaStreamer provides continuous ingestion mode where a single long running spark application  
+### Hudi Streamer Continuous Mode
+Hudi Streamer provides continuous ingestion mode where a single long running spark application  
 ingests data to Hudi table continuously from upstream sources. In this mode, Hudi supports managing asynchronous
 compactions. Here is an example snippet for running in continuous mode with async compactions
 
 ```properties
 spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 --table-type MERGE_ON_READ \
 --target-base-path <hudi_base_path> \
 --target-table <hudi_table> \
@@ -76,7 +76,7 @@ you may want Synchronous compaction, which means that as a commit is written it 
 
 Compaction is run synchronously by passing the flag "--disable-compaction" (Meaning to disable async compaction scheduling).
 When both ingestion and compaction is running in the same spark context, you can use resource allocation configuration 
-in DeltaStreamer CLI such as ("--delta-sync-scheduling-weight",
+in Hudi Streamer CLI such as ("--delta-sync-scheduling-weight",
 "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare")
 to control executor allocation between ingestion and compaction.
 
