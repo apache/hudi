@@ -7,11 +7,11 @@ keywords: [hudi, streamer, hoodiestreamer]
 :::danger Breaking Change
 
 The following classes were renamed and relocated to `org.apache.hudi.utilities.streamer` package.
-- DeltastreamerMultiWriterCkptUpdateFunc is renamed to StreamerMultiWriterCkptUpdateFunc
-- DeltaSync is renamed to StreamSync
-- HoodieDeltaStreamer is renamed to HoodieStreamer
-- HoodieDeltaStreamerMetrics is renamed to HoodieStreamerMetrics
-- HoodieMultiTableDeltaStreamer is renamed to HoodieMultiTableStreamer
+- `DeltastreamerMultiWriterCkptUpdateFunc` is renamed to `StreamerMultiWriterCkptUpdateFunc`
+- `DeltaSync` is renamed to `StreamSync`
+- `HoodieDeltaStreamer` is renamed to `HoodieStreamer`
+- `HoodieDeltaStreamerMetrics` is renamed to `HoodieStreamerMetrics`
+- `HoodieMultiTableDeltaStreamer` is renamed to `HoodieMultiTableStreamer`
 
 To maintain backward compatiblity, the original classes are still present in the org.apache.hudi.utilities.deltastreamer
 package, but have been deprecated.
