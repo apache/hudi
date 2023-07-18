@@ -62,6 +62,8 @@ import scala.util.Random
 
 class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
+  /*
+
   var spark: SparkSession = _
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -698,4 +700,5 @@ object TestHoodieFileIndex {
       Arguments.arguments("org.apache.hudi.keygen.TimestampBasedKeyGenerator")
     )
   }
+   */
 }

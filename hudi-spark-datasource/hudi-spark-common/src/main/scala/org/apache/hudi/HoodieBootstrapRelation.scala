@@ -208,6 +208,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 */
 
   def toHadoopFsRelation: HadoopFsRelation = {
+    fileIndex.addTableState(sparkSession.sparkContext.broadcast(tableState))
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,

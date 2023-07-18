@@ -125,7 +125,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     sparkSession.conf().set("spark.sql.columnVector.offheap.enabled", "false");
     this.bootstrapType = "mixed";
     this.dashPartitions = true;
-    this.tableType = "COPY_ON_WRITE";
+    this.tableType = "MERGE_ON_READ";
     this.nPartitions = 1;
     setupDirs();
 
@@ -136,6 +136,9 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .options(options)
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
+
+    options = basicOptions();
+    doUpdate(options, "001");
 
     sparkSession.read().format("hudi").load(hudiBasePath).createOrReplaceTempView("hoodi");
     sparkSession.read().format("hudi").load(bootstrapTargetPath).createOrReplaceTempView("bootstrap");

@@ -254,6 +254,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
+      sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
       FileStatusCache.getOrCreate(sparkSession))
 
   lazy val tableState: HoodieTableState = {
@@ -269,7 +270,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = fileIndex.metadataConfig,
+      metadataConfig =  fileIndex.metadataConfig,
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = recordMergerStrategy
     )
