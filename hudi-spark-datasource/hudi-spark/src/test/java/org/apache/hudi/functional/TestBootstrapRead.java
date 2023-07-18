@@ -41,6 +41,7 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -116,6 +117,33 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       }
     }
     return b.build();
+  }
+
+  @Test
+  public void testJoin() {
+    sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+    sparkSession.conf().set("spark.sql.columnVector.offheap.enabled", "false");
+    this.bootstrapType = "mixed";
+    this.dashPartitions = true;
+    this.tableType = "COPY_ON_WRITE";
+    this.nPartitions = 1;
+    setupDirs();
+
+    //do bootstrap
+    Map<String, String> options = setBootstrapOptions();
+    Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
+    bootstrapDf.write().format("hudi")
+        .options(options)
+        .mode(SaveMode.Overwrite)
+        .save(bootstrapTargetPath);
+
+    sparkSession.read().format("hudi").load(hudiBasePath).createOrReplaceTempView("hoodi");
+    sparkSession.read().format("hudi").load(bootstrapTargetPath).createOrReplaceTempView("bootstrap");
+    sparkSession.sql("select * from bootstrap where begin_lon > 0.5").createOrReplaceTempView("tmpv");
+    Dataset<Row> joinDf = sparkSession.sql("select * from hoodi h INNER JOIN tmpv b ON h._row_key == b._row_key and h.partition_path == b.partition_path");
+    joinDf.explain(true);
+    joinDf.show(500, false);
+    System.out.println("here");
   }
 
   @ParameterizedTest

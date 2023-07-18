@@ -281,6 +281,7 @@ object DefaultSource {
     }
   }
 
+/*
   private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
                                              globPaths: Seq[Path],
                                              userSchema: Option[StructType],
@@ -298,6 +299,16 @@ object DefaultSource {
       HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
+*/
+
+  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
+                                             globPaths: Seq[Path],
+                                             userSchema: Option[StructType],
+                                             metaClient: HoodieTableMetaClient,
+                                             parameters: Map[String, String]): BaseRelation = {
+    HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
+  }
+
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
                                           globPaths: Seq[Path],

@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferenc
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -38,6 +38,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
+import org.apache.hudi.HiddenFileStatus
 
 import java.text.SimpleDateFormat
 import javax.annotation.concurrent.NotThreadSafe
@@ -159,7 +160,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
-        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        val c = fileSlices.asScala.foldLeft(Map[String, FileSlice]()) { (m, f) => m + ( f.getFileId -> f) }
+        PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
     }
 
     val skippingRatio =

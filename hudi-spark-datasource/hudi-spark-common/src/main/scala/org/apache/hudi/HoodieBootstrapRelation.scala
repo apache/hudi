@@ -19,7 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader, sparkAdapter}
 import org.apache.hudi.HoodieBootstrapRelation.{createPartitionedFile, validate}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -194,6 +194,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
+/*
   def toHadoopFsRelation: HadoopFsRelation = {
       HadoopFsRelation(
         location = fileIndex,
@@ -203,6 +204,19 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
         fileFormat = fileFormat,
         optParams)(sparkSession)
   }
+
+*/
+
+  def toHadoopFsRelation: HadoopFsRelation = {
+    HadoopFsRelation(
+      location = fileIndex,
+      partitionSchema = fileIndex.partitionSchema,
+      dataSchema = fileIndex.dataSchema,
+      bucketSpec = None,
+      fileFormat = sparkAdapter.createHoodieMORTestParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get,
+      optParams)(sparkSession)
+  }
+
 
 }
 
