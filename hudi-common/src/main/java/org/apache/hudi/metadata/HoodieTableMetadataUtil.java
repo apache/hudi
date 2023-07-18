@@ -944,8 +944,7 @@ public class HoodieTableMetadataUtil {
     allRecordsRDD = allRecordsRDD.union(deletedFilesRecordsRDD);
 
     List<Pair<String, String>> partitionToAppendedFilesList = partitionToAppendedFiles.entrySet().stream().flatMap(entry -> {
-      Set<String> filesSet = entry.getValue().keySet();
-      return filesSet.stream().map(file -> Pair.of(entry.getKey(), file));
+      return entry.getValue().keySet().stream().map(file -> Pair.of(entry.getKey(), file));
     }).collect(Collectors.toList());
 
     int appendedFilesTargetParallelism = Math.max(Math.min(partitionToAppendedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
