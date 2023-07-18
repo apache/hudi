@@ -24,11 +24,11 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * The SlashEncodedYearMonthPartitionValueExtractor class is a custom implementation of the
+ * The SlashEncodedMonthPartitionValueExtractor class is a custom implementation of the
  * PartitionValueExtractor interface to support extracting partition values from paths
  * in the format 'yyyy/mm'.
  */
-public class SlashEncodedYearMonthPartitionValueExtractor implements PartitionValueExtractor {
+public class SlashEncodedMonthPartitionValueExtractor implements PartitionValueExtractor {
 
   private static final long serialVersionUID = 1L;
 
