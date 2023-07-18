@@ -926,8 +926,7 @@ public class HoodieTableMetadataUtil {
     }
 
     List<Pair<String, String>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet().stream().flatMap(entry -> {
-      List<String> filesList = entry.getValue();
-      return filesList.stream().map(file -> Pair.of(entry.getKey(), file));
+      return entry.getValue().stream().map(file -> Pair.of(entry.getKey(), file));
     }).collect(Collectors.toList());
 
     int deletedFilesTargetParallelism = Math.max(Math.min(partitionToDeletedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
