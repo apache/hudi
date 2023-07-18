@@ -456,6 +456,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return new ArrayList<>(instants);
   }
 
+  /**
+   * Get the instant by instant timestamp and state
+   */
+  public Option<HoodieInstant> getInstantByTimestampAndState(String timestamp, State state) {
+    return Option.fromJavaOptional(getInstantsAsStream().filter(i -> i.getState().equals(state) && i.getTimestamp().equals(timestamp)).findFirst());
+  }
+
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
     return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
