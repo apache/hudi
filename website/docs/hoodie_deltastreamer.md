@@ -16,20 +16,6 @@ The following classes were renamed and relocated to `org.apache.hudi.utilities.s
 To maintain backward compatiblity, the original classes are still present in the org.apache.hudi.utilities.deltastreamer
 package, but have been deprecated.
 
-The following classes (classes added after 0.13.0) were directly relocated to org.apache.hudi.utilities.streamer package
-- BaseErrorTableWriter
-- BootstrapExecutor
-- ConfigurationHotUpdateStrategy
-- ConfigurationHotUpdateStrategyUtils
-- ErrorEvent
-- ErrorTableUtils
-- SchedulerConfGenerator
-- SourceFormatAdapter
-- SparkSampleWritesUtils
-- TableExecutionContext
-- TerminationStrategyUtils
-- NoNewDataTerminationStrategy.
-- PostWriteTerminationStrategy.
 :::
 
 The `HoodieStreamer` utility (part of `hudi-utilities-bundle`) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
