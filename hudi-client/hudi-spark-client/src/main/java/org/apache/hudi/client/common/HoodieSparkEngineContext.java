@@ -250,7 +250,9 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     info.put("spark.version", javaSparkContext.version());
     info.put("spark.defaultParallelism", String.valueOf(javaSparkContext.defaultParallelism()));
     info.put("spark.defaultMinPartitions", String.valueOf(javaSparkContext.defaultMinPartitions()));
-    info.put("spark.executor.instances", String.valueOf(javaSparkContext.getConf().get("spark.executor.instances")));
+    info.put("spark.executor.instances", javaSparkContext.getConf().get("spark.executor.instances", "-1"));
+    info.put("spark.driver.memory", javaSparkContext.getConf().get("spark.driver.memory", "-1"));
+    info.put("spark.executor.memory", javaSparkContext.getConf().get("spark.executor.memory", "-1"));
     return info;
   }
 }
