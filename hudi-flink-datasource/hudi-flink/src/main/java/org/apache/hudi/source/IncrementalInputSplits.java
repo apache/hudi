@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -409,7 +410,7 @@ public class IncrementalInputSplits implements Serializable {
 
   private FileIndex getFileIndex() {
     return FileIndex.builder()
-        .path(new org.apache.hadoop.fs.Path(path.toUri()))
+        .path(new StoragePath(path.toUri()))
         .conf(conf)
         .rowType(rowType)
         .partitionPruner(partitionPruner)
