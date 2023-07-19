@@ -55,7 +55,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -86,7 +85,7 @@ public class TestHoodieLogFormatAppendFailure {
   @AfterAll
   public static void tearDownClass() {
     // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
-    Assumptions.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+    Assumptions.assumeFalse(shouldUseExternalHdfs());
 
     cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created

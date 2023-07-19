@@ -24,8 +24,8 @@ ENV HUDI_CONF_DIR=$WORKDIR/conf
 RUN if [[ $HIVE_HOME =~ 'hive-2' ]]; \
     then mv conf/hive-site.hive2.xml conf/hive-site.xml; fi
 
-RUN cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/
-RUN cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
+#RUN cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/
+#RUN cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
 RUN cp conf/hive-site.xml $HIVE_HOME/conf/
 RUN cp conf/hive-site.xml $SPARK_HOME/conf/
 RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
