@@ -193,7 +193,7 @@ The log file name format is:
 - **Log File Version** - Current version of the log file format
 - **File Write Token** - Monotonically increasing token for every attempt to write the log file. This should help uniquely identifying the log file when there are failures and retries. Cleaner can clean-up partial log files if the write token is not the latest in the file slice.
 
-The Log file format structure is a Hudi native format. The actual content bytes are serialized into one of Apache Avro, Apache Parquet or Apache HFile file formats based on configuration and the other metadata in the block is serialized using the Java DataOutputStream (DOS) serializer.
+The Log file format structure is a Hudi native format. The actual content bytes are serialized into one of Apache Avro, Apache Parquet or Apache HFile file formats based on configuration and the other metadata in the block is serialized using primitive types and byte arrays. 
 
 Hudi Log format specification is as follows. 
 
@@ -206,11 +206,11 @@ Hudi Log format specification is as follows.
 | **version**            | 4        | Version of the Log file format, monotonically increasing to support backwards compatibility                                                                                                                                                                                  |
 | **type**               | 4        | Represents the type of the log block. Id of the type is serialized as an Integer.                                                                                                                                                                                            |
 | **header length**      | 8        | Length of the header section to follow                                                                                                                                                                                                                                       |
-| **header**             | variable | Map of header metadata entries. The entries are encoded with key as a metadata Id and the value is the String representation of the metadata value.                                                                                                                          |
+| **header**             | variable | Custom serialized map of header metadata entries. 4 bytes of map size that denotes number of entries, then for each entry 4 bytes of metadata type, followed by length/bytearray of variable length utf-8 string.                                                            |
 | **content length**     | 8        | Length of the actual content serialized                                                                                                                                                                                                                                      |
 | **content**            | variable | The content contains the serialized records in one of the supported file formats (Apache Avro, Apache Parquet or Apache HFile)                                                                                                                                               |
 | **footer length**      | 8        | Length of the footer section to follow                                                                                                                                                                                                                                       |
-| **footer**             | variable | Similar to Header. Map of footer metadata entries. The entries are encoded with key as a metadata Id and the value is the String representation of the metadata value.                                                                                                       |
+| **footer**             | variable | Similar to Header. Map of footer metadata entries.                                                                                                                                                                                                                           |
 | **total block length** | 8        | Total size of the block including the magic bytes. This is used to determine if a block is corrupt by comparing to the block size in the header. Each log block assumes that the block size will be last data written in a block. Any data if written after is just ignored. |
 
 Metadata key mapping from Integer to actual metadata is as follows
