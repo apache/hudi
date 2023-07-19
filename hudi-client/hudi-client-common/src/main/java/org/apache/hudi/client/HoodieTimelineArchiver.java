@@ -686,13 +686,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       for (HoodieInstant hoodieInstant : instants) {
         try {
           deleteAnyLeftOverMarkers(context, hoodieInstant);
-          // in local FS and HDFS, there could be empty completed instants due to crash.
-          if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
-            // lets add an entry to the archival, even if not for the plan.
-            records.add(createAvroRecordFromEmptyInstant(hoodieInstant));
-          } else {
-            records.add(convertToAvroRecord(hoodieInstant));
-          }
+          records.add(convertToAvroRecord(hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
           }
@@ -731,9 +725,5 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
-  }
-
-  private IndexedRecord createAvroRecordFromEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
-    return MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant);
   }
 }
