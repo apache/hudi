@@ -38,7 +38,6 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.hudi.HiddenFileStatus
 import org.apache.spark.broadcast.Broadcast
 
 import java.text.SimpleDateFormat
