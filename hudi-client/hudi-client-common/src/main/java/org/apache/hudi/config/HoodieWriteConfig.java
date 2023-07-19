@@ -589,6 +589,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
+  public static final ConfigProperty<Long> MAX_DURATION_TO_TRANSFER_EXTRA_METADATA = ConfigProperty
+      .key("hoodie.write.empty.commit.create.duration")
+      .defaultValue(-1L)
+      .withDocumentation("In some cases empty commit needs to be created to ensure the offsets/checkpoint "
+          + "info stored in the timeline is not lost and also the commit could trigger post commit operations "
+          + "like archival and cleaner or pre write operations like compaction on metadata table etc. "
+          + "This config determines how frequently these empty commits needs to be created.");
+
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
@@ -2577,6 +2585,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
+  public long maxDurationToTransferExtraMetadata() {
+    return getLong(MAX_DURATION_TO_TRANSFER_EXTRA_METADATA);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *
@@ -3173,6 +3185,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
+      return this;
+    }
+
+    public Builder withMaxDurationToTransferExtraMetadata(long duration) {
+      writeConfig.setValue(MAX_DURATION_TO_TRANSFER_EXTRA_METADATA, String.valueOf(duration));
       return this;
     }
 
