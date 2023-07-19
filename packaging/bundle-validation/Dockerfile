@@ -24,8 +24,6 @@ ENV HUDI_CONF_DIR=$WORKDIR/conf
 RUN if [[ $HIVE_HOME =~ 'hive-2' ]]; \
     then mv conf/hive-site.hive2.xml conf/hive-site.xml; fi
 
-#RUN cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/
-#RUN cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
 RUN cp conf/hive-site.xml $HIVE_HOME/conf/
 RUN cp conf/hive-site.xml $SPARK_HOME/conf/
 RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
@@ -42,6 +40,9 @@ RUN tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.6.3
 ENV PATH=$MAVEN_HOME/bin:$PATH
 RUN mvn --version
+
+# prepare directory for docker java17 test
+RUN mkdir -p /opt/bundle-validation/docker-test
 
 # Hadoop env
 ENV HDFS_NAMENODE_USER root

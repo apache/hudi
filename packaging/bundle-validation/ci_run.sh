@@ -30,10 +30,8 @@
 HUDI_VERSION=$1
 JAVA_RUNTIME_VERSION=$2
 STAGING_REPO_NUM=$3
-MODE=$4 # if MODE is java17 then build on docker and run docker_test_java17.sh
-
 echo "HUDI_VERSION: $HUDI_VERSION JAVA_RUNTIME_VERSION: $JAVA_RUNTIME_VERSION"
-echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE  SCALA_PROFILE (optional): $SCALA_PROFILE"
+echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
 
 # choose versions based on build profiles
 if [[ ${SPARK_RUNTIME} == 'spark2.4.8' ]]; then
@@ -112,116 +110,96 @@ fi
 TMP_JARS_DIR=/tmp/jars/$(date +%s)
 mkdir -p $TMP_JARS_DIR
 
-if [[ -z "$MODE" ]] || [[ "$MODE" != "java17" ]]; then
-  if [[ "$HUDI_VERSION" == *"SNAPSHOT" ]]; then
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
-    echo 'Validating jars below:'
-  else
-    echo 'Adding environment variables for bundles in the release candidate'
+if [[ "$HUDI_VERSION" == *"SNAPSHOT" ]]; then
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  echo 'Validating jars below:'
+else
+  echo 'Adding environment variables for bundles in the release candidate'
 
-    HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
-    HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
-    HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
+  HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
+  HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
+  HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
-    if [[ ${SPARK_PROFILE} == 'spark' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark-bundle_2.11
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
-    elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark2.4-bundle_2.11
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
-    elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark3.1-bundle_2.12
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-    elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark3.2-bundle_2.12
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-    elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-    elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
-      HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
-      HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-      HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-    fi
-
-    if [[ ${FLINK_PROFILE} == 'flink1.13' ]]; then
-      HUDI_FLINK_BUNDLE_NAME=hudi-flink1.13-bundle
-    elif [[ ${FLINK_PROFILE} == 'flink1.14' ]]; then
-      HUDI_FLINK_BUNDLE_NAME=hudi-flink1.14-bundle
-    elif [[ ${FLINK_PROFILE} == 'flink1.15' ]]; then
-      HUDI_FLINK_BUNDLE_NAME=hudi-flink1.15-bundle
-    elif [[ ${FLINK_PROFILE} == 'flink1.16' ]]; then
-      HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
-    elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
-      HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
-    fi
-
-    echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."
-    REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$STAGING_REPO_NUM/org/apache/hudi
-    wget -q $REPO_BASE_URL/$HUDI_FLINK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_FLINK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_SPARK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_SPARK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_UTILITIES_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_UTILITIES_SLIM_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_SLIM_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    wget -q $REPO_BASE_URL/$HUDI_METASERVER_SERVER_BUNDLE_NAME/$HUDI_VERSION/$HUDI_METASERVER_SERVER_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
-    echo "Downloaded these jars from $REPO_BASE_URL for validation:"
+  if [[ ${SPARK_PROFILE} == 'spark' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark-bundle_2.11
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
+  elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark2.4-bundle_2.11
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
+  elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.1-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.2-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  ls -l $TMP_JARS_DIR
+  if [[ ${FLINK_PROFILE} == 'flink1.13' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.13-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.14' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.14-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.15' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.15-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.16' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
+  fi
 
-  # Copy test dataset
-  TMP_DATA_DIR=/tmp/data/$(date +%s)
-  mkdir -p $TMP_DATA_DIR/stocks/data
-  cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
-  cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
-
-  # build docker image
-  cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
-  docker build \
-  --build-arg HADOOP_VERSION=$HADOOP_VERSION \
-  --build-arg HIVE_VERSION=$HIVE_VERSION \
-  --build-arg DERBY_VERSION=$DERBY_VERSION \
-  --build-arg FLINK_VERSION=$FLINK_VERSION \
-  --build-arg SPARK_VERSION=$SPARK_VERSION \
-  --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
-  --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
-  --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
-  --build-arg IMAGE_TAG=$IMAGE_TAG \
-  -t hudi-ci-bundle-validation:$IMAGE_TAG \
-  .
-
-  # run validation script in docker
-  docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-    -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION
-else
-  echo "Running Docker test for Java 17, skipping jar copying"
-  # build docker image
-  cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
-  docker build \
-  --build-arg HADOOP_VERSION=$HADOOP_VERSION \
-  --build-arg HIVE_VERSION=$HIVE_VERSION \
-  --build-arg DERBY_VERSION=$DERBY_VERSION \
-  --build-arg FLINK_VERSION=$FLINK_VERSION \
-  --build-arg SPARK_VERSION=$SPARK_VERSION \
-  --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
-  --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
-  --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
-  --build-arg IMAGE_TAG=$IMAGE_TAG \
-  -t hudi-ci-bundle-validation:$IMAGE_TAG \
-  .
-
-  docker run -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
-    -i hudi-ci-bundle-validation:$IMAGE_TAG bash docker_test_java17.sh $JAVA_RUNTIME_VERSION $SPARK_PROFILE $SCALA_PROFILE
+  echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."
+  REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$STAGING_REPO_NUM/org/apache/hudi
+  wget -q $REPO_BASE_URL/$HUDI_FLINK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_FLINK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_SPARK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_SPARK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_UTILITIES_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_UTILITIES_SLIM_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_SLIM_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  wget -q $REPO_BASE_URL/$HUDI_METASERVER_SERVER_BUNDLE_NAME/$HUDI_VERSION/$HUDI_METASERVER_SERVER_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  echo "Downloaded these jars from $REPO_BASE_URL for validation:"
 fi
+
+ls -l $TMP_JARS_DIR
+
+# Copy test dataset
+TMP_DATA_DIR=/tmp/data/$(date +%s)
+mkdir -p $TMP_DATA_DIR/stocks/data
+cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
+cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
+
+# build docker image
+cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
+docker build \
+--build-arg HADOOP_VERSION=$HADOOP_VERSION \
+--build-arg HIVE_VERSION=$HIVE_VERSION \
+--build-arg DERBY_VERSION=$DERBY_VERSION \
+--build-arg FLINK_VERSION=$FLINK_VERSION \
+--build-arg SPARK_VERSION=$SPARK_VERSION \
+--build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
+--build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
+--build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
+--build-arg IMAGE_TAG=$IMAGE_TAG \
+-t hudi-ci-bundle-validation:$IMAGE_TAG \
+.
+
+# run validation script in docker
+docker run -v $TMP_JARS_DIR:/opt/bundle-validation/jars -v $TMP_DATA_DIR:/opt/bundle-validation/data \
+  -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION

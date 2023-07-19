@@ -25,9 +25,9 @@
 #    - <dataset name>/data/<data files>
 #################################################################################################
 
-JAVA_RUNTIME_VERSION=$1
-SPARK_PROFILE=$2
-SCALA_PROFILE=$3
+SPARK_PROFILE=$1
+SCALA_PROFILE=$2
+JAVA_RUNTIME_VERSION=openjdk17
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
@@ -138,7 +138,7 @@ run_docker_tests() {
   echo "::warning::docker_test_java17.sh Hudi maven tests passed!"
 
   echo "::warning::docker_test_java17.sh run_docker_tests Running Hudi Scala script tests on Docker"
-  $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/TestHiveClientUtils.scala
+  $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/docker_java17/TestHiveClientUtils.scala
   if [ $? -ne 0 ]; then
     echo "::error::docker_test_java17.sh HiveClientUtils failed"
     exit 1
