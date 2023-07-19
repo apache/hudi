@@ -27,7 +27,7 @@ classpath of drivers and executors using `--jars` option. Alternatively, hudi-sp
 Retrieve the data table at the present point in time.
 
 ```scala
-val hudiIncQueryDF = spark
+val hudiSnapshotQueryDF = spark
      .read
      .format("hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
