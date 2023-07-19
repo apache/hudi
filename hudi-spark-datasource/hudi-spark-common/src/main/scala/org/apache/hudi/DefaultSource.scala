@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, DATASOURCE_WRITE_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.HoodieBaseRelation.sparkAdapter
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -34,6 +35,7 @@ import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -255,6 +257,8 @@ object DefaultSource {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+    } else if (parameters.get("hoodie.merging.file.format").getOrElse("false").toBoolean) {
+      new HoodieFormatUtils(sqlContext, metaClient, parameters, userSchema).getHadoopFsRelation()
     } else {
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
@@ -265,14 +269,23 @@ object DefaultSource {
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
-        case (_, _, _) =>
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+
+        case (_, _, true) =>
           resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
 
+        case (_, _, _) =>
+          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+            s"isBootstrappedTable: $isBootstrappedTable ")
       }
     }
   }
 
-/*
+
   private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
                                              globPaths: Seq[Path],
                                              userSchema: Option[StructType],
@@ -290,16 +303,6 @@ object DefaultSource {
       HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
-*/
-
-  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
-                                             globPaths: Seq[Path],
-                                             userSchema: Option[StructType],
-                                             metaClient: HoodieTableMetaClient,
-                                             parameters: Map[String, String]): BaseRelation = {
-    HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
-  }
-
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
                                           globPaths: Seq[Path],

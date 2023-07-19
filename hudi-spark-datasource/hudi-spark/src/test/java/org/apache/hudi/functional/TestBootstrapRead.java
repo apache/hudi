@@ -140,8 +140,8 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     options = basicOptions();
     doUpdate(options, "001");
 
-    sparkSession.read().format("hudi").load(hudiBasePath).createOrReplaceTempView("hoodi");
-    sparkSession.read().format("hudi").load(bootstrapTargetPath).createOrReplaceTempView("bootstrap");
+    sparkSession.read().format("hudi").option("hoodie.merging.file.format", "true") .load(hudiBasePath).createOrReplaceTempView("hoodi");
+    sparkSession.read().format("hudi").option("hoodie.merging.file.format", "true").load(bootstrapTargetPath).createOrReplaceTempView("bootstrap");
     sparkSession.sql("select * from bootstrap where begin_lon > 0.5").createOrReplaceTempView("tmpv");
     Dataset<Row> joinDf = sparkSession.sql("select * from hoodi h INNER JOIN tmpv b ON h._row_key == b._row_key and h.partition_path == b.partition_path");
     joinDf.explain(true);

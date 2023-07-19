@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{MORTestParquetFileFormat, ParquetFileFormat, Spark32HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrapParquetFileFormat, ParquetFileFormat, Spark32HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark32PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -89,7 +89,7 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   }
 
   def createHoodieMORTestParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new MORTestParquetFileFormat(appendPartitionValues))
+    Some(new MORBootstrapParquetFileFormat(appendPartitionValues))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

@@ -76,7 +76,6 @@ case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
-                           tableSchema: Broadcast[HoodieTableSchema],
                            @transient fileStatusCache: FileStatusCache = NoopCache)
   extends SparkHoodieTableFileIndex(
     spark = spark,
@@ -90,8 +89,13 @@ case class HoodieFileIndex(spark: SparkSession,
     with FileIndex {
 
   var tableState: Broadcast[HoodieTableState] = null
-  def addTableState(tableState: Broadcast[HoodieTableState]): Unit = {
+  var tableSchema: Broadcast[HoodieTableSchema] = null
+  var shouldBroadcast = false
+  lazy val tableName = spark.sparkContext.broadcast(metaClient.getTableConfig.getTableName)
+  def addBroadcasts(tableState: Broadcast[HoodieTableState], tableSchema: Broadcast[HoodieTableSchema]): Unit = {
+    this.shouldBroadcast = true
     this.tableState = tableState
+    this.tableSchema = tableSchema
   }
 
   @transient private var hasPushedDownPartitionPredicates: Boolean = false
@@ -149,7 +153,6 @@ case class HoodieFileIndex(spark: SparkSession,
     var totalFileSize = 0
     var candidateFileSize = 0
 
-    val tableName = spark.sparkContext.broadcast(metaClient.getTableConfig.getTableName);
 
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
@@ -169,8 +172,14 @@ case class HoodieFileIndex(spark: SparkSession,
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
-        val c = fileSlices.asScala.foldLeft(Map[String, FileSlice]()) { (m, f) => m + ( f.getFileId -> f) }
-        PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c), this.tableState, tableSchema, tableName), candidateFiles)
+        if (this.shouldBroadcast) {
+          val c = fileSlices.asScala.foldLeft(Map[String, FileSlice]()) { (m, f) => m + ( f.getFileId -> f) }
+          PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c), tableState, tableSchema, tableName), candidateFiles)
+        } else {
+          PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        }
+
+
     }
 
     val skippingRatio =

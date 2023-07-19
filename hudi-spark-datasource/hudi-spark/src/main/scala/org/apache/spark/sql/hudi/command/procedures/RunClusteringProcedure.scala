@@ -197,7 +197,7 @@ class RunClusteringProcedure extends BaseProcedure
 
   def prunePartition(metaClient: HoodieTableMetaClient, predicate: String): String = {
     val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath)
-    val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options, null,
+    val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
       FileStatusCache.getOrCreate(sparkSession))
 
     // Resolve partition predicates

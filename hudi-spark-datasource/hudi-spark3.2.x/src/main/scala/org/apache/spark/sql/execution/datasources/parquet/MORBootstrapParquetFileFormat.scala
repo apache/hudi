@@ -62,7 +62,7 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter, seqAsJavaListConverter}
 import scala.util.Try
 
-class MORTestParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends Spark32HoodieParquetFileFormat(shouldAppendPartitionValues) {
+class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends Spark32HoodieParquetFileFormat(shouldAppendPartitionValues) {
 
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,

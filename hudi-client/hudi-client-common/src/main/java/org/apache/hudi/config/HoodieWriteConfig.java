@@ -705,6 +705,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
 
+  public static final ConfigProperty<Boolean> MERGING_FILE_FORMAT = ConfigProperty
+      .key("hoodie.merging.file.format")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("Use new file format");
+
   public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
       .key("hoodie.rollback.instant.backup.dir")
       .defaultValue(".rollback_backup")
@@ -2550,6 +2556,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldBackupRollbacks() {
     return getBoolean(ROLLBACK_INSTANT_BACKUP_ENABLED);
+  }
+
+  public boolean useHadoopFsRelation() {
+    return getBoolean(MERGING_FILE_FORMAT);
   }
 
   public String getRollbackBackupDirectory() {
