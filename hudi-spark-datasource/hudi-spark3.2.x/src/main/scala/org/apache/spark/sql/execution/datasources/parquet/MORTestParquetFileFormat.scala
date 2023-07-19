@@ -1,4 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.execution.datasources.parquet
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -55,10 +73,10 @@ class MORTestParquetFileFormat(private val shouldAppendPartitionValues: Boolean)
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val dataReader =   super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields ++ partitionSchema.fields), StructType(Seq.empty), StructType(requiredSchema.fields ++ partitionSchema.fields), filters, options, hadoopConf, shouldAppendOverride = false)
-    val bootstrapDataReader =  super.buildBaseReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name))),
-      partitionSchema, StructType(requiredSchema.fields.filterNot(sf => isMetaField(sf.name))), Seq.empty, options, hadoopConf, shouldAppendOverride = true)
-    val skeletonReader = super.buildSkeletonReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
-      HoodieSparkUtils.getMetaSchema, Seq.empty, options, hadoopConf, shouldAppendOverride = false)
+    val bootstrapDataReader =  super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name))),
+      partitionSchema, StructType(requiredSchema.fields.filterNot(sf => isMetaField(sf.name))), Seq.empty, options, hadoopConf, shouldAppendOverride = true, "base")
+    val skeletonReader = super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+      HoodieSparkUtils.getMetaSchema, Seq.empty, options, hadoopConf, shouldAppendOverride = false, "skeleton")
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
