@@ -75,7 +75,8 @@ case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
-                           @transient fileStatusCache: FileStatusCache = NoopCache)
+                           @transient fileStatusCache: FileStatusCache = NoopCache,
+                           shouldBroadcast: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -87,15 +88,6 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  var tableState: Broadcast[HoodieTableState] = null
-  var tableSchema: Broadcast[HoodieTableSchema] = null
-  var shouldBroadcast = false
-  lazy val tableName = spark.sparkContext.broadcast(metaClient.getTableConfig.getTableName)
-  def addBroadcasts(tableState: Broadcast[HoodieTableState], tableSchema: Broadcast[HoodieTableSchema]): Unit = {
-    this.shouldBroadcast = true
-    this.tableState = tableState
-    this.tableSchema = tableSchema
-  }
 
   @transient private var hasPushedDownPartitionPredicates: Boolean = false
 
@@ -173,7 +165,7 @@ case class HoodieFileIndex(spark: SparkSession,
         candidateFileSize += candidateFiles.size
         if (this.shouldBroadcast) {
           val c = fileSlices.asScala.foldLeft(Map[String, FileSlice]()) { (m, f) => m + ( f.getFileId -> f) }
-          PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c), tableState, tableSchema, tableName), candidateFiles)
+          PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
         } else {
           PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
         }

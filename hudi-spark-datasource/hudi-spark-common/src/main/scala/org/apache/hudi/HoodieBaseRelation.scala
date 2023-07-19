@@ -70,17 +70,7 @@ import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
 
-case class HoodieTableState(tablePath: String,
-                            latestCommitTimestamp: Option[String],
-                            recordKeyField: String,
-                            preCombineFieldOpt: Option[String],
-                            usesVirtualKeys: Boolean,
-                            recordPayloadClassName: String,
-                            metadataConfig: HoodieMetadataConfig,
-                            recordMergerImpls: List[String],
-                            recordMergerStrategy: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]]

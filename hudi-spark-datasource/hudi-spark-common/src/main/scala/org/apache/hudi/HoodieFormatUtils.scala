@@ -56,7 +56,7 @@ class HoodieFormatUtils(val sqlContext: SQLContext,
   private lazy val metaFieldNames = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
 
   lazy val fileIndex: HoodieFileIndex =
-    HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession))
+    HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), shouldBroadcast = true)
 
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
@@ -184,14 +184,15 @@ class HoodieFormatUtils(val sqlContext: SQLContext,
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   def getHadoopFsRelation(): BaseRelation = {
-    fileIndex.addBroadcasts(sparkSession.sparkContext.broadcast(tableState),
-      sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)))
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
       dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
-      fileFormat = sparkAdapter.createHoodieMORTestParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get,
+      fileFormat = sparkAdapter.createHoodieMORTestParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath,
+        sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName).get,
       optParams)(sparkSession)
 
   }

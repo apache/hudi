@@ -18,7 +18,8 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hudi.Spark32HoodieFileScanRDD
+import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark32HoodieFileScanRDD}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -88,8 +89,10 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
     Some(new Spark32HoodieParquetFileFormat(appendPartitionValues))
   }
 
-  def createHoodieMORTestParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new MORBootstrapParquetFileFormat(appendPartitionValues))
+  def createHoodieMORTestParquetFileFormat(appendPartitionValues: Boolean, tableState: Broadcast[HoodieTableState],
+                                           tableSchema: Broadcast[HoodieTableSchema],
+                                           tableName: String): Option[ParquetFileFormat] = {
+    Some(new MORBootstrapParquetFileFormat(appendPartitionValues, tableState, tableSchema, tableName))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

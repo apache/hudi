@@ -44,6 +44,7 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.util.CachingIterator
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -62,7 +63,10 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter, seqAsJavaListConverter}
 import scala.util.Try
 
-class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends Spark32HoodieParquetFileFormat(shouldAppendPartitionValues) {
+class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boolean,
+                                    tableState: Broadcast[HoodieTableState],
+                                    tableSchema: Broadcast[HoodieTableSchema],
+                                    tableName: String) extends Spark32HoodieParquetFileFormat(shouldAppendPartitionValues) {
 
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -102,8 +106,8 @@ class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boo
           baseIt
         } else {
           new RecordMergingFileIterator(logFiles, filePath.getParent, baseIt, StructType(dataSchema.fields ++ partitionSchema.fields),
-            broadcast.getTableSchema, StructType(requiredSchema.fields ++ partitionSchema.fields), broadcast.getTableName,
-            broadcast.getTableState,broadcastedHadoopConf.value.value)
+            tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
+            tableState.value,broadcastedHadoopConf.value.value)
         }
       } else {
         dataReader(file)
