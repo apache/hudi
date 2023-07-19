@@ -152,11 +152,11 @@ stable, we can use it by default.
 For the selection of instants in the pending, combined with the content of "Priority of write operation" mentioned
 above, we have the following selection logic:
 
-| current \ pending           | ingestion                                        | clustering                                       | compaction |
-|-----------------------------|--------------------------------------------------|--------------------------------------------------|------------|
-| ingestion                   | no                                               | no if SparkAllowUpdateStrategy is set ; else yes | yes        |
-| clustering                  | yes if SparkAllowUpdateStrategy is set ; else no | no                                               | no         |
-| ingestion (will not happen) | -                                                | -                                                | -          |
+| current \ pending            | ingestion                                        | clustering                                       | compaction |
+|------------------------------|--------------------------------------------------|--------------------------------------------------|------------|
+| ingestion                    | no                                               | no if SparkAllowUpdateStrategy is set ; else yes | yes        |
+| clustering                   | yes if SparkAllowUpdateStrategy is set ; else no | no                                               | no         |
+| compaction (will not happen) | -                                                | -                                                | -          |
 
 Note:
 
@@ -192,7 +192,6 @@ Note:
 TransactionManager {
    Option<HoodieInstant> currentTxnOwnerInstant;
    // Option<HoodieInstant> lastCompletedTxnOwnerInstant  // remove
-   List<HoodieInstant> pendingInstants;                   // new
 ...
 }
 
