@@ -107,8 +107,8 @@ public class HoodieCompactor {
     @Parameter(names = {"--job-max-processing-time-ms", "-mt"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. "
         + "If maxProcessingTimeMs passed but compaction job is still unfinished, hoodie would consider this job as failed and relaunch.")
     public long maxProcessingTimeMs = 0;
-    @Parameter(names = {"--retry-last-failed-compaction-job", "-rc"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. " +
-        "Set true means check, rollback and execute last failed compaction plan instead of planing a new compaction job directly.")
+    @Parameter(names = {"--retry-last-failed-compaction-job", "-rc"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. "
+        + "Set true means check, rollback and execute last failed compaction plan instead of planing a new compaction job directly.")
     public Boolean retryLastFailedCompactionJob = false;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
@@ -278,8 +278,8 @@ public class HoodieCompactor {
 
         if (cfg.retryLastFailedCompactionJob) {
           if (cfg.maxProcessingTimeMs <= 0) {
-            throw new HoodieCompactionException("When --retry-last-failed-compaction-job set true, " +
-                "--compaction-max-processing-time-ms should greater than 0.");
+            throw new HoodieCompactionException("When --retry-last-failed-compaction-job set true, "
+                + "--compaction-max-processing-time-ms should greater than 0.");
           }
           HoodieTimeline inflightCompactionTimeline = metaClient.getActiveTimeline()
               .filterPendingCompactionTimeline().filterInflights();
