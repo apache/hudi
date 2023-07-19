@@ -86,7 +86,7 @@ public class TestHoodieLogFormatAppendFailure {
   @AfterAll
   public static void tearDownClass() {
     // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
-    Assume.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
+    Assumptions.assumeFalse(getJavaVersion() == 11 || getJavaVersion() == 17);
 
     cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created
