@@ -342,7 +342,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_WRITES.key(), ENABLE_OPTIMIZED_SQL_WRITES.defaultValue()) == "true") {
+    val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
       Project(incomingDataCols, joinData)
@@ -622,8 +622,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
-    val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_WRITES.key(),
-      ENABLE_OPTIMIZED_SQL_WRITES.defaultValue())
+    val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
+      SPARK_SQL_OPTIMIZED_WRITES.defaultValue())
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -659,7 +659,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
-      HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY -> enableOptimizedMerge,
+      HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> enableOptimizedMerge,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 

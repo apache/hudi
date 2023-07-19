@@ -45,7 +45,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
        """.stripMargin)
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.merge.enable=$optimizedSqlEnabled")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
         // First merge with a extra input field 'flag' (insert a new record)
         spark.sql(
@@ -1216,7 +1216,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.merge.enable=$optimizedSqlEnabled")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
         spark.sql(
           s"""

@@ -45,7 +45,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.config.HoodieWriteConfig.WRITE_PREPPED_MERGE_KEY
+import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.HoodieIndex
@@ -258,7 +258,7 @@ object HoodieSparkSqlWriter {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITE_PREPPED_KEY, false)
             val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
               None
             } else {
@@ -356,8 +356,8 @@ object HoodieSparkSqlWriter {
             }
 
             // Remove meta columns from writerSchema if isPrepped is true.
-            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val mergeIntoWrites = parameters.getOrDefault(WRITE_PREPPED_MERGE_KEY, "false").toBoolean
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITE_PREPPED_KEY, false)
+            val mergeIntoWrites = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
             val processedDataSchema = if (isPrepped || mergeIntoWrites) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {

@@ -71,7 +71,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |""".stripMargin)
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.merge.enable=$optimizedSqlEnabled")
+        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
 
         spark.sql(
           s"""
@@ -143,7 +143,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
   test("Test pkless complex merge cond") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
-      spark.sql("set hoodie.spark.sql.optimized.merge.enable=true")
+      spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -218,7 +218,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
     for (withPrecombine <- Seq(true, false)) {
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
-        spark.sql("set hoodie.spark.sql.optimized.merge.enable=true")
+        spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
         val tableName = generateTableName
 
         val prekstr = if (withPrecombine) "tblproperties (preCombineField = 'ts')" else ""
@@ -271,7 +271,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
   test("Test MergeInto Basic pkless") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
-      spark.sql("set hoodie.spark.sql.optimized.merge.enable=true")
+      spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
       val tableName = generateTableName
       // Create table
       spark.sql(
