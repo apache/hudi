@@ -922,18 +922,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       restorePlan = TimelineMetadataUtils.deserializeAvroMetadata(
           dataMetaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
     } catch (IOException e) {
-      throw new HoodieIOException("Deserialization of rollback plan failed ", e);
+      throw new HoodieIOException("Deserialization of restore plan failed whose restore instant time is " + instantTime + " in data table", e);
     }
     final String restoreToInstantTime = restorePlan.getSavepointToRestoreTimestamp();
     LOG.info("Triggering restore to " + restoreToInstantTime + " in metadata table");
 
     // fetch the earliest commit to retain and ensure the base file prior to the time to restore is present
     List<HoodieFileGroup> filesGroups = metadata.getMetadataFileSystemView().getAllFileGroups(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
-    boolean canRestore = filesGroups.get(0).getAllFileSlices().map(fileSlice -> fileSlice.getBaseInstantTime()).anyMatch(
-        instantTime1 -> HoodieTimeline.compareTimestamps(instantTime1, LESSER_THAN_OR_EQUALS, restoreToInstantTime));
-    if (!canRestore) {
-      throw new HoodieMetadataException("Can't restore since there is no base file in MDT lesser than the commit to restore to. "
-          + "Please delete metadata table and retry");
+
+    boolean cannotRestore = filesGroups.stream().map(fileGroup -> fileGroup.getAllFileSlices().map(fileSlice -> fileSlice.getBaseInstantTime()).anyMatch(
+        instantTime1 -> HoodieTimeline.compareTimestamps(instantTime1, LESSER_THAN_OR_EQUALS, restoreToInstantTime))).anyMatch(canRestore -> !canRestore);
+    if (cannotRestore) {
+      throw new HoodieMetadataException(String.format("Can't restore to %s since there is no base file in MDT lesser than the commit to restore to. "
+          + "Please delete metadata table and retry", restoreToInstantTime));
     }
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
@@ -951,46 +952,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
       Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
-
-      for (String partition : metadata.fetchAllPartitionPaths()) {
-        Path partitionPath = null;
-        if (StringUtils.isNullOrEmpty(partition) && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-          partitionPath = new Path(dataWriteConfig.getBasePath());
-        } else {
-          partitionPath = new Path(dataWriteConfig.getBasePath(), partition);
-        }
-        final String partitionId = HoodieTableMetadataUtil.getPartitionIdentifier(partition);
-        FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
-        if (!dirInfoMap.containsKey(partition)) {
-          // Entire partition has been deleted
-          partitionsToDelete.add(partitionId);
-          if (metadataFiles != null && metadataFiles.length > 0) {
-            partitionFilesToDelete.put(partitionId, Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList()));
-          }
-        } else {
-          // Some files need to be cleaned and some to be added in the partition
-          Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
-          List<String> mdtFiles = Arrays.stream(metadataFiles).map(mdtFile -> mdtFile.getPath().getName()).collect(Collectors.toList());
-          List<String> filesDeleted = Arrays.stream(metadataFiles).map(f -> f.getPath().getName())
-              .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
-          Map<String, Long> filesToAdd = new HashMap<>();
-          // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.
-          dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k,v) -> {
-            if (!mdtFiles.contains(k)) {
-              filesToAdd.put(k,v);
-            }
-          });
-          if (!filesToAdd.isEmpty()) {
-            partitionFilesToAdd.put(partitionId, filesToAdd);
-          }
-          if (!filesDeleted.isEmpty()) {
-            partitionFilesToDelete.put(partitionId, filesDeleted);
-          }
-        }
-      }
+      fetchOutofSyncFilesRecordsFromMetadataTable(dirInfoMap, partitionFilesToAdd, partitionFilesToDelete, partitionsToDelete);
 
       // Even if we don't have any deleted files to sync, we still create an empty commit so that we can track the restore has completed.
-      // We cannot create a deltaCommit at instantTime now because a future block (rollback) has already been written to the logFiles.
+      // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
       String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
@@ -1010,50 +975,48 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    if (initialized && metadata != null) {
-      // The commit which is being rolled back on the dataset
-      final String commitInstantTime = rollbackMetadata.getCommitsRollback().get(0);
-      // Find the deltacommits since the last compaction
-      Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-          CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
+    // The commit which is being rolled back on the dataset
+    final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
+    // Find the deltacommits since the last compaction
+    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
 
-      // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
-      HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
-      HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
+    // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
+    HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
+    HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
 
-      // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitInstantTime);
+    // The deltacommit that will be rolled back
+    HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
 
-      // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
-      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-        final String compactionInstantTime = compactionInstant.getTimestamp();
-        if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitInstantTime, compactionInstantTime)) {
-          throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
-                  + "There are %d deltacommits after this compaction: %s", commitInstantTime, compactionInstantTime,
-              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
-        }
+    // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+    // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+    if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+      final String compactionInstantTime = compactionInstant.getTimestamp();
+      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+        throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
+                + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
+            deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
       }
-
-      // lets apply a delta commit with DT's rb instant containing following records:
-      // a. any log files as part of RB commit metadata that was added
-      // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
-      // both above list should only be added to FILES partition.
-
-      String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
-
-      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
-        LOG.info("Rolling back MDT deltacommit " + commitInstantTime);
-        if (!getWriteClient().rollback(commitInstantTime, rollbackInstantTime)) {
-          throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitInstantTime);
-        }
-      } else {
-        LOG.info(String.format("Ignoring rollback of instant %s at %s since there are no corresponding deltacommits on MDT",
-            commitInstantTime, rollbackInstantTime));
-      }
-      closeInternal();
     }
+
+    // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
+    // a. any log files as part of RB commit metadata that was added
+    // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
+    // both above list should only be added to FILES partition.
+
+    String rollbackInstantTime = createRollbackTimestamp(instantTime);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+
+    if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+      LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
+      if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
+        throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+      }
+    } else {
+      LOG.info(String.format("Ignoring rollback of instant %s at %s. The commit to rollback is not found in MDT",
+          commitToRollbackInstantTime, instantTime));
+    }
+    closeInternal();
   }
 
   @Override
@@ -1276,6 +1239,47 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       return false;
     }
     return true;
+  }
+
+  private void fetchOutofSyncFilesRecordsFromMetadataTable(Map<String, DirectoryInfo> dirInfoMap, Map<String, Map<String, Long>> partitionFilesToAdd,
+                                                           Map<String, List<String>> partitionFilesToDelete, List<String> partitionsToDelete) throws IOException {
+
+    for (String partition : metadata.fetchAllPartitionPaths()) {
+      Path partitionPath = null;
+      if (StringUtils.isNullOrEmpty(partition) && !dataMetaClient.getTableConfig().isTablePartitioned()) {
+        partitionPath = new Path(dataWriteConfig.getBasePath());
+      } else {
+        partitionPath = new Path(dataWriteConfig.getBasePath(), partition);
+      }
+      final String partitionId = HoodieTableMetadataUtil.getPartitionIdentifier(partition);
+      FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
+      if (!dirInfoMap.containsKey(partition)) {
+        // Entire partition has been deleted
+        partitionsToDelete.add(partitionId);
+        if (metadataFiles != null && metadataFiles.length > 0) {
+          partitionFilesToDelete.put(partitionId, Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList()));
+        }
+      } else {
+        // Some files need to be cleaned and some to be added in the partition
+        Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
+        List<String> mdtFiles = Arrays.stream(metadataFiles).map(mdtFile -> mdtFile.getPath().getName()).collect(Collectors.toList());
+        List<String> filesDeleted = Arrays.stream(metadataFiles).map(f -> f.getPath().getName())
+            .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
+        Map<String, Long> filesToAdd = new HashMap<>();
+        // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.
+        dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k,v) -> {
+          if (!mdtFiles.contains(k)) {
+            filesToAdd.put(k,v);
+          }
+        });
+        if (!filesToAdd.isEmpty()) {
+          partitionFilesToAdd.put(partitionId, filesToAdd);
+        }
+        if (!filesDeleted.isEmpty()) {
+          partitionFilesToDelete.put(partitionId, filesDeleted);
+        }
+      }
+    }
   }
 
   /**

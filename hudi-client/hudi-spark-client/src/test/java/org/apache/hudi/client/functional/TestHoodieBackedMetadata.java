@@ -1610,7 +1610,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test several table operations with restore. This test uses SparkRDDWriteClient.
    * Once the restore support is ready in HoodieTestTable, then rewrite this test.
    */
-  // @Disabled("HUDI-6527")
   @Test
   public void testTableOperationsWithRestoreforMOR() throws Exception {
     HoodieTableType tableType = MERGE_ON_READ;

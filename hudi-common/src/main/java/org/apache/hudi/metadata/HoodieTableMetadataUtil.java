@@ -647,15 +647,12 @@ public class HoodieTableMetadataUtil {
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext engineContext, HoodieTableMetaClient dataTableMetaClient, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
     List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient);
-    final HoodieData<HoodieRecord> rollbackRecordsRDD = (filesPartitionRecords.isEmpty() || filesPartitionRecords.size() == 0) ? engineContext.emptyHoodieData()
+    final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
         : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
 
-    partitionToRecordsMap.put(MetadataPartitionType.FILES, rollbackRecordsRDD);
-
-    return partitionToRecordsMap;
+    return Collections.singletonMap(MetadataPartitionType.FILES, rollbackRecordsRDD);
   }
 
   private static void reAddLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime,
@@ -675,7 +672,7 @@ public class HoodieTableMetadataUtil {
           Map<String, Long> logFiles = new HashMap<>();
           rollbackRequest.getLogBlocksToBeDeleted().forEach((k,v) -> {
             String fileName = k.substring(k.lastIndexOf("/") + 1);
-            // rollback plan may not have size for log files to be rolled back. but with merging w/ original commits, the size will get adjusted.
+            // rollback plan may not have size for log files to be rolled back. but while merging w/ original commits, the size will get adjusted.
             logFiles.put(fileName, 1L);
           });
           partitionToFilesMap.get(partitionId).putAll(logFiles);
@@ -777,25 +774,6 @@ public class HoodieTableMetadataUtil {
     LOG.info("Found at " + instantTime + " from " + operation + ". #partitions_updated=" + records.size()
         + ", #files_deleted=" + fileChangeCount[0] + ", #files_appended=" + fileChangeCount[1]);
 
-    return records;
-  }
-
-  private static List<HoodieRecord> convertFilesToFilesPartitionRecords(Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                        String operation) {
-    List<HoodieRecord> records = new LinkedList<>();
-    int[] fileChangeCount = {0, 0}; // deletes, appends
-    partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
-      final String partition = getPartitionIdentifier(partitionName);
-      fileChangeCount[1] += appendedFileMap.size();
-      Map<String, Long> appendedFiles = new HashMap<>();
-      appendedFileMap.forEach((k,v) -> appendedFiles.put(k, 1L));
-      // New files added to a partition
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFiles),
-          Option.empty());
-      records.add(record);
-    });
-
-    LOG.info("Re-adding files=" + fileChangeCount[1] + " from " + operation + " with num records " + records.size());
     return records;
   }
 
