@@ -661,7 +661,7 @@ public class HoodieTableMetadataUtil {
     HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
     try {
       HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-          dataTableMetaClient.reloadActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
+          dataTableMetaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
 
       rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
         final String partitionId = getPartitionIdentifier(rollbackRequest.getPartitionPath());

@@ -2561,7 +2561,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         + Path.SEPARATOR + FILES.getPartitionPath())));
     assertTrue(fs.exists(new Path(getMetadataTableBasePath(basePath)
         + Path.SEPARATOR + MetadataPartitionType.RECORD_INDEX.getPartitionPath())));
-
   }
 
   /**

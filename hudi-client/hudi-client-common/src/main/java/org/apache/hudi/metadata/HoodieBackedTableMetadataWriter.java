@@ -975,48 +975,50 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    // The commit which is being rolled back on the dataset
-    final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
-    // Find the deltacommits since the last compaction
-    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
+    if (initialized && metadata != null) {
+      // The commit which is being rolled back on the dataset
+      final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
+      // Find the deltacommits since the last compaction
+      Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+          CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
 
-    // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
-    HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
-    HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
+      // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
+      HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
+      HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
 
-    // The deltacommit that will be rolled back
-    HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
+      // The deltacommit that will be rolled back
+      HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
 
-    // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
-    // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-    if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-      final String compactionInstantTime = compactionInstant.getTimestamp();
-      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
-        throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
-                + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
-            deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+      // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+        final String compactionInstantTime = compactionInstant.getTimestamp();
+        if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+          throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
+                  + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
+              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+        }
       }
-    }
 
-    // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
-    // a. any log files as part of RB commit metadata that was added
-    // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
-    // both above list should only be added to FILES partition.
+      // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
+      // a. any log files as part of RB commit metadata that was added
+      // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
+      // both above list should only be added to FILES partition.
 
-    String rollbackInstantTime = createRollbackTimestamp(instantTime);
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+      String rollbackInstantTime = createRollbackTimestamp(instantTime);
+      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
-    if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
-      LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
-      if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
-        throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+        LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
+        if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+        }
+      } else {
+        LOG.info(String.format("Ignoring rollback of instant %s at %s. The commit to rollback is not found in MDT",
+            commitToRollbackInstantTime, instantTime));
       }
-    } else {
-      LOG.info(String.format("Ignoring rollback of instant %s at %s. The commit to rollback is not found in MDT",
-          commitToRollbackInstantTime, instantTime));
+      closeInternal();
     }
-    closeInternal();
   }
 
   @Override
