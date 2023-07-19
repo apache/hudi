@@ -721,7 +721,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
-  public static final String WRITE_PREPPED_MERGE_KEY = "_hoodie.datasource.merge.prepped";
+  public static final String WRITE_PREPPED_MERGE_KEY = "_hoodie.datasource.merge.into.prepped";
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;

@@ -646,14 +646,7 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql prepped update and delete is enabled.")
-
-  val ENABLE_OPTIMIZED_SQL_MERGE_WRITES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.spark.sql.optimized.merge.enable")
-    .defaultValue("true")
-    .markAdvanced()
-    .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql prepped merge is enabled.")
+    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
