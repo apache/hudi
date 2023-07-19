@@ -107,8 +107,7 @@ public class HoodieMetadataWriteUtils {
             .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
             .withAutoClean(false)
             .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
             .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
             .build())
@@ -127,7 +126,7 @@ public class HoodieMetadataWriteUtils {
             // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
             // partitions together requiring UnBoundedCompactionStrategy.
             .withCompactionStrategy(new UnBoundedCompactionStrategy())
-            // Check if log compaction is enabled, this is needed for tables with lot of records.
+            // Check if log compaction is enabled, this is needed for tables with a lot of records.
             .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
