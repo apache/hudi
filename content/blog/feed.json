@@ -126,17 +126,6 @@
             }
         },
         {
-            "id": "/2023/06/06/TOCTOU",
-            "content_html": "<div url=\"https://medium.com/@simpsons/toctou-5224db6470dc\">Redirecting... please wait!! </div>",
-            "url": "https://hudi.apache.org/blog/2023/06/06/TOCTOU",
-            "title": "TOCTOU",
-            "summary": "Redirecting... please wait!!",
-            "date_modified": "2023-06-06T00:00:00.000Z",
-            "author": {
-                "name": "Sivabalan Narayanan"
-            }
-        },
-        {
             "id": "/2023/06/03/text-based-search-from-elastic-search-to-vector-search",
             "content_html": "<div url=\"https://medium.com/@m.kaushik90/text-based-search-from-elastic-search-to-vector-search-15d686258bf2\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search",

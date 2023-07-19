@@ -96,14 +96,6 @@
             <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/cleaner-and-archival-in-apache-hudi-9e15b08b2933">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
-            <title><![CDATA[TOCTOU]]></title>
-            <link>https://hudi.apache.org/cn/blog/2023/06/06/TOCTOU</link>
-            <guid>/2023/06/06/TOCTOU</guid>
-            <pubDate>Tue, 06 Jun 2023 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<div url="https://medium.com/@simpsons/toctou-5224db6470dc">Redirecting... please wait!! </div>]]></content:encoded>
-        </item>
-        <item>
             <title><![CDATA[Text-Based Search: From Elastic Search to Vector Search]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search</link>
             <guid>/2023/06/03/text-based-search-from-elastic-search-to-vector-search</guid>

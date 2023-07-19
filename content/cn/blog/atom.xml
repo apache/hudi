@@ -135,17 +135,6 @@
         </author>
     </entry>
     <entry>
-        <title type="html"><![CDATA[TOCTOU]]></title>
-        <id>/2023/06/06/TOCTOU</id>
-        <link href="https://hudi.apache.org/cn/blog/2023/06/06/TOCTOU"/>
-        <updated>2023-06-06T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<div url="https://medium.com/@simpsons/toctou-5224db6470dc">Redirecting... please wait!! </div>]]></content>
-        <author>
-            <name>Sivabalan Narayanan</name>
-        </author>
-    </entry>
-    <entry>
         <title type="html"><![CDATA[Text-Based Search: From Elastic Search to Vector Search]]></title>
         <id>/2023/06/03/text-based-search-from-elastic-search-to-vector-search</id>
         <link href="https://hudi.apache.org/cn/blog/2023/06/03/text-based-search-from-elastic-search-to-vector-search"/>
