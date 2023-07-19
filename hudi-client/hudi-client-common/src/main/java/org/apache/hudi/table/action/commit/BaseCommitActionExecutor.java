@@ -194,8 +194,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     txnManager.beginTransaction(inflightInstant);
     try {
       setCommitMetadata(result);
-      if (result.getCommitMetadata().isPresent() && config.getWriteConflictResolutionStrategy().
-          isConflictResolveRequired(result.getCommitMetadata().get().getOperationType())) {
+      if (result.getCommitMetadata().isPresent() && config.getWriteConflictResolutionStrategy()
+          .isConflictResolveRequired(result.getCommitMetadata().get().getOperationType())) {
         table.getMetaClient().reloadActiveTimeline();
         TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
             result.getCommitMetadata(), config, pendingInflightAndRequestedInstants);

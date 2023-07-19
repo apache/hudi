@@ -55,11 +55,11 @@ public class StateTransitionTimeBasedConflictResolutionStrategy
   @Override
   public Stream<HoodieInstant> getCompletedInstantsAfterCurrent(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                                 Option<Set<String>> pendingInstantsBeforeWrite) {
-     return metaClient.getActiveTimeline()
-              .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
-              .filterCompletedInstants()
-              .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
-              .getInstantsAsStream();
+    return metaClient.getActiveTimeline()
+        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
+        .filterCompletedInstants()
+        .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
+        .getInstantsAsStream();
   }
 
   @Override

@@ -28,8 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.List;
-import java.util.Set;
 
 /**
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is

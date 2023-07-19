@@ -19,8 +19,6 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;

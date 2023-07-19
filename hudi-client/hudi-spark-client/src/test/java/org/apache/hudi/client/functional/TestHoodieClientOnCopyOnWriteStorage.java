@@ -29,7 +29,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
-import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.StateTransitionTimeBasedConflictResolutionStrategy;

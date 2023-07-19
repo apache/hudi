@@ -42,7 +42,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -61,13 +60,17 @@ public class TestConflictResolutionStrategyWithBucketIndex extends HoodieCommonT
   }
 
   private static Stream<Arguments> additionalProps() {
-    return Arrays.stream(new Properties[]{new Properties() {{
-      setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-    }}, new Properties() {{
-      setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), StateTransitionTimeBasedConflictResolutionStrategy.class.getName());
-    }}}).map(Arguments::of);
+    return Stream.of(
+        Arguments.of(createProperties(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())),
+        Arguments.of(createProperties(StateTransitionTimeBasedConflictResolutionStrategy.class.getName()))
+    );
+  }
+
+  public static Properties createProperties(String conflictResolutionStrategyClassName) {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), conflictResolutionStrategyClassName);
+    properties.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
+    return properties;
   }
 
   @ParameterizedTest
@@ -124,7 +127,7 @@ public class TestConflictResolutionStrategyWithBucketIndex extends HoodieCommonT
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -159,7 +162,7 @@ public class TestConflictResolutionStrategyWithBucketIndex extends HoodieCommonT
 
   private void createCommit(String instantTime) throws Exception {
     String fileId1 = "00000001-file-" + instantTime + "-1";
-    String fileId2 = "00000002-file-"  + instantTime + "-2";
+    String fileId2 = "00000002-file-" + instantTime + "-2";
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");

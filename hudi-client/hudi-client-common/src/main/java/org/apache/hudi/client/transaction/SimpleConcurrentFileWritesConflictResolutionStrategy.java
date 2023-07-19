@@ -89,8 +89,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     return metaClient.getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
-        .filter(i -> compareTimestamps(i.getTimestamp(), GREATER_THAN, currentInstant.getTimestamp()) ||
-            (pendingInstantsBeforeWrite.isPresent() && pendingInstantsBeforeWrite.get().contains(i.getTimestamp())))
+        .filter(i -> compareTimestamps(i.getTimestamp(), GREATER_THAN, currentInstant.getTimestamp())
+            || (pendingInstantsBeforeWrite.isPresent() && pendingInstantsBeforeWrite.get().contains(i.getTimestamp())))
         .getInstantsAsStream();
   }
 
@@ -114,8 +114,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
 
     Set<String> actionsToPick = new HashSet<>();
 
-    if (REPLACE_COMMIT_ACTION.equals(currentInstant.getAction()) &&
-        ClusteringUtils.isPendingClusteringInstant(metaClient, currentInstant)) {
+    if (REPLACE_COMMIT_ACTION.equals(currentInstant.getAction())
+        && ClusteringUtils.isPendingClusteringInstant(metaClient, currentInstant)) {
       if (isIngestionPrimaryClustering()) {
         actionsToPick.add(COMMIT_ACTION);
         actionsToPick.add(DELTA_COMMIT_ACTION);
@@ -203,14 +203,16 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return true;
     } else if (operationType.equals(CLUSTER)) {
       return isIngestionPrimaryClustering();
-    } else return operationType.equals(LOG_COMPACT);
+    } else {
+      return operationType.equals(LOG_COMPACT);
+    }
   }
 
   /**
    * Whether ingestion takes precedence over clustering
    */
   public boolean isIngestionPrimaryClustering() {
-    return writeConfig.getClusteringUpdatesStrategyClass().
-        equals("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy");
+    return writeConfig.getClusteringUpdatesStrategyClass()
+        .equals("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy");
   }
 }

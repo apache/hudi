@@ -37,7 +37,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -63,23 +62,23 @@ public class TestConflictResolutionStrategyWithTableService extends HoodieCommon
     cleanMetaClient();
   }
 
-  private static final String SparkAllowUpdateStrategy = "org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy";
-  private static final String SparkRejectUpdateStrategy = "org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy";
+  private static final String SPARK_ALLOW_UPDATE_STRATEGY = "org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy";
+  private static final String SPARK_REJECT_UPDATE_STRATEGY = "org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy";
 
   private static Stream<Arguments> additionalProps() {
-    return Arrays.stream(new Properties[]{new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-      setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), SparkAllowUpdateStrategy);
-    }}, new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), StateTransitionTimeBasedConflictResolutionStrategy.class.getName());
-      setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), SparkAllowUpdateStrategy);
-    }}, new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-      setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), SparkRejectUpdateStrategy);
-    }}, new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-      setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), SparkRejectUpdateStrategy);
-    }}}).map(Arguments::of);
+    return Stream.of(
+        Arguments.of(createProperties(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName(), SPARK_ALLOW_UPDATE_STRATEGY)),
+        Arguments.of(createProperties(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName(), SPARK_REJECT_UPDATE_STRATEGY)),
+        Arguments.of(createProperties(StateTransitionTimeBasedConflictResolutionStrategy.class.getName(), SPARK_ALLOW_UPDATE_STRATEGY)),
+        Arguments.of(createProperties(StateTransitionTimeBasedConflictResolutionStrategy.class.getName(), SPARK_REJECT_UPDATE_STRATEGY))
+    );
+  }
+
+  public static Properties createProperties(String conflictResolutionStrategyClassName, String updatesStrategy) {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), conflictResolutionStrategyClassName);
+    properties.setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), updatesStrategy);
+    return properties;
   }
 
   @ParameterizedTest
@@ -191,7 +190,7 @@ public class TestConflictResolutionStrategyWithTableService extends HoodieCommon
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), Option.empty()).collect(
         Collectors.toList());
-    if (props.get(HoodieClusteringConfig.UPDATES_STRATEGY.key()).equals(SparkAllowUpdateStrategy)) {
+    if (props.get(HoodieClusteringConfig.UPDATES_STRATEGY.key()).equals(SPARK_ALLOW_UPDATE_STRATEGY)) {
       Assertions.assertEquals(0, candidateInstants.size());
     } else {
       Assertions.assertEquals(1, candidateInstants.size());

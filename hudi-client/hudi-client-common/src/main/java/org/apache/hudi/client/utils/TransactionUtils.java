@@ -24,12 +24,9 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -37,7 +34,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,8 +56,8 @@ public class TransactionUtils {
       final Option<HoodieInstant> currentTxnOwnerInstant,
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
-      Set<String> pendingInstants
-      ) throws HoodieWriteConflictException {
+      final Set<String> pendingInstants
+  ) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();

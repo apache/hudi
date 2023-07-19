@@ -39,7 +39,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -74,11 +73,16 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   private static Stream<Arguments> additionalProps() {
-    return Arrays.stream(new Properties[]{new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
-    }}, new Properties() {{
-      setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), StateTransitionTimeBasedConflictResolutionStrategy.class.getName());
-    }}}).map(Arguments::of);
+    return Stream.of(
+        Arguments.of(createProperties(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())),
+        Arguments.of(createProperties(StateTransitionTimeBasedConflictResolutionStrategy.class.getName()))
+    );
+  }
+
+  public static Properties createProperties(String conflictResolutionStrategyClassName) {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), conflictResolutionStrategyClassName);
+    return properties;
   }
 
   @ParameterizedTest
@@ -167,7 +171,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -197,7 +201,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -227,7 +231,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -280,7 +284,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -310,7 +314,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -340,7 +344,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+      strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -386,7 +390,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     metaClient.reloadActiveTimeline();
     timeline.reload();
     List<HoodieInstant> completedInstantsDuringCurrentWriteOperation = TransactionUtils
-            .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
+        .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
     // C1,C11,C12,C4 should be included
     Assertions.assertEquals(4, completedInstantsDuringCurrentWriteOperation.size());
 
@@ -396,7 +400,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
       ConcurrentOperation thatCommitOperation = new ConcurrentOperation(instant, metaClient);
       Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
       try {
-        strategy.resolveConflict( thisCommitOperation, thatCommitOperation);
+        strategy.resolveConflict(thisCommitOperation, thatCommitOperation);
         // C11 is COMPACTION, and C3 is created after C11, so the resolve can pass
         if (!instant.getTimestamp().equals(newCompactionInstantTimeC11)) {
           Assertions.fail("Cannot reach here, should have thrown a conflict");

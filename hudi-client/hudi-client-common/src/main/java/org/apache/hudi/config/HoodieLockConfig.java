@@ -17,7 +17,6 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.index.HoodieIndex;
 
 import java.io.File;
 import java.io.FileReader;
