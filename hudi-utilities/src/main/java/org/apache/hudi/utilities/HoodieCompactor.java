@@ -25,11 +25,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -45,6 +47,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -101,6 +104,12 @@ public class HoodieCompactor {
     public String runningMode = null;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
+    @Parameter(names = {"--job-max-processing-time-ms", "-mt"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. "
+        + "If maxProcessingTimeMs passed but compaction job is still unfinished, hoodie would consider this job as failed and relaunch.")
+    public long maxProcessingTimeMs = 0;
+    @Parameter(names = {"--retry-last-failed-compaction-job", "-rc"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. " +
+        "Set true means check, rollback and execute last failed compaction plan instead of planing a new compaction job directly.")
+    public Boolean retryLastFailedCompactionJob = false;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -265,11 +274,33 @@ public class HoodieCompactor {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
-        } else {
-          LOG.info("There is no scheduled compaction in the table.");
-          return 0;
+        }
+
+        if (cfg.retryLastFailedCompactionJob) {
+          if (cfg.maxProcessingTimeMs <= 0) {
+            throw new HoodieCompactionException("When --retry-last-failed-compaction-job set true, " +
+                "--compaction-max-processing-time-ms should greater than 0.");
+          }
+          HoodieTimeline inflightCompactionTimeline = metaClient.getActiveTimeline()
+              .filterPendingCompactionTimeline().filterInflights();
+          if (!inflightCompactionTimeline.empty()) {
+            HoodieInstant inflightInstant = inflightCompactionTimeline.firstInstant().get();
+            Date inflightStartTime = HoodieActiveTimeline.parseDateFromInstantTime(inflightInstant.getStateTransitionTime());
+            if (inflightStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
+              cfg.compactionInstantTime = inflightInstant.getTimestamp();
+              LOG.info("Found failed compaction instant, update the earliest scheduled compaction instant which will be executed: "
+                  + cfg.compactionInstantTime);
+            }
+          }
         }
       }
+
+      // do nothing if cfg.compactionInstantTime still is null
+      if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
+        LOG.info("There is no scheduled compaction in the table.");
+        return 0;
+      }
+
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
       clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
