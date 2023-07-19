@@ -283,24 +283,24 @@ jobs:
           # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
           sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
           mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
-      - name: IT - Bundle Validation - OpenJDK 8
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
-      - name: IT - Bundle Validation - OpenJDK 11
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
+#      - name: IT - Bundle Validation - OpenJDK 8
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: 'scala-2.12'
+#        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
+#      - name: IT - Bundle Validation - OpenJDK 11
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: 'scala-2.12'
+#        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}

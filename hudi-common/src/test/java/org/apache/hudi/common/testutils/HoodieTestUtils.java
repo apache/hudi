@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
 
 /**
  * A utility class for testing.
@@ -230,5 +232,19 @@ public class HoodieTestUtils {
       }
     }
     return Integer.parseInt(version);
+  }
+
+  public static boolean shouldUseExternalHdfs() {
+    return getJavaVersion() == 11 || getJavaVersion() == 17;
+  }
+
+  public static DistributedFileSystem useExternalHdfs() throws IOException {
+    // For Java 17, this unit test has to run in Docker
+    // Need to set -Duse.external.hdfs=true in mvn command to run this test
+    Assumptions.assumeTrue(Boolean.valueOf(System.getProperty("use.external.hdfs", "false")));
+    Configuration conf = new Configuration();
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "3");
+    return (DistributedFileSystem) DistributedFileSystem.get(conf);
   }
 }
