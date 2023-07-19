@@ -4,7 +4,7 @@
 | Syntax        | Description |
 |:--------------|:-----------:|
 | Last Updated  |  Aug 2022   |
-| [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L29) |      4      |
+| [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L29) |      5      |
 
 
 This document is a specification for the Hudi's Storage Format which transforms immutable cloud/file storage systems into transactional data lakes. 
