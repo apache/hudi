@@ -19,7 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.table.format.CastMapConverters.CastMapConverter;
+import org.apache.hudi.table.format.TypeConverters.TypeConverter;
 import org.apache.hudi.util.RowDataCastProjection;
 import org.apache.hudi.util.RowDataProjection;
 
@@ -84,7 +84,7 @@ public final class CastMap implements Serializable {
 
   @VisibleForTesting
   void add(int pos, LogicalType fromType, LogicalType toType) {
-    CastMapConverter converter = CastMapConverters.createConverter(fromType, toType);
+    TypeConverter converter = TypeConverters.getInstance(fromType, toType);
     if (converter == null) {
       throw new IllegalArgumentException(String.format("Cannot create cast %s => %s at pos %s", fromType, toType, pos));
     }
@@ -105,16 +105,16 @@ public final class CastMap implements Serializable {
 
     private final LogicalType from;
     private final LogicalType to;
-    private final CastMapConverter castMapConverter;
+    private final TypeConverter castMapConverter;
 
-    Cast(LogicalType from, LogicalType to, CastMapConverter conversion) {
+    Cast(LogicalType from, LogicalType to, TypeConverter conversion) {
       this.from = from;
       this.to = to;
       this.castMapConverter = conversion;
     }
 
     Object convert(Object val) {
-      return castMapConverter.getConversion(val);
+      return castMapConverter.convert(val);
     }
 
     @Override
