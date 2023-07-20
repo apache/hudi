@@ -49,7 +49,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Meta fields are not populated by default for metadata table
   public static final boolean DEFAULT_METADATA_POPULATE_META_FIELDS = false;
   // Default number of commits to retain, without cleaning, on metadata table
-  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 10;
+  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 20;
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
   public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";
