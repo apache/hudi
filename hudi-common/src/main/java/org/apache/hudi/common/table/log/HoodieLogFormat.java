@@ -124,6 +124,8 @@ public interface HoodieLogFormat {
     private Short replication;
     // FileSystem
     private FileSystem fs;
+    // Append old log file switch
+    private Boolean logAppendEnable;
     // Size threshold for the log file. Useful when used with a rolling log appender
     private Long sizeThreshold;
     // Log File extension. Could be .avro.delta or .avro.commits etc
@@ -175,6 +177,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withFs(FileSystem fs) {
       this.fs = fs;
+      return this;
+    }
+
+    public WriterBuilder withLogAppendEnable(Boolean logAppendEnable) {
+      this.logAppendEnable = logAppendEnable;
       return this;
     }
 
@@ -288,11 +295,14 @@ public interface HoodieLogFormat {
       if (replication == null) {
         replication = FSUtils.getDefaultReplication(fs, parentPath);
       }
+      if (logAppendEnable == null) {
+        logAppendEnable = true;
+      }
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
       return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold,
-          rolloverLogWriteToken, logFileWriteCallback);
+          rolloverLogWriteToken, logFileWriteCallback, logAppendEnable);
     }
   }
 

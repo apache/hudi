@@ -51,6 +51,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private FSDataOutputStream output;
 
   private final FileSystem fs;
+  private final Boolean logAppendEnable;
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -62,7 +63,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
-                        String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback) {
+                        String rolloverLogWriteToken, HoodieLogFileWriteCallback logFileWriteCallback, Boolean logAppendEnable) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
@@ -70,6 +71,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.logFileWriteCallback = logFileWriteCallback;
+    this.logAppendEnable = logAppendEnable;
     addShutDownHook();
   }
 
@@ -99,7 +101,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
         // here we use marker file to fence concurrent append to the same file. So it is safe to use speculation in spark now.
         boolean callbackSuccess = logFileWriteCallback.preLogFileOpen(logFile);
-        if (isAppendSupported && callbackSuccess) {
+        if (logAppendEnable && !isAppendSupported) {
+          LOG.info("Current file system : " + fs.getScheme() + " does not support append mode.");
+        }
+        if (logAppendEnable && isAppendSupported && callbackSuccess) {
           LOG.info(logFile + " exists. Appending to existing file");
           try {
             // open the path for append and record the offset
@@ -121,7 +126,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             }
           }
         }
-        if (!isAppendSupported || !callbackSuccess) {
+        if (!logAppendEnable || !isAppendSupported || !callbackSuccess) {
           rollOver();
           createNewFile();
           String rolloverReason = isAppendSupported ? "Append not supported" : "Callback failed";
