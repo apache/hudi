@@ -107,6 +107,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
+      + "{\"name\": \"trip_type\", \"type\": {\"type\": \"enum\", \"name\": \"TripType\", \"symbols\": [\"UNKNOWN\", \"UBERX\", \"BLACK\"], \"default\": \"UNKNOWN\"}},"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
@@ -357,6 +358,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("partition_path", partitionPath);
+    rec.put("trip_type", rand.nextInt(2) == 0 ? "UBERX" : "BLACK");
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("begin_lat", rand.nextDouble());

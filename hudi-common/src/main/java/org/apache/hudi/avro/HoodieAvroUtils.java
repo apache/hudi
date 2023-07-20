@@ -917,6 +917,7 @@ public class HoodieAvroUtils {
         case DOUBLE:
         case BYTES:
         case STRING:
+        case ENUM:
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
