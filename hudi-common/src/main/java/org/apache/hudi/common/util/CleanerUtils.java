@@ -130,16 +130,16 @@ public class CleanerUtils {
 
     if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
         && completedCommitsTimeline.countInstants() > commitsRetained) {
-      Option<HoodieInstant> earliestPendingCommits =
+      Option<HoodieInstant> earliestPendingCommit =
           commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
-      if (earliestPendingCommits.isPresent()) {
+      if (earliestPendingCommit.isPresent()) {
         // Earliest commit to retain must not be later than the earliest pending commit
         earliestCommitToRetain =
             completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants() - commitsRetained).map(nthInstant -> {
-              if (nthInstant.compareTo(earliestPendingCommits.get()) <= 0) {
+              if (nthInstant.compareTo(earliestPendingCommit.get()) <= 0) {
                 return Option.of(nthInstant);
               } else {
-                return completedCommitsTimeline.findInstantsBefore(earliestPendingCommits.get().getTimestamp()).lastInstant();
+                return completedCommitsTimeline.findInstantsBefore(earliestPendingCommit.get().getTimestamp()).lastInstant().or(earliestPendingCommit);
               }
             }).orElse(Option.empty());
       } else {

@@ -19,6 +19,8 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -27,22 +29,29 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -61,6 +70,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -682,5 +693,57 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     assertTrue(testTable.baseFileExists(p1, secondCommitTs, file1P1C0));
     assertFalse(testTable.baseFileExists(p0, firstCommitTs, file1P0C0));
     assertFalse(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
+  }
+
+  @Test
+  public void testGetEarliestCommitToRetain() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+            .withPath(basePath)
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                    .withAssumeDatePartitioning(true)
+                    .build())
+            .withAutoCommit(false)
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                    .withIncrementalCleaningMode(true)
+                    .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .retainCommits(5)
+                    .build())
+            .build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    IntStream.rangeClosed(1, 9).mapToObj(i -> {
+      String newCommitTime = "00" + i;
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      writeClient.startCommitWithTime(newCommitTime);
+      JavaRDD<WriteStatus> writeStatues = writeClient.insert(writeRecords, newCommitTime);
+      // Assuming the first commit is pending, simulating the situation where all instants before the first pending commit have been achieved.
+      if (i != 1)
+        writeClient.commit(newCommitTime, writeStatues);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      CleanPlanner planner = new CleanPlanner<>(context, table, config);
+      Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
+      // The retainCommits is set to 5, so getEarliestCommitToRetain will not be obtained until six data is inserted
+      if (i < 6) {
+        assertTrue(!earliestInstant.isPresent());
+      } else {
+        earliestInstant.ifPresent(instant -> {
+          assertEquals(metaClient.getActiveTimeline().firstInstant().orElse(null), instant);
+        });
+      }
+      // Simulating the situation where other commits can be normally cleaned after the first pending commit is submitted, and checking if the correct committed instants are obtained based on the set retainCommits.
+      if (i == 9) {
+        writeClient.commit("001", writeStatues);
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        table = HoodieSparkTable.create(config, context, metaClient);
+        planner = new CleanPlanner<>(context, table, config);
+        earliestInstant = planner.getEarliestCommitToRetain();
+        HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
+        assertEquals(commitTimeline.nthInstant(commitTimeline.countInstants() - 5), earliestInstant);
+      }
+      return earliestInstant;
+    }).collect(Collectors.toList());
   }
 }
