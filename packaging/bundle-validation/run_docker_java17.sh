@@ -22,10 +22,13 @@ docker ps -a
 docker start $CONTAINER_NAME
 HADOOP_HOME=$(docker exec $CONTAINER_NAME printenv HADOOP_HOME)
 echo "HADOOP_HOME: $HADOOP_HOME"
+echo "pwd: $(pwd)"
+ls -l
+docker ps
 
 # Upload config
-docker cp conf/core-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/core-site.xml
-docker cp conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
+docker cp packaging/bundle-validation/conf/core-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/core-site.xml
+docker cp packaging/bundle-validation/conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
 
 # Start test script
-docker exec $CONTAINER_NAME bash docker_java17/docker_java17_tests.sh $SPARK_PROFILE $SCALA_PROFILE
+docker exec $CONTAINER_NAME bash packaging/bundle-validation/docker_java17/docker_java17_tests.sh $SPARK_PROFILE $SCALA_PROFILE
