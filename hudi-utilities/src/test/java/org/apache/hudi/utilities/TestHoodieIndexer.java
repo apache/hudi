@@ -65,7 +65,6 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.METADATA_INDEXER_TIME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
@@ -186,7 +185,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metadataConfig, metaClient.getBasePathV2().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
-    String mdtCommitTime = indexUptoInstantTime + METADATA_INDEXER_TIME_SUFFIX;
+    String mdtCommitTime = HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime);
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
 
     // Reverts both instants to inflight state, to simulate inflight indexing instants

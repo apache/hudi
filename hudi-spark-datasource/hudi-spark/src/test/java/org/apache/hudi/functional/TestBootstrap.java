@@ -256,6 +256,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass)
             .withBootstrapModeForRegexMatch(modeForRegexMatch).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3).build())
         .build();
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);

@@ -228,7 +228,8 @@ public class TestClientRollback extends HoodieClientTestBase {
   @Test
   public void testGetSavepointOldSchema() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
-        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
+        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
