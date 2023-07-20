@@ -123,6 +123,16 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
 
+  public static final DataType ROW_DATA_TYPE_BIGINT = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.BIGINT()),
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_BIGINT = (RowType) ROW_DATA_TYPE_BIGINT.getLogicalType();
+
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");
   }
