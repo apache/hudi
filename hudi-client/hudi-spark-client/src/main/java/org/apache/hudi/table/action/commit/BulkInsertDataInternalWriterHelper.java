@@ -19,14 +19,11 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -44,7 +41,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.UUID;
 
 /**
@@ -102,7 +98,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.fileIdPrefix = UUID.randomUUID().toString();
 
     if (!populateMetaFields) {
-      this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
+      this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(writeConfig.getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();
     }
@@ -115,29 +111,6 @@ public class BulkInsertDataInternalWriterHelper {
       this.simpleKeyGen = false;
       this.simplePartitionFieldIndex = -1;
       this.simplePartitionFieldDataType = null;
-    }
-  }
-
-  /**
-   * Instantiate {@link BuiltinKeyGenerator}.
-   *
-   * @param properties properties map.
-   * @return the key generator thus instantiated.
-   */
-  private Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
-    TypedProperties typedProperties = new TypedProperties();
-    typedProperties.putAll(properties);
-    if (Option.ofNullable(properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
-        .map(v -> v.equals(NonpartitionedKeyGenerator.class.getName())).orElse(false)) {
-      return Option.empty(); // Do not instantiate NonPartitionKeyGen
-    } else {
-      try {
-        return Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
-      } catch (ClassCastException cce) {
-        throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
-      } catch (IOException e) {
-        throw new HoodieIOException("Key generator instantiation failed ", e);
-      }
     }
   }
 

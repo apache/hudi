@@ -18,13 +18,16 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
+import org.apache.hudi.index.HoodieIndex.IndexType
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
@@ -1612,59 +1615,112 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        // Create a partitioned table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  dt string,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (
-             | primaryKey = 'id,name',
-             | type = 'mor',
-             | preCombineField = 'ts',
-             | hoodie.index.type = 'BUCKET',
-             | hoodie.index.bucket.engine = 'CONSISTENT_HASHING',
-             | hoodie.bucket.index.hash.field = 'id,name'
-             | )
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
+      Seq("false", "true").foreach { bulkInsertAsRow =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  dt string,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               | primaryKey = 'id,name',
+               | type = 'mor',
+               | preCombineField = 'ts',
+               | hoodie.index.type = 'BUCKET',
+               | hoodie.index.bucket.engine = 'CONSISTENT_HASHING',
+               | hoodie.bucket.index.hash.field = 'id,name',
+               | hoodie.datasource.write.row.writer.enable = '$bulkInsertAsRow'
+               | )
+               | partitioned by (dt)
+               | location '${basePath}'
            """.stripMargin)
 
-        // Note: Do not write the field alias, the partition field must be placed last.
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1,1', 10, 1000, "2021-01-05"),
-             | (2, 'a2', 20, 2000, "2021-01-06"),
-             | (3, 'a3,3', 30, 3000, "2021-01-07")
-           """.stripMargin)
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1,1', 10, 1000, "2021-01-05"),
+               | (2, 'a1,2', 10, 1000, "2021-01-05"),
+               | (1, 'a2,1', 20, 2000, "2021-01-06"),
+               | (2, 'a2,2', 20, 2000, "2021-01-06"),
+               | (1, 'a3,1', 30, 3000, "2021-01-07"),
+               | (2, 'a3,2', 30, 3000, "2021-01-07")
+            """.stripMargin)
 
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-          Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+            Seq(2, "a1,2", 10.0, 1000, "2021-01-05"),
+            Seq(1, "a2,1", 20.0, 2000, "2021-01-06"),
+            Seq(2, "a2,2", 20.0, 2000, "2021-01-06"),
+            Seq(1, "a3,1", 30.0, 3000, "2021-01-07"),
+            Seq(2, "a3,2", 30.0, 3000, "2021-01-07")
+          )
 
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1', 10, 1000, "2021-01-05"),
-             | (3, "a3", 30, 3000, "2021-01-07")
-         """.stripMargin)
+          // there are six files in the table, each partition contains two files
+          checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName")(
+            Seq(6)
+          )
 
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-          Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
-          Seq(3, "a3", 30.0, 3000, "2021-01-07")
-        )
+          val insertStatement =
+            s"""
+               | insert into $tableName values
+               | (1, 'a1,1', 11, 1000, "2021-01-05"),
+               | (2, 'a1,2', 11, 1000, "2021-01-05"),
+               | (3, 'a2,1', 21, 2000, "2021-01-05"),
+               | (4, 'a2,2', 21, 2000, "2021-01-05"),
+               | (5, 'a3,1', 31, 3000, "2021-01-05"),
+               | (6, 'a3,2', 31, 3000, "2021-01-05")
+            """.stripMargin
+
+          // We can only upsert to existing consistent hashing bucket index table
+          checkExceptionContain(insertStatement)("Consistent Hashing bulk_insert only support write to new file group")
+
+          spark.sql("set hoodie.datasource.write.operation = upsert")
+          spark.sql(insertStatement)
+
+          checkAnswer(s"select id, name, price, ts, dt from $tableName where dt = '2021-01-05'")(
+            Seq(1, "a1,1", 11.0, 1000, "2021-01-05"),
+            Seq(2, "a1,2", 11.0, 1000, "2021-01-05"),
+            Seq(3, "a2,1", 21.0, 2000, "2021-01-05"),
+            Seq(4, "a2,2", 21.0, 2000, "2021-01-05"),
+            Seq(5, "a3,1", 31.0, 3000, "2021-01-05"),
+            Seq(6, "a3,2", 31.0, 3000, "2021-01-05")
+          )
+
+          val clusteringOptions: Map[String, String] = Map(
+            s"${RECORDKEY_FIELD.key()}" -> "id,name",
+            s"${ENABLE_ROW_WRITER.key()}" -> s"${bulkInsertAsRow}",
+            s"${HoodieIndexConfig.INDEX_TYPE.key()}" -> s"${IndexType.BUCKET.name()}",
+            s"${HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()}" -> "id,name",
+            s"${HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()}" -> "CONSISTENT_HASHING",
+            s"${HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME.key()}" -> "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy",
+            s"${HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key()}" -> "org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy"
+          )
+
+          val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, clusteringOptions, Option(tableName))
+          val instant = HoodieActiveTimeline.createNewInstantTime
+
+          // Test bucket merge by clustering
+          client.scheduleClusteringAtInstant(instant, HOption.empty())
+
+          checkAnswer(s"call show_clustering(table => '$tableName')")(
+            Seq(instant, 10, HoodieInstant.State.REQUESTED.name(), "*")
+          )
+
+          client.cluster(instant)
+
+          checkAnswer(s"call show_clustering(table => '$tableName')")(
+            Seq(instant, 10, HoodieInstant.State.COMPLETED.name(), "*")
+          )
+
+          spark.sql("set hoodie.datasource.write.operation = bulk_insert")
+        }
       }
     }
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")

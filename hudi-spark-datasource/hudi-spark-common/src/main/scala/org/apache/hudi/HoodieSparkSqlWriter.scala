@@ -368,7 +368,7 @@ object HoodieSparkSqlWriter {
 
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
-            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT && !isConsistentHashingBucketIndex(client)) {
+            if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
               return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath,
                 instantTime, writerSchema, tableConfig)
             }
@@ -1082,10 +1082,6 @@ object HoodieSparkSqlWriter {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
       && client.getConfig.isAsyncClusteringEnabled)
-  }
-
-  private def isConsistentHashingBucketIndex(client: SparkRDDWriteClient[_]): Boolean = {
-    client.getConfig.getIndexType == IndexType.BUCKET && client.getConfig.getBucketIndexEngineType == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING
   }
 
   /**
