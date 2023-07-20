@@ -291,7 +291,6 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/run_docker_java17.sh
-          
 
 #  validate-release-candidate-bundles:
 #    if: false
