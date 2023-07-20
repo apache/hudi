@@ -502,7 +502,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsRequiredBeforeWrite()) {
+    if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsBeforeWriteRequired()) {
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, instantTime);
       tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
     }

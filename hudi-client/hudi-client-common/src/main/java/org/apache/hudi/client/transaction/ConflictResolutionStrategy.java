@@ -66,7 +66,7 @@ public interface ConflictResolutionStrategy {
    * Whether to record the pending instants before write.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  boolean isPendingInstantsRequiredBeforeWrite();
+  boolean isPendingInstantsBeforeWriteRequired();
 
   /**
    * Whether the write operation needs to do conflict detection.

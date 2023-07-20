@@ -18,12 +18,14 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieLockConfig;
@@ -39,6 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,6 +49,7 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompactionRequested;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceInflight;
@@ -271,4 +275,177 @@ public class TestConflictResolutionStrategyWithTableService extends HoodieCommon
     }
   }
 
+  /**
+   * Test get candidate instants, all instants are ingestion
+   */
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testGetCandidateInstantsWithIngestion(Properties props) throws Exception {
+    // The whole process requires two reload active timeline, before write, pre commit
+    //
+    //                      start            end
+    // current               <---------------->
+    // instant1  <------>
+    // instant2    <------------> pick
+    // instant3       <--------------------------------->
+    // instant4                   <---------> pick
+    // instant5                      <---------------------->
+
+    String instant1 = HoodieTestTable.makeNewCommitTime();
+    createCommit(instant1, metaClient);
+
+    String instant2 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant2, metaClient);
+
+    String instant3 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant3, metaClient);
+
+    String current = HoodieTestTable.makeNewCommitTime();
+    // before write: reload active timeline, collect pending instants
+    metaClient.reloadActiveTimeline();
+    Set<String> pendingInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, current);
+    createInflightCommit(current, metaClient);
+
+    createCompleteCommit(instant2, metaClient);
+
+    String instant4 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant4, metaClient);
+
+    String instant5 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant5, metaClient);
+
+    createCompleteCommit(instant4, metaClient);
+
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+
+    // pre commit: reload active timeline, getCandidateInstants
+    metaClient.reloadActiveTimeline();
+    HoodieInstant currentInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, current);
+    List<String> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant, Option.of(pendingInstants))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
+
+    // Since the above instants are all ingestion, current's priority is the highest
+    // 2 and 4 (mandatory) are picked, 3 and 5 (optional) are excluded
+    Assertions.assertEquals(2, candidateInstants.size());
+    Assertions.assertTrue(candidateInstants.contains(instant2));
+    Assertions.assertTrue(candidateInstants.contains(instant4));
+  }
+
+  /**
+   * Test get candidate instants, current is ingestion, pending is clustering
+   */
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testGetCandidateInstantsWithIngestionToClustering(Properties props) throws Exception {
+    //                                                                 start            end
+    // current  (ingestion)                                             <---------------->
+    // instant1 (clustering, scheduled before current start)     <------------------------------->
+    // instant2 (clustering, scheduled after current start)                 <----------------------> pick if not with SparkAllowUpdateStrategy
+
+    String instant1 = HoodieTestTable.makeNewCommitTime();
+    createReplaceRequested(instant1, metaClient);
+
+    String current = HoodieTestTable.makeNewCommitTime();
+    // before write: reload active timeline, collect pending instants
+    metaClient.reloadActiveTimeline();
+    Set<String> pendingInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, current);
+    createInflightCommit(current, metaClient);
+
+    String instant2 = HoodieTestTable.makeNewCommitTime();
+    createReplaceRequested(instant2, metaClient);
+
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+
+    // pre commit: reload active timeline, getCandidateInstants
+    metaClient.reloadActiveTimeline();
+    HoodieInstant currentInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, current);
+    List<String> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant, Option.of(pendingInstants))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
+
+    if (props.get(HoodieClusteringConfig.UPDATES_STRATEGY.key()).equals(SPARK_ALLOW_UPDATE_STRATEGY)) {
+      Assertions.assertEquals(0, candidateInstants.size());
+    } else {
+      Assertions.assertEquals(1, candidateInstants.size());
+      Assertions.assertTrue(candidateInstants.contains(instant2));
+    }
+  }
+
+  /**
+   * Test get candidate instants, current is clustering, pending is ingestion
+   */
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testGetCandidateInstantsWithClusteringToIngestion(Properties props) throws Exception {
+    //                                                                 scheduled          end
+    // current  (clustering)                                             <---------------->
+    // instant1 (ingestion, start before clustering scheduled)     <------------------------------>   pick
+    // instant2 (ingestion, start after clustering scheduled)               <-----------------------> pick
+
+    String instant1 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant1, metaClient);
+
+    String current = HoodieTestTable.makeNewCommitTime();
+    // before write: reload active timeline, collect pending instants
+    metaClient.reloadActiveTimeline();
+    Set<String> pendingInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, current);
+    createReplaceRequested(current, metaClient);
+
+    String instant2 = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(instant2, metaClient);
+
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+
+    // pre commit: reload active timeline, getCandidateInstants
+    metaClient.reloadActiveTimeline();
+    HoodieInstant currentInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, current);
+    List<String> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant, Option.of(pendingInstants))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
+
+    if (props.get(HoodieClusteringConfig.UPDATES_STRATEGY.key()).equals(SPARK_ALLOW_UPDATE_STRATEGY)) {
+      Assertions.assertEquals(2, candidateInstants.size());
+      Assertions.assertTrue(candidateInstants.contains(instant1));
+      Assertions.assertTrue(candidateInstants.contains(instant2));
+    } else {
+      Assertions.assertEquals(0, candidateInstants.size());
+    }
+  }
+
+  /**
+   * Test get candidate instants, current is ingestion, pending is compaction
+   */
+  @ParameterizedTest
+  @MethodSource("additionalProps")
+  public void testGetCandidateInstantsWithIngestionToCompaction(Properties props) throws Exception {
+    //                                                                 start            end
+    // current  (ingestion)                                             <---------------->
+    // instant1 (compaction, scheduled before current start)     <------------------------------->
+    // instant2 (compaction, scheduled after current start)                 <----------------------> pick
+
+    String instant1 = HoodieTestTable.makeNewCommitTime();
+    createCompactionRequested(instant1, metaClient);
+
+    String current = HoodieTestTable.makeNewCommitTime();
+    // before write: reload active timeline, collect pending instants
+    metaClient.reloadActiveTimeline();
+    Set<String> pendingInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(metaClient, current);
+    createInflightCommit(current, metaClient);
+
+    String instant2 = HoodieTestTable.makeNewCommitTime();
+    createCompactionRequested(instant2, metaClient);
+
+    ConflictResolutionStrategy strategy = TestConflictResolutionStrategyUtil.getConflictResolutionStrategy(metaClient, props);
+
+    // pre commit: reload active timeline, getCandidateInstants
+    metaClient.reloadActiveTimeline();
+    HoodieInstant currentInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, current);
+    List<String> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant, Option.of(pendingInstants))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
+
+    Assertions.assertEquals(1, candidateInstants.size());
+    Assertions.assertTrue(candidateInstants.contains(instant2));
+  }
 }

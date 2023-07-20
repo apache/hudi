@@ -63,7 +63,7 @@ public class StateTransitionTimeBasedConflictResolutionStrategy
   }
 
   @Override
-  public boolean isPendingInstantsRequiredBeforeWrite() {
+  public boolean isPendingInstantsBeforeWriteRequired() {
     return false;
   }
 }

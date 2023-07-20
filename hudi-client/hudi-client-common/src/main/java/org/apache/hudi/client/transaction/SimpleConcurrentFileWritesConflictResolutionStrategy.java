@@ -190,7 +190,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   }
 
   @Override
-  public boolean isPendingInstantsRequiredBeforeWrite() {
+  public boolean isPendingInstantsBeforeWriteRequired() {
     return true;
   }
 

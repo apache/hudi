@@ -94,7 +94,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     //  is held in {@link BaseHoodieWriteClient}, https://issues.apache.org/jira/browse/HUDI-6566
     if (config.shouldAutoCommit()) {
       this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-      if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsRequiredBeforeWrite()) {
+      if (txnManager.isLockRequired() && config.getWriteConflictResolutionStrategy().isPendingInstantsBeforeWriteRequired()) {
         this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstantsWithoutCurrent(table.getMetaClient(), instantTime);
       } else {
         this.pendingInflightAndRequestedInstants = null;
