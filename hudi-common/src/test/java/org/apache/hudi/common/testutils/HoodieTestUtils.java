@@ -244,7 +244,7 @@ public class HoodieTestUtils {
     Assumptions.assumeTrue(Boolean.valueOf(System.getProperty("use.external.hdfs", "false")));
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
-    conf.set("dfs.replication", "10");
+    conf.set("dfs.replication", "8");
     return (DistributedFileSystem) DistributedFileSystem.get(conf);
   }
 }
