@@ -624,6 +624,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
       SPARK_SQL_OPTIMIZED_WRITES.defaultValue())
+
+    val keyGeneratorClassName = if (enableOptimizedMerge == "true") {
+      classOf[MergeIntoKeyGenerator].getCanonicalName
+    } else {
+      classOf[SqlKeyGenerator].getCanonicalName
+    }
+
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -632,11 +639,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      KEYGENERATOR_CLASS_NAME.key -> (if (enableOptimizedMerge == "true") {
-        classOf[MergeIntoKeyGenerator].getCanonicalName
-      } else {
-        classOf[SqlKeyGenerator].getCanonicalName
-      }),
+      KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),

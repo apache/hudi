@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.spark.sql.internal.SQLConf
@@ -24,7 +25,7 @@ import org.apache.spark.sql.internal.SQLConf
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
-    Seq(true, false).foreach { optimizedSqlEnabled =>
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = false")
         val tableName = generateTableName
@@ -45,7 +46,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
        """.stripMargin)
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
         // First merge with a extra input field 'flag' (insert a new record)
         spark.sql(
@@ -1192,7 +1193,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with partial insert") {
-    Seq(true, false).foreach { optimizedSqlEnabled =>
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
         // Create a partitioned mor table
@@ -1216,7 +1217,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
         spark.sql(
           s"""

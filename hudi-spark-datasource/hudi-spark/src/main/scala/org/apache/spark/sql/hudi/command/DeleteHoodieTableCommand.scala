@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_WRITE_PREPPED_KEY, SPARK_SQL_OPTIMIZED_WRITES}
+import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_OPTIMIZED_WRITES}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -55,7 +55,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
 
     val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
-      buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITE_PREPPED_KEY -> "true")
+      buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession)
     }

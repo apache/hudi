@@ -313,7 +313,7 @@ object DataSourceWriteOptions {
   /**
    * Config key with boolean value that indicates whether record being written is already prepped.
    */
-  val SPARK_SQL_WRITE_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
+  val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
     * May be derive partition path from incoming df if not explicitly set.

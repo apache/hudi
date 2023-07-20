@@ -258,7 +258,7 @@ object HoodieSparkSqlWriter {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITE_PREPPED_KEY, false)
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
             val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
               None
             } else {
@@ -356,9 +356,9 @@ object HoodieSparkSqlWriter {
             }
 
             // Remove meta columns from writerSchema if isPrepped is true.
-            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITE_PREPPED_KEY, false)
-            val mergeIntoWrites = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-            val processedDataSchema = if (isPrepped || mergeIntoWrites) {
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
+            val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+            val processedDataSchema = if (isPrepped || sqlMergeIntoPrepped) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
@@ -395,7 +395,7 @@ object HoodieSparkSqlWriter {
             val hoodieRecords =
               HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(df,
                 writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                processedDataSchema, operation, instantTime, isPrepped, mergeIntoWrites))
+                processedDataSchema, operation, instantTime, isPrepped, sqlMergeIntoPrepped))
 
             val dedupedHoodieRecords =
               if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {

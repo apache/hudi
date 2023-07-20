@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
 
 class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test Merge into extra cond") {
-    Seq(true, false).foreach { optimizedSqlEnabled =>
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(
@@ -71,7 +72,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |""".stripMargin)
 
         // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.optimized.writes.enable=$optimizedSqlEnabled")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
         spark.sql(
           s"""
@@ -143,7 +144,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
   test("Test pkless complex merge cond") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
-      spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
+      spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -218,7 +219,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
     for (withPrecombine <- Seq(true, false)) {
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
-        spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
         val tableName = generateTableName
 
         val prekstr = if (withPrecombine) "tblproperties (preCombineField = 'ts')" else ""
@@ -271,7 +272,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
   test("Test MergeInto Basic pkless") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
-      spark.sql("set hoodie.spark.sql.optimized.writes.enable=true")
+      spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
       val tableName = generateTableName
       // Create table
       spark.sql(
