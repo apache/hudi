@@ -145,6 +145,11 @@ run_docker_tests() {
 # Execute tests
 ############################
 cd $DOCKER_TEST_DIR
+echo "yxchang: $(PATH)"
+export PATH=/usr/bin:$PATH
+whoami
+which ssh
+whoami
 
 echo "::warning::docker_test_java17.sh Building Hudi with Java 8"
 build_hudi_java8
