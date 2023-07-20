@@ -38,6 +38,7 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
@@ -440,7 +441,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
     boolean isValid = data == null || data instanceof UnsafeRow
-        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data) || data instanceof SpecificInternalRow);
 
     ValidationUtils.checkState(isValid);
   }

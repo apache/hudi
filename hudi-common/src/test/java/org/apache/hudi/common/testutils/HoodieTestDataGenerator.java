@@ -785,6 +785,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
   }
 
+  public HoodieRecord generateUpdateRecord(HoodieKey key, String instantTime, Boolean isFlattened) throws IOException {
+    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, isFlattened));
+  }
+
   public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
   }
@@ -834,6 +838,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
       KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
+      updates.add(record);
+    }
+    return updates;
+  }
+
+  public List<HoodieRecord> generateUpdates(String instantTime, Integer n, Boolean isFlattened) throws IOException {
+    List<HoodieRecord> updates = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+      Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
+      HoodieRecord record = generateUpdateRecord(kp.key, instantTime, isFlattened);
       updates.add(record);
     }
     return updates;

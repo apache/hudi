@@ -29,11 +29,11 @@ import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator.scanLog
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
-import org.apache.hudi.{AvroProjection, HoodieBaseRelation, HoodieMergeOnReadFileSplit, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, SparkAdapterSupport}
+import org.apache.hudi.{AvroProjection, HoodieBaseRelation, HoodieMergeOnReadFileSplit, HoodieSparkRecordMerger, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, SparkAdapterSupport}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord, HoodieSparkRecord}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieAvroRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -45,21 +45,26 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.util.CachingIterator
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
-import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, JoinedRow, Projection}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.vectorized.{ColumnVectorUtils, UpdateableColumnVector, WritableColumnVector}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 import java.net.URI
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+import collection.JavaConverters._
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter, seqAsJavaListConverter}
 import scala.util.Try
 
@@ -76,13 +81,14 @@ class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val dataReader =   super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields ++ partitionSchema.fields), StructType(Seq.empty), StructType(requiredSchema.fields ++ partitionSchema.fields), filters, options, hadoopConf, shouldAppendOverride = false)
-    val bootstrapDataReader =  super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name))),
+    val dataReader: PartitionedFile => Iterator[Object] =  super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields ++ partitionSchema.fields), StructType(Seq.empty), StructType(requiredSchema.fields ++ partitionSchema.fields), filters, options, hadoopConf, shouldAppendOverride = false)
+    val bootstrapDataReader: PartitionedFile => Iterator[Object] =  super.buildReaderWithPartitionValues(sparkSession, StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name))),
       partitionSchema, StructType(requiredSchema.fields.filterNot(sf => isMetaField(sf.name))), Seq.empty, options, hadoopConf, shouldAppendOverride = true, "base")
-    val skeletonReader = super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+    val skeletonReader: PartitionedFile => Iterator[Object] = super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
       HoodieSparkUtils.getMetaSchema, Seq.empty, options, hadoopConf, shouldAppendOverride = false, "skeleton")
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+    val enableOffHeapColumnVector = sparkSession.sessionState.conf.offHeapColumnVectorEnabled
     (file: PartitionedFile) => {
       if (file.partitionValues.isInstanceOf[InternalRowBroadcast]) {
         val broadcast = file.partitionValues.asInstanceOf[InternalRowBroadcast]
@@ -96,24 +102,63 @@ class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boo
             0, baseFile.getBootstrapBaseFile.get().getFileLen)
           val skeletonFile = createPartitionedFile(
             InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen)
-          merge(skeletonReader(skeletonFile), bootstrapDataReader(dataFile), requiredSchema.toAttributes ++ partitionSchema.toAttributes)
+
+          (skeletonReader(skeletonFile), bootstrapDataReader(dataFile)) match {
+            case (skeleton: Iterator[ColumnarBatch], data: Iterator[ColumnarBatch]) =>
+              columnarMerge(skeleton, data)
+            //do we need more cases?
+            case (skeleton: Iterator[InternalRow], data: Iterator[InternalRow]) =>
+              merge(skeleton, data, requiredSchema.toAttributes ++ partitionSchema.toAttributes)
+          }
         } else {
           val dataFile = createPartitionedFile(InternalRow.empty, baseFile.getHadoopPath, 0, baseFile.getFileLen)
           dataReader(dataFile)
         }
         val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
         if (logFiles.isEmpty) {
-          baseIt
+          baseIt.asInstanceOf[Iterator[InternalRow]]
         } else {
-          new RecordMergingFileIterator(logFiles, filePath.getParent, baseIt, StructType(dataSchema.fields ++ partitionSchema.fields),
-            tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
-            tableState.value,broadcastedHadoopConf.value.value)
+          baseIt match {
+            case iter: Iterator[ColumnarBatch] => new ColumnarMergingIterator(logFiles, filePath.getParent, iter, StructType(dataSchema.fields ++ partitionSchema.fields),
+              tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
+              tableState.value, broadcastedHadoopConf.value.value, enableOffHeapColumnVector).asInstanceOf[Iterator[InternalRow]]
+            case iter: Iterator[InternalRow] => new RecordMergingFileIterator(logFiles, filePath.getParent, iter, StructType(dataSchema.fields ++ partitionSchema.fields),
+              tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
+              tableState.value, broadcastedHadoopConf.value.value)
+          }
         }
       } else {
-        dataReader(file)
+        dataReader(file).asInstanceOf[Iterator[InternalRow]]
       }
     }
   }
+
+  def columnarMerge(skeletonFileIterator: Iterator[ColumnarBatch], dataFileIterator: Iterator[ColumnarBatch]): Iterator[ColumnarBatch] = {
+    new Iterator[ColumnarBatch] {
+
+      override def hasNext: Boolean = {
+        checkState(dataFileIterator.hasNext == skeletonFileIterator.hasNext,
+          "Bootstrap data-file iterator and skeleton-file iterator have to be in-sync!")
+        dataFileIterator.hasNext && skeletonFileIterator.hasNext
+      }
+
+      override def next(): ColumnarBatch = {
+        val dataBatch = dataFileIterator.next()
+        val skeletonBatch = skeletonFileIterator.next()
+        val numCols = skeletonBatch.numCols() + dataBatch.numCols()
+        val vecs: Array[ColumnVector] = new Array[ColumnVector](numCols)
+        for (i <- 0 until numCols) {
+          if (i < skeletonBatch.numCols()) {
+            vecs(i) = skeletonBatch.column(i)
+          } else {
+            vecs(i) = dataBatch.column(i - skeletonBatch.numCols())
+          }
+        }
+        new ColumnarBatch(vecs, skeletonBatch.numRows())
+      }
+    }
+  }
+
 
   def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow], mergedSchema: Seq[Attribute]): Iterator[InternalRow] = {
     val combinedRow = new JoinedRow()
@@ -121,6 +166,81 @@ class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boo
     skeletonFileIterator.zip(dataFileIterator).map(i => unsafeProjection(combinedRow(i._1, i._2)))
   }
 }
+
+class ColumnarMergingIterator(logFiles: List[HoodieLogFile],
+                              partitionPath: Path,
+                              colBatchIterator: Iterator[ColumnarBatch],
+                              readerSchema: StructType,
+                              dataSchema: HoodieTableSchema,
+                              requiredSchema: StructType,
+                              tableName: String,
+                              tableState: HoodieTableState,
+                              config: Configuration,
+                              enableOffHeapColumnVector: Boolean) extends CachingIterator[ColumnarBatch] with SparkAdapterSupport with AvroDeserializerSupport {
+
+  private val logIter = new LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableName, tableState, config)
+  private val recordKeyOrdinal = readerSchema.fieldIndex(tableState.recordKeyField)
+  protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
+    .map { preCombineField =>
+      HoodiePayloadConfig.newBuilder
+        .withPayloadOrderingField(preCombineField)
+        .build
+        .getProps
+    }
+    .getOrElse(new TypedProperties())
+  private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(readerSchema, nullable = false, "record")
+  lazy private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
+  protected override val avroSchema: Schema = HoodieBaseRelation.convertToAvroSchema(requiredSchema, tableName)
+  protected override val structTypeSchema: StructType = requiredSchema
+
+
+  protected def doHasNext: Boolean = {
+    if (colBatchIterator.hasNext) {
+      val colBatch = colBatchIterator.next()
+      val rowIter = colBatch.rowIterator().asScala.zipWithIndex
+      val translatedPositions = ArrayBuffer[Integer]()
+      while (rowIter.hasNext) {
+        val curRow = rowIter.next()
+        val curKey = curRow._1.getString(recordKeyOrdinal)
+        val updatedRecordOpt = logIter.removeLogRecord(curKey)
+        if (updatedRecordOpt.isEmpty) {
+          translatedPositions += curRow._2
+        } else {
+          val updatedSparkRec: HoodieSparkRecord = updatedRecordOpt.get match {
+            case rec: HoodieSparkRecord => rec
+            case _ =>
+              val projectedAvroRecord = requiredSchemaAvroProjection(updatedRecordOpt.get.toIndexedRecord(logIter.logFileReaderAvroSchema, payloadProps).get().getData.asInstanceOf[GenericRecord])
+               new HoodieSparkRecord(deserialize(projectedAvroRecord), readerSchema)
+          }
+          if (!updatedSparkRec.isDeleted) {
+            val curRecord = new HoodieSparkRecord(curRow._1, readerSchema)
+            val whichRecord = HoodieSparkRecordMerger.useNewRecord(curRecord, baseFileReaderAvroSchema, updatedSparkRec, baseFileReaderAvroSchema, payloadProps)
+            if (whichRecord.isPresent) {
+              if (whichRecord.get()) {
+                UpdateableColumnVector.populateAll(colBatch, updatedSparkRec.getData, curRow._2)
+              }
+              translatedPositions += curRow._2
+            }
+          }
+        }
+      }
+      val translatedPosArray = translatedPositions.toArray
+      val vecs: Array[ColumnVector] = new Array[ColumnVector](colBatch.numCols())
+      for (i <- 0 until colBatch.numCols()) {
+        vecs(i) = new UpdateableColumnVector(colBatch.column(i), translatedPosArray)
+      }
+      nextRecord = new ColumnarBatch(vecs, translatedPosArray.length)
+      true
+    } else if (logIter.hasNext) {
+      nextRecord = UpdateableColumnVector.toBatch(dataSchema.structTypeSchema, enableOffHeapColumnVector, logIter.asJava)
+      true
+    } else {
+      false
+    }
+  }
+
+}
+
 
 class LogFileIterator(logFiles: List[HoodieLogFile],
                       partitionPath: Path,
@@ -145,7 +265,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   protected override val avroSchema: Schema = HoodieBaseRelation.convertToAvroSchema(requiredSchema, tableName)
   protected override val structTypeSchema: StructType = requiredSchema
 
-  protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+  val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
   private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
@@ -173,7 +293,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
 
   }
 
-  protected def removeLogRecord(key: String): Option[HoodieRecord[_]] = logRecords.remove(key)
+  def removeLogRecord(key: String): Option[HoodieRecord[_]] = logRecords.remove(key)
 
   protected def doHasNext: Boolean = hasNextInternal
 

@@ -74,6 +74,42 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
     }
   }
 
+  public static Option<Boolean> useNewRecord(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
+    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
+
+    if (newer instanceof HoodieSparkRecord) {
+      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
+      if (newSparkRecord.isDeleted()) {
+        // Delete record
+        return Option.empty();
+      }
+    } else {
+      if (newer.getData() == null) {
+        // Delete record
+        return Option.empty();
+      }
+    }
+
+    if (older instanceof HoodieSparkRecord) {
+      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
+      if (oldSparkRecord.isDeleted()) {
+        // use natural order for delete record
+        return Option.of(true);
+      }
+    } else {
+      if (older.getData() == null) {
+        // use natural order for delete record
+        return Option.of(true);
+      }
+    }
+    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+      return Option.of(false);
+    } else {
+      return Option.of(true);
+    }
+  }
+
   @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.SPARK;

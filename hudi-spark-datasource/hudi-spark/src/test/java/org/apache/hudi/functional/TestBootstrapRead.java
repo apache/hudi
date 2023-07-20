@@ -121,8 +121,8 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @Test
   public void testJoin() {
-    sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
-    sparkSession.conf().set("spark.sql.columnVector.offheap.enabled", "false");
+    //sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+    //sparkSession.conf().set("spark.sql.columnVector.offheap.enabled", "false");
     this.bootstrapType = "mixed";
     this.dashPartitions = true;
     this.tableType = "MERGE_ON_READ";
@@ -278,7 +278,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void setupDirs()  {
-    dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
+    dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA, 0xDEED, dashPartitions ? dashPartitionPaths : slashPartitionPaths, new HashMap<>());
     Dataset<Row> inserts = generateTestInserts();
     if (nPartitions > 0) {
       partitionCols = new String[nPartitions];
@@ -298,7 +298,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   public Dataset<Row> generateTestInserts() {
-    List<String> records = dataGen.generateInserts("000", nInserts).stream()
+    List<String> records = dataGen.generateInserts("000", nInserts, true).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
     return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
@@ -306,7 +306,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   public Dataset<Row> generateTestUpdates(String instantTime) {
     try {
-      List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
+      List<String> records = dataGen.generateUpdates(instantTime, nUpdates, true).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
       return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
