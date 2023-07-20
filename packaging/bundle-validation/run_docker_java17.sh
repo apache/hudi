@@ -24,6 +24,9 @@ HADOOP_HOME=$(docker exec $CONTAINER_NAME printenv HADOOP_HOME)
 echo "HADOOP_HOME: $HADOOP_HOME"
 echo "pwd: $(pwd)"
 ls -l
+ls -l packaging
+ls -l packaging/bundle-validation/
+ls -l packaging/bundle-validation/docker_java17/
 docker ps
 
 # Upload config
@@ -31,4 +34,4 @@ docker cp packaging/bundle-validation/conf/core-site.xml $CONTAINER_NAME:$HADOOP
 docker cp packaging/bundle-validation/conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
 
 # Start test script
-docker exec $CONTAINER_NAME bash packaging/bundle-validation/docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE
+docker exec $CONTAINER_NAME bash ./packaging/bundle-validation/docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE
