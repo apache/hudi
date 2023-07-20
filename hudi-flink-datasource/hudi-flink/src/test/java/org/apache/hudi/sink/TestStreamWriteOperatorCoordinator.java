@@ -427,7 +427,6 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
 
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);

@@ -285,14 +285,14 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       try {
         // initialize the metadata table path
         // guard the metadata writer with concurrent lock
-        this.txnManager.getLockManager().lock();
+        this.txnManager.beginTransaction(Option.empty(), Option.empty());
         try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
           metadataWriter.performTableServices(Option.empty());
         }
       } catch (Exception e) {
         throw new HoodieException("Failed to initialize metadata table", e);
       } finally {
-        this.txnManager.getLockManager().unlock();
+        this.txnManager.endTransaction(Option.empty());
       }
       // clean the obsolete index stats
       table.deleteMetadataIndexIfNecessary();

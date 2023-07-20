@@ -19,14 +19,16 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,7 +57,19 @@ public class TestFlinkWriteClients {
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     StreamerUtil.initTableIfNotExists(conf);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    assertThat(writeConfig.getLockProviderClass(), is(FileSystemBasedLockProvider.class.getName()));
+    Assertions.assertTrue(writeConfig.isLockRequired());
+    assertThat(writeConfig.getLockProviderClass(), is(InProcessLockProvider.class.getName()));
+    assertThat(writeConfig.getWriteConcurrencyMode(), is(WriteConcurrencyMode.SINGLE_WRITER));
+  }
+
+  @Test
+  void testAutoSetupLockProviderWithoutTableService() throws Exception {
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.setBoolean("hoodie.table.services.enabled", false);
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    Assertions.assertFalse(writeConfig.isLockRequired());
+    assertThat(writeConfig.getLockProviderClass(), is(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue()));
     assertThat(writeConfig.getWriteConcurrencyMode(), is(WriteConcurrencyMode.SINGLE_WRITER));
   }
 }

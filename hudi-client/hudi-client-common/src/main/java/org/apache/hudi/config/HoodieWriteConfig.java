@@ -3111,7 +3111,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       if (!isLockProviderPropertySet && writeConfig.isAutoAdjustLockConfigs() && isLockRequiredForSingleWriter()) {
-        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
+        // auto adjustment is required only for flink, deltastreamer and spark streaming where async table services can be executed in the same JVM.
         // This is targeted at Single writer with async table services
         // If user does not set the lock provider, likely that the concurrency mode is not set either
         // Override the configs for metadata table
