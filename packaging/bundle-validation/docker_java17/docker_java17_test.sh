@@ -78,8 +78,8 @@ setup_hdfs () {
   echo "::warning::docker_test_java17.sh starting hadoop hdfs"
   $HADOOP_HOME/sbin/start-dfs.sh
 
-  # start 3 datanodes
-  for i in 1 2 3
+  # start datanodes
+  for i in $(seq 1 6)
   do
     start_datanode $i
   done
