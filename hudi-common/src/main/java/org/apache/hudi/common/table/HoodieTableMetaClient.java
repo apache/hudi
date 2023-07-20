@@ -97,7 +97,8 @@ public class HoodieTableMetaClient implements Serializable {
 
   public static final String SCHEMA_FOLDER_NAME = ".schema";
 
-  public static final String MARKER_EXTN = ".marker";
+  public static final String INPROGRESS_MARKER_EXTN = ".marker";
+  public static final String COMPLETED_MARKER_EXTN = ".success";
 
   // In-memory cache for archived timeline based on the start instant time
   // Only one entry should be present in this map

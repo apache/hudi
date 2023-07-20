@@ -115,8 +115,8 @@ public class FlinkMergeHandle<T, I, K, O>
   }
 
   @Override
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+  protected void createInProgressMarkerFile(String partitionPath, String dataFileName, String markerInstantTime) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, markerInstantTime);
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 

@@ -192,10 +192,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       writeStatus.getStat().setFileId(fileId);
       setWriteStatusPath();
 
-      // Create Marker file,
+      // If this is a second or subsequent attempt to create the data file, try to recover existing version.
+      if (recoverWriteStatusIfAvailable(partitionPath,FSUtils.makeBaseFileName(this.instantTime, this.writeToken,
+          this.fileId, hoodieTable.getBaseFileExtension()), this.instantTime)) {
+        this.fileWriter = null;
+        return;
+      }
+
+      // Create inprogress marker file,
       // uses name of `newFilePath` instead of `newFileName`
       // in case the sub-class may roll over the file handle name.
-      createMarkerFile(partitionPath, newFilePath.getName());
+      createInProgressMarkerFile(partitionPath, newFilePath.getName(), instantTime);
 
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getHadoopConf(),
@@ -444,6 +451,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       stat.setRuntimeStats(runtimeStats);
 
       performMergeDataValidationCheck(writeStatus);
+
+      // createCompleteMarkerFile throws hoodieException, if marker directory is not present.
+      createCompletedMarkerFileIfRequired(partitionPath, this.instantTime, Collections.singletonList(writeStatus));
 
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));

@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -765,6 +766,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           // This will either ensure all files to be deleted are absent.
           waitForAllFiles(context, invalidPathsByPartition, FileVisibility.DISAPPEAR);
         }
+      }
+      if (config.isFailRetriesAfterFinalizeWrite()) {
+        markers.createCompletionMarker(EMPTY_STRING, WriteMarkers.FINALIZE_WRITE_COMPLETED, instantTs, IOType.CREATE,
+            false, Option.empty());
       }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);

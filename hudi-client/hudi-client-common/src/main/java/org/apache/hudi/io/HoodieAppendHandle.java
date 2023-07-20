@@ -201,6 +201,18 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
             hoodieTable.getPartitionMetafileFormat());
         partitionMetadata.trySave(getPartitionId());
+        // If this is a second or subsequent attempt to create the data file, try to recover existing version.
+        if (recoverWriteStatusIfAvailable(partitionPath,FSUtils.makeBaseFileName(this.instantTime, this.writeToken,
+            this.fileId, hoodieTable.getBaseFileExtension()), this.instantTime)) {
+          this.writer = null;
+          return;
+        }
+        // Since the actual log file written to can be different based on when rollover happens, we use the
+        // base file to denote some log appends happened on a slice. writeToken will still fence concurrent
+        // writers.
+        // https://issues.apache.org/jira/browse/HUDI-1517
+        createInProgressMarkerFile(partitionPath, FSUtils.makeBaseFileName(baseInstantTime, writeToken, fileId,
+            hoodieTable.getBaseFileExtension()), baseInstantTime);
         this.writer = createLogWriter(fileSlice, baseInstantTime);
       } catch (Exception e) {
         LOG.error("Error in update task at commit " + instantTime, e);
@@ -515,6 +527,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         status.getStat().setFileSizeInBytes(logFileSize);
       }
 
+      createCompletedMarkerFileIfRequired(partitionPath, baseInstantTime, statuses);
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);

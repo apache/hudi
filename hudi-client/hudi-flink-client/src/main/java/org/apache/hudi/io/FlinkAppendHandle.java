@@ -81,6 +81,17 @@ public class FlinkAppendHandle<T, I, K, O>
   }
 
   @Override
+  protected void createInProgressMarkerFile(String partitionPath, String dataFileName, String markerInstantTime) {
+    // In some rare cases, the task was pulled up again with same write file name,
+    // for e.g, reuse the small log files from last commit instant.
+
+    // Just skip the marker creation if it already exists, the new data would append to
+    // the file directly.
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+  }
+
+  @Override
   public boolean canWrite(HoodieRecord record) {
     return true;
   }

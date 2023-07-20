@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +46,7 @@ import java.util.Set;
 public abstract class WriteMarkers implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(WriteMarkers.class);
+  public static final String FINALIZE_WRITE_COMPLETED = "FINALIZE_WRITE";
 
   protected final String basePath;
   protected final transient Path markerDirPath;
@@ -59,12 +62,12 @@ public abstract class WriteMarkers implements Serializable {
    * Creates a marker without checking if the marker already exists.
    *
    * @param partitionPath partition path in the table.
-   * @param fileName      file name.
+   * @param dataFileName  file name.
    * @param type          write IO type.
    * @return the marker path.
    */
-  public Option<Path> create(String partitionPath, String fileName, IOType type) {
-    return create(partitionPath, fileName, type, false);
+  public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
+    return create(partitionPath, dataFileName, type, false);
   }
 
   /**
@@ -96,15 +99,15 @@ public abstract class WriteMarkers implements Serializable {
   }
 
   /**
-   * Creates a marker if the marker does not exist.
+   * Creates an in-progress marker if the marker does not exist.
    *
    * @param partitionPath partition path in the table
-   * @param fileName file name
+   * @param dataFileName data file name
    * @param type write IO type
    * @return the marker path or empty option if already exists
    */
-  public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type) {
-    return create(partitionPath, fileName, type, true);
+  public Option<Path> createIfNotExists(String partitionPath, String dataFileName, IOType type) {
+    return create(partitionPath, dataFileName, type, true);
   }
 
   /**
@@ -157,33 +160,67 @@ public abstract class WriteMarkers implements Serializable {
    * @return Stripped path
    */
   public static String stripMarkerSuffix(String path) {
-    return path.substring(0, path.indexOf(HoodieTableMetaClient.MARKER_EXTN));
+    return path.substring(0, path.indexOf(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN));
   }
 
   /**
-   * Gets the marker file name, in the format of "[file_name].marker.[IO_type]".
+   * Gets the marker file name, in the format of "[data_file_name].marker.[IO_type]".
    *
-   * @param fileName file name
+   * @param dataFileName data file name
    * @param type IO type
    * @return the marker file name
    */
-  protected static String getMarkerFileName(String fileName, IOType type) {
-    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
+  protected String getMarkerFileName(String dataFileName, IOType type) {
+    return String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.INPROGRESS_MARKER_EXTN, type.name());
+  }
+
+  /**
+   * Gets the completion marker file name, in the format of "[fileId]_[instantTime].success.[IO_type]".
+   *
+   * @param fileId
+   * @param instantTime
+   * @param type
+   * @return completed marker file name
+   */
+  protected String getCompletionMarkerFileName(String fileId, String instantTime, IOType type) {
+    return String.format("%s_%s%s.%s", fileId, instantTime, HoodieTableMetaClient.COMPLETED_MARKER_EXTN, type.name());
   }
 
   /**
    * Returns the marker path. Would create the partition path first if not exists
    *
    * @param partitionPath The partition path
-   * @param fileName      The file name
+   * @param dataFileName  The data file name
    * @param type          The IO type
    * @return path of the marker file
    */
-  protected Path getMarkerPath(String partitionPath, String fileName, IOType type) {
+  protected Path getMarkerPath(String partitionPath, String dataFileName, IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
-    String markerFileName = getMarkerFileName(fileName, type);
+    String markerFileName = getMarkerFileName(dataFileName, type);
     return new Path(path, markerFileName);
   }
+
+  /**
+   * Returns the completion marker path. Would create the partition path first if not exists.
+   *
+   * @param partitionPath
+   * @param fileId
+   * @param instantTime
+   * @param type
+   * @return
+   */
+  public Path getCompletionMarkerPath(String partitionPath, String fileId, String instantTime, IOType type) {
+    Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
+    String markerFileName = getCompletionMarkerFileName(fileId, instantTime, type);
+    LOG.warn("direct completion marker: " + path + " " + markerFileName);
+    return new Path(path, markerFileName);
+  }
+
+  /**
+   * Creates the marker directory.
+   * @throws IOException
+   */
+  public abstract void createMarkerDir() throws HoodieIOException;
 
   /**
    * Deletes the marker directory.
@@ -198,7 +235,9 @@ public abstract class WriteMarkers implements Serializable {
    * @return {@true} if the marker directory exists in the file system; {@false} otherwise.
    * @throws IOException
    */
-  public abstract boolean doesMarkerDirExist() throws IOException;
+  public abstract boolean doesMarkerDirExist();
+
+  public abstract boolean markerExists(Path markerPath);
 
   /**
    * @param context {@code HoodieEngineContext} instance.
@@ -218,12 +257,12 @@ public abstract class WriteMarkers implements Serializable {
    * Creates a marker.
    *
    * @param partitionPath  partition path in the table
-   * @param fileName file name
+   * @param dataFileName file name
    * @param type write IO type
    * @param checkIfExists whether to check if the marker already exists
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
-  abstract Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists);
+  abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
 
   /**
    * Creates a marker with early conflict detection for multi-writers. If conflict is detected,
@@ -240,4 +279,19 @@ public abstract class WriteMarkers implements Serializable {
    */
   public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
                                                                 HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
+
+  /**
+   * Creates a completion marker.
+   *
+   * @param partitionPath
+   * @param fileId
+   * @param instantTime
+   * @param type
+   * @param ignoreExisting
+   * @return
+   */
+  public abstract Option<Path> createCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type,
+                                               boolean ignoreExisting, Option<byte[]> serializedData) throws IOException;
+
+  public abstract Option<byte[]> getContentsOfCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type) throws HoodieException, IOException;
 }

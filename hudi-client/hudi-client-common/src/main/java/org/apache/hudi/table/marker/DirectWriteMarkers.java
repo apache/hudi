@@ -18,10 +18,13 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -48,6 +51,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.zip.CRC32;
 
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
@@ -73,6 +77,19 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   /**
+   * Creates marker directory.
+   * @throws HoodieIOException
+   */
+  @Override
+  public void createMarkerDir() throws HoodieIOException {
+    try {
+      FSUtils.createPathIfNotExists(fs, markerDirPath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create marker folder " + markerDirPath, e);
+    }
+  }
+
+  /**
    * Deletes Marker directory corresponding to an instant.
    *
    * @param context HoodieEngineContext.
@@ -84,10 +101,10 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   /**
    * @return {@code true} if marker directory exists; {@code false} otherwise.
-   * @throws IOException
    */
-  public boolean doesMarkerDirExist() throws IOException {
-    return fs.exists(markerDirPath);
+  @Override
+  public boolean doesMarkerDirExist() {
+    return FSUtils.pathExists(markerDirPath, fs);
   }
 
   @Override
@@ -99,7 +116,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     for (FileStatus topLevelStatus: topLevelStatuses) {
       if (topLevelStatus.isFile()) {
         String pathStr = topLevelStatus.getPath().toString();
-        if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+        if (pathStr.contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
           dataFiles.add(translateMarkerToDataPath(pathStr));
         }
       } else {
@@ -119,7 +136,7 @@ public class DirectWriteMarkers extends WriteMarkers {
         while (itr.hasNext()) {
           FileStatus status = itr.next();
           String pathStr = status.getPath().toString();
-          if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+          if (pathStr.contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
             result.add(translateMarkerToDataPath(pathStr));
           }
         }
@@ -135,16 +152,34 @@ public class DirectWriteMarkers extends WriteMarkers {
     return stripMarkerSuffix(rPath);
   }
 
+  public static String stripMarkerSuffix(String path) {
+    return path.substring(0, path.indexOf(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN));
+  }
+
+  public static String stripOldStyleMarkerSuffix(String path) {
+    // marker file was created by older version of Hudi, with INPROGRESS_MARKER_EXTN (f1_w1_c1.marker).
+    // Rename to data file by replacing .marker with .parquet.
+    return String.format("%s%s", path.substring(0, path.indexOf(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN)),
+        HoodieFileFormat.PARQUET.getFileExtension());
+  }
+
   @Override
   public Set<String> allMarkerFilePaths() throws IOException {
     Set<String> markerFiles = new HashSet<>();
     if (doesMarkerDirExist()) {
       FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-        markerFiles.add(MarkerUtils.stripMarkerFolderPrefix(fileStatus.getPath().toString(), basePath, instantTime));
+        // Only the inprogress markerFiles are to be included here
+        if (fileStatus.getPath().toString().contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN)) {
+          markerFiles.add(MarkerUtils.stripMarkerFolderPrefix(fileStatus.getPath().toString(), basePath, instantTime));
+        }
         return true;
       }, false);
     }
     return markerFiles;
+  }
+
+  public boolean markerExists(Path markerPath) {
+    return FSUtils.pathExists(markerPath, fs);
   }
 
   /**
@@ -203,4 +238,49 @@ public class DirectWriteMarkers extends WriteMarkers {
         + " in " + timer.endTimer() + " ms");
     return Option.of(markerPath);
   }
+
+  @Override
+  public Option<Path> createCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type,
+                                                boolean ignoreExisting, Option<byte[]> serializedData)
+      throws HoodieException, IOException {
+    Path markerPath = getCompletionMarkerPath(partitionPath, fileId, instantTime, type);
+    if (!fs.exists(markerPath.getParent())) {
+      throw new HoodieException("Marker directory is absent." + markerPath.getParent());
+    }
+    try {
+      FSDataOutputStream outputStream = fs.create(markerPath, ignoreExisting);
+      if (serializedData.isPresent()) {
+        outputStream.writeLong(serializedData.get().length);
+        outputStream.write(serializedData.get());
+        outputStream.writeLong(generateChecksum(serializedData.get()));
+      }
+      outputStream.close();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create completed marker " + markerPath);
+    }
+    return Option.of(markerPath);
+  }
+
+  public static long generateChecksum(byte[] data) {
+    CRC32 crc = new CRC32();
+    crc.update(data);
+    return crc.getValue();
+  }
+
+  public Option<byte[]> getContentsOfCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type) throws HoodieException, IOException {
+    Path markerPath = getCompletionMarkerPath(partitionPath, fileId, instantTime, type);
+    if (!fs.exists(markerPath)) {
+      throw new HoodieException("Marker File is absent." + markerPath);
+    }
+    FSDataInputStream inputStream = fs.open(markerPath);
+    long length = inputStream.readLong();
+    byte[] content = new byte[(int)length];
+    inputStream.read(content);
+    long crc = inputStream.readLong();
+    if (crc != generateChecksum(content)) {
+      throw new HoodieException("Content checksum match failed for " + markerPath);
+    }
+    return Option.of(content);
+  }
+
 }

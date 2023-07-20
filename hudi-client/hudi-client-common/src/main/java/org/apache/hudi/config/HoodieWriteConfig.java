@@ -614,6 +614,21 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
+  public static final ConfigProperty<String> OPTIMIZE_TASK_RETRIES_WITH_MARKERS = ConfigProperty
+      .key("hoodie.markers.optimize.task.retries")
+      .defaultValue("false")
+      .sinceVersion("0.14.0")
+      .withDocumentation("Prevents the creation of duplicate data files, when multiple spark tasks are racing to "
+          + "create data files and a completed data file is already present");
+
+  public static final ConfigProperty<String> FORCE_FAIL_RETRIES_AFTER_FINALIZE_WRITE = ConfigProperty
+      .key("hoodie.markers.fail.retries.after.finalize.write")
+      .defaultValue("false")
+      .sinceVersion("0.14.0")
+      .withDocumentation("If finalize write stage has been completed and the job encounters a task or stage retry"
+          + "due to infrastructure induced failure that attempts to recreate data files, then with this flag enabled "
+          + "retry attempt will not be performed, instead the task/stage will be forced to fail");
+
   public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
       .key("hoodie.table.services.enabled")
       .defaultValue(true)
@@ -1421,6 +1436,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  public boolean optimizeTaskRetriesWithMarkers() {
+    return getBooleanOrDefault(OPTIMIZE_TASK_RETRIES_WITH_MARKERS);
+  }
+
+  public boolean isFailRetriesAfterFinalizeWrite() {
+    return getBooleanOrDefault(FORCE_FAIL_RETRIES_AFTER_FINALIZE_WRITE);
   }
 
   /**
@@ -3044,6 +3067,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withClientInitCallbackClassNames(String classNames) {
       writeConfig.setValue(CLIENT_INIT_CALLBACK_CLASS_NAMES, classNames);
+      return this;
+    }
+
+    public Builder withEnforceCompletionMarkerCheck(boolean enabled) {
+      writeConfig.setValue(OPTIMIZE_TASK_RETRIES_WITH_MARKERS, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withFailRetriesAfterFinalizeWrite(boolean enabled) {
+      writeConfig.setValue(FORCE_FAIL_RETRIES_AFTER_FINALIZE_WRITE, Boolean.toString(enabled));
       return this;
     }
 

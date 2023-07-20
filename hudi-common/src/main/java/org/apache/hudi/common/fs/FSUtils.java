@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -137,6 +138,24 @@ public class FSUtils {
     return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
+  public static  void cleanupDataFile(Path dataFile, FileSystem fs) throws IOException {
+    try {
+      fs.delete(dataFile, false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to clean up " + dataFile);
+    }
+  }
+
+  public static boolean pathExists(Path path, FileSystem fs) {
+    boolean exists = false;
+    try {
+      exists =  fs.exists(path);
+    } catch (IOException ioe) {
+      // assume false
+    }
+    return exists;
+  }
+
   public static Path addSchemeIfLocalPath(String path) {
     Path providedPath = new Path(path);
     File localFile = new File(path);
@@ -179,6 +198,18 @@ public class FSUtils {
 
   public static String makeBootstrapIndexFileName(String instantTime, String fileId, String ext) {
     return String.format("%s_%s_%s%s", fileId, "1-0-1", instantTime, ext);
+  }
+
+  public static String makeInprogressMarkerFile(String dataFileName, String markerExtension, String typeName) {
+    return String.format("%s%s.%s", dataFileName, markerExtension, typeName);
+  }
+
+  public static String makeInprogressMarkerFile(String dataFileName) {
+    return String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.INPROGRESS_MARKER_EXTN, IOType.CREATE.name());
+  }
+
+  public static String makeCompletedMarkerFile(String commitTime, String fileId) {
+    return String.format("%s_%s%s", fileId,  commitTime, HoodieTableMetaClient.COMPLETED_MARKER_EXTN);
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {

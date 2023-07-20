@@ -21,12 +21,15 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -87,6 +90,12 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
+  public Path getCompletionMarkerPath(String partitionPath, String fileId, String instantTime, IOType type) {
+    return partitionPath.isEmpty() ? new Path(getCompletionMarkerFileName(fileId, instantTime, type))
+        : new Path(partitionPath, getCompletionMarkerFileName(fileId, instantTime, type));
+  }
+
+  @Override
   public boolean deleteMarkerDir(HoodieEngineContext context, int parallelism) {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
@@ -108,13 +117,20 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     }
   }
 
+  public boolean markerExists(Path markerPath) {
+    Set<String>  all = allMarkerFilePaths();
+    return allMarkerFilePaths().contains(markerPath);
+  }
+
   @Override
   public Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       Set<String> markerPaths = executeRequestToTimelineServer(
           CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
-      return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
+      return markerPaths.stream()
+          .filter(m -> m.contains(HoodieTableMetaClient.INPROGRESS_MARKER_EXTN))
+          .map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
           + markerDirPath.toString(), e);
@@ -133,6 +149,25 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
+  public void createMarkerDir() throws HoodieIOException {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    boolean success;
+    try {
+      success = executeRequestToTimelineServer(
+          CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {
+          }, RequestMethod.POST);
+      if (!success) {
+        throw new HoodieIOException("Marker folder " + markerDirPath + ", creation failed.");
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create marker folder " + markerDirPath, e);
+    }
+    LOG.info("Created marker folder " + markerDirPath + " in " + timer.endTimer() + " ms");
+  }
+
+  @Override
   protected Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
     String markerFileName = getMarkerFileName(fileName, type);
@@ -143,6 +178,29 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
         + " in " + timer.endTimer() + " ms");
     if (success) {
       return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+    } else {
+      return Option.empty();
+    }
+  }
+
+  // Writing serializedData is not supported by TimelineServedBasedMarkers (available ony with DirectMarkers)
+  @Override
+  public Option<Path> createCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type,
+                                                boolean ignoreExisting, Option<byte[]> serializedData) {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Path markerFilePath = getCompletionMarkerPath(partitionPath, fileId, instantTime, type);
+    String markerFileName = markerFilePath.getName();
+
+    if (!doesMarkerDirExist()) {
+      throw new HoodieException("Marker directory is absent for creating " + partitionPath + "/" + markerFileName);
+    }
+
+    Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
+    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
+    LOG.info("Created marker file " + partitionPath + "/" + markerFileName + " in " + timer.endTimer() + " ms");
+    if (success) {
+      return Option.of(markerFilePath);
     } else {
       return Option.empty();
     }
@@ -210,6 +268,11 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     }
 
     return paramsMap;
+  }
+
+  public Option<byte[]> getContentsOfCompletionMarker(String partitionPath, String fileId, String instantTime, IOType type) throws IOException {
+    // storing contents in markers, not supported for Timeline server based markers.
+    return Option.empty();
   }
 
   private <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
