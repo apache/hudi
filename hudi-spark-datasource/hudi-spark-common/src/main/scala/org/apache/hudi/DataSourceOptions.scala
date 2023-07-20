@@ -311,9 +311,10 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-   * Config key with boolean value that indicates whether record being written is already prepped.
+   * Config key with boolean value that indicates whether record being written during UPDATE or DELETE Spark SQL
+   * operations are already prepped.
    */
-  val DATASOURCE_WRITE_PREPPED_KEY = "_hoodie.datasource.write.prepped";
+  val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
     * May be derive partition path from incoming df if not explicitly set.
@@ -641,12 +642,12 @@ object DataSourceWriteOptions {
 
   val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
-  val ENABLE_OPTIMIZED_SQL_WRITES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.spark.sql.writes.optimized.enable")
+  val SPARK_SQL_OPTIMIZED_WRITES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.optimized.writes.enable")
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql optimized update is enabled.")
+    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
