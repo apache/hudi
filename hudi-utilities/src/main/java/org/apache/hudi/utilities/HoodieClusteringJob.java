@@ -131,7 +131,7 @@ public class HoodieClusteringJob {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
-          + "   --modee " + runningMode + ", \n"
+          + "   --mode " + runningMode + ", \n"
           + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs + ", \n"
@@ -193,7 +193,7 @@ public class HoodieClusteringJob {
           return doCluster(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
         }
       }
