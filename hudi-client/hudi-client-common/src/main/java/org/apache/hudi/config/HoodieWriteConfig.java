@@ -721,6 +721,10 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
+  /**
+   * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
+   * operation are already prepped.
+   */
   public static final String SPARK_SQL_MERGE_INTO_PREPPED_KEY = "_hoodie.spark.sql.merge.into.prepped";
 
   private ConsistencyGuardConfig consistencyGuardConfig;

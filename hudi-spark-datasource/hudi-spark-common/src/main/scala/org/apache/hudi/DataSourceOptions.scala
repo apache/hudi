@@ -311,7 +311,8 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-   * Config key with boolean value that indicates whether record being written is already prepped.
+   * Config key with boolean value that indicates whether record being written during UPDATE or DELETE Spark SQL
+   * operations are already prepped.
    */
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
