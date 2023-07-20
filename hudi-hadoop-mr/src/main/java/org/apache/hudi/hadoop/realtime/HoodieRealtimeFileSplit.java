@@ -18,9 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -34,9 +35,9 @@ import java.util.List;
  *   <li>Split corresponding to the base file</li>
  *   <li>List of {@link HoodieLogFile} that holds the delta to be merged (upon reading)</li>
  * </ol>
- *
+ * <p>
  * This split is correspondent to a single file-slice in the Hudi terminology.
- *
+ * <p>
  * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
  *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
@@ -63,11 +64,10 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
    */
   private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
-  public HoodieRealtimeFileSplit() {}
+  public HoodieRealtimeFileSplit() {
+  }
 
-  public HoodieRealtimeFileSplit(FileSplit baseSplit,
-                                 HoodieRealtimePath path)
-      throws IOException {
+  public HoodieRealtimeFileSplit(FileSplit baseSplit, HoodieRealtimePath path) throws IOException {
     this(baseSplit,
         path.getBasePath(),
         path.getDeltaLogFiles(),

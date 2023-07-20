@@ -160,6 +160,8 @@ public class HoodieJavaApp {
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.ENABLE_OPTIMIZED_SQL_WRITES().key(), "true")
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 

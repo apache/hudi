@@ -119,7 +119,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
       // reload because table configs could have been updated
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }

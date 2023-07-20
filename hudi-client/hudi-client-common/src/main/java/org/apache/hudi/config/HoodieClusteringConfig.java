@@ -159,6 +159,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
       .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
           + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "
@@ -744,54 +745,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       }
 
       return enumValue;
-    }
-
-    public String getValue() {
-      return value;
-    }
-  }
-
-  public enum ClusteringOperator {
-
-    /**
-     * only schedule the clustering plan
-     */
-    SCHEDULE("schedule"),
-
-    /**
-     * only execute then pending clustering plans
-     */
-    EXECUTE("execute"),
-
-    /**
-     * schedule cluster first, and execute all pending clustering plans
-     */
-    SCHEDULE_AND_EXECUTE("scheduleandexecute");
-
-    private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
-            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
-
-    private final String value;
-
-    ClusteringOperator(String value) {
-      this.value = value;
-    }
-
-    @Nonnull
-    public static ClusteringOperator fromValue(String value) {
-      ClusteringOperator enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-      return enumValue;
-    }
-
-    public boolean isSchedule() {
-      return this != ClusteringOperator.EXECUTE;
-    }
-
-    public boolean isExecute() {
-      return this != ClusteringOperator.SCHEDULE;
     }
 
     public String getValue() {

@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
@@ -539,7 +540,11 @@ public class TestData {
     if (OptionsResolver.isAppendMode(conf)) {
       return new InsertFunctionWrapper<>(basePath, conf);
     } else if (OptionsResolver.isBucketIndexType(conf)) {
-      return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+        return new ConsistentBucketStreamWriteFunctionWrapper<>(basePath, conf);
+      } else {
+        return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      }
     } else {
       return new StreamWriteFunctionWrapper<>(basePath, conf);
     }

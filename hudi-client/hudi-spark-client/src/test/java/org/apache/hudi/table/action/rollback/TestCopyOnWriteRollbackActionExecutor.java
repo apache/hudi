@@ -109,7 +109,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true,
         false);
@@ -184,7 +184,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
     String rollbackInstant = "003";
 
-    ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant);
+    ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequests = rollbackStrategy.getRollbackRequests(needRollBackInstant);
     rollBackRequests.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
         + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
@@ -199,7 +199,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     Mockito.when(fs.exists(any()))
         .thenThrow(new IOException("Failing exists call for " + rollbackRequest.getFilesToBeDeleted().get(0)));
 
-    rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant);
+    rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequestsUpdated = rollbackStrategy.getRollbackRequests(needRollBackInstant);
     rollBackRequestsUpdated.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
         + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
@@ -266,7 +266,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Schedule rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
@@ -291,7 +291,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", commitInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, cfg, table, "003", commitInstant, false,
         false);
@@ -357,7 +357,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Create the rollback plan and perform the rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     copyOnWriteRollbackPlanActionExecutor.execute();
 
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003",
@@ -447,7 +447,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     String rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            !table.getConfig().shouldRollbackUsingMarkers());
+            !table.getConfig().shouldRollbackUsingMarkers(), false);
     copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
@@ -460,7 +460,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode

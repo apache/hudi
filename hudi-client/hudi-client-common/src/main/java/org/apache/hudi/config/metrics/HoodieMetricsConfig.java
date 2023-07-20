@@ -106,6 +106,12 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Comma separated list of config file paths for metric exporter configs");
 
+  public static final ConfigProperty<Boolean> TURN_METRICS_COMPACTION_LOG_BLOCKS_ON = ConfigProperty
+      .key(METRIC_PREFIX + "compaction.log.blocks.on")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Turn on/off metrics reporting for log blocks with compaction commit. off by default.");
+
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
    */
@@ -168,6 +174,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder on(boolean metricsOn) {
       hoodieMetricsConfig.setValue(TURN_METRICS_ON, String.valueOf(metricsOn));
+      return this;
+    }
+
+    public Builder compactionLogBlocksEnable(boolean compactionLogBlockMetricsEnable) {
+      hoodieMetricsConfig.setValue(TURN_METRICS_COMPACTION_LOG_BLOCKS_ON, String.valueOf(compactionLogBlockMetricsEnable));
       return this;
     }
 

@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -65,7 +66,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     // Set properties for multi transformer
     // timestamp.transformer.increment is a common config and varies between the transformers
     // timestamp.transformer.multiplier is also a common config but doesn't change between transformers
-    Properties properties = ((HoodieDeltaStreamer.DeltaSyncService) deltaStreamer.getIngestionService()).getProps();
+    Properties properties = ((HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService()).getProps();
     // timestamp value initially is set to 0
     // timestamp = 0 * 2 + 10; (transformation 1)
     // timestamp = 10 * 2 + 20 = 40 (transformation 2)

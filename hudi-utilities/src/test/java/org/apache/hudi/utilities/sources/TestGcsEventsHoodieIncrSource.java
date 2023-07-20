@@ -79,7 +79,7 @@ import static org.mockito.Mockito.when;
 public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
-      TestGcsEventsHoodieIncrSource.class, "/delta-streamer-config/gcs-metadata.avsc", true);
+      TestGcsEventsHoodieIncrSource.class, "/streamer-config/gcs-metadata.avsc", true);
 
   @TempDir
   protected java.nio.file.Path tempDir;

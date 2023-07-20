@@ -41,17 +41,17 @@ public abstract class HoodieIngestionMetrics implements Serializable {
 
   public abstract Timer.Context getMetaSyncTimerContext();
 
-  public abstract void updateDeltaStreamerMetrics(long durationNanos);
+  public abstract void updateStreamerMetrics(long durationNanos);
 
-  public abstract void updateDeltaStreamerMetaSyncMetrics(String syncClassShortName, long syncTimeNanos);
+  public abstract void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncTimeNanos);
 
-  public abstract void updateDeltaStreamerSyncMetrics(long syncEpochTimeMs);
+  public abstract void updateStreamerSyncMetrics(long syncEpochTimeMs);
 
-  public abstract void updateDeltaStreamerHeartbeatTimestamp(long heartbeatTimestampMs);
+  public abstract void updateStreamerHeartbeatTimestamp(long heartbeatTimestampMs);
 
-  public abstract void updateDeltaStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount);
+  public abstract void updateStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount);
 
-  public abstract void updateDeltaStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount);
+  public abstract void updateStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount);
 
   public abstract void shutdown();
 }

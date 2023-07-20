@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.utilities.streamer.SchedulerConfGenerator;
 
 import org.junit.jupiter.api.Test;
 
