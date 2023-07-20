@@ -30,7 +30,7 @@ import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanSt
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
-import org.apache.hudi.client.transaction.NonBlockingWriterConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -2683,7 +2683,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
         .withLockProvider(FileSystemBasedLockProviderTestClass.class)
-        .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
+        .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
         .build();
     HoodieCleanConfig cleanConfig = HoodieCleanConfig.newBuilder()
         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build();
@@ -2751,7 +2751,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
         .withLockProvider(FileSystemBasedLockProviderTestClass.class)
-        .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
+        .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
         .build();
     HoodieCleanConfig cleanConfig = HoodieCleanConfig.newBuilder()
         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build();

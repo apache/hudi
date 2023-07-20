@@ -42,10 +42,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
  * This class extends the base implementation of conflict resolution strategy.
  * It gives preference to non-blocking ingestion over table services in case of conflicts.
  */
-public class NonBlockingWriterConflictResolutionStrategy
+public class PreferWriterConflictResolutionStrategy
     extends SimpleConcurrentFileWritesConflictResolutionStrategy {
 
-  private static final Logger LOG = LoggerFactory.getLogger(NonBlockingWriterConflictResolutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PreferWriterConflictResolutionStrategy.class);
 
   /**
    * For tableservices like replacecommit and compaction commits this method also returns ingestion inflight commits.

@@ -44,7 +44,7 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceInflight;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceRequested;
 
-public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommonTestHarness {
+public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
@@ -65,7 +65,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 does not have a conflict with scheduled compaction plan 1
@@ -90,7 +90,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createCompaction(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
@@ -122,7 +122,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newInstantTime));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     // TODO Create method to create compactCommitMetadata
     //    HoodieCommitMetadata currentMetadata = createCommitMetadata(newInstantTime);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -150,7 +150,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createInflightCommit(currentWriterInstant, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 should not conflict with an earlier scheduled compaction 1 with the same file ids
@@ -175,7 +175,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createReplaceInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // Since we give preference to ingestion over clustering, there won't be a conflict with replacecommit.
@@ -205,7 +205,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createReplace(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy
         .getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
@@ -241,7 +241,7 @@ public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommo
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());

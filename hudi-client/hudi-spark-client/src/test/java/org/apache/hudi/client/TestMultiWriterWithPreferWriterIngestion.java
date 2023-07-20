@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.transaction.NonBlockingWriterConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -62,7 +62,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMultiWriterWithNonBlockingIngestion extends HoodieClientTestBase {
+public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBase {
 
   public void setUpMORTestTable() throws IOException {
     cleanupResources();
@@ -103,7 +103,7 @@ public class TestMultiWriterWithNonBlockingIngestion extends HoodieClientTestBas
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
+            .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
             .build()).withAutoCommit(false).withProperties(properties).build();
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
@@ -208,7 +208,7 @@ public class TestMultiWriterWithNonBlockingIngestion extends HoodieClientTestBas
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
+            .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
             .build()).withAutoCommit(false).withProperties(properties).build();
     // Create the first commit
     String instant1 = HoodieActiveTimeline.createNewInstantTime();

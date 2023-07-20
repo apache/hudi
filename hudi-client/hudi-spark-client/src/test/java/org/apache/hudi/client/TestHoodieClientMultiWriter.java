@@ -19,7 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.NonBlockingWriterConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -143,7 +143,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
       new SimpleConcurrentFileWritesConflictResolutionStrategy(),
-      new NonBlockingWriterConflictResolutionStrategy());
+      new PreferWriterConflictResolutionStrategy());
 
   private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
     List<Object[]> opts = new ArrayList<>();
