@@ -119,7 +119,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filterCompletedAndCompactionInstants() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.isCompleted()
-            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            || s.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)), details);
   }
 
   @Override
@@ -277,7 +278,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * Get all instants (commits, delta commits, replace, compaction) that produce new data or merge file, in the active timeline.
    */
   public HoodieTimeline getCommitsAndCompactionTimeline() {
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION));
   }
 
   /**

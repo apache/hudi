@@ -235,6 +235,41 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   }
 
   /**
+   * Test scheduling log-compaction twice. It should only create generate one plan for log compaction in the timeline.
+   */
+  @Test
+  public void testSchedulingLogCompactionTwice() throws Exception {
+    HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
+        .withMaxNumDeltaCommitsBeforeCompaction(1)
+        .withLogCompactionBlocksThreshold(1)
+        .build();
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // First insert
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    insertBatch(config, client, newCommitTime, "000", 100,
+        SparkRDDWriteClient::insert, false, false, 100, 100,
+        1, Option.empty());
+
+    String prevCommitTime = newCommitTime;
+    // Upsert
+    newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    updateBatch(config, client, newCommitTime, prevCommitTime,
+        Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
+        false, false, 50, 100, 2, config.populateMetaFields());
+
+    // Schedule log compaction
+    Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
+    assertTrue(logCompactionTimeStamp.isPresent());
+
+    // Try scheduling log compaction, it won't succeed.
+    Option<String> logCompactionTimeStamp2 = client.scheduleLogCompaction(Option.empty());
+    assertFalse(logCompactionTimeStamp2.isPresent());
+  }
+
+  /**
    * Test scheduling log-compaction right after scheduling compaction. This should fail.
    */
   @Test
