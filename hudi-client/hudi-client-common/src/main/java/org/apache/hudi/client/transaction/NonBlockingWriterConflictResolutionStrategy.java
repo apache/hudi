@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,12 +40,12 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 
 /**
  * This class extends the base implementation of conflict resolution strategy.
- * It gives preference to ingestion writers compared to table services.
+ * It gives preference to non-blocking ingestion over table services in case of conflicts.
  */
-public class IngestionPrimaryWriterBasedConflictResolutionStrategy
+public class NonBlockingWriterConflictResolutionStrategy
     extends SimpleConcurrentFileWritesConflictResolutionStrategy {
 
-  private static final Logger LOG = LoggerFactory.getLogger(IngestionPrimaryWriterBasedConflictResolutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(NonBlockingWriterConflictResolutionStrategy.class);
 
   /**
    * For tableservices like replacecommit and compaction commits this method also returns ingestion inflight commits.
@@ -54,7 +55,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
     if ((REPLACE_COMMIT_ACTION.equals(currentInstant.getAction())
-          && ClusteringUtils.isClusteringCommit(metaClient, currentInstant))
+        && ClusteringUtils.isClusteringCommit(metaClient, currentInstant))
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {
       return getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant);
     } else {
@@ -64,7 +65,7 @@ public class IngestionPrimaryWriterBasedConflictResolutionStrategy
 
   private Stream<HoodieInstant> getCandidateInstantsForNonTableServicesCommits(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant) {
 
-    // To findout which instants are conflicting, we apply the following logic
+    // To find out which instants are conflicting, we apply the following logic
     // Get all the completed instants timeline only for commits that have happened
     // since the last successful write based on the transition times.
     // We need to check for write conflicts since they may have mutated the same files

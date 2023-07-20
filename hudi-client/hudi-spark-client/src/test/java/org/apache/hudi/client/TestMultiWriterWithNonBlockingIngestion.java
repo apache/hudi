@@ -18,9 +18,8 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.transaction.NonBlockingWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -41,6 +40,8 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -61,7 +62,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTestBase {
+public class TestMultiWriterWithNonBlockingIngestion extends HoodieClientTestBase {
 
   public void setUpMORTestTable() throws IOException {
     cleanupResources();
@@ -102,7 +103,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+            .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
             .build()).withAutoCommit(false).withProperties(properties).build();
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
@@ -207,7 +208,7 @@ public class TestMultiwriterWithIngestionAsPrimaryWriter extends HoodieClientTes
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new IngestionPrimaryWriterBasedConflictResolutionStrategy())
+            .withConflictResolutionStrategy(new NonBlockingWriterConflictResolutionStrategy())
             .build()).withAutoCommit(false).withProperties(properties).build();
     // Create the first commit
     String instant1 = HoodieActiveTimeline.createNewInstantTime();

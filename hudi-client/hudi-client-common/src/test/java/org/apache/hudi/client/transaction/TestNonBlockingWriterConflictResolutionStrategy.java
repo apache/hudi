@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceInflight;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceRequested;
 
-public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends HoodieCommonTestHarness {
+public class TestNonBlockingWriterConflictResolutionStrategy extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
@@ -64,7 +65,7 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 does not have a conflict with scheduled compaction plan 1
@@ -84,12 +85,12 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     // compaction 1 gets scheduled and finishes
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
     // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
     createCompaction(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
@@ -121,7 +122,7 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newInstantTime));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     // TODO Create method to create compactCommitMetadata
     //    HoodieCommitMetadata currentMetadata = createCommitMetadata(newInstantTime);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
@@ -149,7 +150,7 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     createInflightCommit(currentWriterInstant, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 should not conflict with an earlier scheduled compaction 1 with the same file ids
@@ -174,16 +175,16 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     createReplaceInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
-    // Since we give preference to ingestion over clustering, there wont be a conflict with replacecommit.
+    // Since we give preference to ingestion over clustering, there won't be a conflict with replacecommit.
     Assertions.assertEquals(0, candidateInstants.size());
   }
 
   /**
    * This method confirms ingestion commit failing due to already present replacecommit.
-   * Here the replacecommit is allowed to commit. Ideally replacecommit cannot be committed when there is a ingestion inflight.
+   * Here the replacecommit is allowed to commit. Ideally replacecommit cannot be committed when there is an ingestion inflight.
    * The following case can occur, during transition phase of ingestion commit from Requested to Inflight,
    * during that time replacecommit can be completed.
    */
@@ -197,14 +198,14 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
     // clustering writer starts and complete before ingestion commit.
     String replaceWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createReplace(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy
         .getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
@@ -233,14 +234,14 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
     // replace 1 gets scheduled and finished
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-    IngestionPrimaryWriterBasedConflictResolutionStrategy strategy = new IngestionPrimaryWriterBasedConflictResolutionStrategy();
+    NonBlockingWriterConflictResolutionStrategy strategy = new NonBlockingWriterConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
@@ -256,5 +257,4 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
       // expected
     }
   }
-
 }
