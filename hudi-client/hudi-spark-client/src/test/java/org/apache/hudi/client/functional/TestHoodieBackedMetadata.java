@@ -239,7 +239,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
-  @Disabled("HUDI-6324") // Disabling of MDT partitions might have to be revisited. Might only be an admin operation.
   public void testTurnOffMetadataIndexAfterEnable() throws Exception {
     initPath();
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
