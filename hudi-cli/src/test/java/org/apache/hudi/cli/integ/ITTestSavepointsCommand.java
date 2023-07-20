@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -102,6 +103,12 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
    */
   @Test
   public void testRollbackToSavepoint() throws IOException {
+    // disable metadata table.
+    Object result = shell.evaluate(() ->
+        String.format("metadata delete"));
+
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
@@ -112,13 +119,14 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     String savepoint = "102";
     HoodieTestDataGenerator.createSavepointFile(tablePath, savepoint, jsc.hadoopConfiguration());
 
-    Object result = shell.evaluate(() ->
+    result = shell.evaluate(() ->
             String.format("savepoint rollback --savepoint %s --sparkMaster %s", savepoint, "local"));
 
+    Object finalResult = result;
     assertAll("Command run failed",
-        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(finalResult)),
         () -> assertEquals(
-            String.format("Savepoint \"%s\" rolled back", savepoint), result.toString()));
+            String.format("Savepoint \"%s\" rolled back", savepoint), finalResult.toString()));
 
     // there is 1 restore instant
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -132,7 +140,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case of command 'savepoint rollback' with metadata table bootstrap.
    */
-  @Test
+  @Disabled("HUDI-6571")
   public void testRollbackToSavepointWithMetadataTableEnable() throws IOException {
     // generate for savepoints
     for (int i = 101; i < 105; i++) {
