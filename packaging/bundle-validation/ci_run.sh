@@ -203,5 +203,4 @@ docker build \
 docker run --name hudi_docker \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION

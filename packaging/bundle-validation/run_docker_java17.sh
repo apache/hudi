@@ -19,6 +19,7 @@
 
 CONTAINER_NAME=hudi_docker
 docker ps -a
+docker start $CONTAINER_NAME
 HADOOP_HOME=$(docker exec $CONTAINER_NAME printenv HADOOP_HOME)
 echo "HADOOP_HOME: $HADOOP_HOME"
 
