@@ -18,6 +18,7 @@
 # under the License.
 
 CONTAINER_NAME=hudi_docker
+docker ps -a
 HADOOP_HOME=$(docker exec $CONTAINER_NAME printenv HADOOP_HOME)
 echo "HADOOP_HOME: $HADOOP_HOME"
 
