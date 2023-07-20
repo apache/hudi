@@ -17,14 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-#################################################################################################
-# NOTE: this script runs inside hudi-ci-bundle-validation container
-# $WORKDIR/jars/ is to mount to a host directory where bundle jars are placed
-# $WORKDIR/data/ is to mount to a host directory where test data are placed with structures like
-#    - <dataset name>/schema.avsc
-#    - <dataset name>/data/<data files>
-#################################################################################################
-
 SPARK_PROFILE=$1
 SCALA_PROFILE=$2
 JAVA_RUNTIME_VERSION=openjdk17
