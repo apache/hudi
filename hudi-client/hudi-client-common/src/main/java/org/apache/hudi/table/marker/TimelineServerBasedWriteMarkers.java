@@ -133,9 +133,9 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  protected Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
+  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
-    String markerFileName = getMarkerFileName(fileName, type);
+    String markerFileName = getMarkerFileName(dataFileName, type);
 
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
@@ -149,10 +149,10 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    String markerFileName = getMarkerFileName(fileName, type);
+    String markerFileName = getMarkerFileName(dataFileName, type);
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, true);
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);

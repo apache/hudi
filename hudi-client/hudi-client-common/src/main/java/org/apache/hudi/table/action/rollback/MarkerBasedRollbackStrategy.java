@@ -18,24 +18,21 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,9 +41,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
 /**
  * Performs rollback using marker files generated during the write..
@@ -82,32 +78,22 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       return context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
-        String partitionFilePath = WriteMarkers.stripMarkerSuffix(markerFilePath);
-        Path fullFilePath = new Path(basePath, partitionFilePath);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePath.getParent());
         switch (type) {
           case MERGE:
           case CREATE:
-            String fileId = null;
-            String baseInstantTime = null;
-            if (FSUtils.isBaseFile(fullFilePath)) {
-              HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePath.toString());
-              fileId = baseFileToDelete.getFileId();
-              baseInstantTime = baseFileToDelete.getCommitTime();
-            } else if (FSUtils.isLogFile(fullFilePath)) {
-              checkArgument(type != IOType.MERGE, "Log file should not support merge io type");
-              HoodieLogFile logFileToDelete = new HoodieLogFile(fullFilePath.toString());
-              fileId = logFileToDelete.getFileId();
-              baseInstantTime = logFileToDelete.getBaseCommitTime();
-            }
-            Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePath);
-            Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + fullFilePath);
-            return new HoodieRollbackRequest(partitionPath, fileId, baseInstantTime,
-                Collections.singletonList(fullFilePath.toString()),
+            String fileToDelete = WriteMarkers.stripMarkerSuffix(markerFilePath);
+            Path fullDeletePath = new Path(basePath, fileToDelete);
+            String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
+            return new HoodieRollbackRequest(partitionPath, EMPTY_STRING, EMPTY_STRING,
+                Collections.singletonList(fullDeletePath.toString()),
                 Collections.emptyMap());
           case APPEND:
-            HoodieRollbackRequest rollbackRequestForAppend = getRollbackRequestForAppend(partitionFilePath);
-            return rollbackRequestForAppend;
+            // NOTE: This marker file-path does NOT correspond to a log-file, but rather is a phony
+            //       path serving as a "container" for the following components:
+            //          - Base file's file-id
+            //          - Base file's commit instant
+            //          - Partition path
+            return getRollbackRequestForAppend(instantToRollback, WriteMarkers.stripMarkerSuffix(markerFilePath));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
@@ -117,47 +103,35 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
     }
   }
 
-  protected HoodieRollbackRequest getRollbackRequestForAppend(String markerFilePath) throws IOException {
-    Path filePath = new Path(basePath, markerFilePath);
-    String fileId;
-    String baseCommitTime;
-    String relativePartitionPath;
-    Option<HoodieLogFile> latestLogFileOption;
+  protected HoodieRollbackRequest getRollbackRequestForAppend(HoodieInstant instantToRollback, String markerFilePath) throws IOException {
+    Path baseFilePathForAppend = new Path(basePath, markerFilePath);
+    String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
+    String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
+    String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), baseFilePathForAppend.getParent());
+    Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
 
-    // Old marker files may be generated from base file name before HUDI-1517. keep compatible with them.
-    // TODO: may deprecated in the future. @guanziyue.gzy
-    if (FSUtils.isBaseFile(filePath)) {
-      LOG.warn("Find old marker type for log file: " + markerFilePath);
-      fileId = FSUtils.getFileIdFromFilePath(filePath);
-      baseCommitTime = FSUtils.getCommitTime(filePath.getName());
-      relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), filePath.getParent());
-      Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
+    // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
+    //       block to the latest log-file
+    // TODO(HUDI-1517) use provided marker-file's path instead
+    Option<HoodieLogFile> latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
+        HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
 
-      // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
-      //       block to the latest log-file
-      try {
-        latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
-            HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
-      } catch (IOException ioException) {
-        throw new HoodieIOException(
-            "Failed to get latestLogFile for fileId: " + fileId + " in partition: " + partitionPath,
-            ioException);
-      }
-    } else {
-      HoodieLogFile latestLogFile = new HoodieLogFile(filePath);
-      fileId = latestLogFile.getFileId();
-      baseCommitTime = latestLogFile.getBaseCommitTime();
-      relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), filePath.getParent());
-      latestLogFileOption = Option.of(latestLogFile);
+    // Log file can be deleted if the commit to rollback is also the commit that created the fileGroup
+    if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.getTimestamp())) {
+      Path fullDeletePath = new Path(partitionPath, latestLogFileOption.get().getFileName());
+      return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,
+          Collections.singletonList(fullDeletePath.toString()),
+          Collections.emptyMap());
     }
-
+    
     Map<String, Long> logFilesWithBlocsToRollback = new HashMap<>();
     if (latestLogFileOption.isPresent()) {
       HoodieLogFile latestLogFile = latestLogFileOption.get();
       // NOTE: Marker's don't carry information about the cumulative size of the blocks that have been appended,
       //       therefore we simply stub this value.
-      logFilesWithBlocsToRollback = Collections.singletonMap(latestLogFile.getPath().toString(), -1L);
+      logFilesWithBlocsToRollback = Collections.singletonMap(latestLogFile.getFileStatus().getPath().toString(), -1L);
     }
+
     return new HoodieRollbackRequest(relativePartitionPath, fileId, baseCommitTime, Collections.emptyList(),
         logFilesWithBlocsToRollback);
   }
