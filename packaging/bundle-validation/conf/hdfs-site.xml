@@ -17,7 +17,7 @@
 <configuration>
   <property>
     <name>dfs.replication</name>
-    <value>8</value>
+    <value>5</value>
   </property>
   <property>
     <name>dfs.datanode.du.reserved</name>
