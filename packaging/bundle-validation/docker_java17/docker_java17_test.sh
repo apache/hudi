@@ -51,6 +51,9 @@ start_datanode () {
 
   echo "::warning::docker_test_java17.sh starting datanode:"$DN
 
+  cat $HADOOP_HOME/hadoop/etc/hdfs-site.xml
+  cat $HADOOP_HOME/hadoop/etc/core-site.xml
+
   DN_DIR_PREFIX=$DOCKER_TEST_DIR/additional_datanode/
   PID_DIR=$DOCKER_TEST_DIR/pid/$1
 

@@ -43,9 +43,10 @@ ENV PATH=$MAVEN_HOME/bin:$PATH
 RUN mvn --version
 
 # prepare directory for docker java17 test
-RUN if [[ "$JAVA17_TEST" = "true" ]] ; \
+RUN echo "JAVA17_TEST: $JAVA17_TEST"
+RUN if [[ $JAVA17_TEST = "true" ]] ; \
     then cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml; fi
-RUN if [[ "$JAVA17_TEST" = "true" ]] ; \
+RUN if [[ $JAVA17_TEST = "true" ]] ; \
     then cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml; fi
 RUN mkdir -p /opt/bundle-validation/docker-test
 
