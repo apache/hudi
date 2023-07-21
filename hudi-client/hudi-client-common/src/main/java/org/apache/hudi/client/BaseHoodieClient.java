@@ -193,14 +193,15 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param metadata Current committing instant's metadata
    * @param pendingInflightAndRequestedInstants Pending instants on the timeline
    *
-   * @see {@link BaseHoodieWriteClient#preCommit}
-   * @see {@link BaseHoodieTableServiceClient#preCommit}
+   * @see BaseHoodieWriteClient#preCommit
+   * @see BaseHoodieTableServiceClient#preCommit
    */
   protected void resolveWriteConflict(HoodieTable table, HoodieCommitMetadata metadata, Set<String> pendingInflightAndRequestedInstants) {
     Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
     try {
+      // Because HoodieTable is newly initialized, no need to reload active timeline here
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
+          Option.of(metadata), config, pendingInflightAndRequestedInstants);
       metrics.emitConflictResolutionSuccessful();
     } catch (HoodieWriteConflictException e) {
       metrics.emitConflictResolutionFailed();

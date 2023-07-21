@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -227,7 +228,7 @@ public class FlinkWriteClients {
     if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
       // configure the fs lock provider by default
       builder.withLockConfig(HoodieLockConfig.newBuilder()
-          .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))
+          .withConflictResolutionStrategy(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
           .withLockProvider(FileSystemBasedLockProvider.class)
           .withLockWaitTimeInMillis(2000L) // 2s
           .withFileSystemLockExpire(1) // 1 minute

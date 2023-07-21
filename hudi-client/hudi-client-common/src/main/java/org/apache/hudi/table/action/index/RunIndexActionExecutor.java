@@ -251,7 +251,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                                             HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
     try {
       // update the table config and timeline in a lock as there could be another indexer running
-      txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+      txnManager.beginTransaction(Option.of(indexInstant));
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(
@@ -362,7 +362,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           }
           try {
             // we need take a lock here as inflight writer could also try to update the timeline
-            txnManager.beginTransaction(Option.of(instant), Option.empty());
+            txnManager.beginTransaction(Option.of(instant));
             LOG.info("Updating metadata table for instant: " + instant);
             switch (instant.getAction()) {
               // TODO: see if this can be moved to metadata writer itself

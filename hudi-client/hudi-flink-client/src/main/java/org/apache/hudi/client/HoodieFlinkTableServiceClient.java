@@ -92,7 +92,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(compactionInstant));
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
@@ -163,7 +163,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(logCompactionInstant));
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
@@ -199,13 +199,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     }
 
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(clusteringInstant));
       finalizeWrite(table, clusteringCommitTime, writeStats);
-      // Only in some cases conflict resolution needs to be performed.
-      // So, check if preCommit method that does conflict resolution needs to be triggered.
-      if (isPreCommitRequired()) {
-        preCommit(metadata);
-      }
+      preCommit(metadata);
       // commit to data table after committing to metadata table.
       // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
       // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
@@ -262,10 +258,12 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected void preCommit(HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    if (config.getWriteConflictResolutionStrategy().isConflictResolveRequired(metadata.getOperationType())) {
+      // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+      // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+      HoodieTable table = createTable(config, hadoopConf);
+      resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    }
   }
 
   /**

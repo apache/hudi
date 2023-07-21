@@ -142,7 +142,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     handleWriteErrors(writeStats, TableServiceType.COMPACT);
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(compactionInstant));
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       updateTableMetadata(table, metadata, compactionInstant, context.emptyHoodieData());
@@ -171,7 +171,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(logCompactionInstant));
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
@@ -255,14 +255,10 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(clusteringInstant));
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
-      // Only in some cases conflict resolution needs to be performed.
-      // So, check if preCommit method that does conflict resolution needs to be triggered.
-      if (isPreCommitRequired()) {
-        preCommit(metadata);
-      }
+      preCommit(metadata);
       // Update table's metadata (table)
       updateTableMetadata(table, metadata, clusteringInstant, writeStatuses.orElse(context.emptyHoodieData()));
 
@@ -323,9 +319,11 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected void preCommit(HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    if (config.getWriteConflictResolutionStrategy().isConflictResolveRequired(metadata.getOperationType())) {
+      // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+      // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+      HoodieTable table = createTable(config, hadoopConf);
+      resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    }
   }
 }

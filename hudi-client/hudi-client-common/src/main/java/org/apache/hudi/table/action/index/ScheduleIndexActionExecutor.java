@@ -95,7 +95,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
     final HoodieInstant indexInstant = HoodieTimeline.getIndexRequestedInstant(instantTime);
     try {
-      this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+      this.txnManager.beginTransaction(Option.of(indexInstant));
       // get last completed instant
       Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
       if (indexUptoInstant.isPresent()) {
