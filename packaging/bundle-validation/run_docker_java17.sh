@@ -17,25 +17,101 @@
 # specific language governing permissions and limitations
 # under the License.
 
+echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
+echo "SCALA_PROFILE: $SCALA_PROFILE"
 CONTAINER_NAME=hudi_docker
 DOCKER_TEST_DIR=/opt/bundle-validation/docker-test
 
-docker ps -a
-docker start $CONTAINER_NAME
-HADOOP_HOME=$(docker exec $CONTAINER_NAME printenv HADOOP_HOME)
-echo "HADOOP_HOME: $HADOOP_HOME"
-echo "pwd: $(pwd)"
+# choose versions based on build profiles
+if [[ ${SPARK_RUNTIME} == 'spark2.4.8' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=2.3.9
+  DERBY_VERSION=10.10.2.0
+  FLINK_VERSION=1.13.6
+  SPARK_VERSION=2.4.8
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1136hive239spark248
+elif [[ ${SPARK_RUNTIME} == 'spark3.0.2' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.14.6
+  SPARK_VERSION=3.0.2
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1146hive313spark302
+elif [[ ${SPARK_RUNTIME} == 'spark3.1.3' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.13.6
+  SPARK_VERSION=3.1.3
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1136hive313spark313
+elif [[ ${SPARK_RUNTIME} == 'spark3.2.3' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.14.6
+  SPARK_VERSION=3.2.3
+  SPARK_HADOOP_VERSION=2.7
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1146hive313spark323
+elif [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.15.3
+  SPARK_VERSION=3.3.1
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1153hive313spark331
+elif [[ ${SPARK_RUNTIME} == 'spark3.3.2' ]]; then
+  HADOOP_VERSION=2.7.7
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.17.0
+  SPARK_VERSION=3.3.2
+  SPARK_HADOOP_VERSION=2
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1170hive313spark332
+elif [[ ${SPARK_RUNTIME} == 'spark3.4.0' ]]; then
+  HADOOP_VERSION=3.3.5
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.17.0
+  SPARK_VERSION=3.4.0
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1170hive313spark340
+fi
 
-ls -l packaging/bundle-validation/docker_java17/
-docker ps
+# build docker image
+cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
+docker build \
+--build-arg HADOOP_VERSION=$HADOOP_VERSION \
+--build-arg HIVE_VERSION=$HIVE_VERSION \
+--build-arg DERBY_VERSION=$DERBY_VERSION \
+--build-arg FLINK_VERSION=$FLINK_VERSION \
+--build-arg SPARK_VERSION=$SPARK_VERSION \
+--build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
+--build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
+--build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
+--build-arg IMAGE_TAG=$IMAGE_TAG \
+--build-arg JAVA17_TEST=true \
+-t hudi-ci-bundle-validation:$IMAGE_TAG \
+.
 
-## Upload config
-#docker cp packaging/bundle-validation/conf/core-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/core-site.xml
-#docker cp packaging/bundle-validation/conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
-docker exec $CONTAINER_NAME bash -c "rm $HADOOP_HOME/etc/hadoop/core-site.xml"
-docker exec $CONTAINER_NAME bash -c "rm $HADOOP_HOME/etc/hadoop/hdfs-site.xml"
-
-# Start test script
-#docker exec $CONTAINER_NAME bash $DOCKER_TEST_DIR/packaging/bundle-validation/docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE
-
-docker exec $CONTAINER_NAME bash $DOCKER_TEST_DIR/packaging/bundle-validation/validate.sh $JAVA_RUNTIME_VERSION
+# run Java 17 test script in docker
+docker run --name $CONTAINER_NAME \
+  -v ${GITHUB_WORKSPACE}:$DOCKER_TEST_DIR \
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE

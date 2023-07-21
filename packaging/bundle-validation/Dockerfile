@@ -16,6 +16,7 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
+ARG JAVA17_TEST=false
 FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
 
 # configure the stack
@@ -42,6 +43,10 @@ ENV PATH=$MAVEN_HOME/bin:$PATH
 RUN mvn --version
 
 # prepare directory for docker java17 test
+RUN if [[ "$JAVA17_TEST" = "true" ]] ; \
+    then cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml; fi
+RUN if [[ "$JAVA17_TEST" = "true" ]] ; \
+    then cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml; fi
 RUN mkdir -p /opt/bundle-validation/docker-test
 
 # Hadoop env
@@ -53,8 +58,3 @@ ENV YARN_NODEMANAGER_USER root
 
 # for RocksDb
 RUN apk add --no-cache libstdc++
-
-
-# TESTING
-RUN cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
-RUN cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/
