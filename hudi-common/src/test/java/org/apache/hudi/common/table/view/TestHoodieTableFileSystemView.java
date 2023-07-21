@@ -129,7 +129,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   protected void refreshFsView() throws IOException {
     super.refreshFsView();
     closeFsView();
-    fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    fsView = getFileSystemView(metaClient.getActiveTimeline());
     roView = fsView;
     rtView = fsView;
   }
@@ -867,7 +867,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     refreshFsView();
 
     // Check files as of latest commit.
-    List<FileSlice> allSlices = rtView.getAllFileSlices("2016/05/01").collect(Collectors.toList());
+    List<FileSlice> allSlices = rtView.getAllFileSlices("2016/05/01", true).collect(Collectors.toList());
     assertEquals(isLatestFileSliceOnly ? 4 : 8, allSlices.size());
     Map<String, Long> fileSliceMap =
         allSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileId, Collectors.counting()));

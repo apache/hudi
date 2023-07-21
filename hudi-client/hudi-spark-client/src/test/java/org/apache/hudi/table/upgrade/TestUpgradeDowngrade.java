@@ -578,7 +578,6 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         TABLE_METADATA_PARTITIONS.key() + " should contain all partitions except record_index.");
     assertEquals(allPartitionsExceptRecordIndex, metaClient.getTableConfig().getMetadataPartitionsInflight(),
         TABLE_METADATA_PARTITIONS_INFLIGHT.key() + " should contain all partitions except record_index.");
-
   }
 
   @ParameterizedTest(name = TEST_NAME_WITH_DOWNGRADE_PARAMS)
@@ -833,11 +832,11 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit2FileGroups.size());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
     //3. assert filegroup and get the second partition fileslice
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionCommit2FileGroups.size());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlicesIncludingInflight().collect(Collectors.toList()));
 
     //4. assert fileslice
     HoodieTableType tableType = metaClient.getTableType();

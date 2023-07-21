@@ -82,7 +82,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final Option<String> specifiedQueryInstant;
   private final List<Path> queryPaths;
 
-  private final boolean shouldIncludePendingCommits;
+  protected final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
 
   // The `shouldListLazily` variable controls how we initialize/refresh the TableFileIndex:
@@ -263,9 +263,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             Function.identity(),
             partitionPath ->
                 queryInstant.map(instant ->
-                        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get(), shouldIncludePendingCommits)
                     )
-                    .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
+                    .orElse(fileSystemView.getLatestFileSlices(partitionPath.path, shouldIncludePendingCommits))
                     .collect(Collectors.toList())
         ));
   }
@@ -299,7 +299,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     //       timeline) in its name, as opposed to the base-file's commit instant. To make sure we're not filtering
     //       such log-file we have to _always_ include pending compaction instants into consideration
     // TODO(HUDI-3302) re-evaluate whether we should filter any commits in here
-    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
+    HoodieTimeline timeline = metaClient.getActiveTimeline();
     if (shouldIncludePendingCommits) {
       return timeline;
     } else {

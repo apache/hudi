@@ -65,12 +65,16 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
+  public static final String LATEST_PARTITION_SLICES_INCLUDE_PENDING_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/includepending/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
       String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
-  public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all");
+  public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all/");
+  public static final String ALL_SLICES_INCLUDE_PENDING_URL = String.format("%s/%s", BASE_URL, "slices/all/includepending/");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
+  public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL =
+      String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/includepending/");
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
   public static final String LATEST_SLICES_BEFORE_ON_INSTANT_URL =
       String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
@@ -114,7 +118,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
 
   public static final String LAST_INSTANT = String.format("%s/%s", BASE_URL, "timeline/instant/last");
-  public static final String LAST_INSTANTS = String.format("%s/%s", BASE_URL, "timeline/instants/last");
 
   public static final String TIMELINE = String.format("%s/%s", BASE_URL, "timeline/instants/all");
 
@@ -133,6 +136,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
+  public static final String INCLUDE_PENDING = "includePending";
 
 
   private static final Logger LOG = LoggerFactory.getLogger(RemoteHoodieTableFileSystemView.class);
@@ -141,7 +145,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final int serverPort;
   private final String basePath;
   private final HoodieTableMetaClient metaClient;
-  private HoodieTimeline timeline;
+  private HoodieTimeline completedAndCompactionTimeline;
   private final ObjectMapper mapper;
   private final int timeoutMs;
 
@@ -161,7 +165,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.basePath = metaClient.getBasePath();
     this.mapper = new ObjectMapper();
     this.metaClient = metaClient;
-    this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    this.completedAndCompactionTimeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     this.serverHost = viewConf.getRemoteViewServerHost();
     this.serverPort = viewConf.getRemoteViewServerPort();
     this.timeoutMs = viewConf.getRemoteTimelineClientTimeoutSecs() * 1000;
@@ -185,8 +189,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     queryParameters.forEach(builder::addParameter);
 
     // Adding mandatory parameters - Last instants affecting file-slice
-    timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
-    builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
+    completedAndCompactionTimeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
+    builder.addParameter(TIMELINE_HASH, completedAndCompactionTimeline.getTimelineHash());
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
@@ -325,6 +329,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING, String.valueOf(includePending));
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_INCLUDE_PENDING_URL, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, FILEID_PARAM, fileId);
     try {
@@ -368,7 +384,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(BASEPATH_PARAM, basePath);
     paramsMap.put(MAX_INSTANT_PARAM, maxCommitTime);
-
     try {
       Map<String, List<FileSliceDTO>> fileSliceMap = executeRequest(ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
           new TypeReference<Map<String, List<FileSliceDTO>>>() {}, RequestMethod.GET);
@@ -386,6 +401,21 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     try {
       List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
+                                                               boolean includePending) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
+        new String[] {MAX_INSTANT_PARAM, INCLUDE_PENDING},
+        new String[] {maxInstantTime, String.valueOf(includePending)});
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INCLUDE_PENDING_URL, paramsMap,
           new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
@@ -412,6 +442,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileSliceDTO> dataFiles =
           executeRequest(ALL_SLICES_URL, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending) {
+    try {
+      Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, INCLUDE_PENDING, "true");
+      List<FileSliceDTO> dataFiles =
+          executeRequest(ALL_SLICES_INCLUDE_PENDING_URL, paramsMap, new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
@@ -482,7 +524,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       // refresh the local timeline first.
-      this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
+      this.completedAndCompactionTimeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
       return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);

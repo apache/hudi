@@ -183,6 +183,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending) {
+    return execute(partitionPath, (partition) -> preferredView.getLatestFileSlices(partition, includePending),
+        (partition) -> secondaryView.getLatestFileSlices(partition, includePending));
+  }
+
+  @Override
   public Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getLatestUnCompactedFileSlices,
         secondaryView::getLatestUnCompactedFileSlices);
@@ -208,6 +214,14 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
+                                                               boolean includePending) {
+    return execute(partitionPath, maxInstantTime,
+        (partition, instant) -> preferredView.getLatestMergedFileSlicesBeforeOrOn(partition, instant, includePending),
+        (partition, instant) -> secondaryView.getLatestMergedFileSlicesBeforeOrOn(partition, instant, includePending));
+  }
+
+  @Override
   public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     return execute(commitsToReturn, preferredView::getLatestFileSliceInRange, secondaryView::getLatestFileSliceInRange);
   }
@@ -215,6 +229,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getAllFileSlices, secondaryView::getAllFileSlices);
+  }
+
+  @Override
+  public Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending) {
+    return execute(partitionPath, (partition) -> preferredView.getAllFileSlices(partition, includePending),
+        partition -> secondaryView.getAllFileSlices(partition, includePending));
   }
 
   @Override

@@ -421,10 +421,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       saveMode = SaveMode.Append)
     val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
-    val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
-    val lastCompactionInstant = compactionTimeline
+    val completedWriteAndCompactionTimeline = metadataTableFSView.getVisibleFileSystemViewTimeline
+    val lastCompactionInstant = completedWriteAndCompactionTimeline
       .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-        HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+        HoodieCommitMetadata.fromBytes(completedWriteAndCompactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
           .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)

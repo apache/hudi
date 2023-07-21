@@ -92,8 +92,7 @@ public class ManifestFileWriter {
       return partitions.parallelStream().flatMap(p -> {
         Configuration hadoopConf = metaClient.getHadoopConf();
         HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
-        HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+        HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient, metaClient.getActiveTimeline(),
             HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
         return fsView.getLatestBaseFiles(p).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName);
       });

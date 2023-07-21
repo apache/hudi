@@ -108,6 +108,11 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Stream all the latest file slices in the given partition.
+     */
+    Stream<FileSlice> getLatestFileSlices(String partitionPath, boolean includePending);
+
+    /**
      * Get Latest File Slice for a given fileId in a given partition.
      */
     Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);
@@ -136,7 +141,7 @@ public interface TableFileSystemView {
     Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime);
 
     /**
-     * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the
+     * Stream all "merged" file-slices before or on an instant time If a file-group has a pending compaction request, the
      * file-slice before and after compaction request instant is merged and returned.
      * 
      * @param partitionPath Partition Path
@@ -144,6 +149,17 @@ public interface TableFileSystemView {
      * @return
      */
     Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
+
+    /**
+     * Stream all "merged" file-slices before or on an instant time If a file-group has a pending compaction request, the
+     * file-slice before and after compaction request instant is merged and returned. This API can also include pending instants.
+     *
+     * @param partitionPath Partition Path
+     * @param maxInstantTime Max Instant Time
+     * @param includePending Ability to include pending instants as well
+     * @return
+     */
+    Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime, boolean includePending);
 
     /**
      * Stream all the latest file slices, in the given range.
@@ -161,6 +177,10 @@ public interface TableFileSystemView {
      */
     Stream<FileSlice> getAllFileSlices(String partitionPath);
 
+    /**
+     * Stream all the file slices for a given partition, latest or not.
+     */
+    Stream<FileSlice> getAllFileSlices(String partitionPath, boolean includePending);
   }
 
   /**

@@ -77,7 +77,8 @@ public class ClusteringUtils {
    * Checks if the replacecommit is clustering commit.
    */
   public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
-    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+    return HoodieTimeline.REPLACE_COMMIT_ACTION.equals(pendingReplaceInstant.getAction())
+        && getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
   }
 
   /**
@@ -150,11 +151,25 @@ public class ClusteringUtils {
 
   public static Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClusteringInstant(
       HoodieInstant instant, HoodieClusteringPlan clusteringPlan) {
+    if (clusteringPlan == null || clusteringPlan.getInputGroups() == null || clusteringPlan.getInputGroups().isEmpty()) {
+      return Stream.empty();
+    }
     Stream<HoodieFileGroupId> partitionToFileIdLists = clusteringPlan.getInputGroups().stream().flatMap(ClusteringUtils::getFileGroupsFromClusteringGroup);
     return partitionToFileIdLists.map(e -> Pair.of(e, instant));
   }
 
-  private static Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> getFileGroupEntriesInClusteringPlan(
+  public static Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupEntriesFromClusteringInstant(
+      HoodieInstant clusteringInstant, HoodieTableMetaClient metaClient) throws IOException {
+    Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata =
+        ClusteringUtils.getRequestedReplaceMetadata(metaClient, clusteringInstant);
+    HoodieClusteringPlan clusteringPlan = requestedReplaceMetadata.get().getClusteringPlan();
+    Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupStreamToInstant =
+        ClusteringUtils.getFileGroupEntriesInClusteringPlan(clusteringInstant, clusteringPlan)
+            .map(fgIdInstantEntry -> Pair.of(fgIdInstantEntry.getKey(), fgIdInstantEntry.getValue()));
+    return fileGroupStreamToInstant;
+  }
+
+  public static Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> getFileGroupEntriesInClusteringPlan(
       HoodieInstant instant, HoodieClusteringPlan clusteringPlan) {
     return getFileGroupsInPendingClusteringInstant(instant, clusteringPlan).map(entry ->
         new AbstractMap.SimpleEntry<>(entry.getLeft(), entry.getRight()));

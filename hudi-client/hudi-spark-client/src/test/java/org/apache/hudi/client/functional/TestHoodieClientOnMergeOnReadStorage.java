@@ -23,6 +23,8 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -31,12 +33,15 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.IncrementalTimelineSyncFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,10 +56,12 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -365,6 +372,114 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, metaClient.reloadActiveTimeline().lastInstant().get().getAction());
       }
     }
+  }
+
+  /**
+   * Test incremental sync operations on log compaction transitions from requested to completed and inflight to rollback etc
+   */
+  @Test
+  public void testIncrementalFileSyncForLogCompaction() throws Exception {
+    HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
+        .withLogCompactionBlocksThreshold(2)
+        .withMaxNumDeltaCommitsBeforeCompaction(1)
+        .build();
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig);
+
+    // First insert. Here First file slice gets added to file group.
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    insertBatch(writeConfig, client, newCommitTime, "000", 100,
+        SparkRDDWriteClient::insert, false, false, 100, 100,
+        1, Option.empty());
+    String prevCommitTime = newCommitTime;
+
+    // Schedule and execute compaction. Here, second file slice gets added.
+    Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTimeStamp.isPresent());
+    client.compact(compactionTimeStamp.get());
+    prevCommitTime = compactionTimeStamp.get();
+
+    for (int i = 0; i < 2; i++) {
+      // First upsert on  second file slice.
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      updateBatch(writeConfig, client, newCommitTime, prevCommitTime,
+          Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
+          false, false, 50, 10, 2, writeConfig.populateMetaFields());
+      prevCommitTime = newCommitTime;
+    }
+    metaClient.reloadActiveTimeline();
+    SyncableFileSystemView view = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), true);
+    view.sync();
+
+    // Schedule and execute Logcompaction
+    Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
+    assertTrue(logCompactionTimeStamp.isPresent());
+    // Validate incremental sync when logcompaction is requested
+    validateIncrementalSync(view);
+    client.logCompact(logCompactionTimeStamp.get());
+    // Validate incremental sync when logcompaction is completed
+    validateIncrementalSync(view);
+
+    // Schedule and execute compaction.
+    compactionTimeStamp = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTimeStamp.isPresent());
+    client.compact(compactionTimeStamp.get());
+    prevCommitTime = compactionTimeStamp.get();
+
+    for (int i = 0; i < 2; i++) {
+      // First upsert on  second file slice.
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      updateBatch(writeConfig, client, newCommitTime, prevCommitTime,
+          Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
+          false, false, 50, 10, 2, writeConfig.populateMetaFields());
+      prevCommitTime = newCommitTime;
+    }
+
+    // Schedule and execute Logcompaction
+    HoodieWriteConfig writeConfigWithAutoCommitDisabled = HoodieWriteConfig.newBuilder()
+        .withProperties(writeConfig.getProps())
+        .withAutoCommit(false)
+        .build();
+    SparkRDDWriteClient writeClientWithAutoCommitDisabled = new SparkRDDWriteClient(this.context, writeConfigWithAutoCommitDisabled);
+    logCompactionTimeStamp = writeClientWithAutoCommitDisabled.scheduleLogCompaction(Option.empty());
+    assertTrue(logCompactionTimeStamp.isPresent());
+    writeClientWithAutoCommitDisabled.logCompact(logCompactionTimeStamp.get());
+    // Validate incremental sync when logcompaction is moved from requested to inflight
+    validateIncrementalSync(view);
+
+    writeClientWithAutoCommitDisabled.rollbackFailedWrites();
+    // Validate incremental sync when logcompaction instant is rolledback.
+    validateIncrementalSync(view);
+  }
+
+  /**
+   * Util method to validate incremental sync
+   * @param view
+   * @throws IOException
+   */
+  private void validateIncrementalSync(SyncableFileSystemView view) throws IOException {
+    this.metaClient.reloadActiveTimeline();
+    view.sync();
+    IncrementalTimelineSyncFileSystemView incrementalView =
+        (IncrementalTimelineSyncFileSystemView) view;
+    assertTrue(incrementalView.isLastIncrementalSyncSuccessful());
+    SyncableFileSystemView newView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), true);
+
+    // Check for filegroups in pending compaction
+    Set<Pair<String, CompactionOperation>> ops1 = view.getPendingLogCompactionOperations().collect(Collectors.toSet());
+    Set<Pair<String, CompactionOperation>> ops2 = newView.getPendingLogCompactionOperations().collect(Collectors.toSet());
+    assertEquals(ops2, ops1);
+
+    // check for pending compaction operations
+    ops1 = view.getPendingCompactionOperations().collect(Collectors.toSet());
+    ops2 = newView.getPendingCompactionOperations().collect(Collectors.toSet());
+    assertEquals(ops2, ops1);
+
+    // check for filegroups in pending clustering
+    Set<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups1 = view.getFileGroupsInPendingClustering().collect(Collectors.toSet());
+    Set<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups2 = newView.getFileGroupsInPendingClustering().collect(Collectors.toSet());
+    assertEquals(fileGroups2, fileGroups1);
   }
 
   @Test

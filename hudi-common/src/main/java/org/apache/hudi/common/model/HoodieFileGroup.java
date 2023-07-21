@@ -52,9 +52,10 @@ public class HoodieFileGroup implements Serializable {
   private final TreeMap<String, FileSlice> fileSlices;
 
   /**
-   * Timeline, based on which all getter work.
+   * Timeline, based on which all getters work.
+   * This should be a write timeline that contains either completed instants or pending compaction instants.
    */
-  private final HoodieTimeline timeline;
+  private final HoodieTimeline fileSystemViewTimeline;
 
   /**
    * The last completed instant, that acts as a high watermark for all getters.
@@ -62,21 +63,21 @@ public class HoodieFileGroup implements Serializable {
   private final Option<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
-    this.timeline = fileGroup.timeline;
+    this.fileSystemViewTimeline = fileGroup.fileSystemViewTimeline;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
   }
 
-  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
-    this(new HoodieFileGroupId(partitionPath, id), timeline);
+  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline completedAndCompactionWriteTimeline) {
+    this(new HoodieFileGroupId(partitionPath, id), completedAndCompactionWriteTimeline);
   }
 
-  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline) {
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline fileSystemViewTimeline) {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
-    this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
+    this.fileSystemViewTimeline = fileSystemViewTimeline;
+    this.lastInstant = this.fileSystemViewTimeline.lastInstant();
   }
 
   /**
@@ -126,7 +127,7 @@ public class HoodieFileGroup implements Serializable {
       return false;
     }
 
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
+    return fileSystemViewTimeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime());
   }
 
   /**
@@ -144,10 +145,21 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Provides a stream of committed file slices, sorted reverse base commit time.
+   * Provides a stream of committed file slices, sorted in reverse order of base commit time.
    */
   public Stream<FileSlice> getAllFileSlices() {
-    if (!timeline.empty()) {
+    return getAllFileSlices(false);
+  }
+
+  /**
+   * This API takes boolean arg includePending, based on the value passed it will return either committed files slices
+   * or all fileslices sorted in reverse order of base commit time.
+   */
+  public Stream<FileSlice> getAllFileSlices(boolean includePending) {
+    if (includePending) {
+      return getAllFileSlicesIncludingInflight();
+    }
+    if (!fileSystemViewTimeline.empty()) {
       return fileSlices.values().stream().filter(this::isFileSliceCommitted);
     }
     return Stream.empty();
@@ -168,6 +180,19 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
+   * Gets the latest slice - this can contain either.
+   * <p>
+   * - just the log files without data file - (or) data file with 0 or more log files
+   */
+  public Option<FileSlice> getLatestFileSlice(boolean includePending) {
+    if (includePending) {
+      // there should always be one
+      return Option.fromJavaOptional(getAllFileSlicesIncludingInflight().findFirst());
+    }
+    return getLatestFileSlice();
+  }
+
+  /**
    * Gets the latest data file.
    */
   public Option<HoodieBaseFile> getLatestDataFile() {
@@ -178,7 +203,15 @@ public class HoodieFileGroup implements Serializable {
    * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
-    return Option.fromJavaOptional(getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
+    return getLatestFileSliceBeforeOrOn(maxInstantTime, false);
+  }
+
+  /**
+   * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
+   */
+  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime, boolean includePending) {
+    Stream<FileSlice> fileSliceStream = getAllFileSlices(includePending);
+    return Option.fromJavaOptional(fileSliceStream.filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**
@@ -193,6 +226,9 @@ public class HoodieFileGroup implements Serializable {
         .findFirst());
   }
 
+  /**
+   * Fetches latest file slice in range.
+   */
   public Option<FileSlice> getLatestFileSliceInRange(List<String> commitRange) {
     return Option.fromJavaOptional(
         getAllFileSlices().filter(slice -> commitRange.contains(slice.getBaseInstantTime())).findFirst());
@@ -224,6 +260,6 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public HoodieTimeline getTimeline() {
-    return timeline;
+    return fileSystemViewTimeline;
   }
 }
