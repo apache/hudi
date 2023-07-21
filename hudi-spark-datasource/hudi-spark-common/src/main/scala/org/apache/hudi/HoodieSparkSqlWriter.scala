@@ -56,7 +56,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileN
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
-import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
@@ -159,6 +159,9 @@ object HoodieSparkSqlWriter {
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
+    val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+    val isPrepped = canDoPrepped(hoodieConfig, parameters, operation, df)
+
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
       if (jsc.getConf.getOption(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY).isDefined) {
@@ -243,17 +246,16 @@ object HoodieSparkSqlWriter {
       val (writeResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
+            mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
-            val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
-              None
-            } else {
-              Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
-                .asInstanceOf[BaseKeyGenerator])
-            }
-
             val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
+              val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
+                None
+              } else {
+                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
+                  .asInstanceOf[BaseKeyGenerator])
+              }
               var validatePreppedRecord = true
               it.map { avroRec =>
                 if (validatePreppedRecord && isPrepped) {
@@ -343,8 +345,6 @@ object HoodieSparkSqlWriter {
             }
 
             // Remove meta columns from writerSchema if isPrepped is true.
-            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
-            val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
             val processedDataSchema = if (isPrepped || sqlMergeIntoPrepped) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {

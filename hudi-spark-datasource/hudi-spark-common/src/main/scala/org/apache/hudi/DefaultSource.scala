@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, SPARK_SQL_WRITES_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, RECORDKEY_FIELD, SPARK_SQL_WRITES_PREPPED_KEY, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
+import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_CONCURRENCY_MODE}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -144,10 +144,10 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               rawDf: DataFrame): BaseRelation = {
-    val df = if (optParams.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean || optParams.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
-      rawDf // Don't remove meta columns for prepped write.
-    } else {
+    val df = if (canRemoveMetaFields(optParams)) {
       rawDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+    } else {
+      rawDf // Don't remove meta columns for prepped write or for pk less table.
     }
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
@@ -162,6 +162,18 @@ class DefaultSource extends RelationProvider
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
+  }
+
+  /**
+   * For primary key less tables, incoming df could contain meta fields and we can't remove them. for other
+   * flows we can remove the meta fields.
+   * @param optParams
+   * @return
+   */
+  private def canRemoveMetaFields(optParams: Map[String, String]) : Boolean = {
+    !(optParams.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+    || optParams.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+    || !optParams.containsKey(RECORDKEY_FIELD.key()))
   }
 
   override def createSink(sqlContext: SQLContext,
