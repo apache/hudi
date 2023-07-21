@@ -1,4 +1,4 @@
-package org.apache.hudi.table;
+package org.apache.hudi.table.lookup;
 
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.io.RichInputFormat;

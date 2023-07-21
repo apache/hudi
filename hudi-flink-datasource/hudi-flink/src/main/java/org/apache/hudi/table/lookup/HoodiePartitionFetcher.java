@@ -1,4 +1,4 @@
-package org.apache.hudi.table;
+package org.apache.hudi.table.lookup;
 
 import org.apache.flink.table.filesystem.PartitionFetcher;
 
