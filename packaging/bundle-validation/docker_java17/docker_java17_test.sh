@@ -79,7 +79,7 @@ setup_hdfs () {
   $HADOOP_HOME/sbin/start-dfs.sh
 
   # start datanodes
-  for i in $(seq 1 5)
+  for i in $(seq 1 3)
   do
     start_datanode $i
   done
