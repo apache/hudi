@@ -91,6 +91,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
 
+  public static final ConfigProperty<Boolean> LOGFILE_APPEND_ENABLE = ConfigProperty
+      .key("hoodie.logfile.append.enable")
+      .defaultValue(true)
+      .withDocumentation("Whether logfile is enabled to append old files."
+          + "If set to false, it can improve the performance of downstream stream reading");
+
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
       .defaultValue(String.valueOf(1024 * 1024 * 1024)) // 1 GB
@@ -341,6 +347,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder logFileDataBlockMaxSize(long dataBlockSize) {
       storageConfig.setValue(LOGFILE_DATA_BLOCK_MAX_SIZE, String.valueOf(dataBlockSize));
+      return this;
+    }
+
+    public Builder logAppendEnable(long appendEnable) {
+      storageConfig.setValue(LOGFILE_APPEND_ENABLE, String.valueOf(appendEnable));
       return this;
     }
 

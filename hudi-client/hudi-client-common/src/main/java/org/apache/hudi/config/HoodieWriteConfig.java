@@ -2055,6 +2055,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
   }
 
+  public Boolean getLogAppendEnable() {
+    return getBoolean(HoodieStorageConfig.LOGFILE_APPEND_ENABLE);
+  }
+
   public long getLogFileMaxSize() {
     return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
