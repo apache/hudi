@@ -76,6 +76,10 @@ start_datanode () {
 }
 
 setup_hdfs () {
+  echo "::warning::docker_test_java17.sh copying hadoop conf"
+  mv /opt/bundle-validation/tmp-conf-dir/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml
+  mv /opt/bundle-validation/tmp-conf-dir/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml
+
   $HADOOP_HOME/bin/hdfs namenode -format
   $HADOOP_HOME/bin/hdfs --daemon start namenode
   echo "::warning::docker_test_java17.sh starting hadoop hdfs"

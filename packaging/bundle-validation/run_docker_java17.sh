@@ -107,7 +107,6 @@ docker build \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
 --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
---build-arg JAVA17_TEST=true \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
