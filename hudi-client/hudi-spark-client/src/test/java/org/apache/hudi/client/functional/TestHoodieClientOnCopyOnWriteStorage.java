@@ -2713,6 +2713,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Schedule and execute a clustering plan on the same partition. During conflict resolution the commit should fail.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1)
+        .withClusteringUpdatesStrategy("org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy")
+        .withRollbackPendingClustering(true)
         .build();
     HoodiePreCommitValidatorConfig preCommitValidatorConfig = HoodiePreCommitValidatorConfig.newBuilder()
         .withPreCommitValidator(StringUtils.nullToEmpty(SqlQuerySingleResultPreCommitValidator.class.getName()))
@@ -2736,7 +2738,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertThrows(HoodieClusteringException.class, () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
 
     // Do a rollback on the replacecommit that is failed
-    clusteringWriteClient.rollback(clusteringCommitTime);
+    // clusteringWriteClient.rollback(clusteringCommitTime);
 
     // Verify the timeline
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getInstants();
