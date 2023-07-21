@@ -16,7 +16,7 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
-ARG JAVA17_TEST=false
+ARG JAVA17_TEST
 FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
 
 # configure the stack
@@ -44,9 +44,9 @@ RUN mvn --version
 
 # prepare directory for docker java17 test
 RUN echo "JAVA17_TEST: $JAVA17_TEST"
-RUN if [[ $JAVA17_TEST = "true" ]] ; \
+RUN if [[ -z $JAVA17_TEST ]] && [[ $JAVA17_TEST = "true" ]] ; \
     then cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml; fi
-RUN if [[ $JAVA17_TEST = "true" ]] ; \
+RUN if [[ -z $JAVA17_TEST ]] && [[ $JAVA17_TEST = "true" ]] ; \
     then cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml; fi
 RUN mkdir -p /opt/bundle-validation/docker-test
 
