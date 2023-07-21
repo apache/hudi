@@ -2740,6 +2740,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Do a rollback on the replacecommit that is failed
     // clusteringWriteClient.rollback(clusteringCommitTime);
 
+    inflightCommit = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(clusteringWriteClient, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
+        100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
+        2, false);
     // Verify the timeline
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getInstants();
     assertEquals(3, instants.size());
