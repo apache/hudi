@@ -464,7 +464,7 @@ object HoodieSparkSqlWriter {
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
 
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
-          canonicalizeSchema(sourceSchema, latestTableSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts)
         } else {
           sourceSchema
         }
@@ -652,8 +652,8 @@ object HoodieSparkSqlWriter {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema): Schema = {
-    reconcileNullability(sourceSchema, latestTableSchema)
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
+    reconcileNullability(sourceSchema, latestTableSchema, opts)
   }
 
 

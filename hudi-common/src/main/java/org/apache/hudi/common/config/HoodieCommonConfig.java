@@ -62,6 +62,14 @@ public class HoodieCommonConfig extends HoodieConfig {
           + "This enables us, to always extend the table's schema during evolution and never lose the data (when, for "
           + "ex, existing column is being dropped in a new batch)");
 
+  public static final ConfigProperty<Boolean> MAKE_NEW_COLUMNS_NULLABLE = ConfigProperty
+      .key("hoodie.datasource.write.new.columns.nullable")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the newly added "
+          + " column nullable to successfully complete the write operation.");
+
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
