@@ -126,6 +126,11 @@ public class UpdateableColumnVector extends ColumnVector {
     return vector.getChild(translatedPositions[ordinal]);
   }
 
+  public static void nullAll(ColumnarBatch batch, int rowId) {
+    for (int i = 0; i < batch.numCols(); i++) {
+      ((WritableColumnVector) batch.column(i)).putNull(rowId);
+    }
+  }
   public static void populateAll(ColumnarBatch batch, InternalRow row, int rowId) {
     for (int i = 0; i < batch.numCols(); i++) {
       populate((WritableColumnVector) batch.column(i), row, i, rowId);

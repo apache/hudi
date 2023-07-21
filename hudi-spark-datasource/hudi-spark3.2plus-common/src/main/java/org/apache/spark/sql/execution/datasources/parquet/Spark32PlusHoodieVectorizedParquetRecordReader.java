@@ -36,7 +36,7 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+public class Spark32PlusHoodieVectorizedParquetRecordReader extends OtherVectorizedParquetRecordReader {
 
   // save the col type change info.
   private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
@@ -71,8 +71,9 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
       String int96RebaseTz,
       boolean useOffHeap,
       int capacity,
-      Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
-    super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity);
+      Map<Integer, Pair<DataType, DataType>> typeChangeInfos,
+      String readerType) {
+    super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity, readerType);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;

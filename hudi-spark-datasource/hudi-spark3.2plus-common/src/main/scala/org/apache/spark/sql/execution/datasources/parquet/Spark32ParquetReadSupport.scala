@@ -17,19 +17,13 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import java.time.ZoneId
-import java.util.{Locale, Map => JMap}
-
-import scala.collection.JavaConverters._
-
 import org.apache.hadoop.conf.Configuration
-import org.apache.parquet.hadoop.api.{InitContext, ReadSupport}
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
+import org.apache.parquet.hadoop.api.{InitContext, ReadSupport}
 import org.apache.parquet.io.api.RecordMaterializer
-import org.apache.parquet.schema._
 import org.apache.parquet.schema.LogicalTypeAnnotation.ListLogicalTypeAnnotation
 import org.apache.parquet.schema.Type.Repetition
-
+import org.apache.parquet.schema._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
@@ -37,6 +31,10 @@ import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
+
+import java.time.ZoneId
+import java.util.{Locale, Map => JMap}
+import scala.collection.JavaConverters._
 
 /**
  * A Parquet [[ReadSupport]] implementation for reading Parquet records as Catalyst
@@ -63,7 +61,7 @@ class Spark32ParquetReadSupport(
   extends ReadSupport[InternalRow] with Logging {
   private var catalystRequestedSchema: StructType = _
 
-  def this() = {
+  def this(readerType: String) = {
     // We need a zero-arg constructor for SpecificParquetRecordReaderBase.  But that is only
     // used in the vectorized reader, where we get the convertTz/rebaseDateTime value directly,
     // and the values here are ignored.
@@ -72,7 +70,7 @@ class Spark32ParquetReadSupport(
       enableVectorizedReader = true,
       datetimeRebaseSpec = RebaseSpec(LegacyBehaviorPolicy.CORRECTED),
       int96RebaseSpec = RebaseSpec(LegacyBehaviorPolicy.LEGACY),
-      readerType = "")
+      readerType = readerType)
   }
 
   /**

@@ -103,7 +103,8 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
         return Option.of(true);
       }
     }
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    Comparable<Comparable> c1 = older.getOrderingValue(oldSchema, props);
+    if (c1.compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(false);
     } else {
       return Option.of(true);

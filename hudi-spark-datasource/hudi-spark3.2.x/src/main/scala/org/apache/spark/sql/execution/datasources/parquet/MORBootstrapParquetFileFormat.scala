@@ -121,7 +121,7 @@ class MORBootstrapParquetFileFormat(private val shouldAppendPartitionValues: Boo
           baseIt match {
             case iter: Iterator[ColumnarBatch] => new ColumnarMergingIterator(logFiles, filePath.getParent, iter, StructType(dataSchema.fields ++ partitionSchema.fields),
               tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
-              tableState.value, broadcastedHadoopConf.value.value, enableOffHeapColumnVector).asInstanceOf[Iterator[InternalRow]]
+              tableState.value, broadcastedHadoopConf.value.value, enableOffHeapColumnVector, filePath.toString).asInstanceOf[Iterator[InternalRow]]
             case iter: Iterator[InternalRow] => new RecordMergingFileIterator(logFiles, filePath.getParent, iter, StructType(dataSchema.fields ++ partitionSchema.fields),
               tableSchema.value, StructType(requiredSchema.fields ++ partitionSchema.fields), tableName,
               tableState.value, broadcastedHadoopConf.value.value)
@@ -176,7 +176,8 @@ class ColumnarMergingIterator(logFiles: List[HoodieLogFile],
                               tableName: String,
                               tableState: HoodieTableState,
                               config: Configuration,
-                              enableOffHeapColumnVector: Boolean) extends CachingIterator[ColumnarBatch] with SparkAdapterSupport with AvroDeserializerSupport {
+                              enableOffHeapColumnVector: Boolean,
+                              filePath: String) extends CachingIterator[ColumnarBatch] with SparkAdapterSupport with AvroDeserializerSupport {
 
   private val logIter = new LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableName, tableState, config)
   private val recordKeyOrdinal = readerSchema.fieldIndex(tableState.recordKeyField)
@@ -195,6 +196,7 @@ class ColumnarMergingIterator(logFiles: List[HoodieLogFile],
 
 
   protected def doHasNext: Boolean = {
+    val p = filePath
     if (colBatchIterator.hasNext) {
       val colBatch = colBatchIterator.next()
       val rowIter = colBatch.rowIterator().asScala.zipWithIndex
@@ -220,7 +222,11 @@ class ColumnarMergingIterator(logFiles: List[HoodieLogFile],
                 UpdateableColumnVector.populateAll(colBatch, updatedSparkRec.getData, curRow._2)
               }
               translatedPositions += curRow._2
+            } else {
+              UpdateableColumnVector.nullAll(colBatch, curRow._2)
             }
+          } else {
+            UpdateableColumnVector.nullAll(colBatch, curRow._2)
           }
         }
       }
@@ -229,7 +235,8 @@ class ColumnarMergingIterator(logFiles: List[HoodieLogFile],
       for (i <- 0 until colBatch.numCols()) {
         vecs(i) = new UpdateableColumnVector(colBatch.column(i), translatedPosArray)
       }
-      nextRecord = new ColumnarBatch(vecs, translatedPosArray.length)
+      //nextRecord = new ColumnarBatch(vecs, translatedPosArray.length)
+      nextRecord = colBatch
       true
     } else if (logIter.hasNext) {
       nextRecord = UpdateableColumnVector.toBatch(dataSchema.structTypeSchema, enableOffHeapColumnVector, logIter.asJava)
