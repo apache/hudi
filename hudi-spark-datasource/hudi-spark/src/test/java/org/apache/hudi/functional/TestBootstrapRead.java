@@ -41,6 +41,7 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -118,6 +119,46 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       }
     }
     return b.build();
+  }
+
+  @Test
+  public void testMOR() {
+    this.bootstrapType = "full";
+    this.dashPartitions = false;
+    this.tableType = MERGE_ON_READ;
+    this.nPartitions = 2;
+    dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
+    Dataset<Row> inserts = generateTestInserts("000", nInserts);
+    if (dashPartitions) {
+      //test adding a partition to the table
+      inserts = inserts.filter("partition_path != '2016-03-14'");
+    }
+    if (nPartitions > 0) {
+      partitionCols = new String[nPartitions];
+      partitionCols[0] = "partition_path";
+      for (int i = 1; i < partitionCols.length; i++) {
+        partitionCols[i] = "partpath" + (i + 1);
+      }
+    }
+    inserts.write().format("hudi")
+        .options(basicOptions())
+        .mode(SaveMode.Overwrite)
+        .save(hudiBasePath);
+
+    //do upserts
+    Map<String, String> options  = basicOptions();
+    Dataset<Row> updates = generateTestUpdates("001", nUpdates);
+    updates.write().format("hudi")
+        .options(options)
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+        .mode(SaveMode.Append)
+        .save(hudiBasePath);
+
+    Dataset<Row> hudiDf = sparkSession.read().option("MOR_FILE_READER","true").format("hudi").load(hudiBasePath);
+    //hudiDf = hudiDf.select("partition_path", "_row_key");
+    //hudiDf = hudiDf.select("partition_path", "_row_key");
+    hudiDf.explain(true);
+    hudiDf.show(100,false);
   }
 
   @ParameterizedTest

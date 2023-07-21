@@ -30,7 +30,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -45,12 +45,26 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        private val globPaths: Seq[Path],
                                        private val userSchema: Option[StructType],
                                        private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, globPaths, userSchema, prunedDataSchema) {
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, globPaths, userSchema, prunedDataSchema) with SparkAdapterSupport {
 
   override type Relation = MergeOnReadSnapshotRelation
 
   override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
+
+  def toHadoopFsRelation: HadoopFsRelation = {
+    fileIndex.shouldBroadcast = true
+    HadoopFsRelation(
+      location = fileIndex,
+      partitionSchema = fileIndex.partitionSchema,
+      dataSchema = fileIndex.dataSchema,
+      bucketSpec = None,
+      fileFormat = sparkAdapter.createMORFileFormat(shouldExtractPartitionValuesFromPartitionPath,
+        sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields).get,
+      optParams)(sparkSession)
+  }
 
 }
 

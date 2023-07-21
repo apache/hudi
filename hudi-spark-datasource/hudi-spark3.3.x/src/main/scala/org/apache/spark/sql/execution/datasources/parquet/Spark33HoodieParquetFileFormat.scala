@@ -71,6 +71,17 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, allowVectorized = true)
+  }
+
+   protected def buildReaderWithPartitionValues(sparkSession: SparkSession,
+                                                dataSchema: StructType,
+                                                partitionSchema: StructType,
+                                                requiredSchema: StructType,
+                                                filters: Seq[Filter],
+                                                options: Map[String, String],
+                                                hadoopConf: Configuration,
+                                                allowVectorized: Boolean): PartitionedFile => Iterator[InternalRow] = {
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(
       ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
@@ -122,7 +133,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
       sqlConf.parquetVectorizedReaderEnabled &&
-        resultSchema.forall(_.dataType.isInstanceOf[AtomicType])
+        resultSchema.forall(_.dataType.isInstanceOf[AtomicType]) && allowVectorized
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize

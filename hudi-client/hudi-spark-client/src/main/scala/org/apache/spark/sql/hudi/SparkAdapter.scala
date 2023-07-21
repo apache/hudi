@@ -20,8 +20,10 @@ package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.{HoodieTableSchema, HoodieTableState}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -166,6 +168,12 @@ trait SparkAdapter extends Serializable {
    * Create instance of [[ParquetFileFormat]]
    */
   def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+  def createMORFileFormat(appendPartitionValues: Boolean,
+                          tableState: Broadcast[HoodieTableState],
+                          tableSchema: Broadcast[HoodieTableSchema],
+                          tableName: String,
+                          mergeType: String,
+                          mandatoryFields: Seq[String]): Option[ParquetFileFormat]
 
   /**
    * Create instance of [[InterpretedPredicate]]

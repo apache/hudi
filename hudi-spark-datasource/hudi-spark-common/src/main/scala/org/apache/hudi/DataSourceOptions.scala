@@ -87,6 +87,12 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
+  val MOR_FILE_READER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.mor.file.reader")
+    .defaultValue("true")
+    .markAdvanced()
+    .withDocumentation("When querying from table and not specifying column order, the partition columns will be last.")
+
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()

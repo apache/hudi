@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferenc
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -96,6 +96,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
+  var shouldBroadcast: Boolean = false
+
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
    * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
@@ -159,7 +161,17 @@ case class HoodieFileIndex(spark: SparkSession,
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
-        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        if (this.shouldBroadcast) {
+          val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent).
+            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          if (c.nonEmpty) {
+            PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
+          } else {
+            PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+          }
+        } else {
+          PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        }
     }
 
     val skippingRatio =

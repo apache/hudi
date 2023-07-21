@@ -262,7 +262,12 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          val relation = new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          if (parameters.getOrElse(MOR_FILE_READER.key, MOR_FILE_READER.defaultValue).toBoolean) {
+            relation.toHadoopFsRelation
+          } else {
+            relation
+          }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
