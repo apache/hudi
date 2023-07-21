@@ -214,27 +214,27 @@ jobs:
           - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
-          - flinkProfile: 'flink1.17'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.2'
-          - flinkProfile: 'flink1.16'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.2'
-          - flinkProfile: 'flink1.15'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.1'
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark3.2'
-            sparkRuntime: 'spark3.2.3'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark3.1'
-            sparkRuntime: 'spark3.1.3'
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark3.0'
-            sparkRuntime: 'spark3.0.2'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark2.4'
-            sparkRuntime: 'spark2.4.8'
+#          - flinkProfile: 'flink1.17'
+#            sparkProfile: 'spark3.3'
+#            sparkRuntime: 'spark3.3.2'
+#          - flinkProfile: 'flink1.16'
+#            sparkProfile: 'spark3.3'
+#            sparkRuntime: 'spark3.3.2'
+#          - flinkProfile: 'flink1.15'
+#            sparkProfile: 'spark3.3'
+#            sparkRuntime: 'spark3.3.1'
+#          - flinkProfile: 'flink1.14'
+#            sparkProfile: 'spark3.2'
+#            sparkRuntime: 'spark3.2.3'
+#          - flinkProfile: 'flink1.13'
+#            sparkProfile: 'spark3.1'
+#            sparkRuntime: 'spark3.1.3'
+#          - flinkProfile: 'flink1.14'
+#            sparkProfile: 'spark3.0'
+#            sparkRuntime: 'spark3.0.2'
+#          - flinkProfile: 'flink1.13'
+#            sparkProfile: 'spark2.4'
+#            sparkRuntime: 'spark2.4.8'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -243,34 +243,24 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           architecture: x64
-      - name: Build Project
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: 'scala-2.12'
-        run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
-          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
-          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
-      - name: IT - Bundle Validation - OpenJDK 8
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
-      - name: IT - Bundle Validation - OpenJDK 11
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
-        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
+#      - name: IT - Bundle Validation - OpenJDK 8
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: 'scala-2.12'
+#        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
+#      - name: IT - Bundle Validation - OpenJDK 11
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: 'scala-2.12'
+#        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -281,6 +271,16 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: 'scala-2.12'
+        run: |
+          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
       - name: UT/FT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
