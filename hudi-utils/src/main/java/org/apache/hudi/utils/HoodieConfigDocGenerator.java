@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utils;
 
+import com.sun.tools.doclets.internal.toolkit.NestedClassWriter;
 import org.apache.hudi.common.config.*;
 import org.apache.hudi.common.config.ConfigGroups.Names;
 import org.apache.hudi.common.config.ConfigGroups.SubGroupNames;
@@ -79,7 +80,7 @@ public class HoodieConfigDocGenerator {
   private static final String DEFAULT_FOOTER_MARKUP = new StringBuilder().append(NEWLINE).append(new HorizontalRule(3)).append(DOUBLE_NEWLINE).toString();
   private static final Integer DEFAULT_CONFIG_GROUP_HEADING_LEVEL = 2;
   private static final Integer DEFAULT_CONFIG_PARAM_HEADING_LEVEL = 3;
-  private static final TableRow<String> DEFAULT_TABLE_HEADER_ROW = new TableRow<>(new ArrayList<>(Arrays.asList("Config Name", "Default", "Description", "Since Version")));
+  private static final TableRow<String> DEFAULT_TABLE_HEADER_ROW = new TableRow<>(new ArrayList<>(Arrays.asList("Config Name", "Default", "Description")));
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
@@ -121,13 +122,9 @@ public class HoodieConfigDocGenerator {
       keywords: [configurations, default, flink options, spark, configs, parameters]
       permalink: /docs/configurations.html
       summary: This section offers an overview of tools available to operate an ecosystem of Hudi
+      toc_min_heading_level: 2
+      toc_max_heading_level: 4
       last_modified_at: 2019-12-30T15:59:57-04:00
-      hide_table_of_contents: true
-      ---
-      import TOCInline from '@theme/TOCInline';
-
-      <TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>
-
       ---
      */
     LocalDateTime now = LocalDateTime.now();
@@ -136,14 +133,10 @@ public class HoodieConfigDocGenerator {
             .append("keywords: [ configurations, default, flink options, spark, configs, parameters ] ").append(NEWLINE)
             .append("permalink: /docs/configurations.html").append(NEWLINE)
             .append("summary: " + ALL_CONFIGS_PAGE_SUMMARY).append(NEWLINE)
+            .append("toc_min_heading_level: 2").append(NEWLINE)
+            .append("toc_max_heading_level: 4").append(NEWLINE)
             .append("last_modified_at: " + DateTimeFormatter.ISO_DATE_TIME.format(now)).append(NEWLINE)
-            .append("hide_table_of_contents: true").append(NEWLINE)
             .append(new HorizontalRule()).append(NEWLINE)
-            .append("import TOCInline from '@theme/TOCInline';")
-            .append(DOUBLE_NEWLINE)
-            .append("<TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>")
-            .append(DOUBLE_NEWLINE)
-            .append(new HorizontalRule())
             .append(DOUBLE_NEWLINE);
     // Description
     builder.append(ALL_CONFIGS_PAGE_SUMMARY).append(DOUBLE_NEWLINE);
@@ -160,12 +153,6 @@ public class HoodieConfigDocGenerator {
       features a subset of the most frequently used configurations. For a full list of all configs, please visit the
       [All Configurations](/docs/configurations) page.
       last_modified_at: 2019-12-30T15:59:57-04:00
-      hide_table_of_contents: true
-      ---
-      import TOCInline from '@theme/TOCInline';
-
-      <TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>
-
       ---
      */
     LocalDateTime now = LocalDateTime.now();
@@ -173,13 +160,7 @@ public class HoodieConfigDocGenerator {
             .append("title: ").append("Basic Configurations").append(NEWLINE)
             .append("summary: " + BASIC_CONFIGS_PAGE_SUMMARY).append(NEWLINE)
             .append("last_modified_at: " + DateTimeFormatter.ISO_DATE_TIME.format(now)).append(NEWLINE)
-            .append("hide_table_of_contents: true").append(NEWLINE)
             .append(new HorizontalRule()).append(NEWLINE)
-            .append("import TOCInline from '@theme/TOCInline';")
-            .append(DOUBLE_NEWLINE)
-            .append("<TOCInline toc={toc} minHeadingLevel={2} maxHeadingLevel={5}/>")
-            .append(DOUBLE_NEWLINE)
-            .append(new HorizontalRule())
             .append(DOUBLE_NEWLINE);
     // Description
     builder.append(BASIC_CONFIGS_PAGE_SUMMARY).append(DOUBLE_NEWLINE);
@@ -214,20 +195,20 @@ public class HoodieConfigDocGenerator {
       boolean isConfigRequired = (defaultValue == null);
 
       // Description
+      String configParam = "`Config Param: " + field.getName() + "`";
       String description = StringUtils.isNullOrEmpty(cfgProperty.doc()) ? "" : cfgProperty.doc().replaceAll("[\\t\\n\\r]+", " ").replaceAll("&", "&amp;").replaceAll("\\|", " &#124; ").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-      columns.add(description);
 
       // First version
+      String versionInfo = "";
       if (cfgProperty.getSinceVersion().isPresent()) {
-        String sinceVersion = String.valueOf(cfgProperty.getSinceVersion().get());
+        String sinceVersion = "<br />`Since Version: " + cfgProperty.getSinceVersion().get() + "`";
         String deprecatedVersion = "";
         if (cfgProperty.getDeprecatedVersion().isPresent()) {
-          deprecatedVersion = ". Deprecated since: " + String.valueOf(cfgProperty.getDeprecatedVersion().get());
+          deprecatedVersion = "<br />`Deprecated since: " + cfgProperty.getDeprecatedVersion().get() + "`";
         }
-        columns.add(sinceVersion + deprecatedVersion);
-      } else {
-        columns.add(" ");
+        versionInfo = sinceVersion + deprecatedVersion;
       }
+      columns.add(description + "<br /><br />" + configParam + versionInfo);
 
       return new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired, cfgProperty.isAdvanced());
     } catch (IllegalAccessException e) {
@@ -465,10 +446,9 @@ public class HoodieConfigDocGenerator {
         boolean isConfigRequired = (defaultValue == null);
 
         // Description
-        columns.add(StringUtils.isNullOrEmpty(description) ? "" : description.replaceAll("[\\t\\n\\r]+", " "));
-
-        // Since Version. this is empty since for Flink we dont have this info.
-        columns.add(" ");
+        String configParam = " `Config Param: " + field.getName() + "`";
+        String desc = StringUtils.isNullOrEmpty(description) ? "" : description.replaceAll("[\\t\\n\\r]+", " ");
+        columns.add(desc + "<br /><br />" + configParam);
 
         ConfigTableRow configRow = new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired);
 
@@ -578,33 +558,28 @@ public class HoodieConfigDocGenerator {
     EnumSet<Names> inclusionList = EnumSet.noneOf(Names.class);
     // Iterate the Treemap and get all config groups and classes that have basic configs.
     Set<ConfigClassMeta> keySet = configClassTreeMap.keySet();
-    List<ConfigClassMarkups> basicConfigMarkups = new ArrayList<>();
+
+    Names prevGroupName = Names.ENVIRONMENT_CONFIG;
+    SubGroupNames prevSubGroupName = NONE;
+    StringBuilder stringBuilder = new StringBuilder();
     for (ConfigClassMeta configClassMetaInfo : keySet) {
       ConfigClassMarkups configClassMarkup = configClassTreeMap.get(configClassMetaInfo);
-      if (configClassMarkup.basicConfigs != null) {
-        inclusionList.add(configClassMetaInfo.groupName);
-        basicConfigMarkups.add(configClassMarkup);
+      if (configClassMarkup.basicConfigs == null) {
+        continue;
       }
-    }
-
-    String prevGroupSummary = null;
-    String prevSubGroupSummary = null;
-    StringBuilder stringBuilder = new StringBuilder();
-    for(ConfigClassMarkups configClassMarkups: basicConfigMarkups) {
-      String currentGroupSummary = configClassMarkups.topLevelGroupSummary;
-      if (currentGroupSummary != prevGroupSummary) {
-        stringBuilder.append(NEWLINE).append(currentGroupSummary);
-        prevGroupSummary = currentGroupSummary;
+      inclusionList.add(configClassMetaInfo.groupName);
+      if(configClassMetaInfo.groupName != prevGroupName){
+        stringBuilder.append(configClassMarkup.topLevelGroupSummary);
+        prevGroupName = configClassMetaInfo.groupName;
       }
-      String currentSubGroupSummary = configClassMarkups.topLevelSubGroupSummary;
-      if (currentSubGroupSummary != prevSubGroupSummary) {
-        if (currentSubGroupSummary != null) {
-          stringBuilder.append(NEWLINE).append(currentSubGroupSummary);
+      if(configClassMetaInfo.subGroupName != prevSubGroupName){
+        if (configClassMetaInfo.subGroupName != NONE && configClassMarkup.topLevelSubGroupSummary != null){
+          stringBuilder.append(NEWLINE).append(configClassMarkup.topLevelSubGroupSummary);
         }
-        prevSubGroupSummary = currentSubGroupSummary;
+        prevSubGroupName = configClassMetaInfo.subGroupName;
       }
-      stringBuilder.append(NEWLINE).append(configClassMarkups.configClassSummary);
-      stringBuilder.append(NEWLINE).append(configClassMarkups.basicConfigs);
+      stringBuilder.append(NEWLINE).append(configClassMarkup.configClassSummary);
+      stringBuilder.append(NEWLINE).append(configClassMarkup.basicConfigs);
       stringBuilder.append(DEFAULT_FOOTER_MARKUP);
     }
     generateMainHeadings(contentTableBuilder, EnumSet.complementOf(inclusionList));
