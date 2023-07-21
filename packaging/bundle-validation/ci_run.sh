@@ -199,9 +199,16 @@ docker build \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
+## run validation script in docker
+#docker run --name hudi_docker \
+#  -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
+#  -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
+#  -v $TMP_DATA_DIR:/opt/bundle-validation/data \
+#  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION
+
 # run validation script in docker
 docker run --name hudi_docker \
   -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE

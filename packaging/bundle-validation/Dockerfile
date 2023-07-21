@@ -53,3 +53,8 @@ ENV YARN_NODEMANAGER_USER root
 
 # for RocksDb
 RUN apk add --no-cache libstdc++
+
+
+# TESTING
+RUN cp conf/hdfs-site.xml $HADOOP_HOME/etc/hadoop/
+RUN cp conf/core-site.xml $HADOOP_HOME/etc/hadoop/

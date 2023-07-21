@@ -29,9 +29,13 @@ echo "pwd: $(pwd)"
 ls -l packaging/bundle-validation/docker_java17/
 docker ps
 
-# Upload config
-docker cp packaging/bundle-validation/conf/core-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/core-site.xml
-docker cp packaging/bundle-validation/conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
+## Upload config
+#docker cp packaging/bundle-validation/conf/core-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/core-site.xml
+#docker cp packaging/bundle-validation/conf/hdfs-site.xml $CONTAINER_NAME:$HADOOP_HOME/etc/hadoop/hdfs-site.xml
+docker exec $CONTAINER_NAME bash -c "rm $HADOOP_HOME/etc/hadoop/core-site.xml"
+docker exec $CONTAINER_NAME bash -c "rm $HADOOP_HOME/etc/hadoop/hdfs-site.xml"
 
 # Start test script
-docker exec $CONTAINER_NAME bash $DOCKER_TEST_DIR/packaging/bundle-validation/docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE
+#docker exec $CONTAINER_NAME bash $DOCKER_TEST_DIR/packaging/bundle-validation/docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE
+
+docker exec $CONTAINER_NAME bash $DOCKER_TEST_DIR/packaging/bundle-validation/validate.sh $JAVA_RUNTIME_VERSION
