@@ -432,10 +432,9 @@ object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
       operation
     } else {
-      // if no record key, no preCombine and no explicit partition path is set, we should treat it as append only workload
+      // if no record key, no preCombine, we should treat it as append only workload
       // and make bulk_insert as operation type.
       if (!paramsWithoutDefaults.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
-        && !paramsWithoutDefaults.containsKey(DataSourceWriteOptions.PARTITIONPATH_FIELD.key())
         && !paramsWithoutDefaults.containsKey(DataSourceWriteOptions.PRECOMBINE_FIELD.key())
         && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
         log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")

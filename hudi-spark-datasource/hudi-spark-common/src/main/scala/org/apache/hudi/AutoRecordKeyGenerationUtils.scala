@@ -51,7 +51,7 @@ object AutoRecordKeyGenerationUtils {
     }
 
     if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
-      log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignoed with auto record key generation enabled")
+      log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
     }
   }
 }
