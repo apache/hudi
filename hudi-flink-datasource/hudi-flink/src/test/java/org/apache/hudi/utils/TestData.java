@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -914,7 +916,15 @@ public class TestData {
       }
       // Ensure that to write and read sequences are consistent.
       readBuffer.sort(String::compareTo);
-      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+      try {
+        assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+      } catch (Exception e) {
+        RemoteIterator<LocatedFileStatus> files = fs.listFiles(metaClient.getBasePathV2(), true);
+        while (files.hasNext()) {
+          System.out.println("xxxxxx " + files.next().getPath());
+        }
+        throw e;
+      }
     }
   }
 
