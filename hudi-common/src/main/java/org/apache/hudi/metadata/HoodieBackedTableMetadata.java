@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -543,7 +544,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   public Map<String, String> stats() {
-    return metrics.map(m -> m.getStats(true, metadataMetaClient, this)).orElse(new HashMap<>());
+    Set<String> allMetadataPartitionPaths = Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    return metrics.map(m -> m.getStats(true, metadataMetaClient, this, allMetadataPartitionPaths)).orElse(new HashMap<>());
   }
 
   @Override

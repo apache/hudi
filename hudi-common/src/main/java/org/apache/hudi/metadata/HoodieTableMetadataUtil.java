@@ -1634,7 +1634,7 @@ public class HoodieTableMetadataUtil {
 
     LOG.info(String.format("Estimated file group count for MDT partition %s is %d "
             + "[recordCount=%d, avgRecordSize=%d, minFileGroupCount=%d, maxFileGroupCount=%d, growthFactor=%f, "
-            + "maxFileGroupSizeBytes=%d]", partitionType, fileGroupCount, recordCount, averageRecordSize, minFileGroupCount,
+            + "maxFileGroupSizeBytes=%d]", partitionType.name(), fileGroupCount, recordCount, averageRecordSize, minFileGroupCount,
         maxFileGroupCount, growthFactor, maxFileGroupSizeBytes));
     return fileGroupCount;
   }

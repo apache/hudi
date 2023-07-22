@@ -190,7 +190,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     try {
-      this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(), dataWriteConfig.getBasePath());
+      this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(), dataWriteConfig.getBasePath(), true);
       this.metadataMetaClient = metadata.getMetadataMetaClient();
     } catch (Exception e) {
       throw new HoodieException("Could not open MDT for reads", e);
@@ -359,15 +359,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (!filesPartitionAvailable) {
       partitionsToInit.remove(MetadataPartitionType.FILES);
       partitionsToInit.add(0, MetadataPartitionType.FILES);
+      // Initialize the metadata table for the first time
+      metadataMetaClient = initializeMetaClient();
     } else {
       // Check and then open the metadata table reader so FILES partition can be read during initialization of other partitions
       initMetadataReader();
+      // Load the metadata table metaclient if required
+      if (metadataMetaClient == null) {
+        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
+      }
     }
 
     // Already initialized partitions can be ignored
     partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable((metadataPartition)));
 
-    metadataMetaClient = initializeMetaClient();
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
     List<DirectoryInfo> partitionInfoList = filesPartitionAvailable ? listAllPartitionsFromMDT(initializationTime) : listAllPartitionsFromFilesystem(initializationTime);
@@ -382,7 +387,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
       String commitTimeForPartition = generateUniqueCommitInstantTime(initializationTime);
 
-      LOG.info("Initializing MDT partition " + partitionType + " at instant " + commitTimeForPartition);
+      LOG.info("Initializing MDT partition " + partitionType.name() + " at instant " + commitTimeForPartition);
 
       Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
       try {
@@ -413,7 +418,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // Generate the file groups
       final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
-      ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionType + " should be > 0");
+      ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionType.name() + " should be > 0");
       initializeFileGroups(dataMetaClient, partitionType, commitTimeForPartition, fileGroupCount);
 
       // Perform the commit using bulkCommit
@@ -475,6 +480,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
+    fsView.loadAllPartitions();
     final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
     for (String partition : partitions) {
       partitionBaseFilePairs.addAll(fsView.getLatestBaseFiles(partition)
@@ -509,8 +515,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       return engineContext.emptyHoodieData();
     }
 
-    engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from base files");
-    return engineContext.parallelize(partitionBaseFilePairs, partitionBaseFilePairs.size()).flatMap(p -> {
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from " + partitionBaseFilePairs.size() + " base files");
+    final int parallelism = Math.min(partitionBaseFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(p -> {
       final String partition = p.getKey();
       final String filename = p.getValue();
       Path dataFilePath = new Path(dataWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
@@ -558,7 +565,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // Records which save the file listing of each partition
-    engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for MDT FILES partition");
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
@@ -621,6 +628,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // In each round we will list a section of directories
       int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
       // List all directories in parallel
+      engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
         FileSystem fs = path.get().getFileSystem(conf.get());
         String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
@@ -707,12 +715,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // during initial commit, then the fileGroup would still be recognized (as a FileSlice with no baseFiles but a
     // valid logFile). Since these log files being created have no content, it is safe to add them here before
     // the bulkInsert.
-    LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
-        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
+    final String msg = String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
+        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime);
+    LOG.info(msg);
     final List<String> fileGroupFileIds = IntStream.range(0, fileGroupCount)
         .mapToObj(i -> HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i))
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
+    engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
     engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
         final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
