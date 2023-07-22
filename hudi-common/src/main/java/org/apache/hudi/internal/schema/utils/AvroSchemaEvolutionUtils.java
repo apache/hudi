@@ -118,6 +118,7 @@ public class AvroSchemaEvolutionUtils {
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
+   * @param opts config options
    * @return schema (based off {@code source} one) that has nullability constraints reconciled
    */
   public static Schema reconcileNullability(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
