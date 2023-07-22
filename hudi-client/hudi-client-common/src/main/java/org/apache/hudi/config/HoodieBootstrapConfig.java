@@ -105,11 +105,10 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_PATTERN = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex")
-      .noDefaultValue()
+      .defaultValue(".*")
       .markAdvanced()
       .sinceVersion("0.6.0")
-      .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it, "
-          + "when it is specified, only BootstrapRegexModeSelector can be used");
+      .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it.");
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
@@ -178,6 +177,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = PARTITION_SELECTOR_REGEX_MODE.key();
+  /**
+   * @deprecated Use {@link #PARTITION_SELECTOR_REGEX_PATTERN} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX = PARTITION_SELECTOR_REGEX_PATTERN.defaultValue();
   /**
    * @deprecated Use {@link #PARTITION_SELECTOR_REGEX_MODE} and its methods instead
    */

@@ -26,7 +26,6 @@ import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
-import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -47,7 +46,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -111,21 +109,10 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   private void validate() {
-    String bootstrapModeSelectorClass = config.getBootstrapModeSelectorClass();
-    String bootstrapModeSelectorRegex = config.getBootstrapModeSelectorRegex();
-
     checkArgument(config.getBootstrapSourceBasePath() != null,
         "Ensure Bootstrap Source Path is set");
-    checkArgument(bootstrapModeSelectorClass != null,
+    checkArgument(config.getBootstrapModeSelectorClass() != null,
         "Ensure Bootstrap Partition Selector is set");
-    if (!StringUtils.isNullOrEmpty(bootstrapModeSelectorRegex)) {
-      checkArgument(bootstrapModeSelectorClass.equals(BootstrapRegexModeSelector.class.getCanonicalName()),
-          "When hoodie.bootstrap.mode.selector.regex is specified, only BootstrapRegexModeSelector can be used");
-    }
-    if (BootstrapRegexModeSelector.class.getCanonicalName().equals(bootstrapModeSelectorClass)) {
-      checkArgument(!StringUtils.isNullOrEmpty(bootstrapModeSelectorRegex),
-          "When BootstrapRegexModeSelector is used, hoodie.bootstrap.mode.selector.regex must be specified");
-    }
   }
 
   @Override

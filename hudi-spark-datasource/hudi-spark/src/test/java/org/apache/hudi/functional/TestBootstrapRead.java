@@ -41,7 +41,6 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,7 +58,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests different layouts for bootstrap base path
@@ -150,50 +148,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     doInsert(options, "002");
     compareTables();
     verifyMetaColOnlyRead(2);
-  }
-
-  @Test
-  public void testBootstrapConf() {
-    this.dashPartitions = false;
-    this.tableType = COPY_ON_WRITE;
-    this.nPartitions = 2;
-    setupDirs();
-    Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
-
-    Map<String, String> options = basicOptions();
-    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
-    options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
-
-    // Wrong usage 1
-    options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), MetadataOnlyBootstrapModeSelector.class.getName());
-    options.put(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key(), "partition_path=2015-03-1[5-7]/.*");
-
-    assertEquals("When hoodie.bootstrap.mode.selector.regex is specified, only BootstrapRegexModeSelector can be used",
-        assertThrows(Exception.class, () ->
-            bootstrapDf.write().format("hudi")
-                .options(options)
-                .mode(SaveMode.Overwrite)
-                .save(bootstrapTargetPath)).getMessage());
-
-    // Wrong usage 2
-    options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), BootstrapRegexModeSelector.class.getName());
-    options.remove(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key());
-
-    assertEquals("When BootstrapRegexModeSelector is used, hoodie.bootstrap.mode.selector.regex must be specified",
-        assertThrows(Exception.class, () ->
-            bootstrapDf.write().format("hudi")
-                .options(options)
-                .mode(SaveMode.Overwrite)
-                .save(bootstrapTargetPath)).getMessage());
-
-    // Correct usage
-    options.put(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), BootstrapRegexModeSelector.class.getName());
-    options.put(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN.key(), "partition_path=2015-03-1[5-7]/.*");
-
-    bootstrapDf.write().format("hudi")
-        .options(options)
-        .mode(SaveMode.Overwrite)
-        .save(bootstrapTargetPath);
   }
 
   protected Map<String, String> basicOptions() {
