@@ -1311,12 +1311,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   @Override
   public void close() {
+    // Close table service client first
+    this.tableServiceClient.close();
     // Stop timeline-server if running
     super.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
-    this.tableServiceClient.close();
   }
 
   private void setWriteTimer(HoodieTable table) {

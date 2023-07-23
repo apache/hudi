@@ -84,10 +84,8 @@ public class TransactionManager implements Serializable {
   }
 
   public void close() {
-    if (isLockRequired) {
-      lockManager.close();
-      LOG.info("Transaction manager closed");
-    }
+    lockManager.close();
+    LOG.info("Transaction manager closed");
   }
 
   public LockManager getLockManager() {
