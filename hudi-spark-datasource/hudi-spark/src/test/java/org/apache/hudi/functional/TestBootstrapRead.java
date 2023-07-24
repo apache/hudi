@@ -143,7 +143,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     inserts.write().format("hudi")
         .options(basicOptions())
         .mode(SaveMode.Overwrite)
-        .save(hudiBasePath);
+        .save(hudiBasePath +"/tbl1");
+    inserts.write().format("hudi")
+        .options(basicOptions())
+        .mode(SaveMode.Overwrite)
+        .save(hudiBasePath +"/tbl2");
 
     //do upserts
     Map<String, String> options  = basicOptions();
@@ -152,13 +156,32 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .options(options)
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
         .mode(SaveMode.Append)
-        .save(hudiBasePath);
+        .save(hudiBasePath + "/tbl1");
+    updates.write().format("hudi")
+        .options(options)
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+        .mode(SaveMode.Append)
+        .save(hudiBasePath + "tbl2");
 
-    Dataset<Row> hudiDf = sparkSession.read().option("MOR_FILE_READER","true").format("hudi").load(hudiBasePath);
+    Dataset<Row> hudiDf1 = sparkSession.read()
+        .option("hoodie.datasource.read.mor.file.reader","false")
+        .format("hudi").load(hudiBasePath + "/tbl1");
+    Dataset<Row> hudiDf2 = sparkSession.read()
+        .option("hoodie.datasource.read.mor.file.reader","true")
+        .format("hudi").load(hudiBasePath + "/tbl1");
     //hudiDf = hudiDf.select("partition_path", "_row_key");
     //hudiDf = hudiDf.select("partition_path", "_row_key");
-    hudiDf.explain(true);
-    hudiDf.show(100,false);
+    hudiDf1.createOrReplaceTempView("tbla");
+    sparkSession.sql("select * from tbla where begin_lon > 0.5").createOrReplaceTempView("tbl1");
+    hudiDf2.createOrReplaceTempView("tbl2");
+
+    Dataset<Row> joinDf = sparkSession.sql("select * from tbl1 a INNER JOIN tbl2 b ON a._row_key == b._row_key and a.partition_path == b.partition_path");
+    joinDf.explain(true);
+    joinDf.show(100,false);
+//    hudiDf.createOrReplaceTempView("myTable");
+//    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
+//    outputDf.explain(true);
+//    outputDf.show(100,false);
   }
 
   @ParameterizedTest

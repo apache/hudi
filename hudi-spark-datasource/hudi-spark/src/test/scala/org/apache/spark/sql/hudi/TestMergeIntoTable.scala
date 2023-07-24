@@ -24,6 +24,8 @@ import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
+
+
   test("Test MergeInto Basic") {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
@@ -181,82 +183,69 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with ignored record") {
+  test("Test Mor") {
     withRecordType()(withTempDir {tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true")
-      val sourceTable = generateTableName
-      val targetTable = generateTableName
-      // Create source table
+      val tableName = generateTableName
+      val tableType = "mor"
       spark.sql(
         s"""
-           | create table $sourceTable (
+           | create table $tableName (
            |  id int,
            |  name string,
-           |  price double,
+           |  dt string,
            |  ts long
-           | ) using parquet
-           | location '${tmp.getCanonicalPath}/$sourceTable'
-         """.stripMargin)
-      // Create target table
-      spark.sql(
-        s"""
-           |create table $targetTable (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$targetTable'
+           | ) using hudi
            | tblproperties (
-           |  primaryKey ='id',
+           |  type = '$tableType',
+           |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )
-       """.stripMargin)
-      // Insert data to source table
-      spark.sql(s"insert into $sourceTable values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $sourceTable values(2, 'a2', 11, 1000)")
-
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}/t'
+               """.stripMargin)
+      val tableName2 = tableName + "b"
+      val tablePath2 = s"${tmp.getCanonicalPath}/$tableName2"
       spark.sql(
         s"""
-           | merge into $targetTable as t0
-           | using (select * from $sourceTable) as s0
-           | on t0.id = s0.id
-           | when matched then update set *
-           | when not matched and s0.name = 'a1' then insert *
-         """.stripMargin)
-      // The record of "name = 'a2'" will be filter
-      checkAnswer(s"select id, name, price, ts from $targetTable")(
-        Seq(1, "a1", 10.0, 1000)
-      )
-
-      spark.sql(s"insert into $targetTable select 3, 'a3', 12, 1000")
-      checkAnswer(s"select id, name, price, ts from $targetTable")(
-        Seq(1, "a1", 10.0, 1000),
-        Seq(3, "a3", 12, 1000)
-      )
-
+           | create table $tableName2 (
+           |  id int,
+           |  name string,
+           |  dt string,
+           |  ts long
+           | ) using hudi
+           | tblproperties (
+           |  type = '$tableType',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '$tablePath2'
+               """.stripMargin)
       spark.sql(
         s"""
-           | merge into $targetTable as t0
-           | using (
-           |  select * from (
-           |    select 1 as s_id, 'a1' as name, 20 as price, 1001 as ts
-           |    union all
-           |    select 3 as s_id, 'a3' as name, 20 as price, 1003 as ts
-           |    union all
-           |    select 4 as s_id, 'a4' as name, 10 as price, 1004 as ts
-           |  )
-           | ) s0
-           | on s0.s_id = t0.id
-           | when matched and s0.ts = 1001 then update set id = s0.s_id, name = t0.name, price =
-           | s0.price, ts = s0.ts
-         """.stripMargin
-      )
-      // Ignore the update for id = 3
-      checkAnswer(s"select id, name, price, ts from $targetTable")(
-        Seq(1, "a1", 20.0, 1001),
-        Seq(3, "a3", 12.0, 1000)
-      )
+           |insert into $tableName values
+           |    (1, 'a1', 10, 100),
+           |    (2, 'a2', 20, 100),
+           |    (3, 'a3', 30, 100),
+           |    (4, 'a4', 40, 200),
+           |    (5, 'a5', 50, 200),
+           |    (6, 'a6', 60, 200)
+              """.stripMargin)
+      spark.sql(
+        s"""
+           |insert into $tableName2 values
+           |    (1, 'a0', 10, 100),
+           |    (2, 'a0', 20, 100),
+           |    (3, 'a0', 30, 100),
+           |    (4, 'a0', 40, 200),
+           |    (5, 'a0', 50, 200),
+           |    (6, 'a0', 60, 200)
+              """.stripMargin)
+      spark.sql(s"select * from $tableName2 where dt > 110").createOrReplaceTempView("tmpv")
+      val joinDf = spark.sql(s"select * from $tableName a INNER JOIN tmpv b ON a.id == b.id and a.dt == b.dt")
+      joinDf.explain(true)
+      joinDf.show(true)
+      println("here")
     })
   }
 

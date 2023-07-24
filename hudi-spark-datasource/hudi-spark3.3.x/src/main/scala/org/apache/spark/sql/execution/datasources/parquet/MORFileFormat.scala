@@ -31,7 +31,6 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 
 import java.net.URI
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
@@ -41,7 +40,8 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
                     tableSchema: Broadcast[HoodieTableSchema],
                     tableName: String,
                     mergeType: String,
-                    mandatoryFields: Seq[String]) extends Spark33HoodieParquetFileFormat(true) {
+                    mandatoryFields: Seq[String]) extends Spark33HoodieParquetFileFormat(shouldAppendPartitionValues) {
+  var isProjected = false
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = false
 
@@ -54,18 +54,22 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val dataSchemaWithPartition = StructType(dataSchema.fields ++ partitionSchema.fields)
     val requiredSchemaWithMandatoryFields = requiredSchema.fields.toBuffer
-    requiredSchemaWithMandatoryFields.append(partitionSchema.fields:_*)
+    val partitionSchemaForReader = if (shouldAppendPartitionValues) {
+      partitionSchema
+    } else {
+      requiredSchemaWithMandatoryFields.append(partitionSchema.fields:_*)
+      StructType(Seq.empty)
+    }
     for (field <- mandatoryFields) {
       if (requiredSchema.getFieldIndex(field).isEmpty) {
         val fieldToAdd = dataSchemaWithPartition.fields(dataSchemaWithPartition.getFieldIndex(field).get)
         requiredSchemaWithMandatoryFields.append(fieldToAdd)
       }
     }
-
     val requiredSchemaWithMandatory = StructType(requiredSchemaWithMandatoryFields.toArray)
-    val fileReader =   super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema,
+    val fileReader =   super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchemaForReader,
       requiredSchemaWithMandatory, filters, options, hadoopConf, allowVectorized = false)
-    val morReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema,
+    val morReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchemaForReader,
       requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, allowVectorized = false)
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {

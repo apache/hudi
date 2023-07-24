@@ -91,7 +91,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.read.mor.file.reader")
     .defaultValue("true")
     .markAdvanced()
-    .withDocumentation("When querying from table and not specifying column order, the partition columns will be last.")
+    .withDocumentation("read using the mor parquet file reader")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")

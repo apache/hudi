@@ -19,14 +19,16 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport, SparkHoodieTableFileIndex}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.parquet.MORFileFormat
+import org.apache.spark.sql.execution.datasources.{CreateTable, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
@@ -264,6 +266,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             ut.copy(table = relation)
+          case logicalPlan: LogicalPlan if logicalPlan.resolved =>
+            logicalPlan match {
+              case s@ScanOperation(_, _,
+              l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[MORFileFormat] && !fs.fileFormat.asInstanceOf[MORFileFormat].isProjected =>
+                fs.fileFormat.asInstanceOf[MORFileFormat].isProjected = true
+                Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
+              case _ => logicalPlan
+            }
         }
       }
 
