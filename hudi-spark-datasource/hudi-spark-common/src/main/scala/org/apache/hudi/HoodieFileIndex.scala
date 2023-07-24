@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
@@ -79,7 +79,7 @@ case class HoodieFileIndex(spark: SparkSession,
     spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
-    configProperties = getConfigProperties(spark, options),
+    configProperties = getConfigProperties(spark, options, metaClient),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
@@ -324,7 +324,7 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], metaClient: HoodieTableMetaClient) = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -341,6 +341,20 @@ object HoodieFileIndex extends Logging {
       DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, null)
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
+    }
+    val tableConfig = metaClient.getTableConfig
+    val partitionColumns = tableConfig.getPartitionFields
+    if (partitionColumns.isPresent) {
+      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+      // NOTE: A custom key generator with multiple fields could have non-encoded slashes in the partition columns'
+      //       value. We might not be able to properly parse partition-values from the listed partition-paths. Fallback
+      //       to eager listing in this case.
+      val isCustomKeyGenerator = (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))
+      val hasMultiplePartitionFields = partitionColumns.get().length > 1
+      if (hasMultiplePartitionFields && isCustomKeyGenerator) {
+        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, DataSourceReadOptions.FILE_INDEX_LISTING_MODE_EAGER)
+      }
     }
 
     properties

@@ -62,6 +62,7 @@ import java.sql.{Date, Timestamp}
 import java.util.function.Consumer
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.util.matching.Regex
 
 
 /**
@@ -886,8 +887,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("SPARK"))
-  def testSparkPartitionByWithCustomKeyGenerator(recordType: HoodieRecordType): Unit = {
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testSparkPartitionByWithCustomKeyGeneratorWithGlobbing(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
     // Without fieldType, the default is SIMPLE
@@ -939,6 +940,70 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     } catch {
       case e: Exception =>
         assertTrue(e.getCause.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testSparkPartitionByWithCustomKeyGenerator(recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
+    // Specify fieldType as TIMESTAMP of type EPOCHMILLISECONDS and output date format as yyyy/MM/dd
+    var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
+    writer.partitionBy("current_ts:TIMESTAMP")
+      .option(TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyy/MM/dd")))
+
+    assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count())
+
+    // Mixed fieldType with TIMESTAMP of type EPOCHMILLISECONDS and output date format as yyyy/MM/dd
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, writeOpts)
+    writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
+      .option(TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
+      concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
+  }
+
+  @Test
+  def testPartitionPruningForTimestampBasedKeyGenerator(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(HoodieRecordType.AVRO, enableFileIndex = true)
+    val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)
+    writer.partitionBy("current_ts")
+      .option(TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
+      .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotQueryRes = spark.read.format("hudi")
+      .options(readOpts)
+      .load(basePath)
+      .where("current_ts > '1970/01/16'")
+    assertTrue(checkPartitionFilters(snapshotQueryRes.queryExecution.executedPlan.toString, "current_ts.* > 1970/01/16"))
+  }
+
+  def checkPartitionFilters(sparkPlan: String, partitionFilter: String): Boolean = {
+    val partitionFilterPattern: Regex = """PartitionFilters: \[(.*?)\]""".r
+    val tsPattern: Regex = (partitionFilter).r
+
+    val partitionFilterMatch = partitionFilterPattern.findFirstMatchIn(sparkPlan)
+
+    partitionFilterMatch match {
+      case Some(m) =>
+        val filters = m.group(1)
+        tsPattern.findFirstIn(filters).isDefined
+      case None =>
+        false
     }
   }
 
