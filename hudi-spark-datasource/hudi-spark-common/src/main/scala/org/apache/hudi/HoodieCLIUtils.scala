@@ -32,13 +32,13 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isHoodieConfigKey
 
-import scala.collection.JavaConverters._
+import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
 object HoodieCLIUtils {
 
   def createHoodieWriteClient(sparkSession: SparkSession,
                               basePath: String,
-                              confs: Map[String, String],
+                              conf: Map[String, String],
                               tableName: Option[String]): SparkRDDWriteClient[_] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
@@ -52,12 +52,12 @@ object HoodieCLIUtils {
       case None => Map.empty
     }
 
-    // Priority: defaults < catalog props < table configs < sparkSession confs < specified confs
+    // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
       catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
         sparkSession.sqlContext.getAllConfs.filterKeys(isHoodieConfigKey) ++
-        confs
+        conf
     )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
