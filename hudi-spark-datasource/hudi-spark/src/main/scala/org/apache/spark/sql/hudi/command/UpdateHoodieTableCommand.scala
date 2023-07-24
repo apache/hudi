@@ -19,6 +19,9 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_OPTIMIZED_WRITES}
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -31,6 +34,24 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
+  private def buildUpdateConfig( sparkSession: SparkSession,
+                                    hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
+    val optimizedWrite = sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_WRITES.key()
+      , ENABLE_OPTIMIZED_SQL_WRITES.defaultValue()) == "true"
+
+    // as for MERGE_ON_READ precombine field is required but it's not enforced during table creation
+    val shouldCombine = !StringUtils.isNullOrEmpty(hoodieCatalogTable.preCombineKey.getOrElse(""))
+
+    if (!shouldCombine && hoodieCatalogTable.tableType.name().equals("MERGE_ON_READ")) {
+      throw new HoodieException("Precombine field must be set for MERGE_ON_READ table type to execute UPDATE statement.")
+    }
+
+    // Set config to show that this is a prepped write.
+    val preppedWriteConfig = if (optimizedWrite) Map(DATASOURCE_WRITE_PREPPED_KEY -> "true") else Map().empty
+    val combineBeforeUpsertConfig = Map(HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> shouldCombine.toString)
+
+    buildHoodieConfig(hoodieCatalogTable) ++ preppedWriteConfig ++ combineBeforeUpsertConfig
+  }
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
       .map(HoodieCatalogTable(sparkSession, _))
@@ -63,13 +84,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val condition = ut.condition.getOrElse(TrueLiteral)
     val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
 
-    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
-      // Set config to show that this is a prepped write.
-      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
-    } else {
-      buildHoodieConfig(catalogTable)
-    }
+    val config = buildUpdateConfig(sparkSession, catalogTable)
 
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
