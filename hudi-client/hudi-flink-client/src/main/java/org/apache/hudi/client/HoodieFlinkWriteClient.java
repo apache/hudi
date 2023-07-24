@@ -86,7 +86,7 @@ public class HoodieFlinkWriteClient<T> extends
   private final Map<String, Path> bucketToHandles;
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
+    super(context, writeConfig, Option.empty(), FlinkUpgradeDowngradeHelper.getInstance());
     this.bucketToHandles = new HashMap<>();
     this.tableServiceClient = new HoodieFlinkTableServiceClient<>(context, writeConfig, getTimelineServer(), getTxnManager());
   }

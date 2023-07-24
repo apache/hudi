@@ -67,7 +67,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(HoodieEngineContext context, String basePath) {
-    super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build());
+    super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build(), Option.empty(), Option.empty());
   }
 
   /**

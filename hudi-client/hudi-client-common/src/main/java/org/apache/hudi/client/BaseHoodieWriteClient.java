@@ -137,31 +137,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected BaseHoodieTableServiceClient<O> tableServiceClient;
 
   /**
-   * Create a write client, with new hudi index.
-   * @param context HoodieEngineContext
-   * @param writeConfig instance of HoodieWriteConfig
-   * @param upgradeDowngradeHelper engine-specific instance of {@link SupportsUpgradeDowngrade}
-   */
-  @Deprecated
-  public BaseHoodieWriteClient(HoodieEngineContext context,
-                               HoodieWriteConfig writeConfig,
-                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    this(context, writeConfig, Option.empty(), upgradeDowngradeHelper);
-  }
-
-  /**
    * Create a write client, allows to specify all parameters.
    *
    * @param context         HoodieEngineContext
    * @param writeConfig     instance of HoodieWriteConfig
    * @param timelineService Timeline Service that runs as part of write client.
    */
-  @Deprecated
   public BaseHoodieWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    super(context, writeConfig, timelineService);
+    super(context, writeConfig, timelineService, Option.empty());
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }

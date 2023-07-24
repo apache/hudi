@@ -39,7 +39,7 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
                                          Option<EmbeddedTimelineService> timelineService,
-                                         TransactionManager txnManager) {
+                                         Option<TransactionManager> txnManager) {
     super(context, clientConfig, timelineService, txnManager);
   }
 

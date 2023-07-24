@@ -69,7 +69,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService,
-                                       TransactionManager txnManager) {
+                                       Option<TransactionManager> txnManager) {
     super(context, clientConfig, timelineService, txnManager);
   }
 

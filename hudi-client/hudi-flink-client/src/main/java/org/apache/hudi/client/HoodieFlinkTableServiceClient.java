@@ -70,7 +70,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
                                           HoodieWriteConfig clientConfig,
                                           Option<EmbeddedTimelineService> timelineService,
-                                          TransactionManager txnManager) {
+                                          Option<TransactionManager> txnManager) {
     super(context, clientConfig, timelineService, txnManager);
   }
 

@@ -95,7 +95,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
                                          Option<EmbeddedTimelineService> timelineService,
-                                         TransactionManager txnManager) {
+                                         Option<TransactionManager> txnManager) {
     super(context, clientConfig, timelineService, txnManager);
   }
 
