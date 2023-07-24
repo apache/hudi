@@ -30,7 +30,9 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.streaming.Source
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.streaming.{HoodieOffsetRangeLimit, Spark3HoodieStreamSource}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.types.StructType
@@ -92,4 +94,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
+
+  override def createHoodieStreamSource(
+      sqlContext: SQLContext,
+      metadataPath: String,
+      schema: Option[StructType],
+      parameters: Map[String, String],
+      offsetRangeLimit: HoodieOffsetRangeLimit): Source = {
+    new Spark3HoodieStreamSource(sqlContext, metadataPath, schema, parameters, offsetRangeLimit)
+  }
 }

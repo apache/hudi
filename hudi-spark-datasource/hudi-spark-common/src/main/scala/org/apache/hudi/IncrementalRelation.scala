@@ -38,6 +38,7 @@ import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
+import org.apache.spark.sql.hudi.streaming.HoodieStreamSourceOffset
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
@@ -56,7 +57,9 @@ import scala.collection.mutable
 class IncrementalRelation(val sqlContext: SQLContext,
                           val optParams: Map[String, String],
                           val userSchema: Option[StructType],
-                          val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
+                          val metaClient: HoodieTableMetaClient,
+                          val start: Option[HoodieStreamSourceOffset] = None,
+                          val end: Option[HoodieStreamSourceOffset] = None) extends BaseRelation with TableScan {
 
   private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
@@ -95,7 +98,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsTimelineToReturn = {
-    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
+    if (start.nonEmpty && end.nonEmpty) {
+      commitTimeline.findInstantsInRange(start.get.commitTime, end.get.commitTime)
+    } else if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
       commitTimeline.findInstantsInRangeByStateTransitionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
@@ -105,7 +110,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
     }
   }
-  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
+  private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList.sortBy(_.getTimestamp)
 
   // use schema from a file produced in the end/latest instant
 
@@ -150,9 +155,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // if first commit in a table is an empty commit without schema, return empty RDD here
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
-      val regularFileIdToFullPath = mutable.HashMap[String, String]()
-      var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
-
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
       val replacedFile = replacedTimeline.getInstants.flatMap { instant =>
@@ -166,19 +168,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
       }.toMap
 
-      for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
-          .get, classOf[HoodieCommitMetadata])
-
-        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-          metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        } else {
-          regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        }
+      var (regularFileIdToFullPath, metaBootstrapFileIdToFullPath) = if (start.nonEmpty
+        && end.nonEmpty) {
+        getFileIdToFullPath(replacedFile, start, end)
+      } else {
+        getFileIdToFullPath(replacedFile)
       }
 
       if (metaBootstrapFileIdToFullPath.nonEmpty) {
@@ -296,6 +290,115 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
+  }
+
+  private def getFileIdToFullPath(replacedFile: Map[String, String]): (mutable.HashMap[String, String], mutable.HashMap[String, String]) =  {
+    var regularFileIdToFullPath = mutable.HashMap[String, String]()
+    var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
+    for (commit <- commitsToReturn) {
+      val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
+        .get, classOf[HoodieCommitMetadata])
+
+      val fileIdAndFullPaths = metadata.getFileIdAndFullPaths(basePath).toMap
+      // all valid files of instance
+      var validFileIdAndFullPaths = fileIdAndFullPaths.filterNot { case (k, v) =>
+        replacedFile.contains(k) && v.startsWith(replacedFile(k))
+      }
+
+      if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
+        metaBootstrapFileIdToFullPath ++= validFileIdAndFullPaths
+      } else {
+        regularFileIdToFullPath ++= validFileIdAndFullPaths
+      }
+    }
+    (regularFileIdToFullPath, metaBootstrapFileIdToFullPath)
+  }
+
+  private def getFileIdToFullPath(
+      replacedFile: Map[String, String],
+      start: Option[HoodieStreamSourceOffset],
+      end: Option[HoodieStreamSourceOffset]):
+  (mutable.HashMap[String, String], mutable.HashMap[String, String]) =  {
+    var regularFileIdToFullPath = mutable.HashMap[String, String]()
+    var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
+    for (commit <- commitsToReturn) {
+      val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
+        .get, classOf[HoodieCommitMetadata])
+      val fileIdAndFullPaths = metadata.getFileIdAndFullPaths(basePath).toMap
+      val partitions = metadata.getPartitionToWriteStats.keySet().iterator().toList.sortBy(f => f)
+      // all valid files of instance
+      var validFileIdAndFullPaths = fileIdAndFullPaths.filterNot { case (k, v) =>
+        replacedFile.contains(k) && v.startsWith(replacedFile(k))
+      }
+
+      // process all files in  partitions
+      if (commit.getTimestamp.equals(start.get.commitTime) && commit.getTimestamp.equals(end.get.commitTime)) {
+        val resultFileIdAndFullPaths = mutable.HashMap[String, String]()
+        if (start.get.partition.equals(end.get.partition)) {
+          val limitFileIdAndFullPaths = metadata.getFileIdAndFullPaths(
+            basePath,
+            start.get.partition,
+            start.get.cursor,
+            end.get.cursor)
+          resultFileIdAndFullPaths.putAll(limitFileIdAndFullPaths)
+        } else {
+          val limitStartPartitionFileIdAndFullPaths = metadata.getFileIdAndFullPaths(
+            basePath,
+            start.get.partition,
+            start.get.cursor,
+            metadata.getPartitionToWriteStats.get(start.get.partition).size())
+          val limitEndPartitionFileIdAndFullPaths = metadata.getFileIdAndFullPaths(
+            basePath,
+            end.get.partition,
+            0,
+            end.get.cursor)
+
+          resultFileIdAndFullPaths.putAll(limitStartPartitionFileIdAndFullPaths)
+          resultFileIdAndFullPaths.putAll(limitEndPartitionFileIdAndFullPaths)
+
+          val otherPartitions: List[String] = partitions.subList(
+            partitions.indexOf(start.get.partition) + 1,  partitions.indexOf(end.get.partition)).toList
+          val otherFileIdAndFullPaths = metadata.getFileIdAndFullPaths(basePath, otherPartitions)
+          resultFileIdAndFullPaths.putAll(otherFileIdAndFullPaths)
+        }
+        validFileIdAndFullPaths = resultFileIdAndFullPaths.toMap
+      } else if (commit.getTimestamp.equals(start.get.commitTime)) {
+        val limitPartition = start.get.partition
+        // For the partition of start offset, get the elements from cursor to List.size
+        val limitFileIdAndFullPaths = metadata.getFileIdAndFullPaths(
+          basePath,
+          limitPartition,
+          start.get.cursor,
+          metadata.getPartitionToWriteStats.get(limitPartition).size())
+        // Get all FileIdAndFullPath for other partitions
+        val otherPartitions: List[String] = partitions.subList(partitions.indexOf(limitPartition) + 1, partitions.size).toList
+        val otherFileIdAndFullPaths = metadata.getFileIdAndFullPaths(basePath, otherPartitions)
+        otherFileIdAndFullPaths.putAll(limitFileIdAndFullPaths)
+        validFileIdAndFullPaths = otherFileIdAndFullPaths.toMap
+      } else if (commit.getTimestamp.equals(end.get.commitTime)) {
+        val limitPartition = end.get.partition
+        // For the partition of end offset, get the elements from 0 to cursor
+        val limitFileIdAndFullPaths = metadata.getFileIdAndFullPaths(
+          basePath,
+          limitPartition,
+          0,
+          end.get.cursor)
+        // Get all FileIdAndFullPath for other partitions
+        val otherPartitions: List[String] = partitions.subList(0, partitions.indexOf(limitPartition)).toList
+        val otherFileIdAndFullPaths = metadata.getFileIdAndFullPaths(basePath, otherPartitions)
+        otherFileIdAndFullPaths.putAll(limitFileIdAndFullPaths)
+        validFileIdAndFullPaths = otherFileIdAndFullPaths.toMap
+      } else {
+        validFileIdAndFullPaths = validFileIdAndFullPaths
+      }
+
+      if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
+        metaBootstrapFileIdToFullPath ++= validFileIdAndFullPaths
+      } else {
+        regularFileIdToFullPath ++= validFileIdAndFullPaths
+      }
+    }
+    (regularFileIdToFullPath, metaBootstrapFileIdToFullPath)
   }
 
   private def fullTableScanDataFrame(startInstantTime: String, endInstantTime: String): DataFrame = {

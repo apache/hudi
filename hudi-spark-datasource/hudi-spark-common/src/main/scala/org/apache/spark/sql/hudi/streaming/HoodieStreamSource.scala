@@ -51,20 +51,20 @@ class HoodieStreamSource(
     offsetRangeLimit: HoodieOffsetRangeLimit)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
-  @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  @transient protected val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
 
-  private lazy val tablePath: Path = {
+  protected lazy val tablePath: Path = {
     val path = new Path(parameters.getOrElse("path", "Missing 'path' option"))
     val fs = path.getFileSystem(hadoopConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
 
-  private lazy val metaClient = HoodieTableMetaClient.builder()
+  protected lazy val metaClient = HoodieTableMetaClient.builder()
     .setConf(hadoopConf).setBasePath(tablePath.toString).build()
 
-  private lazy val tableType = metaClient.getTableType
+  protected lazy val tableType = metaClient.getTableType
 
-  private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
+  protected val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
@@ -76,12 +76,12 @@ class HoodieStreamSource(
    * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
    * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the blocking behavior.
    */
-  private val hollowCommitHandling: HollowCommitHandling =
+  protected val hollowCommitHandling: HollowCommitHandling =
     parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
       .getOrElse(HollowCommitHandling.BLOCK)
 
-  @transient private lazy val initialOffsets = {
+  @transient protected lazy val initialOffsets = {
     val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
     metadataLog.get(0).getOrElse {
       val offset = offsetRangeLimit match {
@@ -109,7 +109,7 @@ class HoodieStreamSource(
     }
   }
 
-  private def getLatestOffset: Option[HoodieSourceOffset] = {
+  protected def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
     val filteredTimeline = handleHollowCommitIfNeeded(
       metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
@@ -183,7 +183,7 @@ class HoodieStreamSource(
     }
   }
 
-  private def startCommitTime(startOffset: HoodieSourceOffset): String = {
+  protected def startCommitTime(startOffset: HoodieSourceOffset): String = {
     startOffset match {
       case INIT_OFFSET => startOffset.commitTime
       case HoodieSourceOffset(commitTime) =>

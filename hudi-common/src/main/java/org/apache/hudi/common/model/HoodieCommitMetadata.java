@@ -78,6 +78,14 @@ public class HoodieCommitMetadata implements Serializable {
     partitionToWriteStats.get(partitionPath).add(stat);
   }
 
+  public void overwriteWriteStat(String partitionPath, List<HoodieWriteStat> stats) {
+    partitionToWriteStats.put(partitionPath, stats);
+  }
+
+  public void removeWriteStat(String partitionPath) {
+    partitionToWriteStats.remove(partitionPath);
+  }
+
   public void addMetadata(String metaKey, String value) {
     extraMetadata.put(metaKey, value);
   }
@@ -121,6 +129,26 @@ public class HoodieCommitMetadata implements Serializable {
     return filePaths;
   }
 
+  public HashMap<String, String> getFileIdAndRelativePaths(String partition) {
+    HashMap<String, String> filePaths = new HashMap<>();
+    // list all paths in one partition
+    List<HoodieWriteStat> stats =  getPartitionToWriteStats().get(partition);
+    for (HoodieWriteStat stat : stats) {
+      filePaths.put(stat.getFileId(), stat.getPath());
+    }
+    return filePaths;
+  }
+
+  public HashMap<String, String> getFileIdAndRelativePaths(String partition, int start, int end) {
+    HashMap<String, String> filePaths = new HashMap<>();
+    // list all paths in one partition
+    List<HoodieWriteStat> stats =  getPartitionToWriteStats().get(partition).subList(start, end);
+    for (HoodieWriteStat stat : stats) {
+      filePaths.put(stat.getFileId(), stat.getPath());
+    }
+    return filePaths;
+  }
+
   public void setOperationType(WriteOperationType type) {
     this.operationType = type;
   }
@@ -135,6 +163,30 @@ public class HoodieCommitMetadata implements Serializable {
       String fullPath = entry.getValue() != null
           ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
           : null;
+      fullPaths.put(entry.getKey(), fullPath);
+    }
+    return fullPaths;
+  }
+
+  public HashMap<String, String> getFileIdAndFullPaths(Path basePath, List<String> partitions) {
+    HashMap<String, String> fullPaths = new HashMap<>();
+    for (String partition: partitions) {
+      for (Map.Entry<String, String> entry : getFileIdAndRelativePaths(partition).entrySet()) {
+        String fullPath = entry.getValue() != null
+                ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+                : null;
+        fullPaths.put(entry.getKey(), fullPath);
+      }
+    }
+    return fullPaths;
+  }
+
+  public HashMap<String, String> getFileIdAndFullPaths(Path basePath, String partition, int start, int end) {
+    HashMap<String, String> fullPaths = new HashMap<>();
+    for (Map.Entry<String, String> entry : getFileIdAndRelativePaths(partition, start, end).entrySet()) {
+      String fullPath = entry.getValue() != null
+              ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+              : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
