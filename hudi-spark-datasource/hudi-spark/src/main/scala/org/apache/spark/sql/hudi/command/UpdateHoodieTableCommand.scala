@@ -36,8 +36,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
 
   private def buildUpdateConfig( sparkSession: SparkSession,
                                     hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
-    val optimizedWrite = sparkSession.sqlContext.conf.getConfString(ENABLE_OPTIMIZED_SQL_WRITES.key()
-      , ENABLE_OPTIMIZED_SQL_WRITES.defaultValue()) == "true"
+    val optimizedWrite = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true"
 
     // as for MERGE_ON_READ precombine field is required but it's not enforced during table creation
     val shouldCombine = !StringUtils.isNullOrEmpty(hoodieCatalogTable.preCombineKey.getOrElse(""))
@@ -47,7 +47,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     }
 
     // Set config to show that this is a prepped write.
-    val preppedWriteConfig = if (optimizedWrite) Map(DATASOURCE_WRITE_PREPPED_KEY -> "true") else Map().empty
+    val preppedWriteConfig = if (optimizedWrite) Map(SPARK_SQL_WRITES_PREPPED_KEY -> "true") else Map().empty
     val combineBeforeUpsertConfig = Map(HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> shouldCombine.toString)
 
     buildHoodieConfig(hoodieCatalogTable) ++ preppedWriteConfig ++ combineBeforeUpsertConfig
