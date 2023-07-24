@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -217,7 +218,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
-    // sort
     Map<String, HoodieRecord<HoodieMetadataPayload>> result;
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
@@ -274,16 +274,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         return Collections.emptyMap();
       }
 
+      // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
+      List<String> sortedKeys = new ArrayList<>(keys);
+      Collections.sort(sortedKeys);
       boolean fullKeys = true;
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(logRecordScanner, keys, fullKeys, timings);
-      return readFromBaseAndMergeWithLogRecords(baseFileReader, keys, fullKeys, logRecords, timings, partitionName);
+      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(logRecordScanner, sortedKeys, fullKeys, timings);
+      return readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeys, fullKeys, logRecords, timings, partitionName);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
     }
   }
 
   private Map<String, HoodieRecord<HoodieMetadataPayload>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
-                                                                          List<String> keys,
+                                                                          List<String> sortedKeys,
                                                                           boolean fullKey,
                                                                           List<Long> timings) {
     HoodieTimer timer = HoodieTimer.start();
@@ -294,14 +297,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     try {
-      return fullKey ? logRecordReader.getRecordsByKeys(keys) : logRecordReader.getRecordsByKeyPrefixes(keys);
+      return fullKey ? logRecordReader.getRecordsByKeys(sortedKeys) : logRecordReader.getRecordsByKeyPrefixes(sortedKeys);
     } finally {
       timings.add(timer.endTimer());
     }
   }
 
   private Map<String, HoodieRecord<HoodieMetadataPayload>> readFromBaseAndMergeWithLogRecords(HoodieSeekingFileReader<?> reader,
-                                                                                              List<String> keys,
+                                                                                              List<String> sortedKeys,
                                                                                               boolean fullKeys,
                                                                                               Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords,
                                                                                               List<Long> timings,
@@ -317,7 +320,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieTimer readTimer = HoodieTimer.start();
 
     Map<String, HoodieRecord<HoodieMetadataPayload>> records =
-        fetchBaseFileRecordsByKeys(reader, keys, fullKeys, partitionName);
+        fetchBaseFileRecordsByKeys(reader, sortedKeys, fullKeys, partitionName);
 
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
 
@@ -326,8 +329,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         records.merge(
             logRecord.getRecordKey(),
             logRecord,
-            (oldRecord, newRecord) ->
-                new HoodieAvroRecord<>(oldRecord.getKey(), newRecord.getData().preCombine(oldRecord.getData()))
+            (oldRecord, newRecord) -> {
+              HoodieMetadataPayload mergedPayload = newRecord.getData().preCombine(oldRecord.getData());
+              return mergedPayload.isDeleted() ? null : new HoodieAvroRecord<>(oldRecord.getKey(), mergedPayload);
+            }
         ));
 
     timings.add(timer.endTimer());
@@ -336,12 +341,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @SuppressWarnings("unchecked")
   private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileRecordsByKeys(HoodieSeekingFileReader reader,
-                                                                                      List<String> keys,
+                                                                                      List<String> sortedKeys,
                                                                                       boolean fullKeys,
                                                                                       String partitionName) throws IOException {
     ClosableIterator<HoodieRecord<?>> records = fullKeys
-        ? reader.getRecordsByKeysIterator(keys)
-        : reader.getRecordsByKeyPrefixIterator(keys);
+        ? reader.getRecordsByKeysIterator(sortedKeys)
+        : reader.getRecordsByKeyPrefixIterator(sortedKeys);
 
     return toStream(records)
         .map(record -> {
@@ -534,8 +539,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return metadataMetaClient;
   }
 
+  public HoodieTableFileSystemView getMetadataFileSystemView() {
+    return metadataFileSystemView;
+  }
+
   public Map<String, String> stats() {
-    return metrics.map(m -> m.getStats(true, metadataMetaClient, this)).orElse(new HashMap<>());
+    Set<String> allMetadataPartitionPaths = Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    return metrics.map(m -> m.getStats(true, metadataMetaClient, this, allMetadataPartitionPaths)).orElse(new HashMap<>());
   }
 
   @Override

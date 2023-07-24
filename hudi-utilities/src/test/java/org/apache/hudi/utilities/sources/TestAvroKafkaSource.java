@@ -24,12 +24,12 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -140,7 +140,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
     GenericRecord withoutKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
 
-    props.put(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
+    props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
     schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
@@ -168,7 +168,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     Dataset<Row> c = kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
         .getBatch().get();
     List<String> columns = Arrays.stream(c.columns()).collect(Collectors.toList());
-    props.put(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
+    props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
 
     schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());

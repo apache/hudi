@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cdc
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
@@ -47,7 +44,7 @@ import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 
@@ -157,14 +154,6 @@ class HoodieCDCRDD(
       )
     }
 
-    private lazy val mapper: ObjectMapper = {
-      val _mapper = new ObjectMapper
-      _mapper.setSerializationInclusion(Include.NON_ABSENT)
-      _mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-      _mapper.registerModule(DefaultScalaModule)
-      _mapper
-    }
-
     protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
 
     protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
@@ -244,6 +233,8 @@ class HoodieCDCRDD(
      * the cdc infer case is [[AS_IS]] and [[cdcSupplementalLoggingMode]] is [[OP_KEY_ONLY]] or [[DATA_BEFORE]].
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
+
+    private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema)
 
     private def needLoadNextFile: Boolean = {
       !recordIter.hasNext &&
@@ -557,16 +548,7 @@ class HoodieCDCRDD(
      * Convert InternalRow to json string.
      */
     private def convertRowToJsonString(record: InternalRow): UTF8String = {
-      val map = scala.collection.mutable.Map.empty[String, Any]
-      originTableSchema.structTypeSchema.zipWithIndex.foreach {
-        case (field, idx) =>
-          if (field.dataType.isInstanceOf[StringType]) {
-            map(field.name) = record.getString(idx)
-          } else {
-            map(field.name) = record.get(idx, field.dataType)
-          }
-      }
-      convertToUTF8String(mapper.writeValueAsString(map))
+      internalRowToJsonStringConverter.convert(record)
     }
 
     /**

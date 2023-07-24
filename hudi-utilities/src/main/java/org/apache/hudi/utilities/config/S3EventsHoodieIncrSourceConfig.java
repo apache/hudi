@@ -31,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 @ConfigClassProperty(name = "S3 Event-based Hudi Incremental Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of incremental pulling from S3 events "
         + "meta information from Hudi table as a source in Deltastreamer.")
@@ -71,6 +71,6 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
       .key("hoodie.deltastreamer.source.s3incr.spark.datasource.options")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Json string, passed to the reader while loading dataset. Example delta streamer conf \n"
+      .withDocumentation("Json string, passed to the reader while loading dataset. Example Hudi Streamer conf \n"
           + " --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}");
 }

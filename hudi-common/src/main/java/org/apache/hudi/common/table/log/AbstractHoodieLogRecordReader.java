@@ -477,6 +477,7 @@ public abstract class AbstractHoodieLogRecordReader {
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
+          case PARQUET_DATA_BLOCK:
           case DELETE_BLOCK:
             List<HoodieLogBlock> logBlocksList = instantToBlocksMap.getOrDefault(instantTime, new ArrayList<>());
             if (logBlocksList.size() == 0) {
@@ -641,7 +642,7 @@ public abstract class AbstractHoodieLogRecordReader {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  protected abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
+  public abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted record.

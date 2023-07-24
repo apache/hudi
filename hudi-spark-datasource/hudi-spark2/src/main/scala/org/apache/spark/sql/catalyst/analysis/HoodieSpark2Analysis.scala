@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, CurrentDate, CurrentTim
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Assignment, DeleteAction, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, Window}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.toPrettySQL
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 /**
  * NOTE: This code is borrowed from Spark 3.1.3
@@ -76,7 +77,7 @@ object HoodieSpark2Analysis {
                                    mergeInto: MergeIntoTable,
                                    resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
       if (assignments.isEmpty) {
-        val expandedColumns = mergeInto.targetTable.output
+        val expandedColumns = HoodieSqlCommonUtils.removeMetaFields(mergeInto.targetTable.output)
         val expandedValues = mergeInto.sourceTable.output
         expandedColumns.zip(expandedValues).map(kv => Assignment(kv._1, kv._2))
       } else {
@@ -186,11 +187,7 @@ object HoodieSpark2Analysis {
       func.map(wrapper)
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // Following section is amended to the original (Spark's) implementation
-    // >>> BEGINS
-    ////////////////////////////////////////////////////////////////////////////////////////////
-
+    // START: custom Hudi change. Following section is amended to the original (Spark's) implementation.
     private def containsUnresolvedStarAssignments(mit: MergeIntoTable): Boolean = {
       val containsUnresolvedInsertStar = mit.notMatchedActions.exists {
         case InsertAction(_, assignments) => assignments.isEmpty
@@ -203,10 +200,7 @@ object HoodieSpark2Analysis {
 
       containsUnresolvedInsertStar || containsUnresolvedUpdateStar
     }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // <<< ENDS
-    ////////////////////////////////////////////////////////////////////////////////////////////
+    // END: custom Hudi change.
   }
 
 }

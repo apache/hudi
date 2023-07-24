@@ -96,8 +96,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Delete 5 records
     String prevCommitTime = commitTime;
     commitTime = HoodieActiveTimeline.createNewInstantTime();
-    deleteBatch(config, client, commitTime, prevCommitTime,
-        "000", 25, SparkRDDWriteClient::delete, false, false,
+    deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
         0, 100);
 
     // Verify all the records.
@@ -222,8 +221,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Delete 3 records
     newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-    deleteBatch(config, client, newCommitTime, prevCommitTime,
-        "000", 30, SparkRDDWriteClient::delete, false, false,
+    deleteBatch(config, client, newCommitTime, prevCommitTime, "000", 30, false, false,
         0, 70);
 
     String lastCommitBeforeLogCompaction = newCommitTime;

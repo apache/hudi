@@ -50,8 +50,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -182,7 +180,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> sortedKeys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -191,14 +189,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
-        blockContentLoc.getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
-
-    // HFile read will be efficient if keys are sorted, since on storage records are sorted by key.
-    // This will avoid unnecessary seeks.
-    List<String> sortedKeys = new ArrayList<>(keys);
-    Collections.sort(sortedKeys);
 
     final HoodieAvroHFileReader reader =
              new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),

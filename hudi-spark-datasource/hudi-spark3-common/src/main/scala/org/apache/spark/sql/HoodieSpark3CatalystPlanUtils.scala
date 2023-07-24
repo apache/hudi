@@ -19,7 +19,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
@@ -65,6 +65,10 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan =
     iis.asInstanceOf[InsertIntoStatement].copy(table = targetTable, query = query)
+
+  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
+    Join(left, right, joinType, condition, JoinHint.NONE)
+  }
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {

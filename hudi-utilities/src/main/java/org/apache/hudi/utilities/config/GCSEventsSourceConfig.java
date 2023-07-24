@@ -31,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 @ConfigClassProperty(name = "GCS Events Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of GCS Events Source in Deltastreamer.")
 public class GCSEventsSourceConfig extends HoodieConfig {

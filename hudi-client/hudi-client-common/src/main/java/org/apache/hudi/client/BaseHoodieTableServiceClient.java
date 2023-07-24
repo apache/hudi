@@ -861,8 +861,22 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    */
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
-    LOG.info("Begin rollback of instant " + commitInstantTime);
     final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
+    return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking);
+  }
+
+  /**
+   * @param commitInstantTime   Instant time of the commit
+   * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
+   * @param skipLocking         if this is triggered by another parent transaction, locking can be skipped.
+   * @throws HoodieRollbackException if rollback cannot be performed successfully
+   * @Deprecated Rollback the inflight record changes with the given commit time. This
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
+   */
+  @Deprecated
+  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, String rollbackInstantTime,
+                          boolean skipLocking) throws HoodieRollbackException {
+    LOG.info("Begin rollback of instant " + commitInstantTime);
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
     try {
       HoodieTable table = createTable(config, hadoopConf);
@@ -874,7 +888,8 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
                 + "(exists in active timeline: %s), with rollback plan: %s",
             rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
+            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
+                false));
         if (rollbackPlanOption.isPresent()) {
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is

@@ -18,17 +18,17 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
@@ -66,10 +66,10 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(true, true, false);
     FileSystem fs = UtilitiesTestBase.fs;
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-based-source.sql", fs,
+        "streamer-config/sql-file-based-source.sql", fs,
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-based-source-invalid-table.sql", fs,
+        "streamer-config/sql-file-based-source-invalid-table.sql", fs,
         UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
   }
 

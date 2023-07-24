@@ -23,6 +23,8 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
@@ -30,6 +32,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
 import java.io.Closeable
+import java.util.function.Predicate
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
@@ -64,6 +67,9 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param tableState table's state
  * @param mergeType type of merge performed
  * @param fileSplits target file-splits this RDD will be iterating over
+ * @param includeStartTime whether to include the commit with the commitTime
+ * @param startTimestamp start timestamp to filter records
+ * @param endTimestamp end timestamp to filter records
  */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -72,7 +78,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
-                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
+                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
+                           includeStartTime: Boolean = false,
+                           startTimestamp: String = null,
+                           endTimestamp: String = null)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -116,7 +125,33 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.asInstanceOf[Closeable].close()))
     }
 
-    iter
+    val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && !StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)
+    if (needsFiltering) {
+      val filterT: Predicate[InternalRow] = getCommitTimeFilter(includeStartTime, commitTimeMetadataFieldIdx)
+      iter.filter(filterT.test)
+    }
+    else {
+      iter
+    }
+  }
+
+  private def getCommitTimeFilter(includeStartTime: Boolean, commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
+    if (includeStartTime) {
+      new Predicate[InternalRow] {
+        override def test(row: InternalRow): Boolean = {
+          val commitTime = row.getString(commitTimeMetadataFieldIdx)
+          commitTime >= startTimestamp && commitTime <= endTimestamp
+        }
+      }
+    } else {
+      new Predicate[InternalRow] {
+        override def test(row: InternalRow): Boolean = {
+          val commitTime = row.getString(commitTimeMetadataFieldIdx)
+          commitTime > startTimestamp && commitTime <= endTimestamp
+        }
+      }
+    }
   }
 
   private def pickBaseFileReader(): BaseFileReader = {

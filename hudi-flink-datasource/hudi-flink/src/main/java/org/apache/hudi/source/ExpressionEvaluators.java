@@ -543,6 +543,7 @@ public class ExpressionEvaluators {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
+      case BIGINT:
         return ((Long) val1).compareTo((Long) val2);
       case BOOLEAN:
         return ((Boolean) val1).compareTo((Boolean) val2);

@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -37,6 +36,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Hash indexing mechanism.
@@ -81,7 +82,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
             Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
-            return HoodieIndexUtils.getTaggedRecord(record, loc);
+            return tagAsNewRecordIfNeeded(record, loc);
           }
         },
         false
@@ -95,6 +96,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
+      case DELETE_PREPPED:
       case BULK_INSERT:
         return true;
       default:

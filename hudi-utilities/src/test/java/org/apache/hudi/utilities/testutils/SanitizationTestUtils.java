@@ -33,7 +33,7 @@ import org.junit.jupiter.params.provider.Arguments;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 
 public class SanitizationTestUtils {
   public static String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();

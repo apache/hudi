@@ -97,7 +97,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -218,10 +217,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
 
   /**
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * preppedRecords.
+   *
+   * @param context {@link HoodieEngineContext}.
+   * @param instantTime Instant Time for the action.
+   * @param preppedRecords Empty records with key and locator set.
+   * @return {@link HoodieWriteMetadata}
+   */
+  public abstract HoodieWriteMetadata<O> deletePrepped(HoodieEngineContext context, String instantTime, I preppedRecords);
+
+  /**
    * Deletes all data of partitions.
-   * @param context    HoodieEngineContext
+   * @param context HoodieEngineContext
    * @param instantTime Instant Time for the action
-   * @param partitions   {@link List} of partition to be deleted
+   * @param partitions {@link List} of partition to be deleted
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
@@ -531,7 +541,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
-                                                              boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
+                                                              boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
+                                                              boolean isRestore);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
@@ -634,7 +645,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                        Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+        false);
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -648,7 +660,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+        false);
     rollback(context, commitTime, inflightInstant, true, false);
   }
 
@@ -714,24 +727,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         return;
       }
 
-      // we are not including log appends for update here, since they are already fail-safe.
-      // but log files created is included
-      Set<String> invalidFilePaths = getInvalidDataPaths(markers);
-      Set<String> validFilePaths = stats.stream()
+      // we are not including log appends here, since they are already fail-safe.
+      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
+      Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
-          .collect(Collectors.toSet());
-      Set<String> validCdcFilePaths = stats.stream()
-          .map(HoodieWriteStat::getCdcStats)
-          .filter(Objects::nonNull)
-          .flatMap(cdcStat -> cdcStat.keySet().stream())
+          .filter(p -> p.endsWith(this.getBaseFileExtension()))
           .collect(Collectors.toSet());
 
       // Contains list of partially created files. These needs to be cleaned up.
-      invalidFilePaths.removeAll(validFilePaths);
-      invalidFilePaths.removeAll(validCdcFilePaths);
-      if (!invalidFilePaths.isEmpty()) {
-        LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidFilePaths);
-        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidFilePaths.stream()
+      invalidDataPaths.removeAll(validDataPaths);
+
+      if (!invalidDataPaths.isEmpty()) {
+        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
+        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 

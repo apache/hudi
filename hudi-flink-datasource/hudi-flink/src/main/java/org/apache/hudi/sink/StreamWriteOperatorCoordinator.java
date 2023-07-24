@@ -412,6 +412,10 @@ public class StreamWriteOperatorCoordinator
         reset();
       } else {
         LOG.info("Recommit instant {}", instant);
+        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+          writeClient.getHeartbeatClient().start(instant);
+        }
         commitInstant(instant);
       }
       // starts a new instant
@@ -528,7 +532,9 @@ public class StreamWriteOperatorCoordinator
       // Send commit ack event to the write function to unblock the flushing
       // If this checkpoint has no inputs while the next checkpoint has inputs,
       // the 'isConfirming' flag should be switched with the ack event.
-      sendCommitAckEvents(checkpointId);
+      if (checkpointId != -1) {
+        sendCommitAckEvents(checkpointId);
+      }
       return false;
     }
     doCommit(instant, writeResults);
@@ -593,6 +599,11 @@ public class StreamWriteOperatorCoordinator
   @VisibleForTesting
   public Context getContext() {
     return context;
+  }
+
+  @VisibleForTesting
+  public HoodieFlinkWriteClient getWriteClient() {
+    return writeClient;
   }
 
   @VisibleForTesting

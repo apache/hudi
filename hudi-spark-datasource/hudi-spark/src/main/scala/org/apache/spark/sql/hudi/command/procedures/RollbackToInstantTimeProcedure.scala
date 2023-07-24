@@ -65,10 +65,9 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
         .build
 
       val activeTimeline = metaClient.getActiveTimeline
-      val completedTimeline: HoodieTimeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
-      val filteredTimeline = completedTimeline.containsInstant(instantTime)
+      val filteredTimeline = activeTimeline.containsInstant(instantTime)
       if (!filteredTimeline) {
-        throw new HoodieException(s"Commit $instantTime not found in Commits $completedTimeline")
+        throw new HoodieException(s"Commit $instantTime not found in Commits $activeTimeline")
       }
 
       val result = if (client.rollback(instantTime)) true else false

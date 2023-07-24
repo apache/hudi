@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -261,6 +262,97 @@ public class TestCleaner extends HoodieCleanerTestBase {
   }
 
   /**
+   * Test earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testEarliestInstantToRetainForPendingCompaction() throws IOException {
+    HoodieWriteConfig writeConfig = getConfigBuilder().withPath(basePath)
+            .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+                    .withEnableBackupForRemoteFileSystemView(false)
+                    .build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                    .withAutoClean(false)
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .retainCommits(1)
+                    .build())
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                    .withInlineCompaction(false)
+                    .withMaxNumDeltaCommitsBeforeCompaction(1)
+                    .compactionSmallFileSize(1024 * 1024 * 1024)
+                    .build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+                    .withAutoArchive(false)
+                    .archiveCommitsWith(2,3)
+                    .build())
+            .withEmbeddedTimelineServerEnabled(false).build();
+
+    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+
+      final String partition1 = "2023/06/01";
+      final String partition2 = "2023/06/02";
+      String instantTime = "";
+      String earliestInstantToRetain = "";
+
+      for (int idx = 0; idx < 3; ++idx) {
+        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        if (idx == 2) {
+          earliestInstantToRetain = instantTime;
+        }
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
+        client.startCommitWithTime(instantTime);
+        client.insert(jsc.parallelize(records, 1), instantTime).collect();
+      }
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition1).size(), 1);
+      assertEquals(earliestInstantToRetain, cleanPlan.get().getEarliestInstantToRetain().getTimestamp(),
+              "clean until " + earliestInstantToRetain);
+      table.getMetaClient().reloadActiveTimeline();
+      table.clean(context, instantTime);
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
+      client.startCommitWithTime(instantTime);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      client.insert(recordsRDD, instantTime).collect();
+
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      earliestInstantToRetain = instantTime;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(instantTime, records);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context, writeConfig);
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
+      client.startCommitWithTime(instantTime);
+      client.upsertPreppedRecords(updatedTaggedRecordsRDD, instantTime).collect();
+
+      table.getMetaClient().reloadActiveTimeline();
+      // pending compaction
+      String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
+
+      for (int idx = 0; idx < 3; ++idx) {
+        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        records = dataGen.generateInsertsForPartition(instantTime, 1, partition2);
+        client.startCommitWithTime(instantTime);
+        client.insert(jsc.parallelize(records, 1), instantTime).collect();
+      }
+
+      // earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
+    }
+  }
+
+  /**
    * Tests no more than 1 clean is scheduled if hoodie.clean.allow.multiple config is set to false.
    */
   @Test
@@ -465,7 +557,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
 
@@ -736,7 +828,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001"), Option.empty());
     metaClient.reloadActiveTimeline();
     HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001");
-    table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers());
+    table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers(), false);
     table.rollback(context, "002", rollbackInstant, true, false);
     final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
@@ -757,7 +849,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // Example use-case of this is when a client wants to create a table
     // with just some commit metadata, but no data/partitionPaths.
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     testTable.doWriteOperation("001", WriteOperationType.INSERT, Collections.emptyList(), 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -777,16 +869,17 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).withAsyncClean(isAsync).retainCommits(2).build())
         .build();
+
     // Deletions:
-    // . FileId Base Logs Total Retained Commits
-    // FileId7 5 10 15 009, 011
-    // FileId6 5 10 15 009
-    // FileId5 3 6 9 005
-    // FileId4 2 4 6 003
-    // FileId3 1 2 3 001
-    // FileId2 0 0 0 000
-    // FileId1 0 0 0 000
-    testPendingCompactions(config, 48, 18, false);
+    // . FileId   Base  Logs  Total Retained_Commits  Under_Compaction
+    //   FileId7  1     2     3     001,003           false
+    //   FileId6  1     2     3     001,003           false
+    //   FileId5  1     2     3     001,003           true
+    //   FileId4  1     2     3     001,003           true
+    //   FileId3  1     2     3     001               true
+    //   FileId2  0     0     0     000               true
+    //   FileId1  0     0     0     000               false
+    testPendingCompactions(config, 15, 9, false);
   }
 
   /**
@@ -801,15 +894,16 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
+
     // Deletions:
-    // . FileId Base Logs Total Retained Commits
-    // FileId7 5 10 15 009, 011
-    // FileId6 4 8 12 007, 009
-    // FileId5 2 4 6 003 005
-    // FileId4 1 2 3 001, 003
-    // FileId3 0 0 0 000, 001
-    // FileId2 0 0 0 000
-    // FileId1 0 0 0 000
+    // . FileId   Base  Logs  Total Retained_Commits  Under_Compaction
+    //   FileId7  5     10    15    009,013           false
+    //   FileId6  4     8     12    007,009           false
+    //   FileId5  2     4     6     003,005           true
+    //   FileId4  1     2     3     001,003           true
+    //   FileId3  0     0     0     000,001           true
+    //   FileId2  0     0     0     000               true
+    //   FileId1  0     0     0     000               false
     testPendingCompactions(config, 36, 9, retryFailure);
   }
 
@@ -856,7 +950,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
 
@@ -925,8 +1019,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withPath(basePath)
         .build();
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
-    testTable.updateFilesPartitionInTableConfig();
+    // reload because table configs could have been updated
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
 
     String p1 = "part_1";
     String p2 = "part_2";
@@ -1004,23 +1099,24 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
 
     final String partition = "2016/03/15";
+    String timePrefix = "00000000000";
     Map<String, String> expFileIdToPendingCompaction = new HashMap<String, String>() {
       {
-        put("fileId2", "004");
-        put("fileId3", "006");
-        put("fileId4", "008");
-        put("fileId5", "010");
+        put("fileId2", timePrefix + "004");
+        put("fileId3", timePrefix + "006");
+        put("fileId4", timePrefix + "008");
+        put("fileId5", timePrefix + "010");
       }
     };
     Map<String, String> fileIdToLatestInstantBeforeCompaction = new HashMap<String, String>() {
       {
-        put("fileId1", "000");
-        put("fileId2", "000");
-        put("fileId3", "001");
-        put("fileId4", "003");
-        put("fileId5", "005");
-        put("fileId6", "009");
-        put("fileId7", "011");
+        put("fileId1", timePrefix + "000");
+        put("fileId2", timePrefix + "000");
+        put("fileId3", timePrefix + "001");
+        put("fileId4", timePrefix + "003");
+        put("fileId5", timePrefix + "005");
+        put("fileId6", timePrefix + "009");
+        put("fileId7", timePrefix + "013");
       }
     };
 
@@ -1028,6 +1124,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // multiple versions with pending compaction. File Slices (6 - 7) have multiple file-slices but not under
     // compactions
     // FileIds 2-5 will be under compaction
+    // reload because table configs could have been updated
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
     testTable.withPartitionMetaFiles(partition);
@@ -1044,61 +1142,60 @@ public class TestCleaner extends HoodieCleanerTestBase {
     Map<String, List<String>> part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file1P1, file2P1, file3P1, file4P1, file5P1, file6P1, file7P1));
     // all 7 fileIds
-    commitWithMdt("000", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "000", part1ToFileId, testTable, metadataWriter, true, true);
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file3P1, file4P1, file5P1, file6P1, file7P1));
     // fileIds 3 to 7
-    commitWithMdt("001", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "001", part1ToFileId, testTable, metadataWriter, true, true);
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file4P1, file5P1, file6P1, file7P1));
     // fileIds 4 to 7
-    commitWithMdt("003", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "003", part1ToFileId, testTable, metadataWriter, true, true);
 
     // add compaction
-    testTable.addRequestedCompaction("004", new FileSlice(partition, "000", file2P1));
+    testTable.addRequestedCompaction(timePrefix + "004", new FileSlice(partition, timePrefix + "000", file2P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file2P1));
-    commitWithMdt("005", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "005", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file5P1, file6P1, file7P1));
-    commitWithMdt("0055", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0055", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("006", new FileSlice(partition, "001", file3P1));
+    testTable.addRequestedCompaction(timePrefix + "006", new FileSlice(partition, timePrefix + "001", file3P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file3P1));
-    commitWithMdt("007", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "007", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file6P1, file7P1));
-    commitWithMdt("0075", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0075", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("008", new FileSlice(partition, "003", file4P1));
+    testTable.addRequestedCompaction(timePrefix + "008", new FileSlice(partition, timePrefix + "003", file4P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file4P1));
-    commitWithMdt("009", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "009", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file6P1, file7P1));
-    commitWithMdt("0095", part1ToFileId, testTable, metadataWriter, true, true);
+    commitWithMdt(timePrefix + "0095", part1ToFileId, testTable, metadataWriter, true, true);
 
-    testTable.addRequestedCompaction("010", new FileSlice(partition, "005", file5P1));
+    testTable.addRequestedCompaction(timePrefix + "010", new FileSlice(partition, timePrefix + "005", file5P1));
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file5P1));
-    commitWithMdt("011", part1ToFileId, testTable, metadataWriter, false, true);
+    commitWithMdt(timePrefix + "011", part1ToFileId, testTable, metadataWriter, false, true);
 
     part1ToFileId = new HashMap<>();
     part1ToFileId.put(partition, Arrays.asList(file7P1));
-    commitWithMdt("013", part1ToFileId, testTable, metadataWriter, true, true);
-    testTable.updateFilesPartitionInTableConfig();
+    commitWithMdt(timePrefix + "013", part1ToFileId, testTable, metadataWriter, true, true);
 
     // Clean now
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config, retryFailure);
+    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config, 14, true);
 
     // Test for safety
     final HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.reload(metaClient);

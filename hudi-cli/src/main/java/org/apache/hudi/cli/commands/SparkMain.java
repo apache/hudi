@@ -58,8 +58,8 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
-import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.streamer.BootstrapExecutor;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -546,7 +546,7 @@ public class SparkMain {
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKeyCols);
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionFields);
 
-    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetTableName = tableName;
     cfg.targetBasePath = basePath;
     cfg.tableType = tableType;

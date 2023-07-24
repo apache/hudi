@@ -19,8 +19,8 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
@@ -56,5 +56,13 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       case _ =>
         None
     }
+  }
+
+  override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
+    a.failAnalysis(
+      errorClass = "_LEGACY_ERROR_TEMP_2309",
+      messageParameters = Map(
+        "sqlExpr" -> a.sql,
+        "cols" -> cols))
   }
 }

@@ -26,7 +26,6 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -167,6 +166,10 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       } else {
         String indexUptoInstant = fileIndexPartitionInfo.getIndexUptoInstant();
         // save index commit metadata and update table config
+        // instantiation of metadata writer will automatically instantiate the partitions.
+        table.getIndexingMetadataWriter(instantTime)
+            .orElseThrow(() -> new HoodieIndexException(String.format(
+                "Could not get metadata writer to run index action for instant: %s", instantTime)));
         finalIndexPartitionInfos = Collections.singletonList(fileIndexPartitionInfo).stream()
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),
@@ -373,7 +376,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                 }
                 HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                     table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-                metadataWriter.update(commitMetadata, HoodieListData.eager(Collections.emptyList()), instant.getTimestamp());
+                metadataWriter.update(commitMetadata, context.emptyHoodieData(), instant.getTimestamp());
                 break;
               case CLEAN_ACTION:
                 HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(table.getMetaClient(), instant);

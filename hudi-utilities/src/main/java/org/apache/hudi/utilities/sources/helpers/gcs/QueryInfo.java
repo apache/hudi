@@ -36,7 +36,7 @@ import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_V
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
 
 /**
- * Uses the start and end instants of a DeltaStreamer Source to help construct the right kind
+ * Uses the start and end instants of a Hudi Streamer Source to help construct the right kind
  * of query for subsequent requests.
  */
 public class QueryInfo {

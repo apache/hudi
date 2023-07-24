@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -482,24 +483,21 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       copyOfRecords.clear();
 
-      // Rollback latest commit first
-      client.restoreToInstant("000", cfg.isMetadataTableEnabled());
+      // Restore to 3rd commit.
+      client.restoreToInstant("003", cfg.isMetadataTableEnabled());
 
-      metaClient = HoodieTableMetaClient.reload(metaClient);
+      metaClient.reloadActiveTimeline();
       allFiles = listAllBaseFilesInPath(hoodieTable);
-      tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      tableView = getHoodieTableFileSystemView(metaClient, metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      assertFalse(dataFilesToRead.filter(hoodieBaseFile -> hoodieBaseFile.getCommitTime().compareTo("003") > 0).findAny().isPresent());
       TableFileSystemView.SliceView rtView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       List<HoodieFileGroup> fileGroups =
           ((HoodieTableFileSystemView) rtView).getAllFileGroups().collect(Collectors.toList());
-      assertTrue(fileGroups.isEmpty());
+      assertFalse(fileGroups.isEmpty());
 
-      // make sure there are no log files remaining
-      assertEquals(0L, ((HoodieTableFileSystemView) rtView).getAllFileGroups()
-          .filter(fileGroup -> fileGroup.getAllRawFileSlices().noneMatch(f -> f.getLogFiles().count() == 0))
-          .count());
-
+      assertFalse(fileGroups.stream().filter(fileGroup -> fileGroup.getAllFileSlices().map(fileSlice
+          -> fileSlice.getBaseInstantTime().compareTo("003") > 0).count() > 0).findAny().isPresent());
     }
   }
 
@@ -992,4 +990,16 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             .build());
     return cfgBuilder.build();
   }
+
+  private SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
+    try {
+      return new HoodieTableFileSystemView(metaClient,
+          metaClient.getActiveTimeline(),
+          HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
+      );
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error getting file system view", ioe);
+    }
+  }
+
 }

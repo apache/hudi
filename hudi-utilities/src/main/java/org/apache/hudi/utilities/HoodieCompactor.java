@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -293,9 +292,6 @@ public class HoodieCompactor {
 
   private String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run compaction without any completed commits");
-    }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
   }

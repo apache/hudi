@@ -515,6 +515,10 @@ public class HoodieTableSource implements
         .map(HoodieBaseFile::getFileStatus)
         .map(FileStatus::getPath).toArray(Path[]::new);
 
+    if (paths.length == 0) {
+      return InputFormats.EMPTY_INPUT_FORMAT;
+    }
+
     return new CopyOnWriteInputFormat(
         FilePathUtils.toFlinkPaths(paths),
         this.schema.getColumnNames().toArray(new String[0]),

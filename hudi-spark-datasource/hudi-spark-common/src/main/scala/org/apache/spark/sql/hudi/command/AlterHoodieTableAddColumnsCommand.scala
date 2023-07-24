@@ -108,7 +108,8 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
       writeSchema.toString,
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
-      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(hoodieCatalogTable.catalogProperties)).asJava
+      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs).asJava
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)

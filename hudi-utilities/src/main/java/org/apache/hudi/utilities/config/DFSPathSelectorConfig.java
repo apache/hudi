@@ -31,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 @ConfigClassProperty(name = "DFS Path Selector Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of path selector for DFS source in Deltastreamer.")
 public class DFSPathSelectorConfig extends HoodieConfig {

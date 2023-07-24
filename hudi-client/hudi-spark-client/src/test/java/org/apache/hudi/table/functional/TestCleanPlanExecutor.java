@@ -119,7 +119,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .build()).build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
     Map<String, List<BootstrapFileMapping>> bootstrapMapping = enableBootstrapSourceClean ? generateBootstrapIndexAndSourceData(p0, p1) : null;
@@ -235,7 +235,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
     // No cleaning on partially written file, with no commit.
     testTable.forCommit("00000000000011").withBaseFilesInPartition(p0, file3P0C2);
-    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000011", CollectionUtils.createImmutableMap(p0,
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000011", Collections.singletonMap(p0,
         CollectionUtils.createImmutableList(file3P0C2)));
     metaClient.getActiveTimeline().createNewInstant(
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
@@ -263,7 +263,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
 
     final String p0 = "2020/01/01";
     final String p1 = "2020/01/02";
@@ -344,7 +344,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
 
     final String p0 = "2020/01/01";
     final String p1 = "2020/01/02";
@@ -582,7 +582,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     String file2P2 = UUID.randomUUID().toString();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     testTable.withPartitionMetaFiles(p1, p2);
     Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
       {
@@ -629,7 +629,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         .build();
 
     HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     String p0 = "2020/01/01";
     String p1 = "2020/01/02";
     Map<String, List<BootstrapFileMapping>> bootstrapMapping = enableBootstrapSourceClean ? generateBootstrapIndexAndSourceData(p0, p1) : null;
