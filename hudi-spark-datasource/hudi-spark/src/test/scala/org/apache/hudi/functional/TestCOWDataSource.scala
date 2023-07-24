@@ -1547,7 +1547,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     var hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "test_hudi_merger",
       KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "event_id",
-      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "version,event_date",
+      KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "version",
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key() -> "ts",
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
@@ -1555,13 +1555,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
     )
-    df1.write.format("org.apache.hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
+    df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 
     // Try adding a string column. This operation is expected to throw 'schema not compatible' exception since
     // 'MAKE_NEW_COLUMNS_NULLABLE' parameter is 'false' by default.
     val df2 = spark.sql("select '2' as event_id, '2' as ts, '3' as version, 'foo' as event_date, 'bar' as add_col")
     try {
-      (df2.write.format("org.apache.hudi").options(hudiOptions).mode("append").save(basePath))
+      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
       fail("Option succeeded, but was expected to fail.")
     } catch {
       case ex: org.apache.hudi.exception.HoodieInsertException => {
@@ -1576,7 +1576,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // parameter has been set to 'true'.
     hudiOptions = hudiOptions + (HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE.key() -> "true")
     try {
-      (df2.write.format("org.apache.hudi").options(hudiOptions).mode("append").save(basePath))
+      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
     } catch {
       case ex: Exception => {
         fail(ex)
