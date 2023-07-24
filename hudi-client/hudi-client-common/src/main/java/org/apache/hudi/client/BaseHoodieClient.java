@@ -126,8 +126,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   private synchronized Option<EmbeddedTimelineService> startEmbeddedServerView(Option<EmbeddedTimelineService> reused) {
-    if (config.isEmbeddedTimelineServerEnabled()) {
-      if (!reused.isPresent()) {
+    if (reused.isPresent()) {
+      LOG.info("Timeline Server already running. Not restarting the service");
+      return reused;
+    } else {
+      if (config.isEmbeddedTimelineServerEnabled()) {
         // Run Embedded Timeline Server
         try {
           this.shouldStopTimelineServer = true;
@@ -136,11 +139,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
           LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
           stopEmbeddedServerView(false);
         }
-      } else {
-        LOG.info("Timeline Server already running. Not restarting the service");
       }
-    } else {
-      LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
     }
     return Option.empty();
   }
