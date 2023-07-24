@@ -50,7 +50,7 @@ import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CleanPlanner.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
