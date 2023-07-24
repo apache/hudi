@@ -172,9 +172,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           expressionSet.remove((attr, expr))
           (attr, expr)
       }
-      if (resolving.isEmpty && rk._1.equals("primaryKey")) {
-        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
-      }
+      //if (resolving.isEmpty && rk._1.equals("primaryKey")) {
+      //  throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
+      //}
       resolving
     }).filter(_.nonEmpty).map(_.get)
 
