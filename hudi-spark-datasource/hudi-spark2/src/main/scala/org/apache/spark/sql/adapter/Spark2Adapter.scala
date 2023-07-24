@@ -188,6 +188,10 @@ class Spark2Adapter extends SparkAdapter {
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
 
+  /**
+   * Spark2 doesn't support nestedPredicatePushdown,
+   * so fail it if [[supportNestedPredicatePushdown]] is true here.
+   */
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
     if (supportNestedPredicatePushdown) {

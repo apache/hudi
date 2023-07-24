@@ -71,7 +71,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     hoodieTestTable.addCommit("100").withBaseFilesInPartition(DEFAULT_PARTITION, IntStream.range(0, 10).toArray());
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
     Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath)).length);
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartitions(
@@ -96,7 +96,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     });
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, true);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, true);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + DATE_PARTITIONS.get(0))).length);
 
@@ -127,7 +127,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     });
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
 
     List<String> fullPartitionPaths = DATE_PARTITIONS.stream().map(p -> basePath + "/" + p).collect(Collectors.toList());
@@ -152,7 +152,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     });
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + ONE_LEVEL_PARTITIONS.get(0))).length);
 
@@ -178,7 +178,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     });
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(10, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length);
 
@@ -203,7 +203,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     });
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
-        new FileSystemBackedTableMetadata(localEngineContext, new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(), new SerializableConfiguration(metaClient.getHadoopConf()), basePath, false);
     Assertions.assertEquals(3, fileSystemBackedTableMetadata.getAllPartitionPaths().size());
     Assertions.assertEquals(0, fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(basePath + "/" + MULTI_LEVEL_PARTITIONS.get(0))).length);
 

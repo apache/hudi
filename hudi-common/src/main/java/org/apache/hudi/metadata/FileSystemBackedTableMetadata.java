@@ -68,7 +68,18 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
 
-  public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, SerializableConfiguration conf, String datasetBasePath,
+  public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
+                                       SerializableConfiguration conf, String datasetBasePath,
+                                       boolean assumeDatePartitioning) {
+    super(engineContext, conf, datasetBasePath);
+
+    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+    this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
+    this.assumeDatePartitioning = assumeDatePartitioning;
+  }
+
+  public FileSystemBackedTableMetadata(HoodieEngineContext engineContext,
+                                       SerializableConfiguration conf, String datasetBasePath,
                                        boolean assumeDatePartitioning) {
     super(engineContext, conf, datasetBasePath);
 
