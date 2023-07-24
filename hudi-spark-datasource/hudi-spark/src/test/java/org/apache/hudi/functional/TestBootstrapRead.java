@@ -143,11 +143,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     inserts.write().format("hudi")
         .options(basicOptions())
         .mode(SaveMode.Overwrite)
-        .save(hudiBasePath +"/tbl1");
+        .save(hudiBasePath + "/tbl1");
     inserts.write().format("hudi")
         .options(basicOptions())
         .mode(SaveMode.Overwrite)
-        .save(hudiBasePath +"/tbl2");
+        .save(hudiBasePath + "/tbl2");
 
     //do upserts
     Map<String, String> options  = basicOptions();
@@ -178,10 +178,10 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Dataset<Row> joinDf = sparkSession.sql("select * from tbl1 a INNER JOIN tbl2 b ON a._row_key == b._row_key and a.partition_path == b.partition_path");
     joinDf.explain(true);
     joinDf.show(100,false);
-//    hudiDf.createOrReplaceTempView("myTable");
-//    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
-//    outputDf.explain(true);
-//    outputDf.show(100,false);
+    //    hudiDf.createOrReplaceTempView("myTable");
+    //    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
+    //    outputDf.explain(true);
+    //    outputDf.show(100,false);
   }
 
   @ParameterizedTest
