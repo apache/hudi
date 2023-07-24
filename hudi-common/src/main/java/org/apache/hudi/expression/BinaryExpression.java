@@ -16,44 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * The expression that accept two child expressions.
  */
-public class BinaryOperator extends Expression {
+public abstract class BinaryExpression implements Expression {
 
   private final Operator operator;
   private final Expression left;
   private final Expression right;
 
-  private BinaryOperator(Expression left, Operator operator, Expression right) {
-    super(Arrays.asList(left, right));
+  BinaryExpression(Expression left, Operator operator, Expression right) {
     this.left = left;
     this.operator = operator;
     this.right = right;
-  }
-
-  public static BinaryOperator and(Expression left, Expression right) {
-    return new BinaryOperator(left, Operator.AND, right);
-  }
-
-  public static BinaryOperator or(Expression left, Expression right) {
-    return new BinaryOperator(left, Operator.OR, right);
-  }
-
-  public static BinaryOperator eq(Expression left, Expression right) {
-    return new BinaryOperator(left, Operator.EQ, right);
-  }
-
-  public static BinaryOperator gteq(Expression left, Expression right) {
-    return new BinaryOperator(left, Operator.GT_EQ, right);
-  }
-
-  public static BinaryOperator lteq(Expression left, Expression right) {
-    return new BinaryOperator(left, Operator.LT_EQ, right);
   }
 
   public Operator getOperator() {
@@ -69,7 +49,12 @@ public class BinaryOperator extends Expression {
   }
 
   @Override
-  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitBinaryOperator(this);
+  public List<Expression> getChildren() {
+    return Arrays.asList(left, right);
+  }
+
+  @Override
+  public String toString() {
+    return left.toString() + " " + operator.symbol + " " + right.toString();
   }
 }

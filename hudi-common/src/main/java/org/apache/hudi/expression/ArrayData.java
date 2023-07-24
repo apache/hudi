@@ -16,38 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
 import java.util.List;
 
-public abstract class Expression {
+public class ArrayData implements StructLike {
 
-  public enum Operator {
-    AND("AND", "&&"),
-    OR("OR", "||"),
-    GT(">", ">"),
-    LT("<", "<"),
-    EQ("=", "="),
-    GT_EQ(">=", ">="),
-    LT_EQ("<=", "<=");
+  private final List<Object> data;
 
-    public final String sqlOperator;
-    public final String symbol;
-
-    Operator(String sqlOperator, String symbol) {
-      this.sqlOperator = sqlOperator;
-      this.symbol = symbol;
-    }
+  public ArrayData(List<Object> data) {
+    this.data = data;
   }
 
-  private final List<Expression> children;
-
-  public Expression(List<Expression> children) {
-    this.children = children;
+  @Override
+  public int numFields() {
+    return data.size();
   }
 
-  /**
-   * Traverses the expression with the provided {@link ExpressionVisitor}
-   */
-  public abstract <T> T accept(ExpressionVisitor<T> exprVisitor);
+  @Override
+  public <T> T get(int pos, Class<T> classTag) {
+    return classTag.cast(data.get(pos));
+  }
 }

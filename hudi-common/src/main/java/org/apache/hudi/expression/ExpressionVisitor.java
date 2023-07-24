@@ -16,14 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
 /**
- * Expression that without any child expressions.
+ * Visitor used to travers the expression.
  */
-public abstract class LeafExpression extends Expression {
+public interface ExpressionVisitor<T> {
 
-  public LeafExpression() {
-    super(null);
-  }
+  T alwaysTrue();
+
+  T alwaysFalse();
+
+  T visitLiteral(Literal literal);
+
+  T visitNameReference(NameReference attribute);
+
+  T visitBoundReference(BoundReference boundReference);
+
+  T visitAnd(Predicates.And and);
+
+  T visitOr(Predicates.Or or);
+
+  T visitPredicate(Predicate predicate);
 }

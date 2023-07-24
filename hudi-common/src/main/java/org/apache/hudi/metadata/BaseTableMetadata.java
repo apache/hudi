@@ -29,8 +29,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -41,8 +41,6 @@ import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -68,25 +66,33 @@ import java.util.stream.Collectors;
 /**
  * Abstract class for implementing common table metadata operations.
  */
-public abstract class BaseTableMetadata implements HoodieTableMetadata {
+public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseTableMetadata.class);
 
-  protected transient HoodieEngineContext engineContext;
-  protected final SerializablePath dataBasePath;
+  protected static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
+  // NOTE: Buffer-size is deliberately set pretty low, since MT internally is relying
+  //       on HFile (serving as persisted binary key-value mapping) to do caching
+  protected static final int BUFFER_SIZE = 10 * 1024; // 10Kb
+
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
 
   protected boolean isMetadataTableInitialized;
+  protected final boolean hiveStylePartitioningEnabled;
+  protected final boolean urlEncodePartitioningEnabled;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
-    this.engineContext = engineContext;
-    this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
+    super(engineContext, engineContext.getHadoopConf(), dataBasePath);
+
     this.dataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(engineContext.getHadoopConf().get())
+        .setConf(hadoopConf.get())
         .setBasePath(dataBasePath)
         .build();
+
+    this.hiveStylePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getHiveStylePartitioningEnable());
+    this.urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
 
