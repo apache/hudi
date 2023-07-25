@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
@@ -507,7 +507,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
       HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
       HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[IngestionPrimaryWriterBasedConflictResolutionStrategy].getName
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
     )
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
