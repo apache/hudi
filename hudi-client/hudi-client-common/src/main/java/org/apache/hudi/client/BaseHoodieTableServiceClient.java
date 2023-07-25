@@ -174,7 +174,7 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
   }
 
   /**
-   * Ensures compaction instant is in expected state and performs Log Compaction for the workload stored in instant-time.s
+   * Ensures compaction instant is in expected state and performs Log Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
