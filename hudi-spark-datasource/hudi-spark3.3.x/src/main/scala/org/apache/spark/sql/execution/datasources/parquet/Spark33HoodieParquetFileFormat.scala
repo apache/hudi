@@ -71,7 +71,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, allowVectorized = true)
+    buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, shouldAppendPartitionValues, allowVectorized = true, readerType = "")
   }
 
    protected def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -81,11 +81,19 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                                 filters: Seq[Filter],
                                                 options: Map[String, String],
                                                 hadoopConf: Configuration,
-                                                allowVectorized: Boolean): PartitionedFile => Iterator[InternalRow] = {
-    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
-    hadoopConf.set(
-      ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
-      requiredSchema.json)
+                                                appendOverride: Boolean,
+                                                allowVectorized: Boolean,
+                                                readerType: String): PartitionedFile => Iterator[InternalRow] = {
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[Spark33ParquetReadSupport].getName)
+     if (readerType.equals("mor")) {
+       hadoopConf.set(
+         Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA_MOR,
+         requiredSchema.json)
+     } else {
+       hadoopConf.set(
+         Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
+         requiredSchema.json)
+     }
     hadoopConf.set(
       ParquetWriteSupport.SPARK_ROW_SCHEMA,
       requiredSchema.json)
@@ -152,7 +160,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
+      assert(!appendOverride || file.partitionValues.numFields == partitionSchema.size)
 
       val filePath = new Path(new URI(file.filePath))
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
@@ -242,14 +250,23 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
         val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+        if (readerType.equals("mor")) {
+          hadoopAttemptConf.set(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA_MOR, mergedSchema.json)
+        } else {
+          hadoopAttemptConf.set(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+        }
 
         SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
         val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
         if (!implicitTypeChangeInfo.isEmpty) {
           shouldUseInternalSchema = true
-          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+          if (readerType.equals("mor")) {
+            hadoopAttemptConf.set(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA_MOR, sparkRequestSchema.json)
+          } else {
+            hadoopAttemptConf.set(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA_MOR, sparkRequestSchema.json)
+          }
+
         }
         implicitTypeChangeInfo
       }
@@ -322,7 +339,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
           // NOTE: We're making appending of the partitioned values to the rows read from the
           //       data file configurable
-          if (shouldAppendPartitionValues) {
+          if (appendOverride) {
             logDebug(s"Appending $partitionSchema ${file.partitionValues}")
             vectorizedReader.initBatch(partitionSchema, file.partitionValues)
           } else {
@@ -353,21 +370,23 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           val datetimeRebaseSpec =
             DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          new ParquetReadSupport(
+          new Spark33ParquetReadSupport(
             convertTz,
             enableVectorizedReader = false,
             datetimeRebaseSpec,
-            int96RebaseSpec)
+            int96RebaseSpec,
+            readerType)
         } else {
           val datetimeRebaseMode =
             Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
             Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-          createParquetReadSupport(
+          createSpark33ParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,
             datetimeRebaseMode,
-            int96RebaseMode)
+            int96RebaseMode,
+            readerType)
         }
 
         val reader = if (pushed.isDefined && enableRecordFilter) {
@@ -403,7 +422,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
           // NOTE: We're making appending of the partitioned values to the rows read from the
           //       data file configurable
-          if (!shouldAppendPartitionValues || partitionSchema.length == 0) {
+          if (!appendOverride || partitionSchema.length == 0) {
             // There is no partition columns
             iter.map(unsafeProjection)
           } else {
@@ -439,13 +458,13 @@ object Spark33HoodieParquetFileFormat {
   /**
    * NOTE: This method is specific to Spark 3.2.0
    */
-  private def createParquetReadSupport(args: Any*): ParquetReadSupport = {
+  private def createSpark33ParquetReadSupport(args: Any*): Spark33ParquetReadSupport = {
     // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
     //       up by arg types, and have to instead rely on the number of args based on individual class;
     //       the ctor order is not guaranteed
-    val ctor = classOf[ParquetReadSupport].getConstructors.maxBy(_.getParameterCount)
+    val ctor = classOf[Spark33ParquetReadSupport].getConstructors.maxBy(_.getParameterCount)
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
-      .asInstanceOf[ParquetReadSupport]
+      .asInstanceOf[Spark33ParquetReadSupport]
   }
 
   /**

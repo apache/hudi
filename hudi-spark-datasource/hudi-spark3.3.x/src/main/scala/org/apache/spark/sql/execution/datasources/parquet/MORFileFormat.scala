@@ -25,14 +25,16 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, RecordMergingFileIterator, SkipMergeIterator}
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
+import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
@@ -53,24 +55,26 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val dataSchemaWithPartition = StructType(dataSchema.fields ++ partitionSchema.fields)
-    val requiredSchemaWithMandatoryFields = requiredSchema.fields.toBuffer
     val partitionSchemaForReader = if (shouldAppendPartitionValues) {
       partitionSchema
     } else {
-      requiredSchemaWithMandatoryFields.append(partitionSchema.fields:_*)
+      //requiredSchemaWithMandatoryFields.append(partitionSchema.fields:_*)
       StructType(Seq.empty)
     }
+    val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
     for (field <- mandatoryFields) {
       if (requiredSchema.getFieldIndex(field).isEmpty) {
         val fieldToAdd = dataSchemaWithPartition.fields(dataSchemaWithPartition.getFieldIndex(field).get)
-        requiredSchemaWithMandatoryFields.append(fieldToAdd)
+        added.append(fieldToAdd)
       }
     }
-    val requiredSchemaWithMandatory = StructType(requiredSchemaWithMandatoryFields.toArray)
-    val fileReader =   super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchemaForReader,
-      requiredSchemaWithMandatory, filters, options, hadoopConf, allowVectorized = false)
+
+    val addedFields = StructType(added.toArray)
+    val requiredSchemaWithMandatory = StructType(requiredSchema.toArray ++ addedFields.fields)
+    val fileReader =   super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema,
+      requiredSchema, filters, options, hadoopConf, true, allowVectorized = false, "file")
     val morReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchemaForReader,
-      requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, allowVectorized = false)
+      requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, shouldAppendPartitionValues, allowVectorized = false, "mor")
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
      file.partitionValues match {
@@ -81,7 +85,7 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
             case Some(fileSlice) =>
               val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
               val requiredAvroSchema = HoodieBaseRelation.convertToAvroSchema(requiredSchemaWithMandatory, tableName)
-              mergeType match {
+              val iter = mergeType match {
                 case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
                   new SkipMergeIterator(logFiles, filePath.getParent, morReader(file), requiredSchemaWithMandatory,
                     tableSchema.value, requiredSchemaWithMandatory, requiredAvroSchema, tableState.value,
@@ -91,6 +95,11 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
                     tableSchema.value, requiredSchemaWithMandatory, requiredAvroSchema, tableState.value,
                     broadcastedHadoopConf.value.value)
               }
+              if (partitionSchema.nonEmpty && !shouldAppendPartitionValues) {
+                addProj(iter, requiredSchema,  addedFields, partitionSchema, broadcast.getInternalRow)
+              } else {
+                iter
+              }
             case _ => fileReader(file)
           }
         case _ =>
@@ -98,4 +107,15 @@ class MORFileFormat(private val shouldAppendPartitionValues: Boolean,
       }
     }
   }
+
+  def addProj(iter: Iterator[InternalRow],
+              requiredSchema: StructType,
+              addedSchema: StructType,
+              partitionSchema: StructType,
+              partitionValues: InternalRow): Iterator[InternalRow] = {
+    val unsafeProjection =  HoodieCatalystExpressionUtils.generateUnsafeProjection(StructType(requiredSchema ++ addedSchema ++ partitionSchema),  StructType(requiredSchema ++ partitionSchema))
+    val joinedRow = new JoinedRow()
+    iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
+  }
 }
+

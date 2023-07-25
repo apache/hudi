@@ -124,7 +124,7 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   @Test
   public void testMOR() {
     this.bootstrapType = "full";
-    this.dashPartitions = false;
+    this.dashPartitions = true;
     this.tableType = MERGE_ON_READ;
     this.nPartitions = 2;
     dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
@@ -163,25 +163,23 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .mode(SaveMode.Append)
         .save(hudiBasePath + "tbl2");
 
-    Dataset<Row> hudiDf1 = sparkSession.read()
-        .option("hoodie.datasource.read.mor.file.reader","false")
-        .format("hudi").load(hudiBasePath + "/tbl1");
+    Dataset<Row> hudiDf1 = sparkSession.read().format("hudi").load(hudiBasePath + "/tbl1");
     Dataset<Row> hudiDf2 = sparkSession.read()
         .option("hoodie.datasource.read.mor.file.reader","true")
         .format("hudi").load(hudiBasePath + "/tbl1");
     //hudiDf = hudiDf.select("partition_path", "_row_key");
-    //hudiDf = hudiDf.select("partition_path", "_row_key");
-    hudiDf1.createOrReplaceTempView("tbla");
-    sparkSession.sql("select * from tbla where begin_lon > 0.5").createOrReplaceTempView("tbl1");
-    hudiDf2.createOrReplaceTempView("tbl2");
-
-    Dataset<Row> joinDf = sparkSession.sql("select * from tbl1 a INNER JOIN tbl2 b ON a._row_key == b._row_key and a.partition_path == b.partition_path");
-    joinDf.explain(true);
-    joinDf.show(100,false);
-    //    hudiDf.createOrReplaceTempView("myTable");
-    //    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
-    //    outputDf.explain(true);
-    //    outputDf.show(100,false);
+    Dataset<Row> hudiDf = hudiDf1.select("partition_path", "_row_key");
+    //    hudiDf1.createOrReplaceTempView("tbla");
+    //    sparkSession.sql("select * from tbla where begin_lon > 0.5").createOrReplaceTempView("tbl1");
+    //    hudiDf2.createOrReplaceTempView("tbl2");
+    //
+    //    Dataset<Row> joinDf = sparkSession.sql("select * from tbl1 a INNER JOIN tbl2 b ON a._row_key == b._row_key and a.partition_path == b.partition_path");
+    //    joinDf.explain(true);
+    //    joinDf.show(100,false);
+    hudiDf.createOrReplaceTempView("myTable");
+    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
+    outputDf.explain(true);
+    outputDf.show(100,false);
   }
 
   @ParameterizedTest
