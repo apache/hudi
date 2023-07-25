@@ -562,7 +562,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future3 = executors.submit(() -> {
       latchCountDownAndWait(runCountDownLatch, 30000);
       assertDoesNotThrow(() -> {
-        client3.clean(pendingCleanTime, false);
+        client3.clean(pendingCleanTime);
         validInstants.add(pendingCleanTime);
       });
     });
@@ -640,7 +640,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future2.get();
 
     final CountDownLatch commitCountDownLatch = new CountDownLatch(1);
-    HoodieTableMetaClient tableMetaClient = client.getTableServiceClient().createMetaClient(true);
+    metaClient.reloadActiveTimeline();
 
     // Commit the instants and get instants to rollback in parallel
     future1 = executor.submit(() -> {
@@ -655,7 +655,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         //
       }
       List<String> instantsToRollback =
-          client.getTableServiceClient().getInstantsToRollback(tableMetaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
+          client.getTableServiceClient().getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.LAZY, Option.empty());
       // Only commit3 will be rollback, although commit2 is in the inflight timeline and has no heartbeat file
       assertEquals(1, instantsToRollback.size());
       assertEquals(commitTime3, instantsToRollback.get(0));

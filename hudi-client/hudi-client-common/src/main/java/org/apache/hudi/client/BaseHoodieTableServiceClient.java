@@ -59,7 +59,6 @@ import org.apache.hudi.table.action.rollback.BaseRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 
 import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -395,20 +394,21 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     try {
       this.txnManager.beginTransaction(inflightInstant, Option.empty());
       LOG.info("Scheduling table service " + tableServiceType);
+      // 必须 reload active timeline
+      table.getMetaClient().reloadActiveTimeline();
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
     }
   }
 
-  protected Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
-                                                        TableServiceType tableServiceType) {
+  private Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
+                                                      TableServiceType tableServiceType) {
     if (!tableServicesEnabled(config)) {
       return Option.empty();
     }
 
     Option<String> option = Option.empty();
-    HoodieTable<?, ?, ?, ?> table = createTable(config, hadoopConf);
 
     switch (tableServiceType) {
       case ARCHIVE:
@@ -449,8 +449,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
 
     return option;
   }
-
-  protected abstract HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf);
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
@@ -520,22 +518,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
    */
   @Nullable
-  @Deprecated
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
-    return clean(cleanInstantTime, scheduleInline);
-  }
-
-  /**
-   * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
-   * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
-   * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link BaseHoodieTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
-   * of clean.
-   *
-   * @param cleanInstantTime instant time for clean.
-   * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
-   */
-  @Nullable
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
     if (!tableServicesEnabled(config)) {
       return null;
@@ -544,13 +526,12 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites());
 
-    HoodieTable table = createTable(config, hadoopConf);
     if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
       LOG.info("Cleaner started");
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
-        table.getMetaClient().reloadActiveTimeline();
+        // 添加提示
+        scheduleTableService(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
@@ -682,7 +663,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @return {@code true} if rollback happens; {@code false} otherwise.
    */
   protected boolean rollbackFailedIndexingCommits() {
-    HoodieTable table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getFailedIndexingCommitsToRollback(table.getMetaClient());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
@@ -710,7 +690,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    * @return true if rollback was triggered. false otherwise.
    */
   protected Boolean rollbackFailedWrites() {
-    HoodieTable table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
     removeInflightFilesAlreadyRolledBack(instantsToRollback, table.getMetaClient());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
@@ -879,7 +858,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
     LOG.info("Begin rollback of instant " + commitInstantTime);
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
     try {
-      HoodieTable table = createTable(config, hadoopConf);
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
@@ -924,7 +902,6 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    */
   public void rollbackFailedBootstrap() {
     LOG.info("Rolling back pending bootstrap if present");
-    HoodieTable table = createTable(config, hadoopConf);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
     Option<String> instant = Option.fromJavaOptional(
         inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp).findFirst());

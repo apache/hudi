@@ -24,7 +24,6 @@ import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -60,47 +59,45 @@ public class HoodieCompactionAdminTool {
    * Executes one of compaction admin operations.
    */
   public void run(JavaSparkContext jsc) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).build();
-    try (CompactionAdminClient admin = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), cfg.basePath)) {
-      final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-      if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
-        throw new IllegalStateException("Output File Path already exists");
-      }
-      switch (cfg.operation) {
-        case VALIDATE:
-          List<ValidationOpResult> res =
-              admin.validateCompactionPlan(metaClient, cfg.compactionInstantTime, cfg.parallelism);
-          if (cfg.printOutput) {
-            printOperationResult("Result of Validation Operation :", res);
-          }
-          serializeOperationResult(fs, res);
-          break;
-        case UNSCHEDULE_FILE:
-          List<RenameOpResult> r = admin.unscheduleCompactionFileId(
-              new HoodieFileGroupId(cfg.partitionPath, cfg.fileId), cfg.skipValidation, cfg.dryRun);
-          if (cfg.printOutput) {
-            System.out.println(r);
-          }
-          serializeOperationResult(fs, r);
-          break;
-        case UNSCHEDULE_PLAN:
-          List<RenameOpResult> r2 = admin.unscheduleCompactionPlan(cfg.compactionInstantTime, cfg.skipValidation,
-              cfg.parallelism, cfg.dryRun);
-          if (cfg.printOutput) {
-            printOperationResult("Result of Unscheduling Compaction Plan :", r2);
-          }
-          serializeOperationResult(fs, r2);
-          break;
-        case REPAIR:
-          List<RenameOpResult> r3 = admin.repairCompaction(cfg.compactionInstantTime, cfg.parallelism, cfg.dryRun);
-          if (cfg.printOutput) {
-            printOperationResult("Result of Repair Operation :", r3);
-          }
-          serializeOperationResult(fs, r3);
-          break;
-        default:
-          throw new IllegalStateException("Not yet implemented !!");
-      }
+    CompactionAdminClient admin = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), cfg.basePath);
+    final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+    if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
+      throw new IllegalStateException("Output File Path already exists");
+    }
+    switch (cfg.operation) {
+      case VALIDATE:
+        List<ValidationOpResult> res =
+            admin.validateCompactionPlan(cfg.compactionInstantTime, cfg.parallelism);
+        if (cfg.printOutput) {
+          printOperationResult("Result of Validation Operation :", res);
+        }
+        serializeOperationResult(fs, res);
+        break;
+      case UNSCHEDULE_FILE:
+        List<RenameOpResult> r = admin.unscheduleCompactionFileId(
+            new HoodieFileGroupId(cfg.partitionPath, cfg.fileId), cfg.skipValidation, cfg.dryRun);
+        if (cfg.printOutput) {
+          System.out.println(r);
+        }
+        serializeOperationResult(fs, r);
+        break;
+      case UNSCHEDULE_PLAN:
+        List<RenameOpResult> r2 = admin.unscheduleCompactionPlan(cfg.compactionInstantTime, cfg.skipValidation,
+            cfg.parallelism, cfg.dryRun);
+        if (cfg.printOutput) {
+          printOperationResult("Result of Unscheduling Compaction Plan :", r2);
+        }
+        serializeOperationResult(fs, r2);
+        break;
+      case REPAIR:
+        List<RenameOpResult> r3 = admin.repairCompaction(cfg.compactionInstantTime, cfg.parallelism, cfg.dryRun);
+        if (cfg.printOutput) {
+          printOperationResult("Result of Repair Operation :", r3);
+        }
+        serializeOperationResult(fs, r3);
+        break;
+      default:
+        throw new IllegalStateException("Not yet implemented !!");
     }
   }
 

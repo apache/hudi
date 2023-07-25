@@ -69,6 +69,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
+  protected transient HoodieTable<?, ?, ?, ?> table;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -95,6 +96,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
     this.txnManager = new TransactionManager(config, fs);
+    this.table = createHoodieTable(config, hadoopConf);
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -170,6 +172,12 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     // no-op.
   }
 
+  protected abstract HoodieTable<?, ?, ?, ?> createHoodieTable(HoodieWriteConfig config, Configuration hadoopConf);
+
+  public HoodieTable<?, ?, ?, ?> getHoodieTable() {
+    return table;
+  }
+
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -200,7 +208,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), pendingInflightAndRequestedInstants);
       metrics.emitConflictResolutionSuccessful();
     } catch (HoodieWriteConflictException e) {
       metrics.emitConflictResolutionFailed();

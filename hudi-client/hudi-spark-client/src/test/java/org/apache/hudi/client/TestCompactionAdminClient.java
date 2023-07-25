@@ -136,7 +136,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         validateUnSchedulePlan(client, ingestionInstant, compactionInstant, numEntriesPerInstant, expNumRepairs, true);
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    List<ValidationOpResult> result = client.validateCompactionPlan(metaClient, compactionInstant, 1);
+    List<ValidationOpResult> result = client.validateCompactionPlan(compactionInstant, 1);
     if (expNumRepairs > 0) {
       assertTrue(result.stream().anyMatch(r -> !r.isSuccess()), "Expect some failures in validation");
     }
@@ -165,7 +165,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     assertEquals(expRenameFiles, renameFilesFromUndo, "Undo must completely rollback renamed files");
     // Now expect validation to succeed
-    result = client.validateCompactionPlan(metaClient, compactionInstant, 1);
+    result = client.validateCompactionPlan(compactionInstant, 1);
     assertTrue(result.stream().allMatch(OperationResult::isSuccess), "Expect no failures in validation");
     assertEquals(expNumRepairs, undoFiles.size(), "Expected Num Repairs");
   }
@@ -176,9 +176,9 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
    * @param compactionInstant Compaction Instant
    */
   private void ensureValidCompactionPlan(String compactionInstant) throws Exception {
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     // Ensure compaction-plan is good to begin with
-    List<ValidationOpResult> validationResults = client.validateCompactionPlan(metaClient, compactionInstant, 1);
+    metaClient.reloadActiveTimeline();
+    List<ValidationOpResult> validationResults = client.validateCompactionPlan(compactionInstant, 1);
     assertFalse(validationResults.stream().anyMatch(v -> !v.isSuccess()),
         "Some validations failed");
   }

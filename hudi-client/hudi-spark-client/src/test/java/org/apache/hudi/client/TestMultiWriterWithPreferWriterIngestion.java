@@ -179,7 +179,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     });
     future3 = executors.submit(() -> {
       try {
-        client2.clean(instant6, false);
+        client2.clean(instant6);
         validInstants.add(instant6);
       } catch (Exception e2) {
         throw new RuntimeException(e2);

@@ -75,7 +75,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
-    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
+    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = (HoodieWriteMetadata<List<WriteStatus>>) table.compact(context, compactionInstantTime);
     commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     return compactionMetadata;
   }
@@ -83,7 +83,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   @Override
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, getHoodieTable(), compactionInstantTime);
+    completeCompaction(metadata, table, compactionInstantTime);
   }
 
   @Override
@@ -121,7 +121,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
+    HoodieFlinkTable<T> table = getHoodieTable();
 
     // Check if a commit or compaction instant with a greater timestamp is on the timeline.
     // If an instant is found then abort log compaction, since it is no longer needed.
@@ -243,12 +243,12 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable<?, ?, ?, ?> createHoodieTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieFlinkTable.create(config, context);
   }
 
-  public HoodieFlinkTable<?> getHoodieTable() {
-    return HoodieFlinkTable.create(config, context);
+  public HoodieFlinkTable<T> getHoodieTable() {
+    return (HoodieFlinkTable<T>) super.getHoodieTable();
   }
 
   @Override
@@ -262,9 +262,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected void preCommit(HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
     resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
@@ -278,7 +275,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   public void initMetadataTable() {
-    HoodieFlinkTable<?> table = getHoodieTable();
     if (config.isMetadataTableEnabled()) {
       Option<String> latestPendingInstant = table.getActiveTimeline()
           .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getTimestamp);

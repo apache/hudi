@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -66,8 +65,6 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieJavaTable<T> table = HoodieJavaTable.create(config, (HoodieJavaEngineContext) context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
@@ -92,13 +89,8 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable createHoodieTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieJavaTable.create(config, context);
-  }
-
-  @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(config, context, metaClient);
   }
 
   @Override
@@ -164,7 +156,7 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   public void transitionInflight(String instantTime) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    HoodieTableMetaClient metaClient = table.getMetaClient();
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
         Option.empty(), config.shouldAllowMultiWriteOnSameInstant());

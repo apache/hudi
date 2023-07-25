@@ -114,19 +114,17 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+  protected HoodieTable createHoodieTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    return HoodieFlinkTable.create(config, context);
   }
 
-  @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context, metaClient);
+  public HoodieFlinkTable<T> getHoodieTable() {
+    return (HoodieFlinkTable<T>) super.getHoodieTable();
   }
 
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieFlinkTable<T> table = getHoodieTable();
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
@@ -362,9 +360,6 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
     resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
@@ -397,7 +392,6 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeLogCompaction(metadata, table, logCompactionInstantTime);
   }
@@ -411,7 +405,6 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
     return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
   }
@@ -508,14 +501,10 @@ public class HoodieFlinkWriteClient<T> extends
     return writeHandleFactory.create(this.bucketToHandles, record, config, instantTime, table, recordItr);
   }
 
-  public HoodieFlinkTable<T> getHoodieTable() {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
-  }
-
   public Map<String, List<String>> getPartitionToReplacedFileIds(
       WriteOperationType writeOperationType,
       List<WriteStatus> writeStatuses) {
-    HoodieFlinkTable<T> table = getHoodieTable();
+    HoodieFlinkTable<T> table = (HoodieFlinkTable<T>) this.table;
     switch (writeOperationType) {
       case INSERT_OVERWRITE:
         return writeStatuses.stream().map(status -> status.getStat().getPartitionPath()).distinct()

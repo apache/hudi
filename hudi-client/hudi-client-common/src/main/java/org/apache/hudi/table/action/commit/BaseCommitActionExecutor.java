@@ -195,9 +195,9 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
       setCommitMetadata(result);
-      // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
+      table.getMetaClient().reloadActiveTimeline();
       TransactionUtils.resolveWriteConflictIfAny(table, txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
+          result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), pendingInflightAndRequestedInstants);
       commit(extraMetadata, result);
     } finally {
       txnManager.endTransaction(inflightInstant);

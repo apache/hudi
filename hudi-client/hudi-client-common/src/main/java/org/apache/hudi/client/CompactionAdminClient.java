@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
@@ -62,23 +61,29 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 /**
  * Client to perform admin operations related to compaction.
  */
-public class CompactionAdminClient extends BaseHoodieClient {
+public class CompactionAdminClient implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
+  private final transient HoodieEngineContext context;
+  private final HoodieTableMetaClient metaClient;
 
   public CompactionAdminClient(HoodieEngineContext context, String basePath) {
-    super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build());
+    this.context = context;
+    this.metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getHadoopConf().get())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(false)
+        .build();
   }
 
   /**
    * Validate all compaction operations in a compaction plan. Verifies the file-slices are consistent with corresponding
    * compaction operations.
    *
-   * @param metaClient Hoodie Table Meta Client
    * @param compactionInstant Compaction Instant
    */
-  public List<ValidationOpResult> validateCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant,
-      int parallelism) throws IOException {
+  public List<ValidationOpResult> validateCompactionPlan(String compactionInstant, int parallelism) throws IOException {
+    metaClient.reloadActiveTimeline();
     HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
     HoodieTableFileSystemView fsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
@@ -86,7 +91,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
+      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: "
+          + metaClient.getTableConfig().getTableName());
       return context.map(ops, op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
@@ -111,7 +117,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
     List<Pair<HoodieLogFile, HoodieLogFile>> renameActions = getRenamingActionsForUnschedulingCompactionPlan(metaClient,
         compactionInstant, parallelism, Option.empty(), skipValidation);
 
@@ -151,7 +156,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
+    metaClient.reloadActiveTimeline();
     List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
         getRenamingActionsForUnschedulingCompactionForFileId(metaClient, fgId, Option.empty(), skipValidation);
 
@@ -194,8 +199,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   public List<RenameOpResult> repairCompaction(String compactionInstant, int parallelism, boolean dryRun)
       throws Exception {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
-    List<ValidationOpResult> validationResults = validateCompactionPlan(metaClient, compactionInstant, parallelism);
+    metaClient.reloadActiveTimeline();
+    List<ValidationOpResult> validationResults = validateCompactionPlan(compactionInstant, parallelism);
     List<ValidationOpResult> failed =
         validationResults.stream().filter(v -> !v.isSuccess()).collect(Collectors.toList());
     if (failed.isEmpty()) {
@@ -352,7 +357,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
+        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: "
+            + metaClient.getTableConfig().getTableName());
         return context.map(renameActions, lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
@@ -395,7 +401,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations: " + config.getTableName());
+      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations: "
+          + metaClient.getTableConfig().getTableName());
       return context.flatMap(ops, op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,

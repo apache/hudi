@@ -62,7 +62,7 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
   }
 
   @Override
-  protected HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable<?, ?, ?, ?> createHoodieTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieJavaTable.create(config, context);
   }
 }

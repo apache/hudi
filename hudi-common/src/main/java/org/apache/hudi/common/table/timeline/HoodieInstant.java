@@ -140,6 +140,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public HoodieInstant(boolean isInflight, String action, String timestamp) {
+    // 删除
     // TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
