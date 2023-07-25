@@ -142,6 +142,58 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }).map(Arguments::of);
   }
 
+  @Test
+  public void testHFileReaderWriterWithDuplicates() throws Exception {
+    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroHFileWriter writer = createWriter(avroSchema, false);
+    List<String> keys = new ArrayList<>();
+    Map<String, List<GenericRecord>> recordMap = new TreeMap<>();
+    for (int i = 0; i < 50; i++) {
+      // If i is a multiple of 10, select the previous key for duplication
+      String key = i != 0 && i % 10 == 0 ? String.format("%s%04d", "key", i - 1) : String.format("%s%04d", "key", i);
+
+      // Create a list of records for each key to handle duplicates
+      if (!recordMap.containsKey(key)) {
+        recordMap.put(key, new ArrayList<>());
+      }
+
+      // Create the record
+      GenericRecord record = new GenericData.Record(avroSchema);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(RANDOM.nextInt()));
+      record.put("number", i);
+      writer.writeAvro(key, record);
+
+      // Add to the record map and key list
+      recordMap.get(key).add(record);
+      keys.add(key);
+    }
+    writer.close();
+
+    Configuration conf = new Configuration();
+    HoodieAvroHFileReader hoodieHFileReader = (HoodieAvroHFileReader) createReader(conf);
+    List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
+    //assertEquals(new ArrayList<>(recordMap.values()), records);
+
+    hoodieHFileReader.close();
+
+    for (int i = 0; i < 2; i++) {
+      int randomRowstoFetch = 5 + RANDOM.nextInt(10);
+      Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
+
+      List<String> rowsList = new ArrayList<>(rowsToFetch);
+      Collections.sort(rowsList);
+
+      List<GenericRecord> expectedRecords = rowsList.stream().flatMap(row -> recordMap.get(row).stream()).collect(Collectors.toList());
+
+      hoodieHFileReader = (HoodieAvroHFileReader) createReader(conf);
+      List<GenericRecord> result = HoodieAvroHFileReader.readRecords(hoodieHFileReader, rowsList).stream().map(r -> (GenericRecord)r).collect(Collectors.toList());
+
+      assertEquals(expectedRecords, result);
+      hoodieHFileReader.close();
+    }
+  }
+
   @ParameterizedTest
   @MethodSource("populateMetaFieldsAndTestAvroWithMeta")
   public void testWriteReadHFileWithMetaFields(boolean populateMetaFields, boolean testAvroWithMeta) throws Exception {

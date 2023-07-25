@@ -26,7 +26,6 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieDuplicateKeyException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -132,10 +131,10 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    if (prevRecordKey.equals(recordKey)) {
+    /*if (prevRecordKey.equals(recordKey)) {
       throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
           + "Record payload: " + record);
-    }
+    }*/
     byte[] value = null;
     boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
