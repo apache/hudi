@@ -19,12 +19,10 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieSparkUtils.isSpark2
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.scalatest.Ignore
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
 
-  ignore("Test Update Table") {
+  test("Test Update Table") {
     withRecordType()(withTempDir { tmp =>
       Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("cow", "mor").foreach { tableType =>
