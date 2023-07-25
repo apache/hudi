@@ -32,7 +32,8 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Seri
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, validateTimestampAsOf, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -413,6 +414,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     queryTimestamp match {
       case Some(ts) =>
+        specifiedQueryTimestamp.foreach(t => validateTimestampAsOf(metaClient, t))
+
         val partitionDirs = if (globPaths.isEmpty) {
           fileIndex.listFiles(partitionFilters, dataFilters)
         } else {
