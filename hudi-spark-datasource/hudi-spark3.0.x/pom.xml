@@ -16,7 +16,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
-    <groupId>bet.thescore.datalake</groupId>
+    <groupId>org.apache.hudi</groupId>
     <version>0.14.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -174,7 +174,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-client</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -186,7 +186,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -198,7 +198,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -211,13 +211,13 @@
 
     <!-- Hoodie - Test -->
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-tests-common</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
@@ -226,7 +226,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-client</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
@@ -241,7 +241,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
@@ -250,7 +250,7 @@
     </dependency>
 
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>

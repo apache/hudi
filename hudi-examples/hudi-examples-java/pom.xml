@@ -20,7 +20,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <artifactId>hudi-examples</artifactId>
-        <groupId>bet.thescore.datalake</groupId>
+        <groupId>org.apache.hudi</groupId>
         <version>0.14.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -116,7 +116,7 @@
 
         <!-- Hudi -->
         <dependency>
-            <groupId>bet.thescore.datalake</groupId>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-examples-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -128,13 +128,13 @@
         </dependency>
 
         <dependency>
-            <groupId>bet.thescore.datalake</groupId>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-client-common</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <dependency>
-            <groupId>bet.thescore.datalake</groupId>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-java-client</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -146,7 +146,7 @@
         </dependency>
 
         <dependency>
-            <groupId>bet.thescore.datalake</groupId>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-tests-common</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

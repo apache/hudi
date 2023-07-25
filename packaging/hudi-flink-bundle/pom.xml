@@ -20,7 +20,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi</artifactId>
-    <groupId>bet.thescore.datalake</groupId>
+    <groupId>org.apache.hudi</groupId>
     <version>0.14.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
@@ -249,7 +249,7 @@
   <dependencies>
     <!-- Hoodie -->
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -264,7 +264,7 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -275,22 +275,22 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-aws</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-flink-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>${hudi.flink.module}</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-flink</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -301,7 +301,7 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -312,7 +312,7 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -323,7 +323,7 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>bet.thescore.datalake</groupId>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
       <exclusions>
@@ -661,7 +661,7 @@
       </activation>
       <dependencies>
         <dependency>
-          <groupId>bet.thescore.datalake</groupId>
+          <groupId>org.apache.hudi</groupId>
           <artifactId>hudi-metaserver-client</artifactId>
           <version>${project.version}</version>
         </dependency>
