@@ -311,7 +311,7 @@ public class OptionsResolver {
   public static boolean isReadByTxnCompletionTime(Configuration conf) {
     HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
         .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
-    return handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME;
+    return handlingMode == HollowCommitHandling.USE_TRANSITION_TIME;
   }
 
   /**

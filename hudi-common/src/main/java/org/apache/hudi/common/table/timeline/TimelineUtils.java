@@ -321,7 +321,7 @@ public class TimelineUtils {
    */
   public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
       HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
-    if (handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
+    if (handlingMode == HollowCommitHandling.USE_TRANSITION_TIME) {
       return completedCommitTimeline;
     }
 
@@ -341,7 +341,7 @@ public class TimelineUtils {
 
     String hollowCommitTimestamp = firstIncompleteCommit.get().getTimestamp();
     switch (handlingMode) {
-      case EXCEPTION:
+      case FAIL:
         throw new HoodieException(String.format(
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
@@ -356,6 +356,6 @@ public class TimelineUtils {
   }
 
   public enum HollowCommitHandling {
-    EXCEPTION, BLOCK, USE_STATE_TRANSITION_TIME;
+    FAIL, BLOCK, USE_TRANSITION_TIME;
   }
 }

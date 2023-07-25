@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_STATE_TRANSITION_TIME}
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_TRANSITION_TIME}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.streaming.StreamTest
@@ -199,7 +199,7 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("2", "a1", "11", "001")))
       addData(tablePath, Seq(("3", "a1", "12", "002")))
 
-      val timestamp = if (handlingMode == USE_STATE_TRANSITION_TIME) {
+      val timestamp = if (handlingMode == USE_TRANSITION_TIME) {
         metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
           .firstInstant().get().getStateTransitionTime
       } else {

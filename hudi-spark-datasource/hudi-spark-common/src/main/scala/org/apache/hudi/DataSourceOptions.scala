@@ -118,7 +118,7 @@ object DataSourceReadOptions {
       + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
       + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
       + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
-      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + ", will use instant's "
+      + HollowCommitHandling.USE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -129,7 +129,7 @@ object DataSourceReadOptions {
       "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
       "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
       + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
-      + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "`, will use instant's "
+      + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty

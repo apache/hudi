@@ -25,7 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -95,7 +95,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsTimelineToReturn = {
-    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
+    if (hollowCommitHandling == USE_TRANSITION_TIME) {
       commitTimeline.findInstantsInRangeByStateTransitionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
         optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
@@ -225,7 +225,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
-        if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
+        if (hollowCommitHandling == USE_TRANSITION_TIME) {
           throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
         }
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
