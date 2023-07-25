@@ -38,8 +38,6 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
                                     hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val optimizedWrite = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true"
-
-    // as for MERGE_ON_READ precombine field is required but it's not enforced during table creation
     val shouldCombine = !StringUtils.isNullOrEmpty(hoodieCatalogTable.preCombineKey.getOrElse(""))
 
     if (!shouldCombine && hoodieCatalogTable.tableType.name().equals("MERGE_ON_READ")) {
