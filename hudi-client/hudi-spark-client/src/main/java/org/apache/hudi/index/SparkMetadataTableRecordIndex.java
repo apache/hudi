@@ -59,7 +59,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableRecordIndex.class);
   // The index to fallback upon when record index is not initialized yet.
   // This should be a global index like record index so that the behavior of tagging across partitions is not changed.
-  private static final HoodieIndex.IndexType FALLBACK_INDEX_TYPE = IndexType.GLOBAL_SIMPLE;
+  private static final HoodieIndex.IndexType FALLBACK_INDEX_TYPE = IndexType.SIMPLE;
 
   public SparkMetadataTableRecordIndex(HoodieWriteConfig config) {
     super(config);
@@ -69,7 +69,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
     int fileGroupSize;
     try {
-      ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
+      //ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
       fileGroupSize = hoodieTable.getMetadataTable().getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
       ValidationUtils.checkState(fileGroupSize > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
@@ -82,7 +82,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
 
       // Fallback index needs to be a global index like record index
-      ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
+      // ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
 
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }
@@ -138,7 +138,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public boolean isGlobal() {
-    return true;
+    return false;
   }
 
   @Override

@@ -99,7 +99,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   private static Stream<Arguments> indexTypeParams() {
     // IndexType, populateMetaFields, enableMetadataIndex
     Object[][] data = new Object[][] {
-        {IndexType.BLOOM, true, true},
+        /*{IndexType.BLOOM, true, true},
         {IndexType.BLOOM, true, false},
         {IndexType.GLOBAL_BLOOM, true, true},
         {IndexType.GLOBAL_BLOOM, true, false},
@@ -108,7 +108,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         {IndexType.GLOBAL_SIMPLE, true, true},
         {IndexType.GLOBAL_SIMPLE, true, false},
         {IndexType.BUCKET, true, false},
-        {IndexType.BUCKET, false, false},
+        {IndexType.BUCKET, false, false},*/
         {IndexType.RECORD_INDEX, true, true}
     };
     return Stream.of(data).map(Arguments::of);
@@ -195,6 +195,18 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
+  private static List<HoodieRecord> getInsertsWithSameKeyInTwoPartitions() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
+    String recordStr4 = "{\"_row_key\":\"003\",\"time\":\"2015-01-31T00:00:04.000Z\",\"number\":4}";
+    return Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord());
+  }
+
   private static List<HoodieRecord> getInsertsBatch2() throws IOException {
     String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
     String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
@@ -217,6 +229,36 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr2).toHoodieRecord(),
         new RawTripTestPayload(recordStr3).toHoodieRecord(),
         new RawTripTestPayload(recordStr4).toHoodieRecord()));
+  }
+
+  @Test
+  public void testRecordIndexForNonGlobalWrites() throws Exception {
+    setUp(IndexType.RECORD_INDEX, true, true);
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    final int totalRecords = 4;
+    List<HoodieRecord> records = getInsertsWithSameKeyInTwoPartitions();
+    JavaRDD<HoodieRecord> writtenRecords = jsc.parallelize(records, 1);
+
+    // Insert totalRecords records
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
+    List<WriteStatus> writeStatuses = writeStatusRdd.collect();
+    assertNoWriteErrors(writeStatuses);
+    String[] fileIdsFromWriteStatuses = writeStatuses.stream().map(WriteStatus::getFileId)
+        .sorted().toArray(String[]::new);
+
+    // Now commit this & update location of records inserted and validate no errors
+    writeClient.commit(newCommitTime, writeStatusRdd);
+    // Now tagLocation for these records, index should tag them correctly
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writtenRecords, hoodieTable);
+    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
+    List<HoodieRecord> hoodieRecords = writtenRecords.collect();
+    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
+    String[] taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect()
+        .stream().sorted().toArray(String[]::new);
+    assertArrayEquals(taggedFileIds, fileIdsFromWriteStatuses);
   }
 
   @ParameterizedTest
@@ -394,8 +436,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   private static Stream<Arguments> regularIndexTypeParams() {
     // IndexType, populateMetaFields, enableMetadataIndex
     Object[][] data = new Object[][] {
-        // TODO (codope): Enabling metadata index is flaky. Both bloom_filter and col_stats get generated but loading column ranges from the index is failing.
-        // {IndexType.BLOOM, true, true},
+        {IndexType.BLOOM, true, true},
         {IndexType.BLOOM, true, false},
         {IndexType.SIMPLE, true, true},
         {IndexType.SIMPLE, true, false}

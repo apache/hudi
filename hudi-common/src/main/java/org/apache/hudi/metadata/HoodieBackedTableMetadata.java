@@ -279,6 +279,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
+  @Override
+  protected Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName) {
+    // TODO: implement this, make changes downstream while merging records accept all records for the key
+    //       use this only for record index lookup for now.
+    return null;
+  }
+
   /**
    * Lookup list of keys from a single file slice.
    *

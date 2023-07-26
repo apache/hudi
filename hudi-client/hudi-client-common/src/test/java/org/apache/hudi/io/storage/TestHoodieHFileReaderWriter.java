@@ -18,16 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.CellComparatorImpl;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -40,6 +30,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -70,8 +70,8 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -144,7 +144,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
   @Test
   public void testHFileReaderWriterWithDuplicates() throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
     HoodieAvroHFileWriter writer = createWriter(avroSchema, false);
     List<String> keys = new ArrayList<>();
     Map<String, List<GenericRecord>> recordMap = new TreeMap<>();
@@ -173,7 +173,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     HoodieAvroHFileReader hoodieHFileReader = (HoodieAvroHFileReader) createReader(conf);
     List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
-    //assertEquals(new ArrayList<>(recordMap.values()), records);
+    assertEquals(recordMap.values().stream().flatMap(List::stream).collect(Collectors.toList()), records);
 
     hoodieHFileReader.close();
 
@@ -211,7 +211,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       if (testAvroWithMeta) {
         // payload does not matter. GenericRecord passed in is what matters
         writer.writeAvroWithMetadata(new HoodieAvroRecord(new HoodieKey((String) record.get("_row_key"),
-                Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload()).getKey(), record);
+            Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload()).getKey(), record);
         // only HoodieKey will be looked up from the 2nd arg(HoodieRecord).
       } else {
         writer.writeAvro(key, record);
