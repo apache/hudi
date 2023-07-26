@@ -28,8 +28,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 public interface SyncableFileSystemView
     extends TableFileSystemView, BaseFileOnlyView, SliceView {
 
-
-
   /**
    * Allow View to release resources and close.
    */

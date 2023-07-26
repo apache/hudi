@@ -506,14 +506,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param writeOperationType
    * @param metaClient
    */
-  public void preWrite(String instantTime, WriteOperationType writeOperationType,
-      HoodieTableMetaClient metaClient) {
+  public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
     tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
+    // 这里是否能用this
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
   }

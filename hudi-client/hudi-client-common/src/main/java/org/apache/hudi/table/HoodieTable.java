@@ -127,7 +127,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
+  private final SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;

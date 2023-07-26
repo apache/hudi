@@ -447,6 +447,11 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
       LOG.info("Delegate instant [" + instantRange.get() + "] to table service manager");
     }
 
+    if (option.isPresent()) {
+      // 必须 reload active timeline
+      table.getMetaClient().reloadActiveTimeline();
+    }
+
     return option;
   }
 
