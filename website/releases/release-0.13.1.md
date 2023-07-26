@@ -50,7 +50,7 @@ down below on relevant [breaking changes](#migration-guide-breaking-changes) and
 
 ## Migration Guide: Overview
 
-This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.3), and there is no need for
+This release keeps the same table version (`5`) as [0.12.0 release](/releases/release-0.12.2), and there is no need for
 a table version upgrade if you are upgrading from 0.12.0.  There are a few
 [breaking changes](#migration-guide-breaking-changes) and [behavior changes](#migration-guide-behavior-changes) as
 described below, and users are expected to take action accordingly before using 0.13.0 release.
