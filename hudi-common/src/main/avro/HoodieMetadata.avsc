@@ -393,6 +393,12 @@
                             "name": "instantTime",
                             "type": "long",
                             "doc": "Epoch time in millisecond at which record was added"
+                        },
+                        {
+                            "name": "rowId",
+                            "type": ["null", "long"],
+                            "doc": "Identifier for the row",
+                            "default": null
                         }
                     ]
                 }

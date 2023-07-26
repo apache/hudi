@@ -283,7 +283,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
-            Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()));
+            Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
+            0L);
       }
     } else {
       this.isDeletedRecord = true;
@@ -755,7 +756,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               uuid.getMostSignificantBits(),
               uuid.getLeastSignificantBits(),
               fileIndex,
-              instantTimeMillis));
+              instantTimeMillis,
+              0L));
       return new HoodieAvroRecord<>(key, payload);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index.", e);
