@@ -120,55 +120,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    HoodieTimeline completedCommitsTimeline = table.getCompletedCommitsTimeline();
-    Option<HoodieInstant> latestCommit = completedCommitsTimeline.lastInstant();
-    HoodieCleaningPolicy cleanerPolicy = config.getCleanerPolicy();
-    int cleanerCommitsRetained = config.getCleanerCommitsRetained();
-    int cleanerHoursRetained = config.getCleanerHoursRetained();
-    Option<HoodieInstant> earliestCommitToRetain = getEarliestCommitToRetain(latestCommit, cleanerPolicy, cleanerCommitsRetained, cleanerHoursRetained);
-    int configuredMinInstantsToKeep = config.getMinCommitsToKeep();
-    int configuredMaxInstantsToKeep = config.getMaxCommitsToKeep();
-    if (earliestCommitToRetain.isPresent()) {
-      int minInstantsToKeepBasedOnCleaning =
-          completedCommitsTimeline.findInstantsAfter(earliestCommitToRetain.get().getTimestamp())
-              .countInstants() + 2;
-      if (configuredMinInstantsToKeep < minInstantsToKeepBasedOnCleaning) {
-        this.maxInstantsToKeep = minInstantsToKeepBasedOnCleaning
-            + configuredMaxInstantsToKeep - configuredMinInstantsToKeep;
-        this.minInstantsToKeep = minInstantsToKeepBasedOnCleaning;
-        LOG.warn("The configured archival configs {}={} is more aggressive than the cleaning "
-                + "configs as the earliest commit to retain is {}. Adjusted the archival configs "
-                + "to be {}={} and {}={}",
-            MIN_COMMITS_TO_KEEP.key(), configuredMinInstantsToKeep, earliestCommitToRetain.get(),
-            MIN_COMMITS_TO_KEEP.key(), this.minInstantsToKeep,
-            MAX_COMMITS_TO_KEEP.key(), this.maxInstantsToKeep);
-        switch (cleanerPolicy) {
-          case KEEP_LATEST_COMMITS:
-            LOG.warn("Cleaning configs: {}=KEEP_LATEST_COMMITS {}={}", CLEANER_POLICY.key(),
-                CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
-            break;
-          case KEEP_LATEST_BY_HOURS:
-            LOG.warn("Cleaning configs: {}=KEEP_LATEST_BY_HOURS {}={}", CLEANER_POLICY.key(),
-                CLEANER_HOURS_RETAINED.key(), cleanerHoursRetained);
-            break;
-          case KEEP_LATEST_FILE_VERSIONS:
-            LOG.warn("Cleaning configs: {}=CLEANER_FILE_VERSIONS_RETAINED {}={}", CLEANER_POLICY.key(),
-                CLEANER_FILE_VERSIONS_RETAINED.key(), config.getCleanerFileVersionsRetained());
-            break;
-          default:
-            break;
-        }
-      } else {
-        this.maxInstantsToKeep = configuredMaxInstantsToKeep;
-        this.minInstantsToKeep = configuredMinInstantsToKeep;
-      }
-    } else {
-      this.maxInstantsToKeep = configuredMaxInstantsToKeep;
-      this.minInstantsToKeep = configuredMinInstantsToKeep;
-    }
+    Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
+    this.minInstantsToKeep = minAndMaxInstants.getLeft();
+    this.maxInstantsToKeep = minAndMaxInstants.getRight();
   }
 
-  private Option<HoodieInstant> getEarliestCommitToRetain(Option<HoodieInstant> latestCommit, HoodieCleaningPolicy cleanerPolicy, int cleanerCommitsRetained, int cleanerHoursRetained) {
+  private static Option<HoodieInstant> getEarliestCommitToRetain(
+      HoodieTableMetaClient metaClient,
+      Option<HoodieInstant> latestCommit,
+      HoodieCleaningPolicy cleanerPolicy,
+      int cleanerCommitsRetained, int cleanerHoursRetained) {
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     try {
       earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
@@ -725,5 +686,65 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  /**
+   *  getMinAndMaxInstantsToKeep is used by archival service to find the
+   *  min instants and max instants to keep in the active timeline
+   * @param table table implementation extending org.apache.hudi.table.HoodieTable
+   * @param metaClient meta client
+   * @return Pair containing min instants and max instants to keep.
+   */
+  public static Pair<Integer,Integer> getMinAndMaxInstantsToKeep(HoodieTable<?, ?, ?, ?> table, HoodieTableMetaClient metaClient) {
+    HoodieWriteConfig config = table.getConfig();
+    HoodieTimeline completedCommitsTimeline = table.getCompletedCommitsTimeline();
+    Option<HoodieInstant> latestCommit = completedCommitsTimeline.lastInstant();
+    HoodieCleaningPolicy cleanerPolicy = config.getCleanerPolicy();
+    int cleanerCommitsRetained = config.getCleanerCommitsRetained();
+    int cleanerHoursRetained = config.getCleanerHoursRetained();
+    int maxInstantsToKeep;
+    int minInstantsToKeep;
+    Option<HoodieInstant> earliestCommitToRetain = getEarliestCommitToRetain(metaClient, latestCommit, cleanerPolicy, cleanerCommitsRetained, cleanerHoursRetained);
+    int configuredMinInstantsToKeep = config.getMinCommitsToKeep();
+    int configuredMaxInstantsToKeep = config.getMaxCommitsToKeep();
+    if (earliestCommitToRetain.isPresent()) {
+      int minInstantsToKeepBasedOnCleaning =
+          completedCommitsTimeline.findInstantsAfter(earliestCommitToRetain.get().getTimestamp())
+              .countInstants() + 2;
+      if (configuredMinInstantsToKeep < minInstantsToKeepBasedOnCleaning) {
+        maxInstantsToKeep = minInstantsToKeepBasedOnCleaning
+            + configuredMaxInstantsToKeep - configuredMinInstantsToKeep;
+        minInstantsToKeep = minInstantsToKeepBasedOnCleaning;
+        LOG.warn("The configured archival configs {}={} is more aggressive than the cleaning "
+                + "configs as the earliest commit to retain is {}. Adjusted the archival configs "
+                + "to be {}={} and {}={}",
+            MIN_COMMITS_TO_KEEP.key(), configuredMinInstantsToKeep, earliestCommitToRetain.get(),
+            MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
+            MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep);
+        switch (cleanerPolicy) {
+          case KEEP_LATEST_COMMITS:
+            LOG.warn("Cleaning configs: {}=KEEP_LATEST_COMMITS {}={}", CLEANER_POLICY.key(),
+                CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
+            break;
+          case KEEP_LATEST_BY_HOURS:
+            LOG.warn("Cleaning configs: {}=KEEP_LATEST_BY_HOURS {}={}", CLEANER_POLICY.key(),
+                CLEANER_HOURS_RETAINED.key(), cleanerHoursRetained);
+            break;
+          case KEEP_LATEST_FILE_VERSIONS:
+            LOG.warn("Cleaning configs: {}=CLEANER_FILE_VERSIONS_RETAINED {}={}", CLEANER_POLICY.key(),
+                CLEANER_FILE_VERSIONS_RETAINED.key(), config.getCleanerFileVersionsRetained());
+            break;
+          default:
+            break;
+        }
+      } else {
+        maxInstantsToKeep = configuredMaxInstantsToKeep;
+        minInstantsToKeep = configuredMinInstantsToKeep;
+      }
+    } else {
+      maxInstantsToKeep = configuredMaxInstantsToKeep;
+      minInstantsToKeep = configuredMinInstantsToKeep;
+    }
+    return Pair.of(minInstantsToKeep, maxInstantsToKeep);
   }
 }
