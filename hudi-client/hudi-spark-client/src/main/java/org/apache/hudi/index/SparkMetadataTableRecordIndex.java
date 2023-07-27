@@ -69,7 +69,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
     int fileGroupSize;
     try {
-      //ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
+      ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
       fileGroupSize = hoodieTable.getMetadataTable().getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
       ValidationUtils.checkState(fileGroupSize > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
@@ -80,9 +80,6 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(FALLBACK_INDEX_TYPE).build()).build();
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
-
-      // Fallback index needs to be a global index like record index
-      // ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
 
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }

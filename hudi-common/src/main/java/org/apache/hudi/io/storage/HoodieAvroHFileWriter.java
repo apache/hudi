@@ -39,8 +39,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -50,23 +48,21 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * HoodieHFileWriter writes IndexedRecords into an HFile. The record's key is used as the key and the
  * AVRO encoded record bytes are saved as the value.
- *
+ * <p>
  * Limitations (compared to columnar formats like Parquet or ORC):
- *  1. Records should be added in order of keys
- *  2. There are no column stats
+ * 1. Records should be added in order of keys
+ * 2. There are no column stats
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private static AtomicLong recordIndex = new AtomicLong(1);
   private final Path file;
-  private HoodieHFileConfig hfileConfig;
+  private final HoodieHFileConfig hfileConfig;
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final Schema schema;
   private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
@@ -83,7 +79,6 @@ public class HoodieAvroHFileWriter
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
-    this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
@@ -131,10 +126,6 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    /*if (prevRecordKey.equals(recordKey)) {
-      throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
-          + "Record payload: " + record);
-    }*/
     byte[] value = null;
     boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
