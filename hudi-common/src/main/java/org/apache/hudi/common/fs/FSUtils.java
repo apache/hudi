@@ -191,10 +191,15 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (isLogFile(fullFileName)) {
-      return fullFileName.split("_")[1].split("\\.")[0];
+    try {
+      if (isLogFile(fullFileName)) {
+        return fullFileName.split("_")[1].split("\\.")[0];
+      }
+      return fullFileName.split("_")[2].split("\\.")[0];
+    } catch (ArrayIndexOutOfBoundsException e) {
+      LOG.error("Found files with illegal filename! Full filename: " + fullFileName);
+      throw new HoodieException("Failed to get commit time from filename, filename is illegal: " + fullFileName, e);
     }
-    return fullFileName.split("_")[2].split("\\.")[0];
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
