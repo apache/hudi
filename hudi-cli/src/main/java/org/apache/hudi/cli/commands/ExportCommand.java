@@ -52,6 +52,7 @@ import org.springframework.shell.standard.ShellOption;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -233,7 +234,12 @@ public class ExportCommand {
 
   private void writeToFile(String path, byte[] data) throws Exception {
     FileOutputStream writer = new FileOutputStream(path);
-    writer.write(data);
-    writer.close();
+    try {
+      writer.write(data);
+    } catch (IOException e) {
+      throw e;
+    } finally {
+      writer.close();
+    }
   }
 }
