@@ -302,7 +302,7 @@ public class FSUtils {
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
                                                                String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr, true)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
