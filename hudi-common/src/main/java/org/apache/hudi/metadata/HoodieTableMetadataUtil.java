@@ -241,9 +241,10 @@ public class HoodieTableMetadataUtil {
     });
 
     Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, HoodieColumnRangeMetadata<Comparable>>> collector =
-        Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
+        Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity());
 
-    return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
+    // Explicitly specify the type before collect since JDK11 struggles to infer it
+    Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream = targetFields.stream()
         .map(field -> {
           ColumnStats colStats = allColumnStats.get(field.name());
           return HoodieColumnRangeMetadata.<Comparable>create(
@@ -251,16 +252,17 @@ public class HoodieTableMetadataUtil {
               field.name(),
               colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
               colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
-              colStats == null ? 0 : colStats.nullCount,
-              colStats == null ? 0 : colStats.valueCount,
+              colStats == null ? 0L : colStats.nullCount,
+              colStats == null ? 0L : colStats.valueCount,
               // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
               //       mixing up those provided by Parquet with the ones from other encodings,
               //       since those are not directly comparable
-              0,
-              0
+              0L,
+              0L
           );
-        })
-        .collect(collector);
+        });
+
+    return hoodieColumnRangeMetadataStream.collect(collector);
   }
 
   /**

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
@@ -28,11 +27,10 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._

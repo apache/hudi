@@ -317,15 +317,15 @@ public class ParquetUtils extends BaseFileUtils {
     Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
         Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
 
-    // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
-          .flatMap(blockMetaData ->
-              blockMetaData.getColumns().stream()
+    // Explicitly specify the type before collect since JDK11 struggles to infer it
+    Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream = metadata.getBlocks().stream().sequential()
+        .flatMap(blockMetaData ->
+            blockMetaData.getColumns().stream()
                 .filter(f -> cols.contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
-                  return HoodieColumnRangeMetadata.<Comparable>create(
+                  // Explicitly specify the type since JDK11 struggles to infer it
+                  return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                       parquetFilePath.getName(),
                       columnChunkMetaData.getPath().toDotString(),
                       convertToNativeJavaType(
@@ -342,8 +342,11 @@ public class ParquetUtils extends BaseFileUtils {
                       columnChunkMetaData.getTotalSize(),
                       columnChunkMetaData.getTotalUncompressedSize());
                 })
-          )
-          .collect(groupingByCollector);
+        );
+
+    // Collect stats from all individual Parquet blocks
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
+        hoodieColumnRangeMetadataStream.collect(groupingByCollector);
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
