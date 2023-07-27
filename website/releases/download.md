@@ -15,21 +15,12 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 * Source Release : [Apache Hudi 0.12.3 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.12.3/hudi-0.12.3.src.tgz) ([asc](https://downloads.apache.org/hudi/0.12.3/hudi-0.12.3.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.12.3/hudi-0.12.3.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.12.3](/releases/release-0.12.3))
 
-### Release 0.12.2
-* Source Release : [Apache Hudi 0.12.2 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.12.2/hudi-0.12.2.src.tgz) ([asc](https://downloads.apache.org/hudi/0.12.2/hudi-0.12.2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.12.2/hudi-0.12.2.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.12.2](/releases/release-0.12.2))
-
 ### Release 0.11.1
 * Source Release : [Apache Hudi 0.11.1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.11.1/hudi-0.11.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.11.1/hudi-0.11.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.11.1/hudi-0.11.1.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.11.1](/releases/release-0.11.1))
 
-### Release 0.10.1
-* Source Release : [Apache Hudi 0.10.1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.10.1/hudi-0.10.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.10.1/hudi-0.10.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.10.1/hudi-0.10.1.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.10.1](/releases/release-0.10.1))
-
 ### Older releases
-As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available
-at [here](https://archive.apache.org/dist/hudi/). You can find the release notes of older releases [here](/releases/older-releases).
+As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available at [here](https://archive.apache.org/dist/hudi/). 
 
 ## Verify Release
 

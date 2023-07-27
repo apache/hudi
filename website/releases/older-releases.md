@@ -1,6 +1,6 @@
 ---
 title: "Older Releases"
-sidebar_position: 7
+sidebar_position: 5
 layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00
@@ -538,6 +538,71 @@ Sorry about the inconvenience caused.
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352101).
 
+## [Release 0.12.2](https://github.com/apache/hudi/releases/tag/release-0.12.2) ([docs](/docs/quick-start-guide))
+
+## Long Term Support
+
+We aim to maintain 0.12 for a longer period of time and provide a stable release through the latest 0.12.x release for
+users to migrate to. Release (0.12.3) is the latest 0.12 release.
+
+## Migration Guide
+
+* This release (0.12.2) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
+  [0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide),
+  [0.11.0](/releases/release-0.11.0#migration-guide), and [0.12.0](/releases/release-0.12.0#migration-guide).
+
+### Bug fixes
+
+0.12.2 release is mainly intended for bug fixes and stability. The fixes span across many components, including
+
+* DeltaStreamer
+* Datatype/schema related bug fixes
+* Table services
+* Metadata table
+* Spark SQL
+* Presto stability/pref fixes
+* Trino stability/perf fixes
+* Meta Syncs
+* Flink engine
+* Unit, functional, integration tests and CI
+
+## Known Regressions
+
+We discovered a regression in Hudi 0.12.2 release related to metadata table and timeline server interplay with streaming ingestion pipelines.
+
+The FileSystemView that Hudi maintains internally could go out of sync due to a occasional race conditions when table services are involved
+(compaction, clustering) and could result in updates and deletes routed to older file versions and hence resulting in missed updates and deletes.
+
+Here are the user-flows that could potentially be impacted with this.
+
+- This impacts pipelines using Deltastreamer in **continuous mode** (sync once is not impacted), Spark streaming, or if you have been directly
+  using write client across batches/commits instead of the standard ways to write to Hudi. In other words, batch writes should not be impacted.
+- Among these write models, this could have an impact only when table services are enabled.
+    - COW: clustering enabled (inline or async)
+    - MOR: compaction enabled (by default, inline or async)
+- Also, the impact is applicable only when metadata table is enabled, and timeline server is enabled (which are defaults as of 0.12.2)
+
+Based on some production data, we expect this issue might impact roughly < 1% of updates to be missed, since its a race condition
+and table services are generally scheduled once every N commits. The percentage of update misses could be even less if the
+frequency of table services is less.
+
+[Here](https://issues.apache.org/jira/browse/HUDI-5863) is the jira for the issue of interest and the fix has already been landed in master.
+Next minor release(0.12.3) should have the [fix](https://github.com/apache/hudi/pull/8079). Until we have a next minor release with the fix, we recommend you to disable metadata table
+(`hoodie.metadata.enable=false`) to mitigate the issue.
+
+We also discovered a regression for Flink streaming writer with the hive meta sync which is introduced by HUDI-3730, the refactoring to `HiveSyncConfig`
+causes the Hive `Resources` config objects leaking, which finally leads to an OOM exception for the JobManager if the streaming job runs continuously for weeks.
+0.12.3 should have the [fix](https://github.com/apache/hudi/pull/8050). Until we have a 0.12.3 release, we recommend you to cherry-pick the fix to local
+if hive meta sync is required.
+
+Sorry about the inconvenience caused.
+
+## Raw Release Notes
+
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?version=12352249&styleName=Html&projectId=12322822&Create=Create&atl_token=A5KQ-2QAV-T4JA-FDED_88b472602a0f3c72f949e98ae8087a47c815053b_lin)
+
 
 ## [Release 0.12.1](https://github.com/apache/hudi/releases/tag/release-0.12.1) ([docs](/docs/0.12.1/quick-start-guide))
 
@@ -1070,6 +1135,64 @@ this bug has been addressed in release 0.12.0.
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350673)
 
+## [Release 0.10.1](https://github.com/apache/hudi/releases/tag/release-0.10.1) ([docs](/docs/quick-start-guide))
+
+## Migration Guide
+
+* This release (0.10.1) does not introduce any new table version, hence no migration needed if you are on 0.10.0.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically the upgrade instructions in 0.6.0, 0.9.0 and 0.10.0.
+
+## Release Highlights
+
+### Explicit Spark 3 bundle names
+
+In the previous release (0.10.0), we added Spark 3.1.x support and made it the default Spark 3 version to build with. In 0.10.1,
+we made the Spark 3 version explicit in the bundle name and published a new bundle for Spark 3.0.x. Specifically, these 2 bundles
+are available in the public maven repository.
+
+* `hudi-spark3.1.2-bundle_2.12-0.10.1.jar`
+* `hudi-spark3.0.3-bundle_2.12-0.10.1.jar`
+
+### Repair Utility
+
+We added a new repair utility `org.apache.hudi.utilities.HoodieRepairTool` to clean up dangling base and log files. The utility
+can be run as a separate Spark job as below.
+
+```
+spark-submit \
+--class org.apache.hudi.utilities.HoodieRepairTool \
+--driver-memory 4g \
+--executor-memory 1g \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.sql.catalogImplementation=hive \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+--packages org.apache.spark:spark-avro_2.12:3.1.2 \
+$HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11.0-SNAPSHOT.jar \
+--mode dry_run \
+--base-path base_path \
+--assume-date-partitioning
+```
+
+Check out the javadoc in `HoodieRepairTool` for more instructions and examples.
+
+### Bug fixes
+
+0.10.1 is mainly intended for bug fixes and stability. The fixes span across many components, including
+
+* HoodieDeltaStreamer
+* Timeline related fixes
+* Table services
+* Metadata table
+* Spark SQL support
+* Timestamp-based key generator
+* Hive Sync
+* Flink and Java engines
+* Kafka Connect
+
+## Raw Release Notes
+
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12351135)
+
 ## [Release 0.10.0](https://github.com/apache/hudi/releases/tag/release-0.10.0) ([docs](/docs/0.10.0/quick-start-guide))
 
 ## Migration Guide
@@ -1601,7 +1724,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ## Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346663)
 
-## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/0.5.3/quick-start-guide))
+## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/quick-start-guide))
 
 ## Migration Guide for this release
 * This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3
@@ -1645,7 +1768,7 @@ For example hudi-spark-bundle pom dependency would look like:
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12348256)
 
 
-## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2/quick-start-guide))
+## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/quick-start-guide))
 
 ### Migration Guide for this release
 * Write Client restructuring has moved classes around ([HUDI-554](https://issues.apache.org/jira/browse/HUDI-554)). Package `client` now has all the various client classes, that do the transaction management. `func` renamed to `execution` and some helpers moved to `client/utils`. All compaction code under `io` now under `table/compact`. Rollback code under `table/rollback` and in general all code for individual operations under `table`. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.
@@ -1667,7 +1790,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346606)
 
-## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1/quick-start-guide))
+## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/quick-start-guide))
 
 ### Migration Guide for this release
 * Upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
@@ -1708,7 +1831,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346183)
 
-## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/0.5.0/quick-start-guide))
+## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/quick-start-guide))
 
 ### Release Highlights
 * Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)
