@@ -233,8 +233,9 @@ public class ExportCommand {
   }
 
   private void writeToFile(String path, byte[] data) throws Exception {
-    FileOutputStream writer = new FileOutputStream(path);
+    FileOutputStream writer = null;
     try {
+      writer = new FileOutputStream(path);
       writer.write(data);
     } catch (IOException e) {
       throw e;
