@@ -18,15 +18,28 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -34,11 +47,20 @@ import java.util.Map;
 
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Tests {@link HoodieMetadataPayload}.
  */
 public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
+
+  // NOTE: This is the schema of the HoodieRecordIndexInfo class without the 'rowId' field
+  private static final String OLD_RECORD_INDEX_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"HoodieRecordIndexInfo\",\"namespace\":\"org.apache.hudi.avro.model\",\"fields\":[" +
+      "{\"name\":\"partition\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"Partition which contains the record\",\"avro.java.string\":\"String\"}," +
+      "{\"name\":\"fileIdHighBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (high 64 bits)\"}," +
+      "{\"name\":\"fileIdLowBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (low 64 bits)\"}," +
+      "{\"name\":\"fileIndex\",\"type\":\"int\",\"doc\":\"index of the file\"}," +
+      "{\"name\":\"instantTime\",\"type\":\"long\",\"doc\":\"Epoch time in millisecond at which record was added\"}]}";
 
   @Test
   public void testFileSystemMetadataPayloadMerging() {
@@ -153,5 +175,36 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         columnStatsRecord.getData().preCombine(deletedColumnStatsRecord.getData());
 
     assertEquals(columnStatsRecord.getData(), overwrittenCombinedMetadataPayload);
+  }
+
+  @Test
+  public void testRecordIndexPayloadSchemaEvolution() throws IOException {
+    Schema oldSchema = new Schema.Parser().parse(OLD_RECORD_INDEX_SCHEMA_STRING);
+    GenericRecord oldRecord = new GenericData.Record(oldSchema);
+    oldRecord.put("partition", "partition");
+    oldRecord.put("fileIdHighBits", 1L);
+    oldRecord.put("fileIdLowBits", 1L);
+    oldRecord.put("fileIndex", 1);
+    oldRecord.put("instantTime", 1L);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(oldSchema);
+    Encoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+
+    // Serialize record with old schema
+    writer.write(oldRecord, encoder);
+    encoder.flush();
+    out.close();
+
+    byte[] serializedBytes = out.toByteArray();
+
+    // Deserialize record with new schema
+    Schema newSchema = HoodieRecordIndexInfo.SCHEMA$;
+    DatumReader<GenericRecord> reader = new GenericDatumReader<>(oldSchema, newSchema);
+    Decoder decoder = DecoderFactory.get().binaryDecoder(serializedBytes, null);
+    GenericRecord newRecord = reader.read(null, decoder);
+
+    // Assert that the rowId field in the new record is null
+    assertNull(newRecord.get("rowId"));
   }
 }
