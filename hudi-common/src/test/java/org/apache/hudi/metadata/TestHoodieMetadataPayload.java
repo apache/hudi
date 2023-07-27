@@ -55,12 +55,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
 
   // NOTE: This is the schema of the HoodieRecordIndexInfo class without the 'rowId' field
-  private static final String OLD_RECORD_INDEX_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"HoodieRecordIndexInfo\",\"namespace\":\"org.apache.hudi.avro.model\",\"fields\":[" +
-      "{\"name\":\"partition\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"Partition which contains the record\",\"avro.java.string\":\"String\"}," +
-      "{\"name\":\"fileIdHighBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (high 64 bits)\"}," +
-      "{\"name\":\"fileIdLowBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (low 64 bits)\"}," +
-      "{\"name\":\"fileIndex\",\"type\":\"int\",\"doc\":\"index of the file\"}," +
-      "{\"name\":\"instantTime\",\"type\":\"long\",\"doc\":\"Epoch time in millisecond at which record was added\"}]}";
+  private static final String OLD_RECORD_INDEX_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"HoodieRecordIndexInfo\",\"namespace\":\"org.apache.hudi.avro.model\",\"fields\":["
+      + "{\"name\":\"partition\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"},\"doc\":\"Partition which contains the record\",\"avro.java.string\":\"String\"},"
+      + "{\"name\":\"fileIdHighBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (high 64 bits)\"},"
+      + "{\"name\":\"fileIdLowBits\",\"type\":\"long\",\"doc\":\"fileId which contains the record (low 64 bits)\"},"
+      + "{\"name\":\"fileIndex\",\"type\":\"int\",\"doc\":\"index of the file\"},"
+      + "{\"name\":\"instantTime\",\"type\":\"long\",\"doc\":\"Epoch time in millisecond at which record was added\"}]}";
 
   @Test
   public void testFileSystemMetadataPayloadMerging() {
