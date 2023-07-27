@@ -114,6 +114,23 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
   }
 
+  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> sortedKeys) {
+    if (sortedKeys.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
+    //       materialized state, to make sure there's no concurrent access
+    synchronized (this) {
+      logRecordScanner.scanByFullKeys(sortedKeys);
+      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
+      return sortedKeys.stream()
+          .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
+          .filter(Objects::nonNull)
+          .collect(Collectors.groupingBy(HoodieRecord::getRecordKey));
+    }
+  }
+
   @Override
   public void close() throws IOException {
     logRecordScanner.close();

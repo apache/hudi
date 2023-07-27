@@ -26,8 +26,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -112,7 +112,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
                                                                           Types.RecordType partitionFields,
-                                                                          Expression expression) throws IOException {
+                                                                          Expression expression) {
     return relativePathPrefixes.stream().flatMap(relativePathPrefix -> {
       try {
         return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix,
@@ -285,7 +285,12 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName) {
+    throw new HoodieMetadataException("Unsupported operation: getAllRecordsByKeys!");
+  }
+
+  @Override
+  public Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 

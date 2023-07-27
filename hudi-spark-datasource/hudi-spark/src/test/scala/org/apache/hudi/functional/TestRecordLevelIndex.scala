@@ -35,7 +35,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -605,7 +605,10 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocation = recordIndexMap.get(recordKey)
+      val recordLocations = recordIndexMap.get(recordKey)
+      assertFalse(recordLocations.isEmpty)
+      // assuming no duplicate keys for now
+      val recordLocation = recordLocations.get(0)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
     }

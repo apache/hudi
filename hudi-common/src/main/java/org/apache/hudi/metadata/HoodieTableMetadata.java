@@ -30,11 +30,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -120,7 +120,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath, boolean reuse) {
     if (metadataConfig.enabled()) {
       HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
-      // If the MDT is not initialized then we fallback to FSBackedTableMetadata
+      // If the MDT is not initialized then we fall back to FSBackedTableMetadata
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
@@ -149,7 +149,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
   /**
-   * Retrieve the paths of partitions under the provided sub-directories,
+   * Retrieve the paths of partitions under the provided subdirectories,
    * and try to filter these partitions using the provided {@link Expression}.
    */
   List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
@@ -157,7 +157,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                                                    Expression expression) throws IOException;
 
   /**
-   * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
+   * Fetches all partition paths that are the subdirectories of the list of provided (relative) paths.
    * <p>
    * E.g., Table has partition 4 partitions:
    * year=2022/month=08/day=30, year=2022/month=08/day=31, year=2022/month=07/day=03, year=2022/month=07/day=04
@@ -173,7 +173,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Fetch all files for given partition paths.
-   *
+   * <p>
    * NOTE: Absolute partition paths are expected here
    */
   Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitionPaths) throws IOException;
@@ -212,9 +212,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Returns the location of record keys which are found in the record index.
-   * Records that are not found are ignored and wont be part of map object that is returned.
+   * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+  Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys);
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
@@ -227,6 +227,15 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                           String partitionName,
                                                                           boolean shouldLoadInMemory);
+
+  /**
+   * Fetch records for given keys. A key could have multiple records associated with it. This method returns all the records for given keys.
+   *
+   * @param keys          list of key for which interested records are looked up for.
+   * @param partitionName partition name in metadata table where the records are looked up for.
+   * @return Map of key to {@link List} of {@link HoodieRecord}s with records matching the passed in keys.
+   */
+  Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
