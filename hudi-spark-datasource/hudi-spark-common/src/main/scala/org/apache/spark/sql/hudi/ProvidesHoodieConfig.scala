@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceWriteOptions, config}
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -39,6 +39,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsin
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.SQLConf.{PARTITION_OVERWRITE_MODE, PartitionOverwriteMode}
 import org.apache.spark.sql.types.StructType
 
 import java.util.Locale
@@ -108,9 +109,9 @@ trait ProvidesHoodieConfig extends Logging {
   private def deduceSqlWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                                       sqlWriteOperation: String): String = {
     if (isOverwriteTable) {
-      WriteOperationType.INSERT_OVERWRITE_TABLE.name()
+      INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
-      WriteOperationType.INSERT_OVERWRITE.name()
+      INSERT_OVERWRITE_OPERATION_OPT_VAL
     } else {
       sqlWriteOperation
     }
@@ -208,7 +209,7 @@ trait ProvidesHoodieConfig extends Logging {
     // or when both configs are set, or when only sql write operation is set), we honor sql write operation and ignore
     // the insert mode.
     val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
-    val operation = combinedOpts.getOrElse(OPERATION.key,
+    var operation = combinedOpts.getOrElse(OPERATION.key,
       if (useLegacyInsertModeFlow) {
         // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
         //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
@@ -218,6 +219,32 @@ trait ProvidesHoodieConfig extends Logging {
         deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
     )
+
+    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
+      if (isOverwriteTable) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+      } else if (isOverwritePartition) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
+      } else {
+        Map()
+      }
+    } else if (operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
+      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+        operation = BULK_INSERT_OPERATION_OPT_VAL
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+      } else {
+        Map()
+      }
+    } else if (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
+      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+        operation = BULK_INSERT_OPERATION_OPT_VAL
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
+      } else {
+        Map()
+      }
+    } else {
+      Map()
+    }
 
     // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
@@ -257,17 +284,6 @@ trait ProvidesHoodieConfig extends Logging {
       null
     }
 
-    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
-      if (isOverwriteTable) {
-        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
-      } else if (isOverwritePartition) {
-        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
-      } else {
-        Map()
-      }
-    } else {
-      Map()
-    }
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
@@ -297,6 +313,45 @@ trait ProvidesHoodieConfig extends Logging {
       )
     } else {
       Map()
+    }
+  }
+
+  def deduceIsOverwriteTable(sparkSession: SparkSession,
+                             catalogTable: HoodieCatalogTable,
+                             partitionSpec: Map[String, Option[String]]): Boolean = {
+    val operation = sparkSession.sqlContext.getConf(OPERATION.key, "")
+    if (operation.nonEmpty && operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
+      true
+    } else if (operation.nonEmpty && operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
+      false
+    } else {
+      // NonPartitioned table always insert overwrite whole table
+      if (catalogTable.partitionFields.isEmpty) {
+        true
+      } else {
+        // Insert overwrite partitioned table with PARTITION clause will always insert overwrite the specific partition
+        if (partitionSpec.nonEmpty) {
+          false
+        } else {
+          // If hoodie.datasource.overwrite.mode configured, respect it
+          val hoodieOverwriteMode = sparkSession.sqlContext.getConf(OVERWRITE_MODE.key, "").toUpperCase()
+          if (hoodieOverwriteMode.isEmpty) {
+            val sparkOverwriteMode = sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key).toUpperCase()
+            if (sparkOverwriteMode.equals(PartitionOverwriteMode.STATIC.toString)) {
+              true
+            } else {
+              false
+            }
+          } else {
+            OVERWRITE_MODE.checkValues(hoodieOverwriteMode)
+            if (hoodieOverwriteMode.equals("STATIC")) {
+              true
+            } else {
+              false
+            }
+          }
+        }
+      }
     }
   }
 
