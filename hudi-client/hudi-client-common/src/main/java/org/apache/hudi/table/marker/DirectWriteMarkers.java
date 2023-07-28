@@ -37,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -189,13 +190,12 @@ public class DirectWriteMarkers extends WriteMarkers {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + dirPath, e);
     }
-    try {
+    try (FSDataOutputStream fsDataOutputStream = fs.create(markerPath, false)) {
       if (checkIfExists && fs.exists(markerPath)) {
         LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
         return Option.empty();
       }
       LOG.info("Creating Marker Path=" + markerPath);
-      fs.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
