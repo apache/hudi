@@ -197,7 +197,6 @@ public class FSUtils {
       }
       return fullFileName.split("_")[2].split("\\.")[0];
     } catch (ArrayIndexOutOfBoundsException e) {
-      LOG.error("Found files with illegal filename! Full filename: " + fullFileName);
       throw new HoodieException("Failed to get commit time from filename, filename is illegal: " + fullFileName, e);
     }
   }
