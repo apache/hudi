@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{MORFileFormat, ParquetFileFormat, Spark33HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap33FileFormat, ParquetFileFormat, Spark33HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark33PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -90,13 +90,15 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     Some(new Spark33HoodieParquetFileFormat(appendPartitionValues))
   }
 
-  override def createMORFileFormat(appendPartitionValues: Boolean,
+  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
                                    tableState: Broadcast[HoodieTableState],
                                    tableSchema: Broadcast[HoodieTableSchema],
                                    tableName: String,
                                    mergeType: String,
-                                   mandatoryFields: Seq[String]): Option[ParquetFileFormat] = {
-    Some(new MORFileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields))
+                                   mandatoryFields: Seq[String],
+                                   isMOR: Boolean,
+                                   isBootstrap: Boolean): Option[ParquetFileFormat] = {
+    Some(new MORBootstrap33FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

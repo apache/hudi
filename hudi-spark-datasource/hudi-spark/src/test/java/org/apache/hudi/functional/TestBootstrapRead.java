@@ -41,7 +41,6 @@ import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -57,7 +56,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
-import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -119,67 +117,6 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       }
     }
     return b.build();
-  }
-
-  @Test
-  public void testMOR() {
-    this.bootstrapType = "full";
-    this.dashPartitions = true;
-    this.tableType = MERGE_ON_READ;
-    this.nPartitions = 2;
-    dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
-    Dataset<Row> inserts = generateTestInserts("000", nInserts);
-    if (dashPartitions) {
-      //test adding a partition to the table
-      inserts = inserts.filter("partition_path != '2016-03-14'");
-    }
-    if (nPartitions > 0) {
-      partitionCols = new String[nPartitions];
-      partitionCols[0] = "partition_path";
-      for (int i = 1; i < partitionCols.length; i++) {
-        partitionCols[i] = "partpath" + (i + 1);
-      }
-    }
-    inserts.write().format("hudi")
-        .options(basicOptions())
-        .mode(SaveMode.Overwrite)
-        .save(hudiBasePath + "/tbl1");
-    inserts.write().format("hudi")
-        .options(basicOptions())
-        .mode(SaveMode.Overwrite)
-        .save(hudiBasePath + "/tbl2");
-
-    //do upserts
-    Map<String, String> options  = basicOptions();
-    Dataset<Row> updates = generateTestUpdates("001", nUpdates);
-    updates.write().format("hudi")
-        .options(options)
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
-        .mode(SaveMode.Append)
-        .save(hudiBasePath + "/tbl1");
-    updates.write().format("hudi")
-        .options(options)
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
-        .mode(SaveMode.Append)
-        .save(hudiBasePath + "tbl2");
-
-    Dataset<Row> hudiDf1 = sparkSession.read().format("hudi").load(hudiBasePath + "/tbl1");
-    Dataset<Row> hudiDf2 = sparkSession.read()
-        .option("hoodie.datasource.read.mor.file.reader","true")
-        .format("hudi").load(hudiBasePath + "/tbl1");
-    //hudiDf = hudiDf.select("partition_path", "_row_key");
-    Dataset<Row> hudiDf = hudiDf1.select("partition_path", "_row_key");
-    //    hudiDf1.createOrReplaceTempView("tbla");
-    //    sparkSession.sql("select * from tbla where begin_lon > 0.5").createOrReplaceTempView("tbl1");
-    //    hudiDf2.createOrReplaceTempView("tbl2");
-    //
-    //    Dataset<Row> joinDf = sparkSession.sql("select * from tbl1 a INNER JOIN tbl2 b ON a._row_key == b._row_key and a.partition_path == b.partition_path");
-    //    joinDf.explain(true);
-    //    joinDf.show(100,false);
-    hudiDf.createOrReplaceTempView("myTable");
-    Dataset<Row> outputDf = sparkSession.sql("select * from myTable where partition_path != '2016-03-15'");
-    outputDf.explain(true);
-    outputDf.show(100,false);
   }
 
   @ParameterizedTest
@@ -300,20 +237,12 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   protected void compareTables() {
     Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
-    Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
-      if (tableType.equals(COPY_ON_WRITE)) {
-        compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
-      }
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
     compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
-    if (tableType.equals(COPY_ON_WRITE)) {
-      compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
-      compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
-    }
   }
 
   protected void verifyMetaColOnlyRead(Integer iteration) {

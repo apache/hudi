@@ -168,12 +168,14 @@ trait SparkAdapter extends Serializable {
    * Create instance of [[ParquetFileFormat]]
    */
   def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
-  def createMORFileFormat(appendPartitionValues: Boolean,
+  def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
                           tableState: Broadcast[HoodieTableState],
                           tableSchema: Broadcast[HoodieTableSchema],
                           tableName: String,
                           mergeType: String,
-                          mandatoryFields: Seq[String]): Option[ParquetFileFormat]
+                          mandatoryFields: Seq[String],
+                          isMOR: Boolean,
+                          isBootstrap: Boolean): Option[ParquetFileFormat]
 
   /**
    * Create instance of [[InterpretedPredicate]]

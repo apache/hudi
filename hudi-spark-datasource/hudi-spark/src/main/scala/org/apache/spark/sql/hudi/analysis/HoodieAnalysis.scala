@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.parquet.MORFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.MORBootstrap33FileFormat
 import org.apache.spark.sql.execution.datasources.{CreateTable, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
@@ -269,8 +269,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
             logicalPlan match {
               case s@ScanOperation(_, _,
-              l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[MORFileFormat] && !fs.fileFormat.asInstanceOf[MORFileFormat].isProjected =>
-                fs.fileFormat.asInstanceOf[MORFileFormat].isProjected = true
+              l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[MORBootstrap33FileFormat] && !fs.fileFormat.asInstanceOf[MORBootstrap33FileFormat].isProjected =>
+                fs.fileFormat.asInstanceOf[MORBootstrap33FileFormat].isProjected = true
                 Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
               case _ => logicalPlan
             }

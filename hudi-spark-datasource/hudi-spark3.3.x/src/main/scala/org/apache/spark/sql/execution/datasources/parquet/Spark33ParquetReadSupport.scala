@@ -19,10 +19,8 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import java.time.ZoneId
 import java.util
-import java.util.{Locale, Map => JMap, UUID}
-
+import java.util.{Locale, UUID, Map => JMap}
 import scala.collection.JavaConverters._
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.hadoop.api.{InitContext, ReadSupport}
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
@@ -30,11 +28,11 @@ import org.apache.parquet.io.api.RecordMaterializer
 import org.apache.parquet.schema._
 import org.apache.parquet.schema.LogicalTypeAnnotation.ListLogicalTypeAnnotation
 import org.apache.parquet.schema.Type.Repetition
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.errors.QueryExecutionErrors
+import org.apache.spark.sql.execution.datasources.parquet.Spark33ParquetReadSupport.getSchemaConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
@@ -64,7 +62,7 @@ class Spark33ParquetReadSupport(
   extends ReadSupport[InternalRow] with Logging {
   private var catalystRequestedSchema: StructType = _
 
-  def this() = {
+  def this(readerType: String) = {
     // We need a zero-arg constructor for SpecificParquetRecordReaderBase.  But that is only
     // used in the vectorized reader, where we get the convertTz/rebaseDateTime value directly,
     // and the values here are ignored.
@@ -73,8 +71,7 @@ class Spark33ParquetReadSupport(
       enableVectorizedReader = true,
       datetimeRebaseSpec = RebaseSpec(LegacyBehaviorPolicy.CORRECTED),
       int96RebaseSpec = RebaseSpec(LegacyBehaviorPolicy.LEGACY),
-      readerType = ""
-    )
+      readerType = readerType)
   }
 
   /**
@@ -84,11 +81,7 @@ class Spark33ParquetReadSupport(
   override def init(context: InitContext): ReadContext = {
     val conf = context.getConfiguration
     catalystRequestedSchema = {
-      val schemaString = if (readerType.equals("mor")) {
-        conf.get(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA_MOR)
-      } else {
-        conf.get(Spark33ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA)
-      }
+      val schemaString = conf.get(getSchemaConfig(readerType))
       assert(schemaString != null, "Parquet requested schema not set.")
       StructType.fromString(schemaString)
     }
@@ -122,6 +115,17 @@ class Spark33ParquetReadSupport(
 object Spark33ParquetReadSupport extends Logging {
   val SPARK_ROW_REQUESTED_SCHEMA = "org.apache.spark.sql.parquet.row.requested_schema"
   val SPARK_ROW_REQUESTED_SCHEMA_MOR = "org.apache.spark.sql.parquet.row.requested_schema.mor"
+  val SPARK_ROW_REQUESTED_SCHEMA_SKELETON = "org.apache.spark.sql.parquet.row.requested_schema.skeleton"
+  val SPARK_ROW_REQUESTED_SCHEMA_BOOTSTRAP = "org.apache.spark.sql.parquet.row.requested_schema.bootstrap"
+
+  def getSchemaConfig(readerType: String): String = {
+    readerType match {
+      case "mor" => SPARK_ROW_REQUESTED_SCHEMA_MOR
+      case "skeleton" => SPARK_ROW_REQUESTED_SCHEMA_SKELETON
+      case "bootstrap" => SPARK_ROW_REQUESTED_SCHEMA_BOOTSTRAP
+      case _ => SPARK_ROW_REQUESTED_SCHEMA
+    }
+  }
 
   val SPARK_METADATA_KEY = "org.apache.spark.sql.parquet.row.metadata"
 

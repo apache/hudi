@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
@@ -102,8 +101,7 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams +
-      (DATA_QUERIES_ONLY.key() -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), optParams.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()))))
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
@@ -263,7 +261,7 @@ object DefaultSource {
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           val relation = new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
-          if (parameters.getOrElse(MOR_FILE_READER.key, MOR_FILE_READER.defaultValue).toBoolean) {
+          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
             relation.toHadoopFsRelation
           } else {
             relation
@@ -273,33 +271,24 @@ object DefaultSource {
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-
+          val relation = new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
+            relation.toHadoopFsRelation
+          } else {
+            relation
+          }
         case (_, _, true) =>
-          resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          val relation = new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
+            relation.toHadoopFsRelation
+          } else {
+            relation
+          }
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
-    }
-  }
-
-  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
-                                             globPaths: Seq[Path],
-                                             userSchema: Option[StructType],
-                                             metaClient: HoodieTableMetaClient,
-                                             parameters: Map[String, String]): BaseRelation = {
-    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(parameters, sqlContext.sparkSession.sessionState.conf,
-      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
-    val isSchemaEvolutionEnabledOnRead = HoodieSparkConfUtils.getConfigValue(parameters,
-      sqlContext.sparkSession.sessionState.conf, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-    if (!enableFileIndex || isSchemaEvolutionEnabledOnRead
-      || globPaths.nonEmpty || !parameters.getOrElse(DATA_QUERIES_ONLY.key, DATA_QUERIES_ONLY.defaultValue).toBoolean) {
-      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters + (DATA_QUERIES_ONLY.key() -> "false"))
-    } else {
-      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
 

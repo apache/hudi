@@ -59,10 +59,10 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
       partitionSchema = fileIndex.partitionSchema,
       dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
-      fileFormat = sparkAdapter.createMORFileFormat(shouldExtractPartitionValuesFromPartitionPath,
+      fileFormat = sparkAdapter.createMORBootstrapFileFormat(shouldExtractPartitionValuesFromPartitionPath,
         sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields).get,
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR = true, isBootstrap = false).get,
       optParams)(sparkSession)
   }
 

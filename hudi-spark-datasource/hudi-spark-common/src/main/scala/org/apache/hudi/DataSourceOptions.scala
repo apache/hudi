@@ -87,11 +87,11 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val MOR_FILE_READER: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.mor.file.reader")
-    .defaultValue("true")
+  val MOR_BOOTSTRAP_FILE_READER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.mor.bootstrap.file.reader")
+    .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("read using the mor parquet file reader")
+    .withDocumentation("read using the mor bootstrap parquet file reader")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")

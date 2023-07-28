@@ -47,7 +47,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    override val metaClient: HoodieTableMetaClient,
                                    override val optParams: Map[String, String],
                                    private val prunedDataSchema: Option[StructType] = None)
-  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) {
+  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) with SparkAdapterSupport {
 
   override type Relation = HoodieBootstrapRelation
 
@@ -59,12 +59,16 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   def toHadoopFsRelation: HadoopFsRelation = {
+    fileIndex.shouldBroadcast = true
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
       dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
-      fileFormat = fileFormat,
+      fileFormat = sparkAdapter.createMORBootstrapFileFormat(shouldExtractPartitionValuesFromPartitionPath,
+        sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, "", mandatoryFields, isMOR = false, isBootstrap = true).get,
       optParams)(sparkSession)
   }
 }

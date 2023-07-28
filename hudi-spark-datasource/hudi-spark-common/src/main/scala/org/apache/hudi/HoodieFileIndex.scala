@@ -127,16 +127,16 @@ case class HoodieFileIndex(spark: SparkSession,
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters) match {
-        case Success(opt) => opt
-        case Failure(e) =>
-          logError("Failed to lookup candidate files in File Index", e)
+    lookupCandidateFilesInMetadataTable(dataFilters) match {
+      case Success(opt) => opt
+      case Failure(e) =>
+        logError("Failed to lookup candidate files in File Index", e)
 
-          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
-            case DataSkippingFailureMode.Fallback.value => Option.empty
-            case DataSkippingFailureMode.Strict.value   => throw new HoodieException(e);
-          }
-      }
+        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+          case DataSkippingFailureMode.Fallback.value => Option.empty
+          case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
+        }
+    }
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
@@ -149,10 +149,11 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
-        val baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
-          .asScala
-          .map(fs => fs.getBaseFile.orElse(null))
-          .filter(_ != null))
+        val baseFileStatuses: Seq[FileStatus] =
+          fileSlices.asScala
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null)
+            .map(_.getFileStatus)
 
         // Filter in candidate files based on the col-stats index lookup
         val candidateFiles = baseFileStatuses.filter(fs =>
@@ -162,7 +163,7 @@ case class HoodieFileIndex(spark: SparkSession,
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
         if (this.shouldBroadcast) {
-          val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent).
+          val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
             PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
@@ -187,25 +188,11 @@ case class HoodieFileIndex(spark: SparkSession,
 
     if (shouldReadAsPartitionedTable()) {
       listedPartitions
+    } else if (shouldBroadcast) {
+      assert(partitionSchema.isEmpty)
+      listedPartitions
     } else {
       Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
-    }
-  }
-
-  /**
-   * In the fast bootstrap read code path, it gets the file status for the bootstrap base files instead of
-   * skeleton files.
-   */
-  private def getBaseFileStatus(baseFiles: mutable.Buffer[HoodieBaseFile]): mutable.Buffer[FileStatus] = {
-    if (shouldFastBootstrap) {
-     baseFiles.map(f =>
-        if (f.getBootstrapBaseFile.isPresent) {
-         f.getBootstrapBaseFile.get().getFileStatus
-        } else {
-          f.getFileStatus
-        })
-    } else {
-      baseFiles.map(_.getFileStatus)
     }
   }
 
