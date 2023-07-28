@@ -448,49 +448,22 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     assertTrue(compactionBaseFile.isPresent)
   }
 
+  @Disabled("Would take a long time to run on regular basis")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
     var hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1")
-
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
 
-    val mdtMetaClient = getMetadataMetaClient(hudiOpts)
-    hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15")
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+    hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "40")
+    val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+    executeFunctionNTimes(function, 20)
 
     assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
     rollbackLastInstant(hudiOpts)
@@ -563,6 +536,12 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       assertEquals(ActionType.rollback.name(), getMetadataMetaClient(hudiOpts).reloadActiveTimeline().lastInstant().get().getAction)
     }
     lastInstant
+  }
+
+  private def executeFunctionNTimes[T](function0: Function0[T], n : Int): Unit = {
+    for (i <- 1 to n) {
+      function0.apply()
+    }
   }
 
   private def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
