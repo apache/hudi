@@ -25,13 +25,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -45,11 +43,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class HoodieCompactor {
 
@@ -276,22 +275,22 @@ public class HoodieCompactor {
               + cfg.compactionInstantTime);
         }
 
-        if (cfg.retryLastFailedCompactionJob) {
-          if (cfg.maxProcessingTimeMs <= 0) {
-            throw new HoodieCompactionException("When --retry-last-failed-compaction-job set true, "
-                + "--compaction-max-processing-time-ms should greater than 0.");
+        // update cfg.compactionInstantTime if finding an expired instant
+        List<HoodieInstant> inflightInstants = metaClient.getActiveTimeline()
+            .filterPendingCompactionTimeline().filterInflights().getInstants();
+        List<String> expiredInstants = inflightInstants.stream().filter(instant -> {
+          try {
+            return client.getHeartbeatClient().isHeartbeatExpired(instant.getTimestamp());
+          } catch (IOException io) {
+            LOG.info("Failed to check heartbeat for instant " + instant);
           }
-          HoodieTimeline inflightCompactionTimeline = metaClient.getActiveTimeline()
-              .filterPendingCompactionTimeline().filterInflights();
-          if (!inflightCompactionTimeline.empty()) {
-            HoodieInstant inflightInstant = inflightCompactionTimeline.firstInstant().get();
-            Date inflightStartTime = HoodieActiveTimeline.parseDateFromInstantTime(inflightInstant.getStateTransitionTime());
-            if (inflightStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
-              cfg.compactionInstantTime = inflightInstant.getTimestamp();
-              LOG.info("Found failed compaction instant, update the earliest scheduled compaction instant which will be executed: "
-                  + cfg.compactionInstantTime);
-            }
-          }
+          return false;
+        }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+        if (!expiredInstants.isEmpty()) {
+          cfg.compactionInstantTime = expiredInstants.get(0);
+          LOG.info("Found expired compaction instant, update the earliest scheduled compaction instant which will be executed: "
+              + cfg.compactionInstantTime);
         }
       }
 
@@ -300,6 +299,9 @@ public class HoodieCompactor {
         LOG.info("There is no scheduled compaction in the table.");
         return 0;
       }
+
+      // start a heartbeat for the instant
+      client.getHeartbeatClient().start(cfg.compactionInstantTime);
 
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
       clean(client);
