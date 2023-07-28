@@ -118,6 +118,8 @@ object Spark33ParquetReadSupport extends Logging {
   val SPARK_ROW_REQUESTED_SCHEMA_SKELETON = "org.apache.spark.sql.parquet.row.requested_schema.skeleton"
   val SPARK_ROW_REQUESTED_SCHEMA_BOOTSTRAP = "org.apache.spark.sql.parquet.row.requested_schema.bootstrap"
 
+
+
   def getSchemaConfig(readerType: String): String = {
     readerType match {
       case "mor" => SPARK_ROW_REQUESTED_SCHEMA_MOR

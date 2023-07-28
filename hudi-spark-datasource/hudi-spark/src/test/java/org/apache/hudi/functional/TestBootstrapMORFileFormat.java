@@ -88,6 +88,7 @@ public class TestBootstrapMORFileFormat  extends TestBootstrapRead {
 
   protected void runComparison(String tableBasePath) {
     runIndividualComparison(tableBasePath);
+    runIndividualComparison(tableBasePath, "partition_path");
     runIndividualComparison(tableBasePath, "_hoodie_record_key", "_hoodie_commit_time", "_hoodie_partition_path");
     runIndividualComparison(tableBasePath, "_hoodie_commit_time", "_hoodie_commit_seqno");
     runIndividualComparison(tableBasePath, "_hoodie_commit_time", "_hoodie_commit_seqno", "partition_path");

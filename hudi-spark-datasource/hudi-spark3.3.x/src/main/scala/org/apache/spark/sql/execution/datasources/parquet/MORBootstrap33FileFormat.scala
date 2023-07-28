@@ -90,13 +90,6 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
     val needMetaCols = requiredMeta.nonEmpty
     val needDataCols = requiredWithoutMeta.nonEmpty
     val bootstrapReaderOutput = StructType(requiredMeta.fields ++ requiredWithoutMeta.fields)
-    //schema after merging the skeleton and bootstrap base files
-    val readerSchema = (isBootstrap, isMOR) match {
-      case (true, true) => StructType(requiredMeta.fields ++ requiredWithoutMeta.fields)
-      case (true, false) => outputSchema
-      case (false, true) => requiredSchemaWithMandatory
-      case (false, false) => throw new IllegalStateException("Should not be here if not bootstrap or MOR")
-    }
 
     val skeletonReaderAppend = needMetaCols && isBootstrap && !(needDataCols || isMOR) && partitionSchema.nonEmpty
     val bootstrapBaseAppend = needDataCols && isBootstrap && !isMOR && partitionSchema.nonEmpty
@@ -108,7 +101,7 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
 
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
-     file.partitionValues match {
+      file.partitionValues match {
         case broadcast: InternalRowBroadcast =>
           val filePath = new Path(new URI(file.filePath))
           //We do not broadcast the slice if it has no log files or bootstrap base
@@ -118,19 +111,21 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
               val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
               val partitionValues = broadcast.getInternalRow
               val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
-
-              //Get our iterator to be used for mor log file merge (if necessary)
-              if (isBootstrap && bootstrapFileOpt.isPresent) {
-                 val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
-                   skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
-                   needMetaCols, needDataCols)
+              if (requiredSchema.isEmpty) {
+                val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                baseFileReader(baseFile)
+              } else if (isBootstrap && bootstrapFileOpt.isPresent) {
+                val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
+                  skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
+                  needMetaCols, needDataCols)
                 (isMOR, logFiles.nonEmpty) match {
                   case (true, true) =>
                     buildMergeOnReadIterator(bootstrapIterator, logFiles, filePath.getParent, bootstrapReaderOutput,
-                    requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
+                      requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
                   case (true, false) =>
                     appendPartitionAndProject(bootstrapIterator, bootstrapReaderOutput, partitionSchema, outputSchema, partitionValues)
                   case (false, false) => bootstrapIterator
+                  case (false, true) => throw new IllegalStateException("should not be log files if not mor table")
                 }
               } else {
                 val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
@@ -166,8 +161,8 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
 
     //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
-        requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, appendOverride = false, supportBatchOverride = false,
-        "mor")
+      requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, appendOverride = false, supportBatchOverride = false,
+      "mor")
 
     //Rules for appending partitions and filtering in the bootstrap readers:
     // 1. if it is mor, we don't want to filter data or append partitions
@@ -250,6 +245,9 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
     }
   }
 
+  /**
+   * Merge skeleton and data file iterators
+   */
   def doBootstrapMerge(skeletonFileIterator: Iterator[Any], dataFileIterator: Iterator[Any]): Iterator[InternalRow] = {
     new Iterator[Any] {
       val combinedRow = new JoinedRow()
@@ -285,9 +283,9 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
    * Create iterator for a file slice that has log files
    */
   def buildMergeOnReadIterator(iter: Iterator[InternalRow], logFiles: List[HoodieLogFile],
-                                partitionPath: Path, inputSchema: StructType, requiredSchemaWithMandatory: StructType,
-                                outputSchema: StructType, partitionSchema: StructType, partitionValues: InternalRow,
-                                hadoopConf: Configuration): Iterator[InternalRow] = {
+                               partitionPath: Path, inputSchema: StructType, requiredSchemaWithMandatory: StructType,
+                               outputSchema: StructType, partitionSchema: StructType, partitionValues: InternalRow,
+                               hadoopConf: Configuration): Iterator[InternalRow] = {
 
     val requiredAvroSchema = HoodieBaseRelation.convertToAvroSchema(requiredSchemaWithMandatory, tableName)
     val morIterator = mergeType match {
@@ -303,7 +301,7 @@ class MORBootstrap33FileFormat(private val shouldAppendPartitionValues: Boolean,
   }
 
   /**
-   * Append partition values to rows
+   * Append partition values to rows and project to output schema
    */
   def appendPartitionAndProject(iter: Iterator[InternalRow],
                                 inputSchema: StructType,
