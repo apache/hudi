@@ -999,16 +999,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // The deltacommit that will be rolled back
       HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
 
-      // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
-      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-        final String compactionInstantTime = compactionInstant.getTimestamp();
-        if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
-          throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
-                  + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
-              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
-        }
-      }
+      validateRollback(commitToRollbackInstantTime, compactionInstant, deltacommitsSinceCompaction);
 
       // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
       // a. any log files as part of RB commit metadata that was added
@@ -1028,6 +1019,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             commitToRollbackInstantTime, instantTime));
       }
       closeInternal();
+    }
+  }
+
+  protected void validateRollback(
+      String commitToRollbackInstantTime,
+      HoodieInstant compactionInstant,
+      HoodieTimeline deltacommitsSinceCompaction) {
+    // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+    // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+    if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+      final String compactionInstantTime = compactionInstant.getTimestamp();
+      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+        throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
+                + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
+            deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+      }
     }
   }
 
