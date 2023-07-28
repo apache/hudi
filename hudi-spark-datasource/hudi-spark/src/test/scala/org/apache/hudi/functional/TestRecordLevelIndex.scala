@@ -519,11 +519,21 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
     validateDataAndRecordIndices(hudiOpts)
   }
 
+  private def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
+    val lastInsant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+      println("Reloaded timeline")
+      metaClient.reloadActiveTimeline()
+      metaClient
+    }
+    metaClient
+  }
+
   private def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
-    val lastInstant = metaClient.reloadActiveTimeline()
+    val lastInstant = getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
       .lastInstant().get()
-    if (getLatestCompactionInstant() != metaClient.reloadActiveTimeline().lastInstant()
+    if (getLatestCompactionInstant() != getLatestMetaClient(false).getActiveTimeline.lastInstant()
       && lastInstant.getAction != ActionType.replacecommit.name()
       && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
@@ -533,7 +543,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
       .rollback(lastInstant.getTimestamp)
 
     if (lastInstant.getAction != ActionType.clean.name()) {
-      assertEquals(ActionType.rollback.name(), getMetadataMetaClient(hudiOpts).reloadActiveTimeline().lastInstant().get().getAction)
+      assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
     }
     lastInstant
   }
@@ -566,7 +576,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    metaClient.reloadActiveTimeline()
+    getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(s => Option(
         try {
           val commitMetadata = MetadataConversionUtils.getHoodieCommitMetadata(metaClient, s)
@@ -581,7 +591,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.lastInstant()
+    getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
   }
 
   private def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
@@ -652,7 +662,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getInstantTime(): String = {
-    String.format("%03d", new Integer(instantTime.getAndIncrement()))
+    String.format("%03d", new Integer(instantTime.incrementAndGet()))
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
