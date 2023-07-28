@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark33HoodieFileScanRDD}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._

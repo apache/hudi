@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Set;
 import scala.collection.JavaConverters;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -133,7 +132,7 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
   /**
    * The memory mode of the columnarBatch
    */
-  private final MemoryMode MEMORY_MODE;
+  private final MemoryMode memoryMode;
 
   public Spark33VectorizedParquetRecordReader(
       ZoneId convertTz,
@@ -149,7 +148,7 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
     this.datetimeRebaseTz = datetimeRebaseTz;
     this.int96RebaseMode = int96RebaseMode;
     this.int96RebaseTz = int96RebaseTz;
-    MEMORY_MODE = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
+    memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.capacity = capacity;
     this.readerType = readerType;
   }
@@ -187,17 +186,6 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
     initializeInternal();
   }
 
-  @VisibleForTesting
-  @Override
-  public void initialize(
-      MessageType fileSchema,
-      MessageType requestedSchema,
-      ParquetRowGroupReader rowGroupReader,
-      int totalRowCount) throws IOException {
-    super.initialize(fileSchema, requestedSchema, rowGroupReader, totalRowCount);
-    initializeInternal();
-  }
-
   @Override
   public void close() throws IOException {
     if (columnarBatch != null) {
@@ -211,10 +199,14 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
   public boolean nextKeyValue() throws IOException {
     resultBatch();
 
-    if (returnColumnarBatch) return nextBatch();
+    if (returnColumnarBatch) {
+      return nextBatch();
+    }
 
     if (batchIdx >= numBatched) {
-      if (!nextBatch()) return false;
+      if (!nextBatch()) {
+        return false;
+      }
     }
     ++batchIdx;
     return true;
@@ -222,7 +214,9 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
 
   @Override
   public Object getCurrentValue() {
-    if (returnColumnarBatch) return columnarBatch;
+    if (returnColumnarBatch) {
+      return columnarBatch;
+    }
     return columnarBatch.getRow(batchIdx - 1);
   }
 
@@ -275,11 +269,11 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
   }
 
   private void initBatch() {
-    initBatch(MEMORY_MODE, null, null);
+    initBatch(memoryMode, null, null);
   }
 
   public void initBatch(StructType partitionColumns, InternalRow partitionValues) {
-    initBatch(MEMORY_MODE, partitionColumns, partitionValues);
+    initBatch(memoryMode, partitionColumns, partitionValues);
   }
 
   /**
@@ -288,7 +282,9 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
    * before any calls to nextKeyValue/nextBatch.
    */
   public ColumnarBatch resultBatch() {
-    if (columnarBatch == null) initBatch();
+    if (columnarBatch == null) {
+      initBatch();
+    }
     return columnarBatch;
   }
 
@@ -307,7 +303,9 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
       vector.reset();
     }
     columnarBatch.setNumRows(0);
-    if (rowsReturned >= totalRowCount) return false;
+    if (rowsReturned >= totalRowCount) {
+      checkEndOfRowGroup();
+    }
     checkEndOfRowGroup();
 
     int num = (int) Math.min(capacity, totalCountLoadedSoFar - rowsReturned);
@@ -357,8 +355,8 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
     } else { // A missing column which is either primitive or complex
       if (column.required()) {
         // Column is missing in data but the required data is non-nullable. This file is invalid.
-        throw new IOException("Required column is missing in data file. Col: " +
-            Arrays.toString(path));
+        throw new IOException("Required column is missing in data file. Col: "
+            + Arrays.toString(path));
       }
       missingColumns.add(column);
     }
@@ -374,7 +372,9 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
   }
 
   private boolean containsPath(Type parquetType, String[] path, int depth) {
-    if (path.length == depth) return true;
+    if (path.length == depth) {
+      return true;
+    }
     if (parquetType instanceof GroupType) {
       String fieldName = path[depth];
       GroupType parquetGroupType = (GroupType) parquetType;
@@ -386,7 +386,9 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
   }
 
   private void checkEndOfRowGroup() throws IOException {
-    if (rowsReturned != totalCountLoadedSoFar) return;
+    if (rowsReturned != totalCountLoadedSoFar) {
+      return;
+    }
     PageReadStore pages = reader.readNextRowGroup();
     if (pages == null) {
       throw new IOException("expecting more rows but reached last block. Read "

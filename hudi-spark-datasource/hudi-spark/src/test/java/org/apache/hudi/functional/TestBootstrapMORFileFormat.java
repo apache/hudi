@@ -51,7 +51,6 @@ public class TestBootstrapMORFileFormat  extends TestBootstrapRead {
     return b.build();
   }
 
-
   @ParameterizedTest
   @MethodSource("testArgs")
   public void runTests(HoodieTableType tableType, Integer nPartitions) {
@@ -103,14 +102,15 @@ public class TestBootstrapMORFileFormat  extends TestBootstrapRead {
   protected void runIndividualComparison(String tableBasePath) {
     runIndividualComparison(tableBasePath, "");
   }
+
   protected void runIndividualComparison(String tableBasePath, String firstColumn, String... columns) {
     Dataset<Row> relationDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.MOR_BOOTSTRAP_FILE_READER().key(),"false") .load(tableBasePath);
+        .option(DataSourceReadOptions.MOR_BOOTSTRAP_FILE_READER().key(),"false").load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.MOR_BOOTSTRAP_FILE_READER().key(),"true") .load(tableBasePath);
+        .option(DataSourceReadOptions.MOR_BOOTSTRAP_FILE_READER().key(),"true").load(tableBasePath);
     if (firstColumn.isEmpty()) {
-     relationDf = relationDf.drop("city_to_state");
-     fileFormatDf = fileFormatDf.drop("city_to_state");
+      relationDf = relationDf.drop("city_to_state");
+      fileFormatDf = fileFormatDf.drop("city_to_state");
     } else {
       if (columns.length > 0) {
         relationDf = relationDf.select(firstColumn, columns);

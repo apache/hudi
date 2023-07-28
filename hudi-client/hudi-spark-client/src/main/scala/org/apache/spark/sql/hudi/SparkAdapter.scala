@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.{HoodieTableSchema, HoodieTableState}
 import org.apache.hudi.client.utils.SparkRowSerDe
@@ -38,7 +39,7 @@ import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.storage.StorageLevel
 

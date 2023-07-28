@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 package org.apache.spark.sql.execution.datasources.parquet;
 
 import java.io.Closeable;
@@ -28,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.parquet.VersionParser;
 import org.apache.parquet.VersionParser.ParsedVersion;
 import org.apache.parquet.column.page.PageReadStore;
@@ -145,7 +143,7 @@ public abstract class Spark33SpecificParquetRecordReaderBase<T> extends RecordRe
    */
   protected void initialize(String path, List<String> columns) throws IOException {
     Configuration config = new Configuration();
-    config.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key() , false);
+    config.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), false);
     config.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), false);
     config.setBoolean(SQLConf.CASE_SENSITIVE().key(), false);
 
@@ -168,8 +166,8 @@ public abstract class Spark33SpecificParquetRecordReaderBase<T> extends RecordRe
         Types.MessageTypeBuilder builder = Types.buildMessage();
         for (String s: columns) {
           if (!fileSchema.containsField(s)) {
-            throw new IOException("Can only project existing columns. Unknown field: " + s +
-                " File schema:\n" + fileSchema);
+            throw new IOException("Can only project existing columns. Unknown field: " + s
+                + " File schema:\n" + fileSchema);
           }
           builder.addFields(fileSchema.getType(s));
         }
@@ -183,25 +181,6 @@ public abstract class Spark33SpecificParquetRecordReaderBase<T> extends RecordRe
         .convertParquetColumn(requestedSchema, Option.empty());
     this.sparkSchema = (StructType) parquetColumn.sparkType();
     this.totalRowCount = fileReader.getFilteredRecordCount();
-  }
-
-  @VisibleForTesting
-  protected void initialize(
-      MessageType fileSchema,
-      MessageType requestedSchema,
-      ParquetRowGroupReader rowGroupReader,
-      int totalRowCount) throws IOException {
-    this.reader = rowGroupReader;
-    this.fileSchema = fileSchema;
-    this.requestedSchema = requestedSchema;
-    Configuration config = new Configuration();
-    config.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key() , false);
-    config.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), false);
-    config.setBoolean(SQLConf.CASE_SENSITIVE().key(), false);
-    this.parquetColumn = new ParquetToSparkSchemaConverter(config)
-        .convertParquetColumn(requestedSchema, Option.empty());
-    this.sparkSchema = (StructType) parquetColumn.sparkType();
-    this.totalRowCount = totalRowCount;
   }
 
   @Override
@@ -238,11 +217,11 @@ public abstract class Spark33SpecificParquetRecordReaderBase<T> extends RecordRe
    * @return the configured read support
    */
   private static <T> ReadSupport<T> getReadSupportInstance(
-      Class<? extends ReadSupport<T>> readSupportClass){
+      Class<? extends ReadSupport<T>> readSupportClass) {
     try {
       return readSupportClass.getConstructor().newInstance();
-    } catch (InstantiationException | IllegalAccessException |
-             NoSuchMethodException | InvocationTargetException e) {
+    } catch (InstantiationException | IllegalAccessException
+             | NoSuchMethodException | InvocationTargetException e) {
       throw new BadConfigurationException("could not instantiate read support class", e);
     }
   }

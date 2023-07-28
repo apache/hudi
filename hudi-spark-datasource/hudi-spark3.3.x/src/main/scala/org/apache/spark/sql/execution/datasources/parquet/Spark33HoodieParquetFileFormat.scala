@@ -72,10 +72,10 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, shouldAppendPartitionValues, supportBatchOverride = true, readerType = "")
+    buildReaderWithPartitionValuesInternal(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, shouldAppendPartitionValues, supportBatchOverride = true, readerType = "")
   }
 
-   protected def buildReaderWithPartitionValues(sparkSession: SparkSession,
+   protected def buildReaderWithPartitionValuesInternal(sparkSession: SparkSession,
                                                 dataSchema: StructType,
                                                 partitionSchema: StructType,
                                                 requiredSchema: StructType,
@@ -85,6 +85,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                                 appendOverride: Boolean,
                                                 supportBatchOverride: Boolean,
                                                 readerType: String): PartitionedFile => Iterator[InternalRow] = {
+
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[Spark33ParquetReadSupport].getName)
     hadoopConf.set(getSchemaConfig(readerType), requiredSchema.json)
     hadoopConf.set(
