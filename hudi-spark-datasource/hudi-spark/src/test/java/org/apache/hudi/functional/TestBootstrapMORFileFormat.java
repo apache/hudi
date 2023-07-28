@@ -37,7 +37,7 @@ import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
 @Tag("functional")
-public class TestBootstrapMORFileFormat  extends TestBootstrapRead {
+public class TestBootstrapMORFileFormat extends TestBootstrapRead {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();

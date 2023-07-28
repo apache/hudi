@@ -51,7 +51,7 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
                                   isMOR: Boolean,
                                   isBootstrap: Boolean,
                                   supportBatchFunc: SupportBatchFunc,
-                                  buildReaderWithPartitionValuesFunc: BuildReaderWithPartitionValuesFunc) extends SparkAdapterSupport  with Serializable {
+                                  buildReaderWithPartitionValuesFunc: BuildReaderWithPartitionValuesFunc) extends SparkAdapterSupport with Serializable {
 
 
   def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -149,7 +149,8 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
 
     //file reader when you just read a hudi parquet file and don't do any merging
 
-    val baseFileReader = buildReaderWithPartitionValuesFunc(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, partitionSchema.nonEmpty, true, "")
+    val baseFileReader = buildReaderWithPartitionValuesFunc(sparkSession, dataSchema, partitionSchema, requiredSchema,
+      filters, options, hadoopConf, partitionSchema.nonEmpty, !isMOR, "")
 
     //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = buildReaderWithPartitionValuesFunc(sparkSession, dataSchema, StructType(Seq.empty),

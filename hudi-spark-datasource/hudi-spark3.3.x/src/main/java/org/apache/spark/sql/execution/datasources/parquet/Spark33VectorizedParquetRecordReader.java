@@ -256,7 +256,7 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
     columnVectors = new ParquetColumnVector[sparkSchema.fields().length];
     for (int i = 0; i < columnVectors.length; i++) {
       columnVectors[i] = new ParquetColumnVector(parquetColumn.children().apply(i),
-          vectors[i], capacity, memMode, missingColumns);
+        vectors[i], capacity, memMode, missingColumns);
     }
 
     if (partitionColumns != null) {
@@ -304,7 +304,7 @@ public class Spark33VectorizedParquetRecordReader extends Spark33SpecificParquet
     }
     columnarBatch.setNumRows(0);
     if (rowsReturned >= totalRowCount) {
-      checkEndOfRowGroup();
+      return false;
     }
     checkEndOfRowGroup();
 
