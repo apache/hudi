@@ -23,6 +23,7 @@ import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
@@ -391,63 +392,65 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
 case class ResolveImplementations() extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      // Convert to MergeIntoHoodieTableCommand
-      case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-        MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
+    AnalysisHelper.allowInvokingTransformsInAnalyzer {
+      plan match {
+        // Convert to MergeIntoHoodieTableCommand
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
+          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
 
-      // Convert to UpdateHoodieTableCommand
-      case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-        UpdateHoodieTableCommand(ut)
+        // Convert to UpdateHoodieTableCommand
+        case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
+          UpdateHoodieTableCommand(ut)
 
-      // Convert to DeleteHoodieTableCommand
-      case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
-        DeleteHoodieTableCommand(dft)
+        // Convert to DeleteHoodieTableCommand
+        case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
+          DeleteHoodieTableCommand(dft)
 
-      // Convert to CompactionHoodieTableCommand
-      case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>
-        CompactionHoodieTableCommand(table, operation, options)
+        // Convert to CompactionHoodieTableCommand
+        case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>
+          CompactionHoodieTableCommand(table, operation, options)
 
-      // Convert to CompactionHoodiePathCommand
-      case cp @ CompactionPath(path, operation, options) if cp.resolved =>
-        CompactionHoodiePathCommand(path, operation, options)
+        // Convert to CompactionHoodiePathCommand
+        case cp @ CompactionPath(path, operation, options) if cp.resolved =>
+          CompactionHoodiePathCommand(path, operation, options)
 
-      // Convert to CompactionShowOnTable
-      case csot @ CompactionShowOnTable(plan @ ResolvesToHudiTable(table), limit) if csot.resolved =>
-        CompactionShowHoodieTableCommand(table, limit)
+        // Convert to CompactionShowOnTable
+        case csot @ CompactionShowOnTable(plan @ ResolvesToHudiTable(table), limit) if csot.resolved =>
+          CompactionShowHoodieTableCommand(table, limit)
 
-      // Convert to CompactionShowHoodiePathCommand
-      case csop @ CompactionShowOnPath(path, limit) if csop.resolved =>
-        CompactionShowHoodiePathCommand(path, limit)
+        // Convert to CompactionShowHoodiePathCommand
+        case csop @ CompactionShowOnPath(path, limit) if csop.resolved =>
+          CompactionShowHoodiePathCommand(path, limit)
 
-      // Convert to HoodieCallProcedureCommand
-      case c @ CallCommand(_, _) =>
-        val procedure: Option[Procedure] = loadProcedure(c.name)
-        val input = buildProcedureArgs(c.args)
-        if (procedure.nonEmpty) {
-          CallProcedureHoodieCommand(procedure.get, input)
-        } else {
-          c
-        }
+        // Convert to HoodieCallProcedureCommand
+        case c @ CallCommand(_, _) =>
+          val procedure: Option[Procedure] = loadProcedure(c.name)
+          val input = buildProcedureArgs(c.args)
+          if (procedure.nonEmpty) {
+            CallProcedureHoodieCommand(procedure.get, input)
+          } else {
+            c
+          }
 
-      // Convert to CreateIndexCommand
-      case ci @ CreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options, output) =>
-        // TODO need to resolve columns
-        CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
+        // Convert to CreateIndexCommand
+        case ci @ CreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options, output) =>
+          // TODO need to resolve columns
+          CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
 
-      // Convert to DropIndexCommand
-      case di @ DropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists, output) if di.resolved =>
-        DropIndexCommand(table, indexName, ignoreIfNotExists, output)
+        // Convert to DropIndexCommand
+        case di @ DropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists, output) if di.resolved =>
+          DropIndexCommand(table, indexName, ignoreIfNotExists, output)
 
-      // Convert to ShowIndexesCommand
-      case si @ ShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
-        ShowIndexesCommand(table, output)
+        // Convert to ShowIndexesCommand
+        case si @ ShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
+          ShowIndexesCommand(table, output)
 
-      // Covert to RefreshCommand
-      case ri @ RefreshIndex(plan @ ResolvesToHudiTable(table), indexName, output) if ri.resolved =>
-        RefreshIndexCommand(table, indexName, output)
+        // Covert to RefreshCommand
+        case ri @ RefreshIndex(plan @ ResolvesToHudiTable(table), indexName, output) if ri.resolved =>
+          RefreshIndexCommand(table, indexName, output)
 
-      case _ => plan
+        case _ => plan
+      }
     }
   }
 
