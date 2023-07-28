@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -254,8 +255,10 @@ public class HoodieCompactor {
     }
     LOG.info("Schema --> : " + schemaStr);
 
-    try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+    SparkRDDWriteClient<HoodieRecordPayload> client = null;
+    try {
+      client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+      HoodieHeartbeatClient heartbeatClient = client.getHeartbeatClient();
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -274,7 +277,7 @@ public class HoodieCompactor {
             .filterPendingCompactionTimeline().filterInflights().getInstants();
         List<String> expiredInstants = inflightInstants.stream().filter(instant -> {
           try {
-            return client.getHeartbeatClient().isHeartbeatExpired(instant.getTimestamp());
+            return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
           } catch (IOException io) {
             LOG.info("Failed to check heartbeat for instant " + instant);
           }
@@ -295,11 +298,15 @@ public class HoodieCompactor {
       }
 
       // start a heartbeat for the instant
-      client.getHeartbeatClient().start(cfg.compactionInstantTime);
+      heartbeatClient.start(cfg.compactionInstantTime);
 
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
       clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
+    } finally {
+      if (client != null) {
+        client.close();
+      }
     }
   }
 
