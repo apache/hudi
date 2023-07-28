@@ -103,12 +103,6 @@ public class HoodieCompactor {
     public String runningMode = null;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
-    @Parameter(names = {"--job-max-processing-time-ms", "-mt"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. "
-        + "If maxProcessingTimeMs passed but compaction job is still unfinished, hoodie would consider this job as failed and relaunch.")
-    public long maxProcessingTimeMs = 0;
-    @Parameter(names = {"--retry-last-failed-compaction-job", "-rc"}, description = "Take effect when using --mode/-m execute or scheduleAndExecute. "
-        + "Set true means check, rollback and execute last failed compaction plan instead of planing a new compaction job directly.")
-    public Boolean retryLastFailedCompactionJob = false;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
