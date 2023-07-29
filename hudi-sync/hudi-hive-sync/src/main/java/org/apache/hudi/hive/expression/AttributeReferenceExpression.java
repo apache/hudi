@@ -16,25 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.hive.expression;
 
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+public class AttributeReferenceExpression extends LeafExpression {
 
-/**
- * An expression that returns a Boolean value.
- */
-public interface Predicate extends Expression {
+  private final String name;
 
-  @Override
-  default Type getDataType() {
-    return Types.BooleanType.get();
+  public AttributeReferenceExpression(String name) {
+    this.name = name;
   }
 
-  Operator getOperator();
+  public String getName() {
+    return name;
+  }
 
   @Override
-  default <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitPredicate(this);
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitAttribute(this);
   }
 }

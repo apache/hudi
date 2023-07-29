@@ -31,8 +31,6 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
-import org.apache.hudi.internal.schema.Types.RecordType
-import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
@@ -46,11 +44,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -229,7 +225,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         logInfo("Partition path prefix analysis is disabled; falling back to fetching all partitions")
         getAllQueryPartitionPaths.asScala
       } else {
-        tryPushDownPartitionPredicates(partitionColumnNames, partitionPruningPredicates)
+        tryListByPartitionPathPrefix(partitionColumnNames, partitionPruningPredicates)
       }
 
       // NOTE: In some cases, like for ex, when non-encoded slash '/' is used w/in the partition column's value,
@@ -264,7 +260,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   // NOTE: Here we try to to achieve efficiency in avoiding necessity to recursively list deep folder structures of
   //       partitioned tables w/ multiple partition columns, by carefully analyzing provided partition predicates:
   //
-  // 1. Firstly, when partition-predicates have
+  //       In cases when partition-predicates have
   //         - The form of equality predicates w/ static literals (for ex, like `date = '2022-01-01'`)
   //         - Fully specified proper prefix of the partition schema (ie fully binding first N columns
   //           of the partition schema adhering to hereby described rules)
@@ -278,12 +274,11 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   //
   //    country_code: string (for ex, 'us')
   //    date: string (for ex, '2022-01-01')
-  //    hour: string (for ex, '08')
   //
   // Table's folder structure:
   //    us/
-  //     |- 2022-01-01/06
-  //     |- 2022-01-02/07
+  //     |- 2022-01-01/
+  //     |- 2022-01-02/
   //     ...
   //
   // In case we have incoming query specifies following predicates:
@@ -291,15 +286,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   //    `... WHERE country_code = 'us' AND date = '2022-01-01'`
   //
   // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`
-  //
-  // 2. Try to push down all partition predicates when listing the sub-folder.
-  // In case we have incoming query specifies following predicates:
-  //
-  //    `... WHERE country_code = 'us' AND date = '2022-01-01' and hour = '06'`
-  //
-  // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`, and then push down
-  // these filters when listing `us/2022-01-01` to get the directory 'us/2022-01-01/06'
-  private def tryPushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
+  private def tryListByPartitionPathPrefix(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]) = {
     // Static partition-path prefix is defined as a prefix of the full partition-path where only
     // first N partition columns (in-order) have proper (static) values bound in equality predicates,
     // allowing in turn to build such prefix to be used in subsequent filtering
@@ -314,59 +301,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         .map(colName => (colName, (staticPartitionColumnValuesMap(colName)._1, staticPartitionColumnValuesMap(colName)._2.get)))
     }
 
-    val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
-    val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
-
-    val partitionTypesOption =if (hiveStylePartitioning && urlEncodePartitioning) {
-      Try {
-        SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
-      } match {
-        case Success(partitionRecordType)
-          if partitionRecordType.fields().size() == _partitionSchemaFromProperties.size
-            && Conversions.isPartitionSchemaSupportedConversion(partitionRecordType) =>
-          Some(partitionRecordType)
-        case _ =>
-          None
-      }
+    if (staticPartitionColumnNameValuePairs.isEmpty) {
+      logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
+      getAllQueryPartitionPaths.asScala
     } else {
-      // Avoid convert partition schemas if hivestylePartitioning & urlEncodePartitioning is not enabled.
-      None
-    }
+      // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
+      // prefix to try to reduce the scope of the required file-listing
+      val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
 
-    (staticPartitionColumnNameValuePairs.isEmpty, partitionTypesOption) match {
-      case (true, Some(partitionTypes)) =>
-        // Push down partition filters without pathPrefix
-        val convertedFilters = SparkFilterHelper.convertFilters(
-          partitionColumnPredicates.flatMap {
-            expr => sparkAdapter.translateFilter(expr)
-          })
-        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters).asScala
-      case (true, None) =>
-        logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
-        getAllQueryPartitionPaths.asScala
-      case (false, _) =>
-        // Based on the static partition-column name-value pairs, we'll try to compose static partition-path
-        // prefix to try to reduce the scope of the required file-listing
-        val relativePartitionPathPrefix = composeRelativePartitionPath(staticPartitionColumnNameValuePairs)
-
-        if (!metaClient.getFs.exists(new Path(getBasePath, relativePartitionPathPrefix))) {
-          Seq()
-        } else if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
-          // In case composed partition path is complete, we can return it directly avoiding extra listing operation
-          Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2._2.asInstanceOf[AnyRef]).toArray))
-        } else {
-          partitionTypesOption.map { partitionTypes =>
-            // Try to composite path prefix and filters to gain better performance
-            val convertedFilters = SparkFilterHelper.convertFilters(
-              partitionColumnPredicates.flatMap {
-                expr => sparkAdapter.translateFilter(expr)
-              })
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava, partitionTypes, convertedFilters).asScala
-          }.getOrElse {
-            log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
-            listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
-          }
-        }
+      if (!metaClient.getFs.exists(new Path(getBasePath, relativePartitionPathPrefix))) {
+        Seq()
+      } else if (staticPartitionColumnNameValuePairs.length == partitionColumnNames.length) {
+        // In case composed partition path is complete, we can return it directly avoiding extra listing operation
+        Seq(new PartitionPath(relativePartitionPathPrefix, staticPartitionColumnNameValuePairs.map(_._2._2.asInstanceOf[AnyRef]).toArray))
+      } else {
+        // Otherwise, compile extracted partition values (from query predicates) into a sub-path which is a prefix
+        // of the complete partition path, do listing for this prefix-path only
+        listPartitionPaths(Seq(relativePartitionPathPrefix).toList.asJava).asScala
+      }
     }
   }
 

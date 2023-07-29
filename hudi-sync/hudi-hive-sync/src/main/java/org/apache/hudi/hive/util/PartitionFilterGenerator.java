@@ -20,14 +20,12 @@ package org.apache.hudi.hive.util;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.expression.NameReference;
-import org.apache.hudi.expression.BinaryExpression;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Literal;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.hive.expression.AttributeReferenceExpression;
+import org.apache.hudi.hive.expression.BinaryOperator;
+import org.apache.hudi.hive.expression.Expression;
+import org.apache.hudi.hive.expression.Literal;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -56,28 +54,6 @@ public class PartitionFilterGenerator {
     }
   };
 
-  private static final String UNSUPPORTED_TYPE_ERROR = "The value type: %s doesn't support to "
-      + "be pushed down to HMS, acceptable types: " + String.join(",", SUPPORT_TYPES);
-
-  private static Literal buildLiteralExpression(String fieldValue, String fieldType) {
-    switch (fieldType.toLowerCase(Locale.ROOT)) {
-      case HiveSchemaUtil.INT_TYPE_NAME:
-        return new Literal<>(Integer.parseInt(fieldValue), Types.IntType.get());
-      case HiveSchemaUtil.BIGINT_TYPE_NAME:
-        return new Literal<>(Long.parseLong(fieldValue), Types.LongType.get());
-      // TODO Handle Date value
-      case HiveSchemaUtil.DATE_TYPE_NAME:
-        return new Literal<>(fieldValue, Types.DateType.get());
-      case HiveSchemaUtil.STRING_TYPE_NAME:
-        return new Literal<>(fieldValue, Types.StringType.get());
-      case HiveSchemaUtil.BOOLEAN_TYPE_NAME:
-        return new Literal<>(Boolean.parseBoolean(fieldValue), Types.BooleanType.get());
-      default:
-        throw new IllegalArgumentException(String.format(UNSUPPORTED_TYPE_ERROR, fieldType));
-    }
-  }
-
-
   /**
    * Build expression from the Partition list. Here we're trying to match all partitions.
    *
@@ -92,10 +68,11 @@ public class PartitionFilterGenerator {
 
       for (int i = 0; i < partitionFields.size(); i++) {
         FieldSchema field = partitionFields.get(i);
-        BinaryExpression exp = Predicates.eq(new NameReference(field.getName()),
-            buildLiteralExpression(partitionValues.get(i), field.getType()));
+        String value = partitionValues.get(i);
+        BinaryOperator exp = BinaryOperator.eq(new AttributeReferenceExpression(field.getName()),
+            new Literal(value, field.getType()));
         if (root != null) {
-          root = Predicates.and(root, exp);
+          root = BinaryOperator.and(root, exp);
         } else {
           root = exp;
         }
@@ -105,7 +82,7 @@ public class PartitionFilterGenerator {
       if (result == null) {
         return expr;
       } else {
-        return Predicates.or(result, expr);
+        return BinaryOperator.or(result, expr);
       }
     });
   }
@@ -152,7 +129,8 @@ public class PartitionFilterGenerator {
         case HiveSchemaUtil.STRING_TYPE_NAME:
           return s1.compareTo(s2);
         default:
-          throw new IllegalArgumentException(String.format(UNSUPPORTED_TYPE_ERROR, valueType));
+          throw new IllegalArgumentException("The value type: " + valueType + " doesn't support to "
+              + "be pushed down to HMS, acceptable types: " + String.join(",", SUPPORT_TYPES));
       }
     }
   }
@@ -174,26 +152,26 @@ public class PartitionFilterGenerator {
       String[] values = fieldWithValues.getValue();
 
       if (values.length == 1) {
-        return Predicates.eq(new NameReference(fieldSchema.getName()),
-            buildLiteralExpression(values[0], fieldSchema.getType()));
+        return BinaryOperator.eq(new AttributeReferenceExpression(fieldSchema.getName()),
+            new Literal(values[0], fieldSchema.getType()));
       }
 
       Arrays.sort(values, new ValueComparator(fieldSchema.getType()));
 
-      return Predicates.and(
-          Predicates.gteq(
-              new NameReference(fieldSchema.getName()),
-              buildLiteralExpression(values[0], fieldSchema.getType())),
-          Predicates.lteq(
-              new NameReference(fieldSchema.getName()),
-              buildLiteralExpression(values[values.length - 1], fieldSchema.getType())));
+      return BinaryOperator.and(
+          BinaryOperator.gteq(
+              new AttributeReferenceExpression(fieldSchema.getName()),
+              new Literal(values[0], fieldSchema.getType())),
+          BinaryOperator.lteq(
+              new AttributeReferenceExpression(fieldSchema.getName()),
+              new Literal(values[values.length - 1], fieldSchema.getType())));
     })
         .filter(Objects::nonNull)
         .reduce(null, (result, expr) -> {
           if (result == null) {
             return expr;
           } else {
-            return Predicates.and(result, expr);
+            return BinaryOperator.and(result, expr);
           }
         });
   }

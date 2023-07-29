@@ -164,7 +164,7 @@ public class HoodieRepairTool {
         .build();
 
     this.tableMetadata = new FileSystemBackedTableMetadata(
-        context, metaClient.getTableConfig(), context.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
+        context, context.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
   }
 
   public boolean run() {
