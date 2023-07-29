@@ -190,12 +190,13 @@ public class DirectWriteMarkers extends WriteMarkers {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + dirPath, e);
     }
-    try (FSDataOutputStream fsDataOutputStream = fs.create(markerPath, false)) {
+    try {
       if (checkIfExists && fs.exists(markerPath)) {
         LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
         return Option.empty();
       }
       LOG.info("Creating Marker Path=" + markerPath);
+      fs.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
