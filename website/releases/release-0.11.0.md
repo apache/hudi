@@ -1,11 +1,14 @@
 ---
 title: "Release 0.11.0"
-sidebar_position: 5
+sidebar_position: 8
 layout: releases
 toc: true
 last_modified_at: 2022-01-27T22:07:00+08:00
 ---
-# [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
 
 ## Migration Guide
 

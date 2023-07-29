@@ -1,17 +1,20 @@
 ---
 title: "Release 0.11.1"
-sidebar_position: 4
+sidebar_position: 7
 layout: releases
 toc: true
 last_modified_at: 2022-06-19T23:30:00-07:00
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # [Release 0.11.1](https://github.com/apache/hudi/releases/tag/release-0.11.1) ([docs](/docs/quick-start-guide))
 
 ## Migration Guide
 
 * This release (0.11.1) does not introduce any new table version, thus no migration is needed if you are on 0.11.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-the upgrade instructions in [0.6.0](/releases/older-releases#migration-guide-for-this-release),
+the upgrade instructions in [0.6.0](/releases/release-0.6.0#migration-guide-for-this-release),
 [0.9.0](/releases/release-0.9.0#migration-guide-for-this-release), [0.10.0](/releases/release-0.10.0#migration-guide), and 
 [0.11.0](/releases/release-0.11.0#migration-guide).
 
@@ -86,5 +89,5 @@ Sorry about the inconvenience caused.
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12351597)
 
 :::tip
-0.11.1 release also contains all the new features and bug fixes from 0.11.0, of which the release notes are [here](/releases/older-releases#release-0110-docs)
+0.11.1 release also contains all the new features and bug fixes from 0.11.0, of which the release notes are [here](/releases/release-0.11.0)
 :::

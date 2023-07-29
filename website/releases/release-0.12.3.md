@@ -1,11 +1,14 @@
 ---
 title: "Release 0.12.3"
-sidebar_position: 3
+sidebar_position: 2
 layout: releases
 toc: true
 last_modified_at: 2023-04-23T10:30:00+05:30
 ---
-# [Release 0.12.3](https://github.com/apache/hudi/releases/tag/release-0.12.3) ([docs](/docs/0.12.3/quick-start-guide))
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## [Release 0.12.3](https://github.com/apache/hudi/releases/tag/release-0.12.3) ([docs](/docs/0.12.3/quick-start-guide))
 
 ## Long Term Support
 
@@ -16,9 +19,9 @@ users to migrate to.  This release (0.12.3) is the latest 0.12 release.
 
 * This release (0.12.3) does not introduce any new table version, thus no migration is needed if you are on 0.12.0.
 * If migrating from an older release, please check the migration guide from the previous release notes, specifically
-  the upgrade instructions in [0.6.0](/releases/older-releases#release-060-docs),
-  [0.9.0](/releases/older-releases#release-090-docs), [0.10.0](/releases/older-releases#release-0100-docs),
-  [0.11.0](/releases/older-releases#release-0110-docs), and [0.12.0](/releases/older-releases#release-0120-docs).
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), and [0.12.0](/releases/release-0.12.0).
 
 ### Bug fixes
 
@@ -40,5 +43,5 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 
 :::tip
 0.12.3 release also contains all the new features and bug fixes from 0.12.2, 0.12.1 and 0.12.0, for which the release notes are
-[here](/releases/older-releases#release-0122-docs), [here](/releases/older-releases#release-0121-docs) and [here](/releases/older-releases#release-0120-docs) 
+[here](/releases/release-0.12.2), [here](/releases/release-0.12.1) and [here](/releases/release-0.12.0) 
 :::
