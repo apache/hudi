@@ -42,19 +42,19 @@ import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
  */
 public class Parquet2SparkSchemaUtils {
 
-  public static String convertToSparkSchemaJson(GroupType parquetSchema, List<FieldSchema> fromStorage) {
+  public static String convertToSparkSchemaJson(GroupType parquetSchema, List<FieldSchema> fieldSchema) {
     String fieldsJsonString = parquetSchema.getFields().stream().map(field -> {
       switch (field.getRepetition()) {
         case OPTIONAL:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":true,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
+                  + ",\"nullable\":true,\"metadata\":{" + getComment(field.getName(), fieldSchema) + "}}";
         case REQUIRED:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
+                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fieldSchema) + "}}";
         case REPEATED:
           String arrayType = arrayType(field, false);
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + arrayType
-                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
+                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fieldSchema) + "}}";
         default:
           throw new UnsupportedOperationException("Unsupport convert " + field + " to spark sql type");
       }
