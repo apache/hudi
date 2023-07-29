@@ -325,4 +325,8 @@ object BootstrapMORIteratorFactory {
     StructType, StructType, StructType, Seq[Filter],
     Map[String, String], Configuration, Boolean, Boolean,
     String) => PartitionedFile => Iterator[InternalRow]
+
+  trait MORBootstrapFileFormat {
+    var isProjected: Boolean
+  }
 }

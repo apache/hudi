@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources.parquet;
 
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.spark.memory.MemoryMode;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.vectorized.OffHeapColumnVector;
@@ -36,7 +37,7 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+public class Spark32HoodieVectorizedParquetRecordReader extends Spark32VectorizedParquetRecordReader {
 
   // save the col type change info.
   private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
@@ -63,7 +64,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   private int batchIdx = 0;
   private int numBatched = 0;
 
-  public Spark32PlusHoodieVectorizedParquetRecordReader(
+  public Spark32HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
       String datetimeRebaseTz,
@@ -71,8 +72,9 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
       String int96RebaseTz,
       boolean useOffHeap,
       int capacity,
-      Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
-    super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity);
+      Map<Integer, Pair<DataType, DataType>> typeChangeInfos,
+      String readerType) {
+    super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity, readerType);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;
