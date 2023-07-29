@@ -90,7 +90,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       for (String sql : sqls) {
         if (hiveDriver != null) {
           HoodieTimer timer = HoodieTimer.start();
-          responses.add(hiveDriver.run(sql));
+          responses.add(hiveDriver.run(escapeAntiSlash(sql)));
           LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, timer.endTimer()));
         }
       }

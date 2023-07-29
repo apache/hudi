@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
@@ -219,6 +220,17 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       changePartitions.add(changePartition);
     }
     return changePartitions;
+  }
+
+  /**
+   * SQL statement should be be escaped in order to consider anti-slash
+   *
+   * For eg: \foo should be transformed into \\\foo
+   * @param sql
+   * @return
+   */
+  protected String escapeAntiSlash(String sql) {
+    return sql.replaceAll("\\\\", Matcher.quoteReplacement("\\\\\\"));
   }
 }
 

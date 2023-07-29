@@ -65,7 +65,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     try {
       stmt = connection.createStatement();
       LOG.info("Executing SQL " + s);
-      stmt.execute(s);
+      stmt.execute(escapeAntiSlash(s));
     } catch (SQLException e) {
       throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
     } finally {

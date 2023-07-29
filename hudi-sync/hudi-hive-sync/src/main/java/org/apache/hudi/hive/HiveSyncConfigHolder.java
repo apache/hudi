@@ -105,7 +105,9 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.sync_as_datasource")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("Adds some spark properties in the table, including json translation of the schema. Since 0.11, there is no usage of them anymore since hudi rely on hudi datasource instead. Moreover showing comments in spark-sql needs to turn this off.");
+      .withDocumentation("Add information to setup the spark datasource, including tables properties and spark schema."
+          + " This allow spark to use optimized reader."
+          + " Column comments are also added for the first level only.");
   public static final ConfigProperty<Integer> HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = ConfigProperty
       .key("hoodie.datasource.hive_sync.schema_string_length_thresh")
       .defaultValue(4000)

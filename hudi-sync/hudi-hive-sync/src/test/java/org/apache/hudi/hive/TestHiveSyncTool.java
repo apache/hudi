@@ -601,7 +601,7 @@ public class TestHiveSyncTool {
             + "{\"name\":\"_hoodie_file_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
             + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}},"
             + "{\"name\":\"favorite_number\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
-            + "{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}},"
+            + "{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,\"metadata\":{\"comment\":\"a quoted\\\"comment\"}},"
             + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
             + "spark.sql.sources.schema.partCol.0\tdatestr\n";
       } else {
@@ -611,7 +611,7 @@ public class TestHiveSyncTool {
             + "spark.sql.sources.schema.part.0\t{\"type\":\"struct\",\"fields\":[{\"name\":\"name\",\"type\":"
             + "\"string\",\"nullable\":false,\"metadata\":{}},{\"name\":\"favorite_number\",\"type\":\"integer\","
             + "\"nullable\":false,\"metadata\":{}},{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,"
-            + "\"metadata\":{}}]}\n"
+            + "\"metadata\":{\"comment\":\"a quoted\\\"comment\"}}]}\n"
             + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
             + "spark.sql.sources.schema.partCol.0\tdatestr\n";
       }

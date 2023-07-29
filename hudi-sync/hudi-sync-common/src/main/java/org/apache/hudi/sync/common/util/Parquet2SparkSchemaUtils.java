@@ -19,10 +19,16 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.sync.common.model.FieldSchema;
+
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Matcher;
 
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 
@@ -30,27 +36,42 @@ import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
  * Convert the parquet schema to spark schema' json string.
  * This code is refer to org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter
  * in spark project.
+ *
+ * Currently, due to limitations in the FieldSchema only the first level of fields get comments
+ * extracted, if exist.
  */
 public class Parquet2SparkSchemaUtils {
 
-  public static String convertToSparkSchemaJson(GroupType parquetSchema) {
+  public static String convertToSparkSchemaJson(GroupType parquetSchema, List<FieldSchema> fromStorage) {
     String fieldsJsonString = parquetSchema.getFields().stream().map(field -> {
       switch (field.getRepetition()) {
         case OPTIONAL:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":true,\"metadata\":{}}";
+                  + ",\"nullable\":true,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
         case REQUIRED:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":false,\"metadata\":{}}";
+                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
         case REPEATED:
           String arrayType = arrayType(field, false);
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + arrayType
-                  + ",\"nullable\":false,\"metadata\":{}}";
+                  + ",\"nullable\":false,\"metadata\":{" + getComment(field.getName(), fromStorage) + "}}";
         default:
           throw new UnsupportedOperationException("Unsupport convert " + field + " to spark sql type");
       }
     }).reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
+  }
+
+  private static String getComment(String name, List<FieldSchema> fromStorage) {
+    return fromStorage.stream()
+        .filter(f -> name.equals(f.getName()))
+        .filter(f -> f.getComment().isPresent())
+        .map(f -> "\"comment\":\"" + escapeQuote(f.getComment().get()) + "\"")
+        .findFirst().orElse("");
+  }
+
+  private static String escapeQuote(String s) {
+    return s.replaceAll("\"", Matcher.quoteReplacement("\\\""));
   }
 
   private static String convertFieldType(Type field) {
@@ -133,7 +154,7 @@ public class Parquet2SparkSchemaUtils {
 
   private static String convertGroupField(GroupType field) {
     if (field.getOriginalType() == null) {
-      return convertToSparkSchemaJson(field);
+      return convertToSparkSchemaJson(field, Arrays.asList());
     }
     switch (field.getOriginalType()) {
       case LIST:
