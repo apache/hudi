@@ -22,7 +22,23 @@ Now hudi supports both kind of blooms, which help in complementary contexts. All
 
 The current page describes how to enable parquet blooms in spark 3.x and starting from hudi 1.14.0, on a COW table.
 
-## Encrypt Copy-on-Write tables
+## How parquet bloom can speedup read queries ?
+
+Parquet has various statistics to speedup read queries (min/max, dictionaries, nulls ...). Dictionaries, already covers
+cases when the column contains duplicates and has less than 40 000 unique values. In this case it stores the list of
+unique values and makes blooms useless.
+
+So bloom would be useful in either case (at the parquet file level) :
+
+- the column has no duplicates
+- the column number of unique values is more than 40k
+
+## How should I choose the NDV
+
+NDV is the number of distinct values and is used by parquet to size the bloom. Bloom precision (in order to limit the
+false positive) is a tradeoff on its size. Then you should choose a NDV representing your own data.
+
+## Setup parquet blooms before writes
 
 First, make sure Hudi Spark 3.x bundle jar and hudi 0.14.0 are used.
 
@@ -32,7 +48,7 @@ Here is an example.
 JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
 // create a parquet bloom on rider column
 jsc.hadoopConfiguration().set("parquet.bloom.filter.enabled#rider", "true")
-jsc.hadoopConfiguration().set("parquet.bloom.filter.expected.ndv", "20")
+jsc.hadoopConfiguration().set("parquet.bloom.filter.expected.ndv#rider", "20")
 
 QuickstartUtils.DataGenerator dataGen = new QuickstartUtils.DataGenerator();
 List<String> inserts = convertToStringList(dataGen.generateInserts(3));
