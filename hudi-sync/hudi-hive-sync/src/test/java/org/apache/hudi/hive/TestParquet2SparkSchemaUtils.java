@@ -27,7 +27,6 @@ import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.IntegerType$;
-import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
