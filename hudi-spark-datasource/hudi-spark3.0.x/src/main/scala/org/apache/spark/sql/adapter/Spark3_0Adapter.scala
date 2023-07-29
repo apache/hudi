@@ -19,7 +19,9 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hudi.Spark30HoodieFileScanRDD
+import org.apache.hadoop.fs.Path
+import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark30HoodieFileScanRDD}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_0AvroDeserializer, HoodieSpark3_0AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -29,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap30FileFormat, ParquetFileFormat, Spark30HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -38,6 +40,8 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+
+import java.net.URI
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.0.x
@@ -86,6 +90,21 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark30HoodieParquetFileFormat(appendPartitionValues))
+  }
+
+  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
+                                            tableState: Broadcast[HoodieTableState],
+                                            tableSchema: Broadcast[HoodieTableSchema],
+                                            tableName: String,
+                                            mergeType: String,
+                                            mandatoryFields: Seq[String],
+                                            isMOR: Boolean,
+                                            isBootstrap: Boolean): Option[ParquetFileFormat] = {
+    Some(new MORBootstrap30FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
+  }
+
+  override def getFilePath(file: PartitionedFile): Path = {
+    new Path(new URI(file.filePath))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

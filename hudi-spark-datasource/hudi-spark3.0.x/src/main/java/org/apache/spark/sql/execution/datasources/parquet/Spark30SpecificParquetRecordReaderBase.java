@@ -69,7 +69,7 @@ import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
  * TODO: move this to the parquet-mr project. There are performance benefits of doing it
  * this way, albeit at a higher cost to implement. This base class is reusable.
  */
-public abstract class Spark31SpecificParquetRecordReaderBase<T> extends RecordReader<Void, T> {
+public abstract class Spark30SpecificParquetRecordReaderBase<T> extends RecordReader<Void, T> {
   protected Path file;
   protected MessageType fileSchema;
   protected MessageType requestedSchema;
@@ -133,11 +133,11 @@ public abstract class Spark31SpecificParquetRecordReaderBase<T> extends RecordRe
     }
     this.fileSchema = footer.getFileMetaData().getSchema();
     Map<String, String> fileMetadata = footer.getFileMetaData().getKeyValueMetaData();
-    ReadSupport<T> readSupport = (ReadSupport<T>) new Spark31ParquetReadSupport(readerType);
+    ReadSupport<T> readSupport = (ReadSupport<T>) new Spark30ParquetReadSupport(readerType);
     ReadSupport.ReadContext readContext = readSupport.init(new InitContext(
         taskAttemptContext.getConfiguration(), toSetMultiMap(fileMetadata), fileSchema));
     this.requestedSchema = readContext.getRequestedSchema();
-    String sparkRequestedSchemaString = configuration.get(Spark31ParquetReadSupport.getSchemaConfig(readerType));
+    String sparkRequestedSchemaString = configuration.get(Spark30ParquetReadSupport.getSchemaConfig(readerType));
     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);
     this.reader = new ParquetFileReader(
         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());
