@@ -42,6 +42,7 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.parquet.Spark31HoodieParquetFileFormat.{createParquetFilters, pruneInternalSchema, rebuildFilterFromParquet}
+import org.apache.spark.sql.execution.datasources.parquet.Spark31ParquetReadSupport.getSchemaConfig
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -49,7 +50,6 @@ import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
-
 
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
@@ -70,10 +70,22 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
-    hadoopConf.set(
-      ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
-      requiredSchema.json)
+    buildReaderWithPartitionValuesInternal(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, shouldAppendPartitionValues, supportBatchOverride = true, readerType = "")
+  }
+
+   protected def buildReaderWithPartitionValuesInternal(sparkSession: SparkSession,
+                                                dataSchema: StructType,
+                                                partitionSchema: StructType,
+                                                requiredSchema: StructType,
+                                                filters: Seq[Filter],
+                                                options: Map[String, String],
+                                                hadoopConf: Configuration,
+                                                appendOverride: Boolean,
+                                                supportBatchOverride: Boolean,
+                                                readerType: String): PartitionedFile => Iterator[InternalRow] = {
+
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[Spark31ParquetReadSupport].getName)
+    hadoopConf.set(getSchemaConfig(readerType), requiredSchema.json)
     hadoopConf.set(
       ParquetWriteSupport.SPARK_ROW_SCHEMA,
       requiredSchema.json)
@@ -123,7 +135,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
     val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
     // Whole stage codegen (PhysicalRDD) is able to deal with batches directly
-    val returningBatch = supportBatch(sparkSession, resultSchema)
+    val returningBatch = supportBatch(sparkSession, resultSchema) && supportBatchOverride
     val pushDownDate = sqlConf.parquetFilterPushDownDate
     val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
     val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
@@ -133,7 +145,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
+      assert(!appendOverride || file.partitionValues.numFields == partitionSchema.size)
 
       val filePath = new Path(new URI(file.filePath))
       val split =
@@ -229,14 +241,13 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
         val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
-
+        hadoopAttemptConf.set(getSchemaConfig(readerType), mergedSchema.json)
         SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
         val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
         if (!implicitTypeChangeInfo.isEmpty) {
           shouldUseInternalSchema = true
-          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+          hadoopAttemptConf.set(getSchemaConfig(readerType), sparkRequestSchema.json)
         }
         implicitTypeChangeInfo
       }
@@ -259,14 +270,16 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
               int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity,
-              typeChangeInfos)
+              typeChangeInfos,
+              readerType)
           } else {
-            new VectorizedParquetRecordReader(
+            new Spark31VectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
               int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
-              capacity)
+              capacity,
+              readerType)
           }
 
         val iter = new RecordReaderIterator(vectorizedReader)
@@ -276,7 +289,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
         // NOTE: We're making appending of the partitioned values to the rows read from the
         //       data file configurable
-        if (shouldAppendPartitionValues) {
+        if (appendOverride) {
           logDebug(s"Appending $partitionSchema ${file.partitionValues}")
           vectorizedReader.initBatch(partitionSchema, file.partitionValues)
         } else {
@@ -292,11 +305,12 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       } else {
         logDebug(s"Falling back to parquet-mr")
         // ParquetRecordReader returns InternalRow
-        val readSupport = new ParquetReadSupport(
+        val readSupport = new Spark31ParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
           datetimeRebaseMode,
-          int96RebaseMode)
+          int96RebaseMode,
+          readerType)
         val reader = if (pushed.isDefined && enableRecordFilter) {
           val parquetFilter = FilterCompat.get(pushed.get, null)
           new ParquetRecordReader[InternalRow](readSupport, parquetFilter)
@@ -331,7 +345,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
         // NOTE: We're making appending of the partitioned values to the rows read from the
         //       data file configurable
-        if (!shouldAppendPartitionValues || partitionSchema.length == 0) {
+        if (!appendOverride || partitionSchema.length == 0) {
           // There is no partition columns
           iter.map(unsafeProjection)
         } else {
