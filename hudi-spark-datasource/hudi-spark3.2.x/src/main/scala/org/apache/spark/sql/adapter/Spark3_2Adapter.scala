@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark32HoodieFileScanRDD}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
@@ -40,6 +41,8 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+
+import java.net.URI
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.2.x branch

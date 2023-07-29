@@ -19,14 +19,18 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.SparkHoodieTableFileIndex
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.spark.sql.BootstrapMORIteratorFactory.MORBootstrapFileFormat
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, Project}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {

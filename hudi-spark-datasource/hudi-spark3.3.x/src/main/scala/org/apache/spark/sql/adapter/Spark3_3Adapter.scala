@@ -18,7 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark33HoodieFileScanRDD}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
@@ -34,13 +34,15 @@ import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap33FileFormat, ParquetFileFormat, Spark33HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark33PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+
+import java.net.URI
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.{BaseFile, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, RecordMergingFileIterator, SkipMergeIterator}
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.BootstrapMORIteratorFactory.MORBootstrapFileFormat
 import org.apache.spark.sql.{BootstrapMORIteratorFactory, HoodieCatalystExpressionUtils, SPARK_LEGACY_DATETIME_METADATA_KEY, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
