@@ -58,7 +58,7 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
-  override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
+  override def failAnalysisForMergeIntoTable(a: Attribute, cols: String): Unit = {
     a.failAnalysis(
       errorClass = "_LEGACY_ERROR_TEMP_2309",
       messageParameters = Map(

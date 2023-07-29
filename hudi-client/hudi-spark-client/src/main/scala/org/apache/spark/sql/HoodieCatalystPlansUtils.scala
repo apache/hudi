@@ -20,7 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -102,7 +102,7 @@ trait HoodieCatalystPlansUtils {
    * Calls fail analysis on
    *s
    */
-  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
+  def failAnalysisForMergeIntoTable(a: Attribute, cols: String): Unit = {}
 
-  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
+  def createMergeIntoTableJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: Option[JoinHint]): LogicalPlan
 }
