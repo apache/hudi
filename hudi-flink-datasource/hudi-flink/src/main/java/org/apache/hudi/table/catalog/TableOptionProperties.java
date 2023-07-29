@@ -184,7 +184,9 @@ public class TableOptionProperties {
         partitionKeys,
         sparkVersion,
         4000,
-        messageType);
+        messageType,
+        // flink does not support comment yet
+        Arrays.asList());
     properties.putAll(sparkTableProperties);
     return properties.entrySet().stream()
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))
