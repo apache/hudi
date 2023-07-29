@@ -85,8 +85,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     @Deprecated
     static final String S3_IGNORE_KEY_SUBSTRING = S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING.key();
     /**
-     *{@link #SPARK_DATASOURCE_OPTIONS} is json string, passed to the reader while loading dataset.
-     * Example delta streamer conf
+     * {@link #SPARK_DATASOURCE_OPTIONS} is json string, passed to the reader while loading dataset.
+     * Example Hudi Streamer conf
      * - --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={"header":"true","encoding":"UTF-8"}
      */
     @Deprecated

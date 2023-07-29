@@ -26,7 +26,8 @@ import org.apache.spark.sql.catalyst.util.toPrettySQL
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 /**
- * NOTE: Taken from HoodieSpark2Analysis and modified to resolve source and target tables if not already resolved
+ * NOTE: Taken from HoodieSpark2Analysis applied to Spark version 3.0.3 and modified to resolve source and target tables
+ * if not already resolved
  *
  *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
@@ -38,15 +39,13 @@ object HoodieSpark30Analysis {
 
     override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
       case mO @ MergeIntoTable(targetTableO, sourceTableO, _, _, _)
-        //// Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
-        //
+        // START: custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target if they haven't been
         if !mO.resolved || containsUnresolvedStarAssignments(mO) =>
         lazy val analyzer = spark.sessionState.analyzer
         val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
         val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
         val m = mO.copy(targetTable = targetTable, sourceTable = sourceTable)
-        //
-        ////
+        // END: custom Hudi change
         EliminateSubqueryAliases(targetTable) match {
           case _ =>
             val newMatchedActions = m.matchedActions.map {
@@ -83,11 +82,9 @@ object HoodieSpark30Analysis {
                                    mergeInto: MergeIntoTable,
                                    resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
       if (assignments.isEmpty) {
-        ////Hudi change: filter out meta fields
-        //
+        // START: custom Hudi change: filter out meta fields
         val expandedColumns = HoodieSqlCommonUtils.removeMetaFields(mergeInto.targetTable.output)
-        //
-        ////
+        // END: custom Hudi change
         val expandedValues = mergeInto.sourceTable.output
         expandedColumns.zip(expandedValues).map(kv => Assignment(kv._1, kv._2))
       } else {
@@ -125,51 +122,27 @@ object HoodieSpark30Analysis {
      *
      * Note : In this routine, the unresolved attributes are resolved from the input plan's
      * children attributes.
-     *
-     * @param e         The expression need to be resolved.
-     * @param q         The LogicalPlan whose children are used to resolve expression's attribute.
-     * @param trimAlias When true, trim unnecessary alias of `GetStructField`. Note that,
-     *                  we cannot trim the alias of top-level `GetStructField`, as we should
-     *                  resolve `UnresolvedAttribute` to a named expression. The caller side
-     *                  can trim the alias of top-level `GetStructField` if it's safe to do so.
-     * @return resolved Expression.
      */
-    private def resolveExpressionTopDown(e: Expression,
-                                         q: LogicalPlan,
-                                         trimAlias: Boolean = false): Expression = {
-
-      def innerResolve(e: Expression, isTopLevel: Boolean): Expression = {
-        // scalastyle:off return
-        if (e.resolved) return e
-        // scalastyle:on return
-        e match {
-          case f: LambdaFunction if !f.bound => f
-          case u@UnresolvedAttribute(nameParts) =>
-            // Leave unchanged if resolution fails. Hopefully will be resolved next round.
-            val resolved =
-              withPosition(u) {
-                q.resolveChildren(nameParts, resolver)
-                  .orElse(resolveLiteralFunction(nameParts, u, q))
-                  .getOrElse(u)
-              }
-            val result = resolved match {
-              // As the comment of method `resolveExpressionTopDown`'s param `trimAlias` said,
-              // when trimAlias = true, we will trim unnecessary alias of `GetStructField` and
-              // we won't trim the alias of top-level `GetStructField`. Since we will call
-              // CleanupAliases later in Analyzer, trim non top-level unnecessary alias of
-              // `GetStructField` here is safe.
-              case Alias(s: GetStructField, _) if trimAlias && !isTopLevel => s
-              case others => others
+    private def resolveExpressionTopDown(e: Expression, q: LogicalPlan): Expression = {
+      // scalastyle:off return
+      if (e.resolved) return e
+      // scalastyle:on return
+      e match {
+        case f: LambdaFunction if !f.bound => f
+        case u@UnresolvedAttribute(nameParts) =>
+          // Leave unchanged if resolution fails. Hopefully will be resolved next round.
+          val result =
+            withPosition(u) {
+              q.resolveChildren(nameParts, resolver)
+                .orElse(resolveLiteralFunction(nameParts, u, q))
+                .getOrElse(u)
             }
-            logDebug(s"Resolving $u to $result")
-            result
-          case UnresolvedExtractValue(child, fieldExpr) if child.resolved =>
-            ExtractValue(child, fieldExpr, resolver)
-          case _ => e.mapChildren(innerResolve(_, isTopLevel = false))
-        }
+          logDebug(s"Resolving $u to $result")
+          result
+        case UnresolvedExtractValue(child, fieldExpr) if child.resolved =>
+          ExtractValue(child, fieldExpr, resolver)
+        case _ => e.mapChildren(resolveExpressionTopDown(_, q))
       }
-
-      innerResolve(e, isTopLevel = true)
     }
 
     /**
@@ -197,11 +170,7 @@ object HoodieSpark30Analysis {
       func.map(wrapper)
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // Following section is amended to the original (Spark's) implementation
-    // >>> BEGINS
-    ////////////////////////////////////////////////////////////////////////////////////////////
-
+    // START: custom Hudi change. Following section is amended to the original (Spark's) implementation
     private def containsUnresolvedStarAssignments(mit: MergeIntoTable): Boolean = {
       val containsUnresolvedInsertStar = mit.notMatchedActions.exists {
         case InsertAction(_, assignments) => assignments.isEmpty
@@ -214,10 +183,7 @@ object HoodieSpark30Analysis {
 
       containsUnresolvedInsertStar || containsUnresolvedUpdateStar
     }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////
-    // <<< ENDS
-    ////////////////////////////////////////////////////////////////////////////////////////////
+    // END: custom Hudi change.
   }
 
 }

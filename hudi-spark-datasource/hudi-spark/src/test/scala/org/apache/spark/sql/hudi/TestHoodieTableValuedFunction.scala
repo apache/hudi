@@ -27,6 +27,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
+          spark.sql("set hoodie.sql.write.operation=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -80,6 +81,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         }
       }
     }
+    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
   }
 
   test(s"Test hudi_table_changes latest_state") {

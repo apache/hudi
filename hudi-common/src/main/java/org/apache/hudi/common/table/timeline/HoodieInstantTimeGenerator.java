@@ -114,7 +114,7 @@ public class HoodieInstantTimeGenerator {
 
   /**
    * Creates an instant string given a valid date-time string.
-   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[:SSS]
+   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[.SSS]
    * @return A timeline instant
    * @throws ParseException If we cannot parse the date string
    */
@@ -124,7 +124,7 @@ public class HoodieInstantTimeGenerator {
     } catch (Exception e) {
       // Attempt to add the milliseconds in order to complete parsing
       return getInstantFromTemporalAccessor(LocalDateTime.parse(
-          String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT), MILLIS_GRANULARITY_DATE_FORMATTER));
+          String.format("%s.%s", dateString, DEFAULT_MILLIS_EXT), MILLIS_GRANULARITY_DATE_FORMATTER));
     }
   }
 

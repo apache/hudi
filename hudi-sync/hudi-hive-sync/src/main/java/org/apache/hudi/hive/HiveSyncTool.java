@@ -20,7 +20,6 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
@@ -237,16 +236,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         LOG.error("Hive database does not exist " + databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
-    }
-
-    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-    // by the data source way (which will use the HoodieBootstrapRelation).
-    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
-    if (syncClient.isBootstrap()
-        && syncClient.getTableType() == HoodieTableType.MERGE_ON_READ
-        && !readAsOptimized) {
-      config.setValue(HIVE_SYNC_AS_DATA_SOURCE_TABLE, "false");
     }
 
     final boolean tableExists = syncClient.tableExists(tableName);

@@ -111,15 +111,17 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 @ConfigClassProperty(name = "Write Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
-        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
+        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g Hudi Streamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
-  // It is here so that both the client and deltastreamer use the same reference
-  public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  // It is here so that both the client and Hudi Streamer use the same reference
+  public static final String STREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  @Deprecated
+  public static final String DELTASTREAMER_CHECKPOINT_KEY = STREAMER_CHECKPOINT_KEY;
 
   public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
@@ -693,18 +695,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
       .markAdvanced()
-      .withDocumentation("Comma separated list of filters for sensitive config keys. Delta Streamer "
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
       .key("hoodie.rollback.instant.backup.enabled")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Backup instants removed during rollback and restore (useful for debugging)");
 
   public static final ConfigProperty<String> ROLLBACK_INSTANT_BACKUP_DIRECTORY = ConfigProperty
       .key("hoodie.rollback.instant.backup.dir")
       .defaultValue(".rollback_backup")
+      .markAdvanced()
       .withDocumentation("Path where instants being rolled back are copied. If not absolute path then a directory relative to .hoodie folder is created.");
 
   public static final ConfigProperty<String> CLIENT_INIT_CALLBACK_CLASS_NAMES = ConfigProperty
@@ -716,6 +720,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "at the initialization of the Hudi client.  The class names are separated by `,`. "
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
+
+  /**
+   * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
+   * operation are already prepped.
+   */
+  public static final String SPARK_SQL_MERGE_INTO_PREPPED_KEY = "_hoodie.spark.sql.merge.into.prepped";
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2353,10 +2363,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isMetadataTableEnabled() {
     return getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
-  }
-
-  public int getMetadataInsertParallelism() {
-    return getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
   }
 
   public int getMetadataCompactDeltaCommitMax() {

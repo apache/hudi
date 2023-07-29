@@ -97,4 +97,12 @@ trait HoodieCatalystPlansUtils {
    * Get the member of the Repair Table LogicalPlan.
    */
   def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
+
+  /**
+   * Calls fail analysis on
+   *s
+   */
+  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
+
+  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 }

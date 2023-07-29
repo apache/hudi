@@ -19,21 +19,10 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.util.Option;
-
-import org.apache.spark.api.java.JavaRDD;
-
 /**
- * Post write termination strategy for deltastreamer in continuous mode.
+ * PostWriteTerminationStrategy is relocated to {@link org.apache.hudi.utilities.streamer}.
+ * Please use {@link org.apache.hudi.utilities.streamer.PostWriteTerminationStrategy} instead.
  */
-public interface PostWriteTerminationStrategy {
-
-  /**
-   * Returns whether deltastreamer needs to be shutdown.
-   * @param writeStatuses optional pair of scheduled compaction instant and write statuses.
-   * @return true if deltastreamer has to be shutdown. false otherwise.
-   */
-  boolean shouldShutdown(Option<JavaRDD<WriteStatus>> writeStatuses);
-
+@Deprecated
+public interface PostWriteTerminationStrategy extends org.apache.hudi.utilities.streamer.PostWriteTerminationStrategy {
 }

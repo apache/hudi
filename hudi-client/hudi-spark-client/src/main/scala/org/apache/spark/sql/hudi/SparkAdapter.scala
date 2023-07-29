@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.storage.StorageLevel
 
@@ -205,10 +205,7 @@ trait SparkAdapter extends Serializable {
   def convertStorageLevelToString(level: StorageLevel): String
 
   /**
-   * Calls fail analysis on
-   *
+   * Tries to translate a Catalyst Expression into data source Filter
    */
-  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
-
-  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
+  def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
 }

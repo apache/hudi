@@ -85,7 +85,8 @@ public class TestHoodieHiveCatalog {
           .field("name", DataTypes.STRING())
           .field("age", DataTypes.INT())
           .field("par1", DataTypes.STRING())
-          .field("ts", DataTypes.BIGINT())
+          .field("ts_3", DataTypes.TIMESTAMP(3))
+          .field("ts_6", DataTypes.TIMESTAMP(6))
           .primaryKey("uuid")
           .build();
   List<String> partitions = Collections.singletonList("par1");
@@ -135,7 +136,8 @@ public class TestHoodieHiveCatalog {
         + "uuid:int,"
         + "name:string,"
         + "age:int,"
-        + "ts:bigint";
+        + "ts_3:timestamp,"
+        + "ts_6:timestamp";
     assertEquals(expectedFieldSchema, fieldSchema);
     String partitionSchema = hiveTable.getPartitionKeys().stream()
         .map(f -> f.getName() + ":" + f.getType())
@@ -153,7 +155,8 @@ public class TestHoodieHiveCatalog {
         + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
         + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
-        + "{\"name\":\"ts\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"ts_3\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
     assertEquals(expectedAvroSchemaStr, avroSchemaStr);
 
@@ -166,7 +169,7 @@ public class TestHoodieHiveCatalog {
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
-    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts` BIGINT";
+    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts_3` TIMESTAMP(3),`ts_6` TIMESTAMP(6)";
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());

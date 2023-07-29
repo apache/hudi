@@ -18,12 +18,12 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -53,6 +53,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,11 +73,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   protected static int nInserts = 100;
   protected static int nUpdates = 20;
-  protected static String[] dashPartitionPaths = {"2016-03-15", "2015-03-16", "2015-03-17"};
+  protected static String[] dashPartitionPaths = {"2016-03-14","2016-03-15", "2015-03-16", "2015-03-17"};
   protected static String[] slashPartitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
   protected String bootstrapType;
   protected Boolean dashPartitions;
-  protected String tableType;
+  protected HoodieTableType tableType;
   protected Integer nPartitions;
 
   protected String[] partitionCols;
@@ -100,14 +102,14 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     Stream.Builder<Arguments> b = Stream.builder();
     String[] bootstrapType = {"full", "metadata", "mixed"};
     Boolean[] dashPartitions = {true,false};
-    String[] tableType = {"COPY_ON_WRITE", "MERGE_ON_READ"};
+    HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
     Integer[] nPartitions = {0, 1, 2};
-    for (String tt : tableType) {
+    for (HoodieTableType tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
           for (Integer n : nPartitions) {
-            //can't be mixed bootstrap if it's nonpartitioned
-            //don't need to test slash partitions if it's nonpartitioned
+            // can't be mixed bootstrap if it's nonpartitioned
+            // don't need to test slash partitions if it's nonpartitioned
             if ((!bt.equals("mixed") && dash) || n > 0) {
               b.add(Arguments.of(bt, dash, tt, n));
             }
@@ -120,14 +122,14 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void runTests(String bootstrapType,Boolean dashPartitions, String tableType, Integer nPartitions) {
+  public void runTests(String bootstrapType, Boolean dashPartitions, HoodieTableType tableType, Integer nPartitions) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
     this.nPartitions = nPartitions;
     setupDirs();
 
-    //do bootstrap
+    // do bootstrap
     Map<String, String> options = setBootstrapOptions();
     Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
     bootstrapDf.write().format("hudi")
@@ -135,19 +137,22 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
     compareTables();
+    verifyMetaColOnlyRead(0);
 
-    //do upserts
+    // do upserts
     options = basicOptions();
     doUpdate(options, "001");
     compareTables();
+    verifyMetaColOnlyRead(1);
 
-    doUpdate(options, "002");
+    doInsert(options, "002");
     compareTables();
+    verifyMetaColOnlyRead(2);
   }
 
-  private Map<String, String> basicOptions() {
+  protected Map<String, String> basicOptions() {
     Map<String, String> options = new HashMap<>();
-    options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
+    options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType.name());
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     if (nPartitions == 0) {
@@ -161,14 +166,14 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
       }
     }
     options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
-    if (tableType.equals("MERGE_ON_READ")) {
+    if (tableType.equals(MERGE_ON_READ)) {
       options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
     }
     options.put(HoodieWriteConfig.TBL_NAME.key(), "test");
     return options;
   }
 
-  private Map<String, String> setBootstrapOptions() {
+  protected Map<String, String> setBootstrapOptions() {
     Map<String, String> options = basicOptions();
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL());
     options.put(HoodieBootstrapConfig.BASE_PATH.key(), bootstrapBasePath);
@@ -202,19 +207,28 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void doUpdate(Map<String,String> options, String instantTime) {
-    Dataset<Row> updates = generateTestUpdates(instantTime);
+    Dataset<Row> updates = generateTestUpdates(instantTime, nUpdates);
+    doUpsert(options, updates);
+  }
+
+  protected void doInsert(Map<String,String> options, String instantTime) {
+    Dataset<Row> inserts = generateTestInserts(instantTime, nUpdates);
+    doUpsert(options, inserts);
+  }
+
+  protected void doUpsert(Map<String,String> options, Dataset<Row> df) {
     String nCompactCommits = "3";
-    updates.write().format("hudi")
+    df.write().format("hudi")
         .options(options)
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), nCompactCommits)
         .mode(SaveMode.Append)
         .save(hudiBasePath);
     if (bootstrapType.equals("mixed")) {
-      //mixed tables have a commit for each of the metadata and full bootstrap modes
-      //so to align with the regular hudi table, we need to compact after 4 commits instead of 3
+      // mixed tables have a commit for each of the metadata and full bootstrap modes
+      // so to align with the regular hudi table, we need to compact after 4 commits instead of 3
       nCompactCommits = "4";
     }
-    updates.write().format("hudi")
+    df.write().format("hudi")
         .options(options)
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), nCompactCommits)
         .mode(SaveMode.Append)
@@ -222,23 +236,35 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
   }
 
   protected void compareTables() {
-    Map<String,String> readOpts = new HashMap<>();
-    if (tableType.equals("MERGE_ON_READ")) {
-      //Bootstrap MOR currently only has read optimized queries implemented
-      readOpts.put(DataSourceReadOptions.QUERY_TYPE().key(),DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL());
-    }
-    Dataset<Row> hudiDf = sparkSession.read().options(readOpts).format("hudi").load(hudiBasePath);
+    Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
     if (nPartitions == 0) {
-      compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
+      if (tableType.equals(COPY_ON_WRITE)) {
+        compareDf(fastBootstrapDf.drop("city_to_state"), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path"));
+      }
       return;
     }
     compareDf(hudiDf.drop(dropColumns).drop(partitionCols), bootstrapDf.drop(dropColumns).drop(partitionCols));
-    compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
     compareDf(hudiDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
-    compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    if (tableType.equals(COPY_ON_WRITE)) {
+      compareDf(fastBootstrapDf.drop("city_to_state").drop(partitionCols), bootstrapDf.drop(dropColumns).drop("_hoodie_partition_path").drop(partitionCols));
+      compareDf(fastBootstrapDf.select("_row_key",partitionCols), bootstrapDf.select("_row_key",partitionCols));
+    }
+  }
+
+  protected void verifyMetaColOnlyRead(Integer iteration) {
+    Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath).select("_hoodie_commit_time", "_hoodie_record_key");
+    Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath).select("_hoodie_commit_time", "_hoodie_record_key");
+    hudiDf.show(100,false);
+    bootstrapDf.show(100,false);
+    if (iteration > 0) {
+      assertEquals(sparkSession.sql("select * from hudi_iteration_" + (iteration - 1)).intersect(hudiDf).count(),
+          sparkSession.sql("select * from bootstrap_iteration_" + (iteration - 1)).intersect(bootstrapDf).count());
+    }
+    hudiDf.createOrReplaceTempView("hudi_iteration_" + iteration);
+    bootstrapDf.createOrReplaceTempView("bootstrap_iteration_" + iteration);
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
@@ -248,7 +274,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
 
   protected void setupDirs()  {
     dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
-    Dataset<Row> inserts = generateTestInserts();
+    Dataset<Row> inserts = generateTestInserts("000", nInserts);
+    if (dashPartitions) {
+      //test adding a partition to the table
+      inserts = inserts.filter("partition_path != '2016-03-14'");
+    }
     if (nPartitions > 0) {
       partitionCols = new String[nPartitions];
       partitionCols[0] = "partition_path";
@@ -266,25 +296,33 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .save(hudiBasePath);
   }
 
-  public Dataset<Row> generateTestInserts() {
-    List<String> records = dataGen.generateInserts("000", nInserts).stream()
+  protected Dataset<Row> makeInsertDf(String instantTime, Integer n) {
+    List<String> records = dataGen.generateInserts(instantTime, n).stream()
         .map(r -> recordToString(r).get()).collect(Collectors.toList());
     JavaRDD<String> rdd = jsc.parallelize(records);
-    return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+    return sparkSession.read().json(rdd);
   }
 
-  public Dataset<Row> generateTestUpdates(String instantTime) {
+  protected Dataset<Row> generateTestInserts(String instantTime, Integer n) {
+    return addPartitionColumns(makeInsertDf(instantTime, n), nPartitions);
+  }
+
+  protected Dataset<Row> makeUpdateDf(String instantTime, Integer n) {
     try {
-      List<String> records = dataGen.generateUpdates(instantTime, nUpdates).stream()
+      List<String> records = dataGen.generateUpdates(instantTime, n).stream()
           .map(r -> recordToString(r).get()).collect(Collectors.toList());
       JavaRDD<String> rdd = jsc.parallelize(records);
-      return addPartitionColumns(sparkSession.read().json(rdd), nPartitions);
+      return sparkSession.read().json(rdd);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
-  public static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
+  protected Dataset<Row> generateTestUpdates(String instantTime, Integer n) {
+    return addPartitionColumns(makeUpdateDf(instantTime, n), nPartitions);
+  }
+
+  private static Dataset<Row> addPartitionColumns(Dataset<Row> df, Integer nPartitions) {
     if (nPartitions < 2) {
       return df;
     }

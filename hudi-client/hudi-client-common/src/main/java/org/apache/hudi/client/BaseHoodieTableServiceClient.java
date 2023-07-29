@@ -861,8 +861,22 @@ public abstract class BaseHoodieTableServiceClient<O> extends BaseHoodieClient i
    */
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
-    LOG.info("Begin rollback of instant " + commitInstantTime);
     final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
+    return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking);
+  }
+
+  /**
+   * @param commitInstantTime   Instant time of the commit
+   * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
+   * @param skipLocking         if this is triggered by another parent transaction, locking can be skipped.
+   * @throws HoodieRollbackException if rollback cannot be performed successfully
+   * @Deprecated Rollback the inflight record changes with the given commit time. This
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
+   */
+  @Deprecated
+  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, String rollbackInstantTime,
+                          boolean skipLocking) throws HoodieRollbackException {
+    LOG.info("Begin rollback of instant " + commitInstantTime);
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
     try {
       HoodieTable table = createTable(config, hadoopConf);

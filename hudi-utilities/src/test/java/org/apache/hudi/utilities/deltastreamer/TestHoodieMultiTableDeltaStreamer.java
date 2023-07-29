@@ -23,13 +23,15 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.junit.jupiter.api.Disabled;
@@ -133,10 +135,10 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getTableExecutionContexts().size());
     assertEquals(basePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
-    assertEquals("topic1", executionContext.getProperties().getString(HoodieDeltaStreamerConfig.KAFKA_TOPIC.key()));
+    assertEquals("topic1", executionContext.getProperties().getString(HoodieStreamerConfig.KAFKA_TOPIC.key()));
     assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
     assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
-    assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP));
+    assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key()));
     assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
     assertEquals("http://localhost:8081/subjects/topic2-value/versions/latest",
         streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));

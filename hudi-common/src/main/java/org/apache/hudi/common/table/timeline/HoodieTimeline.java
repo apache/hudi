@@ -227,6 +227,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingRollbackTimeline();
 
   /**
+   * Filter this timeline for requested rollbacks.
+   */
+  HoodieTimeline filterRequestedRollbackTimeline();
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
@@ -451,6 +456,10 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
+  }
+
+  static HoodieInstant getRestoreRequestedInstant(HoodieInstant instant) {
     return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 

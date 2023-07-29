@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -93,11 +92,6 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param partitions  - list of {@link MetadataPartitionType} to drop
    */
   void deletePartitions(String instantTime, List<MetadataPartitionType> partitions);
-
-  /**
-   * It returns write client for metadata table.
-   */
-  BaseHoodieWriteClient getWriteClient();
 
   /**
    * Returns true if the metadata table is initialized.

@@ -62,6 +62,10 @@ class TestHoodieParquetBloomFilter {
   def testBloomFilter(operation: WriteOperationType): Unit = {
     // setup hadoop conf with bloom col enabled
     spark.sparkContext.hadoopConfiguration.set("parquet.bloom.filter.enabled#bloom_col", "true")
+    spark.sparkContext.hadoopConfiguration.set("parquet.bloom.filter.expected.ndv#bloom_col", "2")
+    // ensure nothing but bloom can trigger read skip
+    spark.sql("set parquet.filter.columnindex.enabled=false")
+    spark.sql("set parquet.filter.stats.enabled=false")
 
     val basePath = java.nio.file.Files.createTempDirectory("hoodie_bloom_source_path").toAbsolutePath.toString
     val opts = Map(

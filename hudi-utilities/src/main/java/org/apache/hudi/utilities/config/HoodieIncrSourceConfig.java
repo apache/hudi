@@ -35,7 +35,7 @@ import java.util.Arrays;
  */
 @Immutable
 @ConfigClassProperty(name = "Hudi Incremental Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of incremental pulling from a Hudi "
         + "table as a source in Deltastreamer.")
@@ -57,14 +57,14 @@ public class HoodieIncrSourceConfig extends HoodieConfig {
       .key("hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt")
       .defaultValue(false)
       .markAdvanced()
-      .withDocumentation("If true, allows delta-streamer to incrementally fetch from latest committed instant when checkpoint is not provided. "
+      .withDocumentation("If true, allows Hudi Streamer to incrementally fetch from latest committed instant when checkpoint is not provided. "
           + "This config is deprecated. Please refer to hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy");
 
   public static final ConfigProperty<String> MISSING_CHECKPOINT_STRATEGY = ConfigProperty
       .key("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Allows delta-streamer to decide the instant to consume from when checkpoint is not set.\n"
+      .withDocumentation("Allows Hudi Streamer to decide the instant to consume from when checkpoint is not set.\n"
           + " Possible values: " + Arrays.toString(IncrSourceHelper.MissingCheckpointStrategy.values()));
 
   public static final ConfigProperty<String> SOURCE_FILE_FORMAT = ConfigProperty

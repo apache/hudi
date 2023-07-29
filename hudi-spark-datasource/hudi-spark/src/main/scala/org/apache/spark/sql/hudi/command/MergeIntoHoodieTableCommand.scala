@@ -25,7 +25,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
-import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -340,9 +340,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Then we want to project the output so that we have the meta columns from the target table
     // followed by the data columns of the source table
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = sparkAdapter.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+    val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedJoinPlan = Project(tableMetaCols ++ incomingDataCols, joinData)
+    val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+      Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else {
+      Project(incomingDataCols, joinData)
+    }
+
     val projectedJoinOutput = projectedJoinPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
@@ -617,6 +622,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
+    val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
+      SPARK_SQL_OPTIMIZED_WRITES.defaultValue())
+
+    val keyGeneratorClassName = if (enableOptimizedMerge == "true") {
+      classOf[MergeIntoKeyGenerator].getCanonicalName
+    } else {
+      classOf[SqlKeyGenerator].getCanonicalName
+    }
+
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -625,7 +639,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      KEYGENERATOR_CLASS_NAME.key -> classOf[MergeIntoKeyGenerator].getCanonicalName,
+      KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
@@ -648,7 +662,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       RECONCILE_SCHEMA.key -> "false",
       CANONICALIZE_NULLABLE.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
-      HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key -> "true",
+      HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
+      HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> enableOptimizedMerge,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 

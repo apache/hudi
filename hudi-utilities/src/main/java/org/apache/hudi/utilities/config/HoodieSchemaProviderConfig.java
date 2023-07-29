@@ -26,14 +26,14 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.DELTA_STREAMER_CONFIG_PREFIX;
 
 /**
- * Delta Streamer Schema Provider related config.
+ * Hudi Streamer Schema Provider related config.
  */
 @Immutable
-@ConfigClassProperty(name = "DeltaStreamer Schema Provider Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+@ConfigClassProperty(name = "Hudi Streamer Schema Provider Configs",
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
     areCommonConfigs = true,
     description = "")

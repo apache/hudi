@@ -45,7 +45,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.config.HoodieInternalConfig.SQL_MERGE_INTO_WRITES
+import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.HoodieIndex
@@ -90,6 +90,14 @@ object HoodieSparkSqlWriter {
   val CANONICALIZE_NULLABLE: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.internal.write.schema.canonicalize.nullable")
       .defaultValue(true)
+
+  /**
+   * For merge into from spark-sql, we need some special handling. for eg, schema validation should be disabled
+   * for writes from merge into. This config is used for internal purposes.
+   */
+  val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue(false)
 
   /**
    * For spark streaming use-cases, holds the batch Id.
@@ -250,7 +258,7 @@ object HoodieSparkSqlWriter {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
-            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
             val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
               None
             } else {
@@ -348,10 +356,9 @@ object HoodieSparkSqlWriter {
             }
 
             // Remove meta columns from writerSchema if isPrepped is true.
-            val isPrepped = hoodieConfig.getBooleanOrDefault(DATASOURCE_WRITE_PREPPED_KEY, false)
-            val mergeIntoWrites = parameters.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
-               SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
-            val processedDataSchema = if (isPrepped || mergeIntoWrites) {
+            val isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
+            val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+            val processedDataSchema = if (isPrepped || sqlMergeIntoPrepped) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
@@ -388,7 +395,7 @@ object HoodieSparkSqlWriter {
             val hoodieRecords =
               HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(df,
                 writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                processedDataSchema, operation, instantTime, isPrepped, mergeIntoWrites))
+                processedDataSchema, operation, instantTime, isPrepped, sqlMergeIntoPrepped))
 
             val dedupedHoodieRecords =
               if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
@@ -453,11 +460,11 @@ object HoodieSparkSqlWriter {
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
           CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
-        val mergeIntoWrites = opts.getOrDefault(HoodieInternalConfig.SQL_MERGE_INTO_WRITES.key(),
+        val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
 
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
-          canonicalizeSchema(sourceSchema, latestTableSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts)
         } else {
           sourceSchema
         }
@@ -645,8 +652,8 @@ object HoodieSparkSqlWriter {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema): Schema = {
-    reconcileNullability(sourceSchema, latestTableSchema)
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
+    reconcileNullability(sourceSchema, latestTableSchema, opts)
   }
 
 
@@ -1112,6 +1119,11 @@ object HoodieSparkSqlWriter {
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
       mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
+    }
+    if (mergedParams.get(OPERATION.key()).get == INSERT_OPERATION_OPT_VAL && mergedParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key())
+      && mergedParams.get(DataSourceWriteOptions.INSERT_DUP_POLICY.key()).get != FAIL_INSERT_DUP_POLICY) {
+      // enable merge allow duplicates when operation type is insert
+      mergedParams.put(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key(), "true")
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))

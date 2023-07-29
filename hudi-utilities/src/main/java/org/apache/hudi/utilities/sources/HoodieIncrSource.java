@@ -86,7 +86,7 @@ public class HoodieIncrSource extends RowSource {
         HoodieIncrSourceConfig.HOODIE_SRC_PARTITION_EXTRACTORCLASS.defaultValue();
 
     /**
-     * {@link  #READ_LATEST_INSTANT_ON_MISSING_CKPT} allows delta-streamer to incrementally fetch from latest committed
+     * {@link  #READ_LATEST_INSTANT_ON_MISSING_CKPT} allows Hudi Streamer to incrementally fetch from latest committed
      * instant when checkpoint is not provided. This config is deprecated. Please refer to {@link #MISSING_CHECKPOINT_STRATEGY}.
      */
     @Deprecated
@@ -96,7 +96,7 @@ public class HoodieIncrSource extends RowSource {
         HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue();
 
     /**
-     * {@link  #MISSING_CHECKPOINT_STRATEGY} allows delta-streamer to decide the checkpoint to consume from when checkpoint is not set.
+     * {@link  #MISSING_CHECKPOINT_STRATEGY} allows Hudi Streamer to decide the checkpoint to consume from when checkpoint is not set.
      * instant when checkpoint is not provided.
      */
     @Deprecated

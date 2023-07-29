@@ -19,7 +19,6 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
@@ -154,18 +153,6 @@ public class AdbSyncTool extends HoodieSyncTool {
       }
     } else if (!syncClient.databaseExists(databaseName)) {
       throw new HoodieAdbSyncException("ADB database does not exists:" + databaseName);
-    }
-
-    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-    // by the data source way (which will use the HoodieBootstrapRelation).
-    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071],
-    //  we can remove this logical.
-    if (syncClient.isBootstrap()
-        && syncClient.getTableType() == HoodieTableType.MERGE_ON_READ
-        && !readAsOptimized) {
-      config.setValue(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE, "false");
-      LOG.info("Disable sync as spark datasource table for mor rt table:{}", tableName);
     }
 
     if (config.getBoolean(ADB_SYNC_DROP_TABLE_BEFORE_CREATION)) {
