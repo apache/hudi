@@ -266,14 +266,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             ut.copy(table = relation)
+
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
-            logicalPlan match {
-              case s@ScanOperation(_, _,
-              l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[MORBootstrapFileFormat] && !fs.fileFormat.asInstanceOf[MORBootstrapFileFormat].isProjected =>
-                fs.fileFormat.asInstanceOf[MORBootstrapFileFormat].isProjected = true
-                Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
-              case _ => logicalPlan
-            }
+            sparkAdapter.getCatalystPlanUtils.applyMORBootstrapFileFormatProjection(logicalPlan)
         }
       }
 

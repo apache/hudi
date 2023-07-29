@@ -43,6 +43,16 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
+  override def applyMORBootstrapFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case s@ScanOperation(_, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[MORBootstrapFileFormat] && !fs.fileFormat.asInstanceOf[MORBootstrapFileFormat].isProjected =>
+        fs.fileFormat.asInstanceOf[MORBootstrapFileFormat].isProjected = true
+        Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
+      case _ => plan
+    }
+  }
+
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
     ProjectionOverSchema(schema, output)
 

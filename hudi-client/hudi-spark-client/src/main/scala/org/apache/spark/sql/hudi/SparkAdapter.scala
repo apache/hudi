@@ -177,6 +177,7 @@ trait SparkAdapter extends Serializable {
                           mandatoryFields: Seq[String],
                           isMOR: Boolean,
                           isBootstrap: Boolean): Option[ParquetFileFormat]
+  def getFilePath(file: PartitionedFile): Path
 
   /**
    * Create instance of [[InterpretedPredicate]]

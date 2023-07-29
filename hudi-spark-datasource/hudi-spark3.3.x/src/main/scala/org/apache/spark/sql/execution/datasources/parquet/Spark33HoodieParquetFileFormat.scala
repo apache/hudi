@@ -182,7 +182,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       // Try to push down filters when filter push-down is enabled.
       val pushed = if (enableParquetFilterPushDown) {
         val parquetSchema = footerFileMetaData.getSchema
-        val parquetFilters = if (HoodieSparkUtils.gteqSpark3_2_1) {
+        val parquetFilters = {
           // NOTE: Below code could only be compiled against >= Spark 3.2.1,
           //       and unfortunately won't compile against Spark 3.2.0
           //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
@@ -197,19 +197,6 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             pushDownInFilterThreshold,
             isCaseSensitive,
             datetimeRebaseSpec)
-        } else {
-          // Spark 3.2.0
-          val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          createParquetFilters(
-            parquetSchema,
-            pushDownDate,
-            pushDownTimestamp,
-            pushDownDecimal,
-            pushDownStringStartWith,
-            pushDownInFilterThreshold,
-            isCaseSensitive,
-            datetimeRebaseMode)
         }
         filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
@@ -335,7 +322,7 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = if (HoodieSparkUtils.gteqSpark3_2_1) {
+        val readSupport = {
           // ParquetRecordReader returns InternalRow
           // NOTE: Below code could only be compiled against >= Spark 3.2.1,
           //       and unfortunately won't compile against Spark 3.2.0
@@ -349,17 +336,6 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             enableVectorizedReader = false,
             datetimeRebaseSpec,
             int96RebaseSpec,
-            readerType)
-        } else {
-          val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          val int96RebaseMode =
-            Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-          createSpark33ParquetReadSupport(
-            convertTz,
-            /* enableVectorizedReader = */ false,
-            datetimeRebaseMode,
-            int96RebaseMode,
             readerType)
         }
 
@@ -416,30 +392,6 @@ class Spark33HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 }
 
 object Spark33HoodieParquetFileFormat {
-
-  /**
-   * NOTE: This method is specific to Spark 3.2.0
-   */
-  private def createParquetFilters(args: Any*): ParquetFilters = {
-    // NOTE: ParquetFilters ctor args contain Scala enum, therefore we can't look it
-    //       up by arg types, and have to instead rely on the number of args based on individual class;
-    //       the ctor order is not guaranteed
-    val ctor = classOf[ParquetFilters].getConstructors.maxBy(_.getParameterCount)
-    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
-      .asInstanceOf[ParquetFilters]
-  }
-
-  /**
-   * NOTE: This method is specific to Spark 3.2.0
-   */
-  private def createSpark33ParquetReadSupport(args: Any*): Spark33ParquetReadSupport = {
-    // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
-    //       up by arg types, and have to instead rely on the number of args based on individual class;
-    //       the ctor order is not guaranteed
-    val ctor = classOf[Spark33ParquetReadSupport].getConstructors.maxBy(_.getParameterCount)
-    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
-      .asInstanceOf[Spark33ParquetReadSupport]
-  }
 
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)

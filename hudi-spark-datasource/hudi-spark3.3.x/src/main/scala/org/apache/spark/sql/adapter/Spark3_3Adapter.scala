@@ -102,6 +102,10 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     Some(new MORBootstrap33FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
   }
 
+  override def getFilePath(file: PartitionedFile): Path = {
+    new Path(new URI(file.filePath))
+  }
+
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
                                        readFunction: PartitionedFile => Iterator[InternalRow],
                                        filePartitions: Seq[FilePartition],

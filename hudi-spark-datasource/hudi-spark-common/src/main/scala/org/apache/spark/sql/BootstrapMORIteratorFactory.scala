@@ -95,7 +95,7 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
     (file: PartitionedFile) => {
       file.partitionValues match {
         case broadcast: InternalRowBroadcast =>
-          val filePath = new Path(new URI(file.filePath))
+          val filePath = sparkAdapter.getFilePath(file)
           //We do not broadcast the slice if it has no log files or bootstrap base
           broadcast.getSlice(FSUtils.getFileId(filePath.getName)) match {
             case Some(fileSlice) =>

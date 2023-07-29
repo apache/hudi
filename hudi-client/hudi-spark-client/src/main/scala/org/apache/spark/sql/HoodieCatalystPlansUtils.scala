@@ -21,6 +21,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -76,6 +77,9 @@ trait HoodieCatalystPlansUtils {
    * notMatchedBySourceActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
    */
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
+
+
+  def applyMORBootstrapFileFormatProjection(plan: LogicalPlan): LogicalPlan
 
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
