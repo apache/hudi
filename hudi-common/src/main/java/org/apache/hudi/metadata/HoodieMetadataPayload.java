@@ -166,11 +166,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata record index payload field ids
    */
-  public static final String RECORD_INDEX_FIELD_PARTITION = "partition";
+  public static final String RECORD_INDEX_FIELD_PARTITION = "partitionName";
   public static final String RECORD_INDEX_FIELD_FILEID_HIGH_BITS = "fileIdHighBits";
   public static final String RECORD_INDEX_FIELD_FILEID_LOW_BITS = "fileIdLowBits";
   public static final String RECORD_INDEX_FIELD_FILE_INDEX = "fileIndex";
   public static final String RECORD_INDEX_FIELD_INSTANT_TIME = "instantTime";
+  public static final String RECORD_INDEX_FIELD_FILEID = "fileId";
+  public static final String RECORD_INDEX_FIELD_FILEID_ENCODING = "fileIdEncoding";
+  public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_UUID = 0;
+  public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_RAW_STRING = 1;
 
   /**
    * FileIndex value saved in record index record when the fileId has no index (old format of base filename)
@@ -283,7 +287,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
-            Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()));
+            recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
+            Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
+            Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()));
       }
     } else {
       this.isDeletedRecord = true;
@@ -749,13 +755,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     try {
       long instantTimeMillis = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
+      // TODO: fix me.
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
           new HoodieRecordIndexInfo(
               partition,
               uuid.getMostSignificantBits(),
               uuid.getLeastSignificantBits(),
               fileIndex,
-              instantTimeMillis));
+              "",
+              instantTimeMillis,
+              0));
       return new HoodieAvroRecord<>(key, payload);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index.", e);
@@ -777,7 +786,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
     final UUID uuid = new UUID(recordIndexMetadata.getFileIdHighBits(), recordIndexMetadata.getFileIdLowBits());
-    final String partition = recordIndexMetadata.getPartition();
+    final String partition = recordIndexMetadata.getPartitionName();
     String fileId = uuid.toString();
     if (recordIndexMetadata.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
       fileId += "-" + recordIndexMetadata.getFileIndex();
