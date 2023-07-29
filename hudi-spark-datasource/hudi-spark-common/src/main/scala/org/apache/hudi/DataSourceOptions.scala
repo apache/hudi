@@ -89,7 +89,7 @@ object DataSourceReadOptions {
 
   val MOR_BOOTSTRAP_FILE_READER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.mor.bootstrap.file.reader")
-    .defaultValue("false")
+    .defaultValue("true")
     .markAdvanced()
     .withDocumentation("read using the mor bootstrap parquet file reader")
 
