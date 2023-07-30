@@ -99,4 +99,18 @@ public class TestStringUtils {
     assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b, c", ","));
     assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b,, c ", ","));
   }
+
+  @Test
+  public void testHexString() {
+    String str = "abcd";
+    assertEquals(StringUtils.toHexString(str.getBytes()), toHexString(str.getBytes()));
+  }
+
+  private static String toHexString(byte[] bytes) {
+    StringBuilder sb = new StringBuilder(bytes.length * 2);
+    for (byte b : bytes) {
+      sb.append(String.format("%02x", b));
+    }
+    return sb.toString();
+  }
 }
