@@ -22,7 +22,8 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieTableSchema, HoodieTableState, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -33,16 +34,18 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap24FileFormat, ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.net.URI
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -186,5 +189,26 @@ class Spark2Adapter extends SparkAdapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
+                                            tableState: Broadcast[HoodieTableState],
+                                            tableSchema: Broadcast[HoodieTableSchema],
+                                            tableName: String,
+                                            mergeType: String,
+                                            mandatoryFields: Seq[String],
+                                            isMOR: Boolean,
+                                            isBootstrap: Boolean): Option[ParquetFileFormat] = {
+    Some(new MORBootstrap24FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
+  }
+
+  override def getFilePath(file: PartitionedFile): Path = {
+    new Path(new URI(file.filePath))
+  }
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    val batch = new ColumnarBatch(vectors)
+    batch.setNumRows(numRows)
+    batch
   }
 }

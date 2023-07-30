@@ -41,6 +41,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.{Locale, TimeZone}
@@ -178,6 +179,8 @@ trait SparkAdapter extends Serializable {
                           isMOR: Boolean,
                           isBootstrap: Boolean): Option[ParquetFileFormat]
   def getFilePath(file: PartitionedFile): Path
+
+  def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**
    * Create instance of [[InterpretedPredicate]]

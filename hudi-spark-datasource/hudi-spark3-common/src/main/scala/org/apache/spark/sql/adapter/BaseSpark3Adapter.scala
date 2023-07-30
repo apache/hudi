@@ -92,4 +92,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    new ColumnarBatch(vectors, numRows)
+  }
 }

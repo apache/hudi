@@ -34,7 +34,7 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
-public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+public class Spark24HoodieVectorizedParquetRecordReader extends Spark24VectorizedParquetRecordReader {
 
   // save the col type change info.
   private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
@@ -65,8 +65,9 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
       TimeZone convertTz,
       boolean useOffHeap,
       int capacity,
-      Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
-    super(convertTz, useOffHeap, capacity);
+      Map<Integer, Pair<DataType, DataType>> typeChangeInfos,
+      String readerType) {
+    super(convertTz, useOffHeap, capacity, readerType);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;

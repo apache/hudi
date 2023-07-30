@@ -96,7 +96,7 @@ public class TestBootstrapMORFileFormat extends TestBootstrapRead {
   }
 
   protected scala.collection.Seq<String> seq(String... a) {
-    return scala.collection.JavaConverters.asScalaBuffer(Arrays.asList(a)).toSeq();
+    return scala.collection.JavaConverters.asScalaBufferConverter(Arrays.asList(a)).asScala().toSeq();
   }
 
   protected void runIndividualComparison(String tableBasePath) {

@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.execution.datasources.parquet.Spark24ParquetReadSupport.getSchemaConfig
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
@@ -59,10 +60,22 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
-    hadoopConf.set(
-      ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
-      requiredSchema.json)
+    buildReaderWithPartitionValuesInternal(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, shouldAppendPartitionValues, supportBatchOverride = true, readerType = "")
+  }
+
+   protected def buildReaderWithPartitionValuesInternal(sparkSession: SparkSession,
+                                                dataSchema: StructType,
+                                                partitionSchema: StructType,
+                                                requiredSchema: StructType,
+                                                filters: Seq[Filter],
+                                                options: Map[String, String],
+                                                hadoopConf: Configuration,
+                                                appendOverride: Boolean,
+                                                supportBatchOverride: Boolean,
+                                                readerType: String): PartitionedFile => Iterator[InternalRow] = {
+
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[Spark24ParquetReadSupport].getName)
+    hadoopConf.set(getSchemaConfig(readerType), requiredSchema.json)
     hadoopConf.set(
       ParquetWriteSupport.SPARK_ROW_SCHEMA,
       requiredSchema.json)
@@ -100,7 +113,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
     val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
     // Whole stage codegen (PhysicalRDD) is able to deal with batches directly
-    val returningBatch = supportBatch(sparkSession, resultSchema)
+    val returningBatch = supportBatch(sparkSession, resultSchema) && supportBatchOverride
     val pushDownDate = sqlConf.parquetFilterPushDownDate
     val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
     val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
@@ -110,7 +123,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     val timeZoneId = Option(sqlConf.sessionLocalTimeZone)
 
     (file: PartitionedFile) => {
-      assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
+      assert(!appendOverride || file.partitionValues.numFields == partitionSchema.size)
 
       val fileSplit =
         new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)
@@ -166,7 +179,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       val (implicitTypeChangeInfos, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
 
       if (!implicitTypeChangeInfos.isEmpty) {
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+        hadoopAttemptConf.set(getSchemaConfig(readerType), sparkRequestSchema.json)
       }
 
       val hadoopAttemptContext =
@@ -184,13 +197,14 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             convertTz.orNull,
             enableOffHeapColumnVector && taskContext.isDefined,
             capacity,
-            implicitTypeChangeInfos
-          )
+            implicitTypeChangeInfos,
+            readerType)
         } else {
-          new VectorizedParquetRecordReader(
+          new Spark24VectorizedParquetRecordReader(
             convertTz.orNull,
             enableOffHeapColumnVector && taskContext.isDefined,
-            capacity)
+            capacity,
+            readerType)
         }
 
         val iter = new RecordReaderIterator(vectorizedReader)
@@ -200,7 +214,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
         // NOTE: We're making appending of the partitioned values to the rows read from the
         //       data file configurable
-        if (shouldAppendPartitionValues) {
+        if (appendOverride) {
           logDebug(s"Appending $partitionSchema ${file.partitionValues}")
           vectorizedReader.initBatch(partitionSchema, file.partitionValues)
         } else {
@@ -216,7 +230,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       } else {
         logDebug(s"Falling back to parquet-mr")
         // ParquetRecordReader returns UnsafeRow
-        val readSupport = new ParquetReadSupport(convertTz)
+        val readSupport = new Spark24ParquetReadSupport(convertTz, readerType)
         val reader = if (pushed.isDefined && enableRecordFilter) {
           val parquetFilter = FilterCompat.get(pushed.get, null)
           new ParquetRecordReader[UnsafeRow](readSupport, parquetFilter)
@@ -254,7 +268,7 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         //
         // NOTE: We're making appending of the partitioned values to the rows read from the
         //       data file configurable
-        if (!shouldAppendPartitionValues || partitionSchema.length == 0) {
+        if (!appendOverride || partitionSchema.length == 0) {
           // There is no partition columns
           iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
         } else {

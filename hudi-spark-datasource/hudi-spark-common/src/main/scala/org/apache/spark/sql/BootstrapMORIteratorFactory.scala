@@ -37,7 +37,6 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.util.SerializableConfiguration
 
-import java.net.URI
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
@@ -262,7 +261,7 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
               }
             }
             assert(s.numRows() == d.numRows())
-            new ColumnarBatch(vecs, s.numRows())
+            sparkAdapter.makeColumnarBatch(vecs, s.numRows())
           case(_: ColumnarBatch, _:InternalRow) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
           case(_: InternalRow, _:ColumnarBatch) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
           case(s: InternalRow, d: InternalRow) => combinedRow(s, d)
