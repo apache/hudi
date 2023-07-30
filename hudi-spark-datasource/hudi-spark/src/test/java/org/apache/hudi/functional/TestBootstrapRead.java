@@ -215,6 +215,11 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
     doUpsert(options, inserts);
   }
 
+  protected void doDelete(Map<String,String> options, String instantTime) {
+    Dataset<Row> deletes = generateTestDeletes(instantTime, nUpdates);
+    doUpsert(options, deletes);
+  }
+
   protected void doUpsert(Map<String,String> options, Dataset<Row> df) {
     String nCompactCommits = "3";
     df.write().format("hudi")
@@ -285,6 +290,17 @@ public class TestBootstrapRead extends HoodieSparkClientTestBase {
         .options(basicOptions())
         .mode(SaveMode.Overwrite)
         .save(hudiBasePath);
+  }
+
+  protected Dataset<Row> makeDeleteDf(String instantTime, Integer n) {
+    List<String> records = dataGen.generateUniqueDeleteRecords(instantTime, n).stream()
+        .map(r -> recordToString(r).get()).collect(Collectors.toList());
+    JavaRDD<String> rdd = jsc.parallelize(records);
+    return sparkSession.read().json(rdd);
+  }
+
+  protected Dataset<Row> generateTestDeletes(String instantTime, Integer n) {
+    return addPartitionColumns(makeDeleteDf(instantTime, n), nPartitions);
   }
 
   protected Dataset<Row> makeInsertDf(String instantTime, Integer n) {

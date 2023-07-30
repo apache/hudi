@@ -67,14 +67,16 @@ public class TestBootstrapMORFileFormat extends TestBootstrapRead {
         .options(options)
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
-    //runComparisons();
+    runComparisons();
 
-    //do upserts
     options = basicOptions();
     doUpdate(options, "001");
     runComparisons();
 
     doInsert(options, "002");
+    runComparisons();
+
+    doDelete(options, "003");
     runComparisons();
   }
 
