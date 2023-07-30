@@ -97,6 +97,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
     DataSourceStrategy.translateFilter(predicate, supportNestedPredicatePushdown)
+  }
 
   override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
     new ColumnarBatch(vectors, numRows)
