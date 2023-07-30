@@ -41,7 +41,7 @@ public class TestBootstrapMORFileFormat extends TestBootstrapRead {
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    HoodieTableType[] tableType = {MERGE_ON_READ};
+    HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
     Integer[] nPartitions = {0, 1, 2};
     for (HoodieTableType tt : tableType) {
       for (Integer n : nPartitions) {
