@@ -24,11 +24,11 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, REALTIME_SKIP_MERGE_OPT_VAL}
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{BaseFile, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.BootstrapMORIteratorFactory.{BuildReaderWithPartitionValuesFunc, SupportBatchFunc}
+import org.apache.spark.sql.BootstrapMORIteratorFactory.{BuildReaderWithPartitionValuesFunc, SupportBatchFunc, getLogFilesFromSlice}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -102,44 +102,53 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
       file.partitionValues match {
         case broadcast: InternalRowBroadcast =>
           val filePath = sparkAdapter.getFilePath(file)
-          //We do not broadcast the slice if it has no log files or bootstrap base
-          broadcast.getSlice(FSUtils.getFileId(filePath.getName)) match {
-            case Some(fileSlice) =>
-              val hoodieBaseFile = fileSlice.getBaseFile.get()
-              val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
-              val partitionValues = broadcast.getInternalRow
-              val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
-              if (requiredSchema.isEmpty) {
-                val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
-                baseFileReader(baseFile)
-              } else if (isBootstrap && bootstrapFileOpt.isPresent) {
-                val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
-                  skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
-                  needMetaCols, needDataCols)
-                (isMOR, isPayloadMerge, logFiles.nonEmpty) match {
-                  case (true, _, true) =>
-                    buildMergeOnReadIterator(bootstrapIterator, logFiles, filePath.getParent, bootstrapReaderOutput,
+          if (FSUtils.isLogFile(filePath)) {
+            //no base file
+            val fileSlice = broadcast.getSlice(FSUtils.getFileId(filePath.getName).substring(1)).get
+            val logFiles = getLogFilesFromSlice(fileSlice)
+            val outputAvroSchema = HoodieBaseRelation.convertToAvroSchema(outputSchema, tableName)
+            new LogFileIterator(logFiles, filePath.getParent,  tableSchema.value, outputSchema, outputAvroSchema,
+              tableState.value, broadcastedHadoopConf.value.value)
+          } else {
+            //We do not broadcast the slice if it has no log files or bootstrap base
+            broadcast.getSlice(FSUtils.getFileId(filePath.getName)) match {
+              case Some(fileSlice) =>
+                val hoodieBaseFile = fileSlice.getBaseFile.get()
+                val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
+                val partitionValues = broadcast.getInternalRow
+                val logFiles = getLogFilesFromSlice(fileSlice)
+                if (requiredSchema.isEmpty) {
+                  val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                  baseFileReader(baseFile)
+                } else if (isBootstrap && bootstrapFileOpt.isPresent) {
+                  val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
+                    skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
+                    needMetaCols, needDataCols)
+                  (isMOR, isPayloadMerge, logFiles.nonEmpty) match {
+                    case (true, _, true) =>
+                      buildMergeOnReadIterator(bootstrapIterator, logFiles, filePath.getParent, bootstrapReaderOutput,
+                        requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
+                    case (true, true, false) =>
+                      appendPartitionAndProject(bootstrapIterator, bootstrapReaderOutput, partitionSchema, outputSchema, partitionValues)
+                    case (false, _, false) => bootstrapIterator
+                    case (false, _, true) => throw new IllegalStateException("should not be log files if not mor table")
+                  }
+                } else {
+                  val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                  if (isMOR && logFiles.nonEmpty) {
+                    val iterForMerge = if (isPayloadMerge) {
+                      preMergeBaseFileReader(baseFile)
+                    } else {
+                      baseFileReader(baseFile)
+                    }
+                    buildMergeOnReadIterator(iterForMerge, logFiles, filePath.getParent, requiredSchemaWithMandatory,
                       requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
-                  case (true, true, false) =>
-                    appendPartitionAndProject(bootstrapIterator, bootstrapReaderOutput, partitionSchema, outputSchema, partitionValues)
-                  case (false, _, false) => bootstrapIterator
-                  case (false, _, true) => throw new IllegalStateException("should not be log files if not mor table")
-                }
-              } else {
-                val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
-                if (isMOR && logFiles.nonEmpty) {
-                  val iterForMerge = if (isPayloadMerge) {
-                    preMergeBaseFileReader(baseFile)
                   } else {
                     baseFileReader(baseFile)
                   }
-                  buildMergeOnReadIterator(iterForMerge, logFiles, filePath.getParent, requiredSchemaWithMandatory,
-                    requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
-                } else {
-                  baseFileReader(baseFile)
                 }
-              }
-            case _ => baseFileReader(file)
+              case _ => baseFileReader(file)
+            }
           }
         case _ => baseFileReader(file)
       }
@@ -334,6 +343,11 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
 }
 
 object BootstrapMORIteratorFactory {
+
+  def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
+    fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
+  }
+
   type SupportBatchFunc = (SparkSession, StructType) => Boolean
 
   type BuildReaderWithPartitionValuesFunc = (SparkSession,

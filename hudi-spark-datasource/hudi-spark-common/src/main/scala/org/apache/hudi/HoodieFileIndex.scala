@@ -153,12 +153,15 @@ case class HoodieFileIndex(spark: SparkSession,
     }
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
-        val baseFileStatuses: Seq[FileStatus] =
+        var baseFileStatuses: Seq[FileStatus] =
           fileSlices.asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)
-
+        if (shouldBroadcast) {
+          baseFileStatuses = baseFileStatuses ++ fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent && !f.getBaseFile.isPresent)
+            .map(f => f.getLogFiles.findAny().get().getFileStatus)
+        }
         // Filter in candidate files based on the col-stats index lookup
         val candidateFiles = baseFileStatuses.filter(fs =>
           // NOTE: This predicate is true when {@code Option} is empty
