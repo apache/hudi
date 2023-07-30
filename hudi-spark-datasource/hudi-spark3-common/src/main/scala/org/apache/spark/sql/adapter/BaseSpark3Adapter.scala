@@ -34,6 +34,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
