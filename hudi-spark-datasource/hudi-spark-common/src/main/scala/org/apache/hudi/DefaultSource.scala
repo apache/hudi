@@ -245,6 +245,9 @@ object DefaultSource {
       Option(schema)
     }
 
+    val useMORBootstrapFF = parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key,
+      MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean
+
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
@@ -261,7 +264,7 @@ object DefaultSource {
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           val relation = new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
-          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
+          if (useMORBootstrapFF && !relation.hasSchemaOnRead) {
             relation.toHadoopFsRelation
           } else {
             relation
@@ -272,14 +275,14 @@ object DefaultSource {
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
           val relation = new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
+          if (useMORBootstrapFF && !relation.hasSchemaOnRead) {
             relation.toHadoopFsRelation
           } else {
             relation
           }
         case (_, _, true) =>
           val relation = new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          if (parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key, MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean) {
+          if (useMORBootstrapFF && !relation.hasSchemaOnRead) {
             relation.toHadoopFsRelation
           } else {
             relation
