@@ -25,7 +25,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.BootstrapMORIteratorFactory.{BuildReaderWithPartitionValuesFunc, SupportBatchFunc}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -63,17 +63,21 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
 
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
 
-    //add mandatory fields to required schema
-    val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
-    for (field <- mandatoryFields) {
-      requiredSchema.indexOf(field)
-      if (requiredSchema.getFieldIndex(field).isEmpty) {
-        val fieldToAdd = dataSchema.fields(dataSchema.getFieldIndex(field).get)
-        added.append(fieldToAdd)
+    val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
+      //add mandatory fields to required schema
+      val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
+      for (field <- mandatoryFields) {
+        requiredSchema.indexOf(field)
+        if (requiredSchema.getFieldIndex(field).isEmpty) {
+          val fieldToAdd = dataSchema.fields(dataSchema.getFieldIndex(field).get)
+          added.append(fieldToAdd)
+        }
       }
+      val addedFields = StructType(added.toArray)
+      StructType(requiredSchema.toArray ++ addedFields.fields)
+    } else {
+      dataSchema
     }
-    val addedFields = StructType(added.toArray)
-    val requiredSchemaWithMandatory = StructType(requiredSchema.toArray ++ addedFields.fields)
 
     val requiredSchemaSplits = requiredSchemaWithMandatory.fields.partition(f => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name))
     val requiredMeta = StructType(requiredSchemaSplits._1)

@@ -20,29 +20,14 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{BaseFile, HoodieLogFile, HoodieRecord}
-import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, RecordMergingFileIterator, SkipMergeIterator}
+import org.apache.hudi.{HoodieTableSchema, HoodieTableState}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.BootstrapMORIteratorFactory.MORBootstrapFileFormat
-import org.apache.spark.sql.{BootstrapMORIteratorFactory, HoodieCatalystExpressionUtils, SPARK_LEGACY_DATETIME_METADATA_KEY, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{Attribute, JoinedRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.util.SerializableConfiguration
-
-import java.net.URI
-import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{BootstrapMORIteratorFactory, SparkSession}
 
 class MORBootstrap33FileFormat(shouldAppendPartitionValues: Boolean,
                                tableState: Broadcast[HoodieTableState],
