@@ -88,7 +88,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       .map(_.getTimestamp)
       .toSeq.sortBy(f => f)
 
-    var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.fileterPendingInstantsAndGetOperation(
+    var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op))
 
     var client: SparkRDDWriteClient[_] = null

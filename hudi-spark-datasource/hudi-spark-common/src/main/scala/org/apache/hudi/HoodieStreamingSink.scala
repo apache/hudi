@@ -118,6 +118,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
+    if (!options.containsKey(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key())) {
+      // if user does not explicitly override, we are disabling timeline server for streaming sink.
+      // refer to HUDI-3636 for more details
+      updatedOptions = updatedOptions.updated(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), " false")
+    }
 
     retry(retryCnt, retryIntervalMs)(
       Try(

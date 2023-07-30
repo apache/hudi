@@ -80,7 +80,7 @@ class DefaultSource extends RelationProvider
     val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
     if (path.isEmpty && readPathsStr.isEmpty) {
-      throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
+      throw new HoodieException(s"'path' or '${READ_PATHS.key()}' or both must be specified.")
     }
 
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())

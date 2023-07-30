@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -47,14 +46,6 @@ public enum MetadataPartitionType {
 
   public String getFileIdPrefix() {
     return fileIdPrefix;
-  }
-
-  public static List<String> allPaths() {
-    return Arrays.asList(
-        FILES.getPartitionPath(),
-        COLUMN_STATS.getPartitionPath(),
-        BLOOM_FILTERS.getPartitionPath()
-    );
   }
 
   /**

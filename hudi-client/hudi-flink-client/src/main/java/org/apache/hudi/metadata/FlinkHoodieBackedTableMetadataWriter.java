@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -160,7 +161,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
+    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
   }
 
   /**
@@ -170,6 +171,15 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected boolean validateTimelineBeforeSchedulingCompaction(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
     // Allows compaction of the metadata table to run regardless of inflight instants
     return true;
+  }
+
+  @Override
+  protected void validateRollback(String commitToRollbackInstantTime, HoodieInstant compactionInstant, HoodieTimeline deltacommitsSinceCompaction) {
+    // ignore, flink has more radical compression strategy, it is very probably that
+    // the latest compaction instant has greater timestamp than the instant to roll back.
+
+    // The limitation can be relaxed because the log reader of MDT only accepts valid instants
+    // based on the DT timeline, so the base file of MDT does not include un-committed instants.
   }
 
   @Override

@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredica
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
@@ -93,6 +93,10 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
+
+  override def translateFilter(predicate: Expression,
+                               supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
+    DataSourceStrategy.translateFilter(predicate, supportNestedPredicatePushdown)
 
   override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
     new ColumnarBatch(vectors, numRows)

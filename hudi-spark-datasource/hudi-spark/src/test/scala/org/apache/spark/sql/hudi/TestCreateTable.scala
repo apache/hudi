@@ -1131,4 +1131,56 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult(table.properties("primaryKey"))("id")
     assertResult(table.properties("preCombineField"))("ts")
   }
+
+  test("Test Create Hoodie Table with existing hoodie.properties") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // drop the table without purging hdfs directory
+      spark.sql(s"drop table $tableName".stripMargin)
+
+      val tableSchemaAfterCreate1 = HoodieTableMetaClient.builder()
+        .setConf(spark.sparkContext.hadoopConfiguration)
+        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+
+      // avro schema name and namespace should not change should not change
+      spark.newSession().sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      val tableSchemaAfterCreate2 = HoodieTableMetaClient.builder()
+        .setConf(spark.sparkContext.hadoopConfiguration)
+        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+
+      assertResult(tableSchemaAfterCreate1.get)(tableSchemaAfterCreate2.get)
+    }
+  }
 }

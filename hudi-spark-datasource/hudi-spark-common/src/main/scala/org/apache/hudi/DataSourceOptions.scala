@@ -532,6 +532,8 @@ object DataSourceWriteOptions {
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
+  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
+
   val SQL_WRITE_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.write.operation")
     .defaultValue("insert")

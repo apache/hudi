@@ -477,6 +477,7 @@ public abstract class AbstractHoodieLogRecordReader {
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
+          case PARQUET_DATA_BLOCK:
           case DELETE_BLOCK:
             List<HoodieLogBlock> logBlocksList = instantToBlocksMap.getOrDefault(instantTime, new ArrayList<>());
             if (logBlocksList.size() == 0) {
