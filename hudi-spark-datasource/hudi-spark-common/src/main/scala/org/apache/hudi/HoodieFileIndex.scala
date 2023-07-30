@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -146,7 +146,11 @@ case class HoodieFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
-    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
+    val prunedPartitions = if (shouldBroadcast) {
+      listMatchingPartitionPaths(convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
+    } else {
+      listMatchingPartitionPaths(partitionFilters)
+    }
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
         val baseFileStatuses: Seq[FileStatus] =
