@@ -246,7 +246,7 @@ object DefaultSource {
     }
 
     val useMORBootstrapFF = parameters.getOrElse(MOR_BOOTSTRAP_FILE_READER.key,
-      MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean
+      MOR_BOOTSTRAP_FILE_READER.defaultValue).toBoolean && globPaths.isEmpty
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
