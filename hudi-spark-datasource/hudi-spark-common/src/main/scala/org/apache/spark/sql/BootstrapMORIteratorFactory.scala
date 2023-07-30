@@ -21,11 +21,12 @@ package org.apache.spark.sql
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, REALTIME_SKIP_MERGE_OPT_VAL}
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.BootstrapMORIteratorFactory.{BuildReaderWithPartitionValuesFunc, SupportBatchFunc}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -52,6 +53,7 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
                                   supportBatchFunc: SupportBatchFunc,
                                   buildReaderWithPartitionValuesFunc: BuildReaderWithPartitionValuesFunc) extends SparkAdapterSupport with Serializable {
 
+  protected val isPayloadMerge: Boolean = isMOR && mergeType.equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
 
   def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -63,7 +65,9 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
 
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
 
-    val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
+    val requiredSchemaWithMandatory = if (isMOR && !isPayloadMerge) {
+        requiredSchema
+    } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
       //add mandatory fields to required schema
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
@@ -86,9 +90,8 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
     val needDataCols = requiredWithoutMeta.nonEmpty
     val bootstrapReaderOutput = StructType(requiredMeta.fields ++ requiredWithoutMeta.fields)
 
-    val skeletonReaderAppend = needMetaCols && isBootstrap && !(needDataCols || isMOR) && partitionSchema.nonEmpty
-    val bootstrapBaseAppend = needDataCols && isBootstrap && !isMOR && partitionSchema.nonEmpty
-
+    val skeletonReaderAppend = needMetaCols && isBootstrap && !(needDataCols || isPayloadMerge) && partitionSchema.nonEmpty
+    val bootstrapBaseAppend = needDataCols && isBootstrap && !isPayloadMerge && partitionSchema.nonEmpty
 
     val (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader) = buildFileReaders(sparkSession,
       dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, requiredSchemaWithMandatory,
@@ -113,19 +116,24 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
                 val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
                   skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
                   needMetaCols, needDataCols)
-                (isMOR, logFiles.nonEmpty) match {
-                  case (true, true) =>
+                (isMOR, isPayloadMerge, logFiles.nonEmpty) match {
+                  case (true, _, true) =>
                     buildMergeOnReadIterator(bootstrapIterator, logFiles, filePath.getParent, bootstrapReaderOutput,
                       requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
-                  case (true, false) =>
+                  case (true, true, false) =>
                     appendPartitionAndProject(bootstrapIterator, bootstrapReaderOutput, partitionSchema, outputSchema, partitionValues)
-                  case (false, false) => bootstrapIterator
-                  case (false, true) => throw new IllegalStateException("should not be log files if not mor table")
+                  case (false, _, false) => bootstrapIterator
+                  case (false, _, true) => throw new IllegalStateException("should not be log files if not mor table")
                 }
               } else {
                 val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                 if (isMOR && logFiles.nonEmpty) {
-                  buildMergeOnReadIterator(preMergeBaseFileReader(baseFile), logFiles, filePath.getParent, requiredSchemaWithMandatory,
+                  val iterForMerge = if (isPayloadMerge) {
+                    preMergeBaseFileReader(baseFile)
+                  } else {
+                    baseFileReader(baseFile)
+                  }
+                  buildMergeOnReadIterator(iterForMerge, logFiles, filePath.getParent, requiredSchemaWithMandatory,
                     requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
                 } else {
                   baseFileReader(baseFile)
@@ -156,8 +164,12 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
       filters, options, hadoopConf, partitionSchema.nonEmpty, !isMOR, "")
 
     //file reader for reading a hudi base file that needs to be merged with log files
-    val preMergeBaseFileReader = buildReaderWithPartitionValuesFunc(sparkSession, dataSchema, StructType(Seq.empty),
+    val preMergeBaseFileReader = if (isPayloadMerge) {
+      buildReaderWithPartitionValuesFunc(sparkSession, dataSchema, StructType(Seq.empty),
       requiredSchemaWithMandatory, Seq.empty, options, hadoopConf, false, false, "mor")
+    } else {
+      _: PartitionedFile => Iterator.empty
+    }
 
     //Rules for appending partitions and filtering in the bootstrap readers:
     // 1. if it is mor, we don't want to filter data or append partitions
@@ -283,16 +295,16 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
                                hadoopConf: Configuration): Iterator[InternalRow] = {
 
     val requiredAvroSchema = HoodieBaseRelation.convertToAvroSchema(requiredSchemaWithMandatory, tableName)
-    val morIterator = mergeType match {
-      case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
+    mergeType match {
+      case REALTIME_SKIP_MERGE_OPT_VAL =>
         new SkipMergeIterator(logFiles, partitionPath, iter, inputSchema, tableSchema.value,
           requiredSchemaWithMandatory, requiredAvroSchema, tableState.value, hadoopConf)
-      case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
-        new RecordMergingFileIterator(logFiles, partitionPath, iter, inputSchema, tableSchema.value,
+      case REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
+        val morIterator =  new RecordMergingFileIterator(logFiles, partitionPath, iter, inputSchema, tableSchema.value,
           requiredSchemaWithMandatory, requiredAvroSchema, tableState.value, hadoopConf)
+        appendPartitionAndProject(morIterator, requiredSchemaWithMandatory, partitionSchema,
+          outputSchema, partitionValues)
     }
-    appendPartitionAndProject(morIterator, requiredSchemaWithMandatory, partitionSchema,
-      outputSchema, partitionValues)
   }
 
   /**
