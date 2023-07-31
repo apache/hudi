@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "MySchema",
+  "fields": [
+    {
+      "name": "data",
+      "type": "string"
+    }
+  ]
+}

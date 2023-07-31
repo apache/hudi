@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "MySchema",
+  "fields": [
+    {
+      "name": "id",
+      "type": ["null", "string"]
+    },
+    {
+      "name": "text",
+      "type": ["null", "string"]
+    }
+  ]
+}

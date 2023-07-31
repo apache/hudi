@@ -113,6 +113,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final GcsObjectMetadataFetcher gcsObjectMetadataFetcher;
   private final CloudDataFetcher gcsObjectDataFetcher;
   private final QueryRunner queryRunner;
+  private final Option<SchemaProvider> schemaProvider;
+
 
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
@@ -142,6 +144,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     this.gcsObjectMetadataFetcher = gcsObjectMetadataFetcher;
     this.gcsObjectDataFetcher = gcsObjectDataFetcher;
     this.queryRunner = queryRunner;
+    this.schemaProvider = Option.ofNullable(schemaProvider);
 
     LOG.info("srcPath: " + srcPath);
     LOG.info("missingCheckpointStrategy: " + missingCheckpointStrategy);
@@ -186,7 +189,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> cloudObjectMetadataDF) {
     List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(sparkContext, cloudObjectMetadataDF, checkIfFileExists);
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
-    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props);
+    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());
   }
 
