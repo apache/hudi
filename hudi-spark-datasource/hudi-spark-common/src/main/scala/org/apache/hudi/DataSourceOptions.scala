@@ -646,7 +646,7 @@ object DataSourceWriteOptions {
 
   val SPARK_SQL_OPTIMIZED_WRITES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.optimized.writes.enable")
-    .defaultValue("true")
+    .defaultValue("false")
     .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
