@@ -74,8 +74,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.array;
-import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
+import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -660,7 +660,7 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
-  void testLookupJoin(HoodieTableType tableType){
+  void testLookupJoin(HoodieTableType tableType) {
     TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -678,21 +678,20 @@ public class ITTestHoodieDataSource {
     execInsertSql(tableEnv, TestSQL.INSERT_T1);
 
 
-    tableEnv.executeSql("create view t1_view as select *," +
-        "PROCTIME() as proc_time from t1");
+    tableEnv.executeSql("create view t1_view as select *,"
+        + "PROCTIME() as proc_time from t1");
 
 
     // Join two hudi tables with the same data
-    String sql = "insert into t2 select b.* from t1_view o " +
-        "             join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day') */  " +
-        "            FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
+    String sql = "insert into t2 select b.* from t1_view o "
+        + "             join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day') */  "
+        + "            FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
     execInsertSql(tableEnv, sql);
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t2").execute().collect());
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
-
 
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
