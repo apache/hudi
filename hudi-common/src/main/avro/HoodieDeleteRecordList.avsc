@@ -23,14 +23,17 @@
   "fields": [
     {
       "name": "deleteRecordList",
+      "doc": "A list of Hudi records to delete",
       "type": {
         "type": "array",
         "items": {
           "name": "HoodieDeleteRecord",
           "type": "record",
+          "doc": "Individual Hudi record to delete",
           "fields": [
             {
               "name": "recordKey",
+              "doc": "Record key in String",
               "type": [
                 "null",
                 "string"
@@ -39,6 +42,7 @@
             },
             {
               "name": "partitionPath",
+              "doc": "Partition path in String",
               "type": [
                 "null",
                 "string"
@@ -47,6 +51,7 @@
             },
             {
               "name": "orderingVal",
+              "doc": "Ordering value determining the order of merging on the same key",
               "type": [
                 "null",
                 "org.apache.hudi.avro.model.BooleanWrapper",
