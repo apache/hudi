@@ -40,8 +40,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.compact.CompactHelpers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +74,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   public HoodieCompactionPlan generateCompactionPlan() throws IOException {
     // Accumulator to keep track of total log files for a table
     HoodieAccumulator totalLogFiles = engineContext.newAccumulator();
-    // Accumulator to keep track of total log file slices for a table
+    // Accumulator to keep track of total file slices for a table
     HoodieAccumulator totalFileSlices = engineContext.newAccumulator();
 
     // TODO : check if maxMemory is not greater than JVM or executor memory
@@ -124,7 +124,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
           // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.6
+          // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
@@ -132,7 +132,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of latest files slices " + totalFileSlices.value());
     LOG.info("Total number of log files " + totalLogFiles.value());
     LOG.info("Total number of file slices " + totalFileSlices.value());
 
