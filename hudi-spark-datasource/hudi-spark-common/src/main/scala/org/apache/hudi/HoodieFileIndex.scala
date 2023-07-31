@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferenc
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -42,7 +42,6 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.text.SimpleDateFormat
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -159,7 +158,8 @@ case class HoodieFileIndex(spark: SparkSession,
             .filter(_ != null)
             .map(_.getFileStatus)
         if (shouldBroadcast) {
-          baseFileStatuses = baseFileStatuses ++ fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent && !f.getBaseFile.isPresent)
+          baseFileStatuses = baseFileStatuses ++ fileSlices.asScala
+            .filter(f => f.getLogFiles.findAny().isPresent && !f.getBaseFile.isPresent)
             .map(f => f.getLogFiles.findAny().get().getFileStatus)
         }
         // Filter in candidate files based on the col-stats index lookup
@@ -169,8 +169,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
-        if (this.shouldBroadcast) {
-          val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
+        if (shouldBroadcast) {
+          val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent
+            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
             PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)

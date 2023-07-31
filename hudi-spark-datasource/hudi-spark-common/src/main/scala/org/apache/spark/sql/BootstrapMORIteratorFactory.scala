@@ -71,7 +71,6 @@ class BootstrapMORIteratorFactory(tableState: Broadcast[HoodieTableState],
       //add mandatory fields to required schema
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
-        requiredSchema.indexOf(field)
         if (requiredSchema.getFieldIndex(field).isEmpty) {
           val fieldToAdd = dataSchema.fields(dataSchema.getFieldIndex(field).get)
           added.append(fieldToAdd)
