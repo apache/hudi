@@ -84,11 +84,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Failed to create catalog table in metastore: ${e}")
-        val sw = new StringWriter
-        val pw = new PrintWriter(sw)
-        e.printStackTrace(pw)
-        logWarning(sw.toString)
+        logWarning(s"Failed to create catalog table in metastore: ", e)
     }
     Seq.empty[Row]
   }
