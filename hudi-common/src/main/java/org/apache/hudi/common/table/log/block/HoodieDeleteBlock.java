@@ -28,7 +28,14 @@ import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.message.BinaryMessageEncoder;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.ByteArrayInputStream;
@@ -57,6 +64,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       Lazy.lazily(HoodieDeleteRecordList::newBuilder);
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
+
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(DeleteRecord[] recordsToDelete, Map<HeaderMetadataType, String> header) {
@@ -119,8 +127,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   }
 
   private byte[] serializeV3() throws IOException {
+    DatumWriter<HoodieDeleteRecordList> writer = new SpecificDatumWriter<>(HoodieDeleteRecordList.class);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(baos, null);
     // Serialization for log block version 3 and above
-    BinaryMessageEncoder<HoodieDeleteRecordList> encoder = HoodieDeleteRecordList.getEncoder();
     HoodieDeleteRecordList.Builder recordListBuilder = HOODIE_DELETE_RECORD_LIST_BUILDER_STUB.get();
     HoodieDeleteRecord.Builder recordBuilder = HOODIE_DELETE_RECORD_BUILDER_STUB.get();
     List<HoodieDeleteRecord> deleteRecordList = Arrays.stream(getRecordsToDelete())
@@ -130,9 +140,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
             .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
             .build())
         .collect(Collectors.toList());
-    return encoder.encode(HoodieDeleteRecordList.newBuilder(recordListBuilder)
+    writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
         .setDeleteRecordList(deleteRecordList)
-        .build()).array();
+        .build(), encoder);
+    encoder.flush();
+    return baos.toByteArray();
   }
 
   private static DeleteRecord[] deserialize(int version, byte[] data) throws IOException {
@@ -143,7 +155,9 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } else if (version == 2) {
       return SerializationUtils.<DeleteRecord[]>deserialize(data);
     } else {
-      List<HoodieDeleteRecord> deleteRecordList = HoodieDeleteRecordList.getDecoder().decode(data)
+      DatumReader<HoodieDeleteRecordList> reader = new SpecificDatumReader<>(HoodieDeleteRecordList.class);
+      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
+      List<HoodieDeleteRecord> deleteRecordList = reader.read(null, decoder)
           .getDeleteRecordList();
       return deleteRecordList.stream()
           .map(record -> DeleteRecord.create(
