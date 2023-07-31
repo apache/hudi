@@ -268,7 +268,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
     boolean isDelete = false;
     if (combineRecordOpt.isPresent()) {
-      updatedRecordsWritten++;
       if (oldRecord.getData() != combineRecordOpt.get().getData()) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(newRecord.getOperation());
@@ -276,6 +275,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         // the incoming record is dropped
         return false;
       }
+      updatedRecordsWritten++;
     }
     return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
