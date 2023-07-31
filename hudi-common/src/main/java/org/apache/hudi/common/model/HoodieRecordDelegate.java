@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.Option;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
+
 /**
  * Delegate for {@link HoodieRecord}.
  * <p>
@@ -30,7 +32,7 @@ import javax.annotation.Nullable;
  * instead of passing back the full {@link HoodieRecord}, this lean delegate
  * of it will be passed instead.
  */
-public class HoodieRecordDelegate {
+public class HoodieRecordDelegate implements Serializable {
 
   private final HoodieKey hoodieKey;
 
