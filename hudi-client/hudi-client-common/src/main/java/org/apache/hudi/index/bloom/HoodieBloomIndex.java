@@ -54,9 +54,9 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
@@ -235,8 +235,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
           new BloomIndexFileInfo(
               FSUtils.getFileId(entry.getKey().getRight()),
               // NOTE: Here we assume that the type of the primary key field is string
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
+              (String) unwrapAvroValueWrapper(entry.getValue().getMinValue()),
+              (String) unwrapAvroValueWrapper(entry.getValue().getMaxValue())
           )));
     }
 
