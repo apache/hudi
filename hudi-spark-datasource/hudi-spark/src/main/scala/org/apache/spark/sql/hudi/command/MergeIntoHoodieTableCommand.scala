@@ -24,8 +24,8 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_NULLABLE
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -342,7 +342,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
     val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    // for pkless table, we need to project the meta columns
+    val hasPrimaryKey = hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
+    val projectedJoinPlan = if (!hasPrimaryKey || sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
       Project(incomingDataCols, joinData)
@@ -619,12 +621,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
-
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
-
-    val enableOptimizedMerge = sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
-      SPARK_SQL_OPTIMIZED_WRITES.defaultValue())
-
+    // for pkless tables, we need to enable optimized merge
+    val hasPrimaryKey = tableConfig.getRecordKeyFields.isPresent
+    val enableOptimizedMerge = if (!hasPrimaryKey) "true" else sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false")
     val keyGeneratorClassName = if (enableOptimizedMerge == "true") {
       classOf[MergeIntoKeyGenerator].getCanonicalName
     } else {
@@ -653,7 +653,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
 
-        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+      // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
       //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
       //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
