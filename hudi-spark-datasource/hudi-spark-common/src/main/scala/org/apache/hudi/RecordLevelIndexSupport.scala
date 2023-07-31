@@ -68,12 +68,13 @@ class RecordLevelIndexSupport(spark: SparkSession,
     Option.apply(recordKeyOpt.orElse(null))
   }
 
-  def attributeMatchesRecordKey(attributeName: String): Boolean = {
+  private def attributeMatchesRecordKey(attributeName: String): Boolean = {
     val recordKeyOpt = getRecordKey
     if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
       true
+    } else {
+      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
     }
-    HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
   }
 
   private def getAttributeLiteralTuple(expression1: Expression, expression2: Expression): Option[(AttributeReference, Literal)] = {

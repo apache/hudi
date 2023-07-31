@@ -226,9 +226,8 @@ case class HoodieFileIndex(spark: SparkSession,
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
     if (recordLevelIndex.isIndexApplicable(queryFilters)) {
-      Try(Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters)))
-    }
-    if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
+      Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters))
+    } else if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
       validateConfig()
       Option.empty
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
