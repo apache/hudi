@@ -71,7 +71,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
   def attributeMatchesRecordKey(attributeName: String): Boolean = {
     val recordKeyOpt = getRecordKey
     if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
-      return true
+      true
     }
     HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
   }
