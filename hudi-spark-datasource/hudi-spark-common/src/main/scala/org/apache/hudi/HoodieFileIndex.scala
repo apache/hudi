@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
@@ -342,17 +342,13 @@ object HoodieFileIndex extends Logging {
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
-    val tableConfig = metaClient.getTableConfig
-    val partitionColumns = tableConfig.getPartitionFields
+    val partitionColumns = metaClient.getTableConfig.getPartitionFields
     if (partitionColumns.isPresent) {
-      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-      // NOTE: A custom key generator with multiple fields could have non-encoded slashes in the partition columns'
-      //       value. We might not be able to properly parse partition-values from the listed partition-paths. Fallback
-      //       to eager listing in this case.
-      val isCustomKeyGenerator = (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))
-      val hasMultiplePartitionFields = partitionColumns.get().length > 1
-      if (hasMultiplePartitionFields && isCustomKeyGenerator) {
+      // NOTE: Multiple partition fields could have non-encoded slashes in the partition value.
+      //       We might not be able to properly parse partition-values from the listed partition-paths.
+      //       Fallback to eager listing in this case.
+      if (partitionColumns.get().length > 1
+        && (listingModeOverride == null || DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY.equals(listingModeOverride))) {
         properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, DataSourceReadOptions.FILE_INDEX_LISTING_MODE_EAGER)
       }
     }

@@ -954,7 +954,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("org.apache.hudi")
+    var recordsReadDF = spark.read.format("hudi")
       .options(readOpts)
       .load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyy/MM/dd")))
@@ -968,7 +968,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy/MM/dd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi")
+    recordsReadDF = spark.read.format("hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
