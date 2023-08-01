@@ -368,15 +368,18 @@ public class UtilHelpers {
   }
 
   public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, configs));
+    SparkConf sparkConf = buildSparkConf(appName, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf);
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster, configs));
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf);
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster));
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster);
+    return getJavaSparkContextFromSparkConf(sparkConf);
   }
 
   /**
@@ -389,9 +392,13 @@ public class UtilHelpers {
     if (sparkMemory != null) {
       sparkConf.set("spark.executor.memory", sparkMemory);
     }
-    return new JavaSparkContext(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf);
   }
 
+  public static JavaSparkContext getJavaSparkContextFromSparkConf(SparkConf sparkConf) {
+    SparkSession sparkSession = SparkSession.builder().enableHiveSupport().config(sparkConf).getOrCreate();
+    return new JavaSparkContext(sparkSession.sparkContext());
+  }
   /**
    * Build Hoodie write client.
    *
