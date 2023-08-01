@@ -869,9 +869,17 @@ public class HoodieAvroUtils {
           fieldNames.pop();
         }
         return newRecord;
+      case ENUM:
+        ValidationUtils.checkArgument(
+            oldSchema.getType() == Schema.Type.STRING || oldSchema.getType() == Schema.Type.ENUM,
+            "Only ENUM or STRING type can be converted ENUM type");
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return new GenericData.EnumSymbol(newSchema, oldRecord);
+        }
+        return oldRecord;
       case ARRAY:
         ValidationUtils.checkArgument(oldRecord instanceof Collection, "cannot rewrite record with different type");
-        Collection array = (Collection)oldRecord;
+        Collection array = (Collection) oldRecord;
         List<Object> newArray = new ArrayList();
         fieldNames.push("element");
         for (Object element : array) {
@@ -917,7 +925,6 @@ public class HoodieAvroUtils {
         case DOUBLE:
         case BYTES:
         case STRING:
-        case ENUM:
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
@@ -1026,11 +1033,6 @@ public class HoodieAvroUtils {
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
-        }
-        break;
-      case ENUM:
-        if (oldSchema.getType() == Schema.Type.STRING) {
-          return new GenericData.EnumSymbol(newSchema, oldValue);
         }
         break;
       default:
