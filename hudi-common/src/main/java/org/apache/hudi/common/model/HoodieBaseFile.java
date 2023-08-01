@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -28,12 +27,17 @@ import org.apache.hadoop.fs.FileStatus;
  * Supports APIs to get Hudi FileId, Commit Time and bootstrap file (if any).
  */
 public class HoodieBaseFile extends BaseFile {
+  private static final long serialVersionUID = 1L;
+  private final String fileId;
+  private final String commitTime;
 
   private Option<BaseFile> bootstrapBaseFile;
 
   public HoodieBaseFile(HoodieBaseFile dataFile) {
     super(dataFile);
     this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
+    this.fileId = dataFile.getFileId();
+    this.commitTime = dataFile.getCommitTime();
   }
 
   public HoodieBaseFile(FileStatus fileStatus) {
@@ -43,6 +47,9 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
     super(fileStatus);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    String[] fileIdAndCommitTime = getFileIdAndCommitTimeFromFileName();
+    this.fileId = fileIdAndCommitTime[0];
+    this.commitTime = fileIdAndCommitTime[1];
   }
 
   public HoodieBaseFile(String filePath) {
@@ -52,14 +59,39 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    String[] fileIdAndCommitTime = getFileIdAndCommitTimeFromFileName();
+    this.fileId = fileIdAndCommitTime[0];
+    this.commitTime = fileIdAndCommitTime[1];
+  }
+
+  private String[] getFileIdAndCommitTimeFromFileName() {
+    String[] values = new String[2];
+    short underscoreCount = 0;
+    short lastUnderscoreIndex = 0;
+    for (int i = 0; i < fileName.length(); i++) {
+      char c = fileName.charAt(i);
+      if (c == '_') {
+        if (underscoreCount == 0) {
+          values[0] = fileName.substring(0, i);
+        }
+        lastUnderscoreIndex = (short) i;
+        underscoreCount++;
+      } else if (c == '.') {
+        if (underscoreCount == 2) {
+          values[1] = fileName.substring(lastUnderscoreIndex + 1, i);
+          break;
+        }
+      }
+    }
+    return values;
   }
 
   public String getFileId() {
-    return FSUtils.getFileId(getFileName());
+    return fileId;
   }
 
   public String getCommitTime() {
-    return FSUtils.getCommitTime(getFileName());
+    return commitTime;
   }
 
   public Option<BaseFile> getBootstrapBaseFile() {

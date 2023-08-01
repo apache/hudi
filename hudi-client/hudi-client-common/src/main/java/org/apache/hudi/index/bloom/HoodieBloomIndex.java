@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -47,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -214,12 +214,16 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
+    List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
+    List<Pair<String, String>> partitionFileNameList = new ArrayList<>(baseFilesForAllPartitions.size());
+    Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size());
+    baseFilesForAllPartitions.forEach(pair -> {
+      Pair<String, String> parititonAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
+      partitionFileNameList.add(parititonAndFileName);
+      partitionAndFileNameToFileId.put(parititonAndFileName, pair.getValue().getFileId());
+    });
     // Partition and file name pairs
-    List<Pair<String, String>> partitionFileNameList =
-        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
-            .map(partitionBaseFilePair -> Pair.of(partitionBaseFilePair.getLeft(), partitionBaseFilePair.getRight().getFileName()))
-            .sorted()
-            .collect(toList());
+    Collections.sort(partitionFileNameList); // TODO why does this need to be sorted?
 
     if (partitionFileNameList.isEmpty()) {
       return Collections.emptyList();
@@ -233,7 +237,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
       result.add(Pair.of(entry.getKey().getLeft(),
           new BloomIndexFileInfo(
-              FSUtils.getFileId(entry.getKey().getRight()),
+              partitionAndFileNameToFileId.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
               (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
               (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())

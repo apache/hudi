@@ -193,9 +193,9 @@ public class FSUtils {
   public static String getCommitTime(String fullFileName) {
     try {
       if (isLogFile(fullFileName)) {
-        return fullFileName.split("_")[1].split("\\.")[0];
+        return fullFileName.split("_")[1].split("\\.", 2)[0];
       }
-      return fullFileName.split("_")[2].split("\\.")[0];
+      return fullFileName.split("_")[2].split("\\.", 2)[0];
     } catch (ArrayIndexOutOfBoundsException e) {
       throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
     }
@@ -206,7 +206,7 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_")[0];
+    return fullFileName.split("_", 2)[0];
   }
 
   /**
