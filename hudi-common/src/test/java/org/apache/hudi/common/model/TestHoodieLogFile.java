@@ -66,7 +66,20 @@ public class TestHoodieLogFile {
     assertFileGetters(null, hoodieLogFile, -1);
   }
 
+  @Test
+  void createFromStringWithSuffix() {
+    String suffix = ".cdc";
+    String pathWithSuffix = pathStr + suffix;
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
+    assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1);
+    assertEquals(suffix, hoodieLogFile.getSuffix());
+  }
+
   private void assertFileGetters(FileStatus fileStatus, HoodieLogFile hoodieLogFile, long fileLength) {
+    assertFileGetters(pathStr, fileStatus, hoodieLogFile, fileLength);
+  }
+
+  private void assertFileGetters(String pathStr, FileStatus fileStatus, HoodieLogFile hoodieLogFile, long fileLength) {
     assertEquals(fileId, hoodieLogFile.getFileId());
     assertEquals(baseCommitTime, hoodieLogFile.getBaseCommitTime());
     assertEquals(logVersion, hoodieLogFile.getLogVersion());
