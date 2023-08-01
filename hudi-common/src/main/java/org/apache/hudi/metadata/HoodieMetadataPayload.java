@@ -740,7 +740,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     try {
       instantTimeMillis = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
     } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to create metadata payload for record index.", e);
+      throw new HoodieMetadataException("Failed to create metadata payload for record index. Instant time parsing for " + instantTime + " failed ", e);
     }
     if (fileIdEncoding == 0) {
       // Data file names have a -D suffix to denote the index (D = integer) of the file written
