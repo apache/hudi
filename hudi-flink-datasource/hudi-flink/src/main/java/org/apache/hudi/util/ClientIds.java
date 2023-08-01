@@ -262,7 +262,7 @@ public class ClientIds implements AutoCloseable, Serializable {
     }
 
     public Builder numTolerableHeartbeatMisses(int numMisses) {
-      this.heartbeatIntervalInMs = numMisses;
+      this.numTolerableHeartbeatMisses = numMisses;
       return this;
     }
 
