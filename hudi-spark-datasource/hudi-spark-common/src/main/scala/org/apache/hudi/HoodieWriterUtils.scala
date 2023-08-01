@@ -90,7 +90,17 @@ object HoodieWriterUtils {
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
-  def canDoPrepped(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
+  /**
+   * Determines whether writes need to take prepped path or regular non-prepped path.
+   * - For spark-sql writes (UPDATES, DELETES), we could use prepped flow due to the presences of meta fields.
+   * - For pkless tables, if incoming df has meta fields, we could use prepped flow.
+   * @param hoodieConfig hoodie config of interest.
+   * @param parameters raw parameters.
+   * @param operation operation type.
+   * @param df incoming dataframe
+   * @return true if prepped writes, false otherwise.  
+   */
+  def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
     var isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
     if (!parameters.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
       && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false") == "false"

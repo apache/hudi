@@ -160,7 +160,7 @@ object HoodieSparkSqlWriter {
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
     val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    val isPrepped = canDoPrepped(hoodieConfig, parameters, operation, df)
+    val isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, df)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
