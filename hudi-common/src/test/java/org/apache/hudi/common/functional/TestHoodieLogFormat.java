@@ -1859,7 +1859,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Delete 10 keys in V2 delete block
     byte[] contentBytes = new byte[605];
     InputStream inputStream = TestHoodieLogFormat.class
-        .getResourceAsStream("/format/delete-block-v2-content-10-records.bin");
+        .getResourceAsStream("/format/delete-block-v2-content-10-records.data");
     inputStream.read(contentBytes);
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
