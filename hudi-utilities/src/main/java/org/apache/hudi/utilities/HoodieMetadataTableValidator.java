@@ -502,9 +502,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       System.exit(1);
     }
 
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Metadata-Table-Validator", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Metadata-Table-Validator", cfg.sparkMaster, sparkConfigMap);
 
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);

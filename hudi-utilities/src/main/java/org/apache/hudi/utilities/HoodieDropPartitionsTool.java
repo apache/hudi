@@ -42,7 +42,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -271,9 +271,10 @@ public class HoodieDropPartitionsTool implements Serializable {
       cmd.usage();
       System.exit(1);
     }
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Drop-Table-Partitions", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Drop-Table-Partitions", cfg.sparkMaster, sparkConfigMap);
+
     HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
     try {
       tool.run();
