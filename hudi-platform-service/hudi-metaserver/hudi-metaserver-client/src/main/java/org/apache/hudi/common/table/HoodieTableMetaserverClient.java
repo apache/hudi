@@ -60,18 +60,17 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
                                      String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
-                                     String databaseName, String tableName, HoodieMetaserverConfig config) {
+                                     HoodieMetaserverConfig config) {
     super(conf, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
         config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
-    checkArgument(nonEmpty(databaseName), "database name is required.");
-    checkArgument(nonEmpty(tableName), "table name is required.");
-    this.databaseName = databaseName;
-    this.tableName = tableName;
+    checkArgument(nonEmpty(tableConfig.getDatabaseName()), "database name is required.");
+    checkArgument(nonEmpty(tableConfig.getTableName()), "table name is required.");
+    this.databaseName = tableConfig.getDatabaseName();
+    this.tableName = tableConfig.getTableName();
     this.metaserverConfig = config;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
-    this.table = initOrGetTable(databaseName, tableName, config);
+    this.table = initOrGetTable(tableConfig.getDatabaseName(), tableConfig.getTableName(), config);
     // TODO: transfer table parameters to table config
-    this.tableConfig = new HoodieTableConfig();
     tableConfig.setTableVersion(HoodieTableVersion.current());
     tableConfig.setAll(config.getProps());
   }
