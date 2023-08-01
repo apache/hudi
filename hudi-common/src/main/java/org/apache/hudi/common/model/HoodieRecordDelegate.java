@@ -20,6 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
@@ -128,6 +129,7 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
         + '}';
   }
 
+  @VisibleForTesting
   @Override
   public final void write(Kryo kryo, Output output) {
     kryo.writeObjectOrNull(output, hoodieKey, HoodieKey.class);
@@ -135,12 +137,11 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
     kryo.writeClassAndObject(output, newLocation.isPresent() ? newLocation.get() : null);
   }
 
+  @VisibleForTesting
   @Override
   public final void read(Kryo kryo, Input input) {
     this.hoodieKey = kryo.readObjectOrNull(input, HoodieKey.class);
-    HoodieRecordLocation newrl = (HoodieRecordLocation) kryo.readClassAndObject(input);
-    this.currentLocation = newrl == null ? Option.empty() : Option.of(newrl);
-    HoodieRecordLocation oldrl = (HoodieRecordLocation) kryo.readClassAndObject(input);
-    this.newLocation = oldrl == null ? Option.empty() : Option.of(oldrl);
+    this.currentLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
+    this.newLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
   }
 }
