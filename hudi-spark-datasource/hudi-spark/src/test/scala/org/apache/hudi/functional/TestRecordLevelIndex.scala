@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -35,6 +34,8 @@ import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -557,7 +558,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   private def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+    val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
     assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
     assertTrue(fs.delete(new Path(metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName), false))
@@ -572,7 +573,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getMetadataMetaClient(hudiOpts: Map[String, String]): HoodieTableMetaClient = {
-    getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+    getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
   }
 
   private def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
@@ -675,7 +676,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   def getFileGroupCountForRecordIndex(writeConfig: HoodieWriteConfig): Long = {
-    val tableMetadata = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata]
+    val tableMetadata = getHoodieTable(metaClient, writeConfig).getMetadata.asInstanceOf[HoodieBackedTableMetadata]
     tableMetadata.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
   }
 

@@ -226,7 +226,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     }
 
     Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
-        hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
+        hoodieTable.getMetadata().getColumnStats(partitionFileNameList, keyField);
 
     List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>(fileToColumnStatsMap.size());
 

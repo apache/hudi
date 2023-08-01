@@ -361,7 +361,11 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Active instants timeline
    */
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
-    activeTimeline = new HoodieActiveTimeline(this);
+    if (activeTimeline == null) {
+      activeTimeline = new HoodieActiveTimeline(this);
+    } else {
+      activeTimeline = activeTimeline.reload();
+    }
     return activeTimeline;
   }
 
