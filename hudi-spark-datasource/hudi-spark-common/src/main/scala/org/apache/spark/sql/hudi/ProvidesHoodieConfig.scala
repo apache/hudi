@@ -338,7 +338,7 @@ trait ProvidesHoodieConfig extends Logging {
             false
           } else {
             // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
-            val hoodieOverwriteMode = sparkSession.sqlContext.getConf(OVERWRITE_MODE.key,
+            val hoodieOverwriteMode = combinedOpts.getOrElse(OVERWRITE_MODE.key,
               sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
 
             hoodieOverwriteMode match {
