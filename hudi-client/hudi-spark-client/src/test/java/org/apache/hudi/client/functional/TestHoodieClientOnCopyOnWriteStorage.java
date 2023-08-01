@@ -435,7 +435,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));
     // Close.
-      client.close();
+    client.close();
   }
 
   private void insertWithConfig(HoodieWriteConfig config, int numRecords, String instant) throws Exception {
