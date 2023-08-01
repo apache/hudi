@@ -162,10 +162,8 @@ public class ClientIds implements AutoCloseable, Serializable {
   }
 
   private void updateHeartbeat(Path heartbeatFilePath) throws HoodieHeartbeatException {
-    try {
-      OutputStream outputStream =
-          this.fs.create(heartbeatFilePath, true);
-      outputStream.close();
+    try (OutputStream outputStream = this.fs.create(heartbeatFilePath, true)) {
+      // no operation
     } catch (IOException io) {
       throw new HoodieHeartbeatException("Unable to generate heartbeat for file path " + heartbeatFilePath, io);
     }
