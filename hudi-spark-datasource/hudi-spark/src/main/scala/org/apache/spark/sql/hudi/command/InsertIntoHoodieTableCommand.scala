@@ -93,7 +93,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     var isOverWritePartition = false
 
     if (overwrite) {
-      if (deduceIsOverwriteTable(sparkSession, catalogTable, partitionSpec)) {
+      if (deduceIsOverwriteTable(sparkSession, catalogTable, partitionSpec, extraOptions)) {
         isOverWriteTable = true
         mode = SaveMode.Overwrite
       } else {

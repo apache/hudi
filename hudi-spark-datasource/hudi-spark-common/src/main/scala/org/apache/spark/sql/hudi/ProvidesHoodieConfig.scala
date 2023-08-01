@@ -39,7 +39,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsin
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.{PARTITION_OVERWRITE_MODE, PartitionOverwriteMode}
+import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
 import org.apache.spark.sql.types.StructType
 
 import java.util.Locale
@@ -318,40 +318,39 @@ trait ProvidesHoodieConfig extends Logging {
 
   def deduceIsOverwriteTable(sparkSession: SparkSession,
                              catalogTable: HoodieCatalogTable,
-                             partitionSpec: Map[String, Option[String]]): Boolean = {
-    val operation = sparkSession.sqlContext.getConf(OPERATION.key, "")
-    if (operation.nonEmpty && operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
-      true
-    } else if (operation.nonEmpty && operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
-      false
-    } else {
-      // NonPartitioned table always insert overwrite whole table
-      if (catalogTable.partitionFields.isEmpty) {
+                             partitionSpec: Map[String, Option[String]],
+                             extraOptions: Map[String, String]): Boolean = {
+    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = extraOptions)
+    val operation = combinedOpts.getOrElse(OPERATION.key, null)
+    operation match {
+      case INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL =>
         true
-      } else {
-        // Insert overwrite partitioned table with PARTITION clause will always insert overwrite the specific partition
-        if (partitionSpec.nonEmpty) {
-          false
+      case INSERT_OVERWRITE_OPERATION_OPT_VAL =>
+        false
+      case _ =>
+        // NonPartitioned table always insert overwrite whole table
+        if (catalogTable.partitionFields.isEmpty) {
+          true
         } else {
-          // If hoodie.datasource.overwrite.mode configured, respect it
-          val hoodieOverwriteMode = sparkSession.sqlContext.getConf(OVERWRITE_MODE.key, "").toUpperCase()
-          if (hoodieOverwriteMode.isEmpty) {
-            val sparkOverwriteMode = sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key).toUpperCase()
-            if (sparkOverwriteMode.equals(PartitionOverwriteMode.STATIC.toString)) {
-              true
-            } else {
-              false
-            }
+          // Insert overwrite partitioned table with PARTITION clause will always insert overwrite the specific partition
+          if (partitionSpec.nonEmpty) {
+            false
           } else {
-            OVERWRITE_MODE.checkValues(hoodieOverwriteMode)
-            if (hoodieOverwriteMode.equals("STATIC")) {
-              true
-            } else {
-              false
+            // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
+            val hoodieOverwriteMode = sparkSession.sqlContext.getConf(OVERWRITE_MODE.key,
+              sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
+
+            hoodieOverwriteMode match {
+              case "STATIC" =>
+                true
+              case "DYNAMIC" =>
+                false
+              case _ =>
+                throw new IllegalArgumentException("Config hoodie.datasource.overwrite.mode is illegal")
             }
           }
         }
-      }
     }
   }
 
