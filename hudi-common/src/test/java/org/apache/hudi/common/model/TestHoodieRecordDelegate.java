@@ -40,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieRecordDelegate {
   private HoodieRecordDelegate hoodieRecordDelegate;
-  private static final Kryo kryo = new Kryo();
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -53,12 +52,12 @@ public class TestHoodieRecordDelegate {
     record.setCurrentLocation(new HoodieRecordLocation("001", "file01"));
     record.setNewLocation(new HoodieRecordLocation("001", "file-01"));
     hoodieRecordDelegate = HoodieRecordDelegate.fromHoodieRecord(record);
-
-    kryo.register(HoodieRecordDelegate.class, new JavaSerializer());
   }
 
   @Test
-  public void TestSerializeDeserialize() {
+  public void testSerializeDeserialize() {
+    Kryo kryo = new Kryo();
+    kryo.register(HoodieRecordDelegate.class, new JavaSerializer());
     ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
     Output output = new Output(baos);
     hoodieRecordDelegate.write(kryo, output);
