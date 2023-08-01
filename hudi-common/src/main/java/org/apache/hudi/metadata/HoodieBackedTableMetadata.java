@@ -290,7 +290,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Map<String, HoodieRecord<HoodieMetadataPayload>> lookupKeysFromFileSlice(String partitionName, List<String> keys, FileSlice fileSlice) {
     Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers = getOrCreateReaders(partitionName, fileSlice);
     try {
-      List<Long> timings = new ArrayList<>();
+      List<Long> timings = new ArrayList<>(1);
       HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
       HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
       if (baseFileReader == null && logRecordScanner == null) {

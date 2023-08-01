@@ -1056,7 +1056,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   protected abstract void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap);
 
-  protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+  protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
+                                Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
@@ -1193,10 +1194,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // Run any pending table services operations.
       runPendingTableServicesOperations(writeClient);
 
-      // Check and run clean operations.
-      String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
+      Option<HoodieInstant> lastInstant = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
           .filterCompletedInstants()
-          .lastInstant().get()
+          .lastInstant();
+      if (!lastInstant.isPresent()) {
+        return;
+      }
+      // Check and run clean operations.
+      String latestDeltacommitTime = lastInstant.get()
           .getTimestamp();
       LOG.info("Latest deltacommit time found is " + latestDeltacommitTime + ", running clean operations.");
       cleanIfNecessary(writeClient, latestDeltacommitTime);
