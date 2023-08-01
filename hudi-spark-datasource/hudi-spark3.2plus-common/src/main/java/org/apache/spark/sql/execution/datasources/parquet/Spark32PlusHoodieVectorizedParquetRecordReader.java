@@ -17,10 +17,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TimeZone;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
@@ -32,9 +28,15 @@ import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
-public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+import java.io.IOException;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
 
   // save the col type change info.
   private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
@@ -43,7 +45,7 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
 
   private Map<Integer, WritableColumnVector> idToColumnVectors;
 
-  private WritableColumnVector[] columnVectors;
+  private ColumnVector[] columnVectors;
 
   // The capacity of vectorized batch.
   private int capacity;
@@ -61,12 +63,16 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
   private int batchIdx = 0;
   private int numBatched = 0;
 
-  public Spark24HoodieVectorizedParquetRecordReader(
-      TimeZone convertTz,
+  public Spark32PlusHoodieVectorizedParquetRecordReader(
+      ZoneId convertTz,
+      String datetimeRebaseMode,
+      String datetimeRebaseTz,
+      String int96RebaseMode,
+      String int96RebaseTz,
       boolean useOffHeap,
       int capacity,
       Map<Integer, Pair<DataType, DataType>> typeChangeInfos) {
-    super(convertTz, useOffHeap, capacity);
+    super(convertTz, datetimeRebaseMode, datetimeRebaseTz, int96RebaseMode, int96RebaseTz, useOffHeap, capacity);
     memoryMode = useOffHeap ? MemoryMode.OFF_HEAP : MemoryMode.ON_HEAP;
     this.typeChangeInfos = typeChangeInfos;
     this.capacity = capacity;
@@ -76,7 +82,7 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
   public void initBatch(StructType partitionColumns, InternalRow partitionValues) {
     super.initBatch(partitionColumns, partitionValues);
     if (columnVectors == null) {
-      columnVectors = new WritableColumnVector[sparkSchema.length() + partitionColumns.length()];
+      columnVectors = new ColumnVector[sparkSchema.length() + partitionColumns.length()];
     }
     if (idToColumnVectors == null) {
       idToColumnVectors = new HashMap<>();
@@ -124,7 +130,7 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
         // fill other vector
         for (int i = 0; i < columnVectors.length; i++) {
           if (columnVectors[i] == null) {
-            columnVectors[i] = (WritableColumnVector) currentColumnBatch.column(i);
+            columnVectors[i] = currentColumnBatch.column(i);
           }
         }
         columnarBatch = new ColumnarBatch(columnVectors);
@@ -183,3 +189,4 @@ public class Spark24HoodieVectorizedParquetRecordReader extends VectorizedParque
     return true;
   }
 }
+

@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap33FileFormat, ParquetFileFormat, Spark33HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -89,19 +89,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_3ExtendedSqlParser(spark, delegate)
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark33HoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
-                                   tableState: Broadcast[HoodieTableState],
-                                   tableSchema: Broadcast[HoodieTableSchema],
-                                   tableName: String,
-                                   mergeType: String,
-                                   mandatoryFields: Seq[String],
-                                   isMOR: Boolean,
-                                   isBootstrap: Boolean): Option[ParquetFileFormat] = {
-    Some(new MORBootstrap33FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark33LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def getFilePath(file: PartitionedFile): Path = {

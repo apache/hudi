@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap31FileFormat, ParquetFileFormat, Spark31HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark31PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -89,19 +89,8 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_1ExtendedSqlParser(spark, delegate)
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark31HoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
-                                            tableState: Broadcast[HoodieTableState],
-                                            tableSchema: Broadcast[HoodieTableSchema],
-                                            tableName: String,
-                                            mergeType: String,
-                                            mandatoryFields: Seq[String],
-                                            isMOR: Boolean,
-                                            isBootstrap: Boolean): Option[ParquetFileFormat] = {
-    Some(new MORBootstrap31FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark31LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def getFilePath(file: PartitionedFile): Path = {

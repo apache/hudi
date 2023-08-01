@@ -19,8 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark34HoodieFileScanRDD}
-import org.apache.spark.broadcast.Broadcast
+import org.apache.hudi.Spark34HoodieFileScanRDD
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -31,14 +30,14 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{MORBootstrap34FileFormat, ParquetFileFormat, Spark34HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark34LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark34PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_4ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSchemaUtils, HoodieSpark34CatalogUtils, HoodieSpark34CatalystExpressionUtils, HoodieSpark34CatalystPlanUtils, HoodieSpark34SchemaUtils, HoodieSpark3CatalogUtils, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -87,19 +86,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_4ExtendedSqlParser(spark, delegate)
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark34HoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def createMORBootstrapFileFormat(appendPartitionValues: Boolean,
-                                            tableState: Broadcast[HoodieTableState],
-                                            tableSchema: Broadcast[HoodieTableSchema],
-                                            tableName: String,
-                                            mergeType: String,
-                                            mandatoryFields: Seq[String],
-                                            isMOR: Boolean,
-                                            isBootstrap: Boolean): Option[ParquetFileFormat] = {
-    Some(new MORBootstrap34FileFormat(appendPartitionValues, tableState, tableSchema, tableName, mergeType, mandatoryFields, isMOR, isBootstrap))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark34LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def getFilePath(file: PartitionedFile): Path = {

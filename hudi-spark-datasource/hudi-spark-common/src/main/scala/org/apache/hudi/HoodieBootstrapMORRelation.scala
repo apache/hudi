@@ -25,6 +25,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -119,10 +120,9 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
       partitionSchema = fileIndex.partitionSchema,
       dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
-      fileFormat = sparkAdapter.createMORBootstrapFileFormat(shouldExtractPartitionValuesFromPartitionPath,
-        sparkSession.sparkContext.broadcast(tableState),
+      fileFormat =  new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR = true, isBootstrap = true).get,
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR = true, isBootstrap = true),
       optParams)(sparkSession)
   }
 }

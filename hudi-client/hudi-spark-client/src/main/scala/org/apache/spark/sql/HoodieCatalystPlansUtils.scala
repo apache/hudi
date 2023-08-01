@@ -79,7 +79,7 @@ trait HoodieCatalystPlansUtils {
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
 
-  def applyMORBootstrapFileFormatProjection(plan: LogicalPlan): LogicalPlan
+  def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan
 
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
