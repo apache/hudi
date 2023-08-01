@@ -245,7 +245,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     return logFilesToBeMoved.stream().map(lf -> {
       ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
       HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
-          FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
+          FSUtils.makeLogFileName(lf.getFileId(), "." + lf.getFileExtension(),
               compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       return Pair.of(lf, newLogFile);
     }).collect(Collectors.toList());
