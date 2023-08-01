@@ -74,6 +74,7 @@ import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -1054,6 +1055,67 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param partitionRecordsMap - Map of partition type to its records to commit
    */
   protected abstract void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap);
+
+  protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
+    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
+
+    //  Flink engine does not optimize initialCommit to MDT as bulk insert is not yet supported
+
+    try (BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient = getWriteClient()) {
+      // rollback partially failed writes if any.
+      if (writeClient.rollbackFailedWrites()) {
+        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+      }
+      metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> compactIfNecessary(writeClient, instant.getTimestamp()));
+
+      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
+        // if this is a new commit being applied to metadata for the first time
+        LOG.info("New commit at " + instantTime + " being applied to MDT.");
+      } else {
+        // this code path refers to a re-attempted commit that:
+        //   1. got committed to metadata table, but failed in datatable.
+        //   2. failed while committing to metadata table
+        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+        // are upserts to metadata table and so only a new delta commit will be created.
+        // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
+        // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+            .lastInstant();
+        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
+            alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
+
+        // Rollback the previous commit
+        if (!writeClient.rollback(instantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
+        }
+        metadataMetaClient.reloadActiveTimeline();
+      }
+
+      writeClient.startCommitWithTime(instantTime);
+      metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+
+      List<WriteStatus> statuses = null;
+      if (isInitializing) {
+        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+        writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner);
+      } else {
+        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+        statuses = writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
+      }
+
+      postInternalCommit(instantTime, statuses);
+    }
+
+    // Update total size of the metadata and count of base/log files
+    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
+  }
+
+  protected void postInternalCommit(String instantTime, List<WriteStatus> statuses) {
+    metadataMetaClient.reloadActiveTimeline();
+  }
 
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit using bulk commit (if supported).
