@@ -131,7 +131,7 @@ public class HoodieLogFile implements Serializable {
   }
 
   public Path getPath() {
-    return new Path(pathStr);
+    return path;
   }
 
   public String getFileName() {
