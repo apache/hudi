@@ -63,6 +63,9 @@ import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
+import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -223,6 +226,18 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     }
     writeClient = new HoodieJavaWriteClient(context, cfg);
     return writeClient;
+  }
+
+  public void syncTableMetadata(HoodieWriteConfig writeConfig) {
+    if (!writeConfig.getMetadataConfig().enabled()) {
+      return;
+    }
+    // Open up the metadata table again, for syncing
+    try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context, Option.empty())) {
+      LOG.info("Successfully synced to metadata table");
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Error syncing to metadata table.", e);
+    }
   }
 
   public HoodieJavaTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
