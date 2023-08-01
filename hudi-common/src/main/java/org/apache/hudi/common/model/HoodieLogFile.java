@@ -103,7 +103,7 @@ public class HoodieLogFile implements Serializable {
     this.fileExtension = matcher.group(3);
     this.logVersion = Integer.parseInt(matcher.group(4));
     this.logWriteToken = matcher.group(6);
-    this.suffix = matcher.group(10);
+    this.suffix = matcher.group(10) == null ? "" : matcher.group(10);
   }
 
   public String getFileId() {
