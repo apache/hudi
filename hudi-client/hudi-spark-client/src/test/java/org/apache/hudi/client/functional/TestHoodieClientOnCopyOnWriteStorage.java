@@ -408,34 +408,35 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   @Test
   public void testInertsWithEmptyCommitsHavingWriterSchemaAsNull() throws Exception {
-    // Set autoCommit false
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
-    String firstCommit = "001";
-    int numRecords = 200;
-    JavaRDD<WriteStatus> result = insertFirstBatch(cfgBuilder.build(), client, firstCommit, "000", numRecords, SparkRDDWriteClient::insert,
-        false, false, numRecords);
-    assertTrue(client.commit(firstCommit, result), "Commit should succeed");
+    try {
+      String firstCommit = "001";
+      int numRecords = 200;
+      JavaRDD<WriteStatus> result = insertFirstBatch(cfgBuilder.build(), client, firstCommit, "000", numRecords, SparkRDDWriteClient::insert,
+          false, false, numRecords);
+      assertTrue(client.commit(firstCommit, result), "Commit should succeed");
 
-    // Re-init client with null writer schema.
-    cfgBuilder = getConfigBuilder((String) null).withAutoCommit(false);
-    client = getHoodieWriteClient(cfgBuilder.build());
-    String secondCommit = "002";
-    client.startCommitWithTime(secondCommit);
-    JavaRDD<HoodieRecord> emptyRdd = context.emptyRDD();
-    result = client.insert(emptyRdd, secondCommit);
-    assertTrue(client.commit(secondCommit, result), "Commit should succeed");
-    try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(secondCommit))) {
-      String everything = FileIOUtils.readAsUTFString(inputStream);
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-      assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
+      // Re-init client with null writer schema.
+      cfgBuilder = getConfigBuilder((String) null).withAutoCommit(false);
+      client = getHoodieWriteClient(cfgBuilder.build());
+      String secondCommit = "002";
+      client.startCommitWithTime(secondCommit);
+      JavaRDD<HoodieRecord> emptyRdd = context.emptyRDD();
+      result = client.insert(emptyRdd, secondCommit);
+      assertTrue(client.commit(secondCommit, result), "Commit should succeed");
+      try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(secondCommit))) {
+        String everything = FileIOUtils.readAsUTFString(inputStream);
+        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
+        assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
+      }
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+      assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));
+    } finally {
+      client.close();
     }
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));
-    // Close.
-    client.close();
   }
 
   private void insertWithConfig(HoodieWriteConfig config, int numRecords, String instant) throws Exception {

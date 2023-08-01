@@ -172,7 +172,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
-    if (schemaStr != null) {
+    if (StringUtils.nonEmpty(schemaStr)) {
       builder.withSchema(schemaStr);
     }
     return builder;

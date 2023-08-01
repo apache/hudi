@@ -62,6 +62,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -826,7 +827,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
     if ((!shouldValidate && allowProjection)
         || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
-        || config.getSchema() == null
+        || StringUtils.nonEmpty(config.getSchema())
     ) {
       // Check not required
       return;
