@@ -1017,15 +1017,20 @@ public class HoodieAvroUtils {
         if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
           if (oldSchema.getType() == Schema.Type.STRING
-                  || oldSchema.getType() == Schema.Type.DOUBLE
-                  || oldSchema.getType() == Schema.Type.INT
-                  || oldSchema.getType() == Schema.Type.LONG
-                  || oldSchema.getType() == Schema.Type.FLOAT) {
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
           }
+        }
+        break;
+      case ENUM:
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return new GenericData.EnumSymbol(newSchema, oldValue);
         }
         break;
       default:
