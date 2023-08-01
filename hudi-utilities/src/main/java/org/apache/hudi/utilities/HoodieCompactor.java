@@ -255,10 +255,9 @@ public class HoodieCompactor {
     }
     LOG.info("Schema --> : " + schemaStr);
 
-    SparkRDDWriteClient<HoodieRecordPayload> client = null;
-    try {
-      client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
-      HoodieHeartbeatClient heartbeatClient = client.getHeartbeatClient();
+    try (SparkRDDWriteClient<HoodieRecordPayload> client =
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+         HoodieHeartbeatClient heartbeatClient = client.getHeartbeatClient()) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -303,10 +302,6 @@ public class HoodieCompactor {
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
       clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
-    } finally {
-      if (client != null) {
-        client.close();
-      }
     }
   }
 
