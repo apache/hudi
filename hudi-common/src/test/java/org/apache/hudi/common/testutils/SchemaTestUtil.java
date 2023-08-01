@@ -142,9 +142,9 @@ public final class SchemaTestUtil {
   /**
    * Generates a list of random UUIDs
    *
-   * @param size
-   * @param existingUUIDs
-   * @return
+   * @param size          Number of UUIDs to return.
+   * @param existingUUIDs Existing UUIDs to include.
+   * @return A list of UUIDs.
    */
   public List<String> genRandomUUID(int size, List<String> existingUUIDs) {
     Set<String> uuidSet = new HashSet<>(existingUUIDs);
@@ -161,6 +161,17 @@ public final class SchemaTestUtil {
     return generateHoodieTestRecords(from, recorKeyList, "0000/00/00", instantTime);
   }
 
+  /**
+   * Generates test records.
+   *
+   * @param from          Offset to start picking records.
+   * @param recordKeyList Record keys to use.
+   * @param partitionPath Partition path to use.
+   * @param instantTime   Hudi instant time.
+   * @return A list of {@link IndexedRecord}.
+   * @throws IOException
+   * @throws URISyntaxException
+   */
   public List<IndexedRecord> generateHoodieTestRecords(int from,
                                                        List<String> recordKeyList,
                                                        String partitionPath,
