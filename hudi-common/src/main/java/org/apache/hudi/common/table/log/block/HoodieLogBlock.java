@@ -50,6 +50,7 @@ public abstract class HoodieLogBlock {
    * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
+   * Current log block version is V3.
    */
   public static int version = 3;
   // Header for each log block

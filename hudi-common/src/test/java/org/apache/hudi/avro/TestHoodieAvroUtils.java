@@ -580,7 +580,7 @@ public class TestHoodieAvroUtils {
 
   @ParameterizedTest
   @MethodSource("javaValueParams")
-  public void testWrapAndUnwrapJavaValues(Comparable value, Class expectedWrapper) throws IOException {
+  public void testWrapAndUnwrapJavaValues(Comparable value, Class expectedWrapper) {
     Object wrapperValue = wrapValueIntoAvro(value);
     assertTrue(expectedWrapper.isInstance(wrapperValue));
     if (value instanceof Timestamp) {
