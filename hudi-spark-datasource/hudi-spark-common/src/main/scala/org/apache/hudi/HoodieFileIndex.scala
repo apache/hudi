@@ -174,7 +174,7 @@ case class HoodieFileIndex(spark: SparkSession,
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new InternalRowBroadcast(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
+            PartitionDirectory(new PartitionFileSliceMapping(InternalRow.fromSeq(partition.values), spark.sparkContext.broadcast(c)), candidateFiles)
           } else {
             PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
           }

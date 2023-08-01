@@ -26,7 +26,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, InternalRowBroadcast, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, PartitionFileSliceMapping, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
@@ -113,7 +113,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
       file.partitionValues match {
-        case broadcast: InternalRowBroadcast =>
+        case broadcast: PartitionFileSliceMapping =>
           val filePath = sparkAdapter.getFilePath(file)
           if (FSUtils.isLogFile(filePath)) {
             //no base file

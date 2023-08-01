@@ -26,8 +26,8 @@ import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{DataType, Decimal}
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
-class InternalRowBroadcast(internalRow: InternalRow,
-                           broadcast: Broadcast[Map[String, FileSlice]]) extends InternalRow {
+class PartitionFileSliceMapping(internalRow: InternalRow,
+                                broadcast: Broadcast[Map[String, FileSlice]]) extends InternalRow {
 
   def getSlice(fileId: String): Option[FileSlice] = {
     broadcast.value.get(fileId)
@@ -41,7 +41,7 @@ class InternalRowBroadcast(internalRow: InternalRow,
 
   override def update(i: Int, value: Any): Unit = internalRow.update(i, value)
 
-  override def copy(): InternalRow = new InternalRowBroadcast(internalRow.copy(), broadcast)
+  override def copy(): InternalRow = new PartitionFileSliceMapping(internalRow.copy(), broadcast)
 
   override def isNullAt(ordinal: Int): Boolean = internalRow.isNullAt(ordinal)
 
