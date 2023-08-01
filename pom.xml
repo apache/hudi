@@ -2512,6 +2512,7 @@
       <properties>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
+        <fasterxml.jackson.datatype.jsr310.module/>
       </properties>
       <activation>
         <property>
@@ -2527,6 +2528,7 @@
         <flink.bundle.version>1.16</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
+        <fasterxml.jackson.datatype.jsr310.module/>
       </properties>
       <activation>
         <property>
@@ -2542,6 +2544,7 @@
         <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
+        <fasterxml.jackson.datatype.jsr310.module/>
       </properties>
       <activation>
         <property>
@@ -2566,6 +2569,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+        <fasterxml.jackson.datatype.jsr310.module/>
       </properties>
       <activation>
         <property>
@@ -2591,6 +2595,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+        <fasterxml.jackson.datatype.jsr310.module/>
         <skipITs>true</skipITs>
       </properties>
       <activation>
