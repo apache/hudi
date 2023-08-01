@@ -825,7 +825,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     boolean shouldValidate = config.shouldValidateAvroSchema();
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
     if ((!shouldValidate && allowProjection)
-        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
+        || config.getSchema() == null
+    ) {
       // Check not required
       return;
     }
