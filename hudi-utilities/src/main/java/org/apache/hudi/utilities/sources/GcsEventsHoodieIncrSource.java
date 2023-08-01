@@ -20,15 +20,19 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
-import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectDataFetcher;
+import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
-import org.apache.hudi.utilities.sources.helpers.gcs.QueryInfo;
+import org.apache.hudi.utilities.sources.helpers.QueryInfo;
+import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -46,7 +50,7 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_C
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
@@ -104,7 +108,11 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
   private final MissingCheckpointStrategy missingCheckpointStrategy;
   private final GcsObjectMetadataFetcher gcsObjectMetadataFetcher;
-  private final GcsObjectDataFetcher gcsObjectDataFetcher;
+  private final CloudDataFetcher gcsObjectDataFetcher;
+  private final QueryRunner queryRunner;
+
+  public static final String GCS_OBJECT_KEY = "name";
+  public static final String GCS_OBJECT_SIZE = "size";
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsHoodieIncrSource.class);
 
@@ -113,12 +121,13 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     this(props, jsc, spark, schemaProvider,
         new GcsObjectMetadataFetcher(props, getSourceFileFormat(props)),
-        new GcsObjectDataFetcher(props, props.getString(DATAFILE_FORMAT.key(), DATAFILE_FORMAT.defaultValue()))
+        new CloudDataFetcher(props, props.getString(DATAFILE_FORMAT.key(), DATAFILE_FORMAT.defaultValue())),
+        new QueryRunner(spark, props)
     );
   }
 
   GcsEventsHoodieIncrSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
-                            SchemaProvider schemaProvider, GcsObjectMetadataFetcher gcsObjectMetadataFetcher, GcsObjectDataFetcher gcsObjectDataFetcher) {
+                            SchemaProvider schemaProvider, GcsObjectMetadataFetcher gcsObjectMetadataFetcher, CloudDataFetcher gcsObjectDataFetcher, QueryRunner queryRunner) {
     super(props, jsc, spark, schemaProvider);
 
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH.key()));
@@ -129,6 +138,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     this.gcsObjectMetadataFetcher = gcsObjectMetadataFetcher;
     this.gcsObjectDataFetcher = gcsObjectDataFetcher;
+    this.queryRunner = queryRunner;
 
     LOG.info("srcPath: " + srcPath);
     LOG.info("missingCheckpointStrategy: " + missingCheckpointStrategy);
@@ -137,57 +147,46 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    QueryInfo queryInfo = getQueryInfo(lastCkptStr);
+  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
+    CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
 
-    if (queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Already caught up. Begin Checkpoint was: " + queryInfo.getStartInstant());
+    QueryInfo queryInfo = generateQueryInfo(
+        sparkContext, srcPath, numInstantsPerFetch,
+        Option.of(cloudObjectIncrCheckpoint.getCommit()),
+        missingCheckpointStrategy, handlingMode, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+        GCS_OBJECT_KEY, GCS_OBJECT_SIZE, true,
+        Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
+    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryInfo:" + queryInfo);
+
+    if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
+      LOG.info("Source of file names is empty. Returning empty result and endInstant: "
+          + queryInfo.getStartInstant());
       return Pair.of(Option.empty(), queryInfo.getStartInstant());
     }
 
-    Dataset<Row> cloudObjectMetadataDF = queryInfo.initCloudObjectMetadata(srcPath, sparkSession);
-
+    Dataset<Row> cloudObjectMetadataDF = queryRunner.run(queryInfo);
     if (cloudObjectMetadataDF.isEmpty()) {
       LOG.info("Source of file names is empty. Returning empty result and endInstant: "
           + queryInfo.getEndInstant());
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
-    return extractData(queryInfo, cloudObjectMetadataDF);
+    LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
+    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> checkPointAndDataset =
+        IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+            cloudObjectMetadataDF, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+    LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
+
+    Pair<Option<Dataset<Row>>, String> extractedCheckPointAndDataset = extractData(queryInfo, checkPointAndDataset.getRight());
+    return Pair.of(extractedCheckPointAndDataset.getLeft(), checkPointAndDataset.getLeft().toString());
   }
 
   private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> cloudObjectMetadataDF) {
     List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(sparkContext, cloudObjectMetadataDF, checkIfFileExists);
+    LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
     Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());
-  }
-
-  private QueryInfo getQueryInfo(Option<String> lastCkptStr) {
-    Option<String> beginInstant = getBeginInstant(lastCkptStr);
-
-    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
-    Pair<String, Pair<String, String>> queryInfoPair = calculateBeginAndEndInstants(
-        sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
-
-    QueryInfo queryInfo = new QueryInfo(
-        queryInfoPair.getLeft(),
-        queryInfoPair.getRight().getLeft(),
-        queryInfoPair.getRight().getRight(),
-        handlingMode);
-
-    if (LOG.isDebugEnabled()) {
-      queryInfo.logDetails();
-    }
-
-    return queryInfo;
-  }
-
-  private Option<String> getBeginInstant(Option<String> lastCheckpoint) {
-    if (lastCheckpoint.isPresent() && !isNullOrEmpty(lastCheckpoint.get())) {
-      return lastCheckpoint;
-    }
-
-    return Option.empty();
   }
 
   private static String getSourceFileFormat(TypedProperties props) {
