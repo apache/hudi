@@ -76,6 +76,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the table operation is 'bulk_insert'.
+   */
+  public static boolean isBulkInsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.BULK_INSERT;
+  }
+
+  /**
    * Returns whether it is a MERGE_ON_READ table.
    */
   public static boolean isMorTable(Configuration conf) {
