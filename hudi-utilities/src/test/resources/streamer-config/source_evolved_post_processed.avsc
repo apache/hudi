@@ -32,6 +32,19 @@
       "type": "string"
     },
     {
+      "name": "trip_type",
+      "type": {
+        "type": "enum",
+        "name": "TripType",
+        "symbols": [
+          "UNKNOWN",
+          "UBERX",
+          "BLACK"
+        ],
+        "default": "UNKNOWN"
+      }
+    },
+    {
       "name": "rider",
       "type": "string"
     },
