@@ -319,13 +319,13 @@
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
-      <version>${fasterxml.version}</version>
+      <version>${fasterxml.jackson.module.scala.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
-      <version>${fasterxml.version}</version>
+      <version>${fasterxml.jackson.dataformat.yaml.version}</version>
     </dependency>
 
     <dependency>
