@@ -32,7 +32,7 @@ object AutoRecordKeyGenerationUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
   def mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters: Map[String, String], hoodieConfig: HoodieConfig): Unit = {
-    val autoGenerateRecordKeys = !parameters.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) // if record key is not configured,
+    val autoGenerateRecordKeys = isAutoGenerateRecordKeys(parameters)
     // hudi will auto generate.
     if (autoGenerateRecordKeys) {
       // de-dup is not supported with auto generation of record keys
@@ -53,5 +53,9 @@ object AutoRecordKeyGenerationUtils {
     if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
       log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
     }
+  }
+
+  def isAutoGenerateRecordKeys(parameters: Map[String, String]): Boolean = {
+    !parameters.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) // if record key is not configured,
   }
 }

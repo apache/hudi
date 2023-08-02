@@ -98,7 +98,7 @@ object HoodieWriterUtils {
    * @param parameters raw parameters.
    * @param operation operation type.
    * @param df incoming dataframe
-   * @return true if prepped writes, false otherwise.  
+   * @return true if prepped writes, false otherwise.
    */
   def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
     var isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)

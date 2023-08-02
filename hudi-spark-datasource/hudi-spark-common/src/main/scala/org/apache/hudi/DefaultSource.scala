@@ -143,13 +143,7 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
-                              rawDf: DataFrame): BaseRelation = {
-    val df = if (canRemoveMetaFields(optParams)) {
-      rawDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
-    } else {
-      rawDf // Don't remove meta columns for prepped write or for pk less table.
-    }
-
+                              df: DataFrame): BaseRelation = {
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
       HoodieSparkSqlWriter.cleanup()
@@ -162,18 +156,6 @@ class DefaultSource extends RelationProvider
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
-  }
-
-  /**
-   * For primary key less tables, incoming df could contain meta fields and we can't remove them. for other
-   * flows we can remove the meta fields.
-   * @param optParams
-   * @return
-   */
-  private def canRemoveMetaFields(optParams: Map[String, String]) : Boolean = {
-    !(optParams.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
-    || optParams.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    || !optParams.containsKey(RECORDKEY_FIELD.key()))
   }
 
   override def createSink(sqlContext: SQLContext,

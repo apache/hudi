@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
+import org.apache.hudi.AutoRecordKeyGenerationUtils.{isAutoGenerateRecordKeys, mayBeValidateParamsForAutoGenerationOfRecordKeys}
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
@@ -112,7 +112,7 @@ object HoodieSparkSqlWriter {
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             optParams: Map[String, String],
-            df: DataFrame,
+            sourceDf: DataFrame,
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
             asyncCompactionTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
@@ -160,7 +160,7 @@ object HoodieSparkSqlWriter {
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
     val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    val isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, df)
+    var isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -225,6 +225,16 @@ object HoodieSparkSqlWriter {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
+      val autoGeneratorRecordKeys = isAutoGenerateRecordKeys(parameters)
+      val df = if ((autoGeneratorRecordKeys && sourceDf.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD) ) ||
+        parameters.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+        || parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
+        // to support updates and deletes for pk less tables or for spark-sql writes.
+        isPrepped = true
+        sourceDf
+      } else {
+        sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS: _*)
+      }
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas

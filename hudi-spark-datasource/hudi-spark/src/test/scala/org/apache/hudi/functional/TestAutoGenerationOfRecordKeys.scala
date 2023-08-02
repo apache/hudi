@@ -201,7 +201,6 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     assertTrue(getRootCause(e).getMessage.contains(configKey + " is not supported with auto generation of record keys"))
   }
 
-
   @Test
   def testRecordKeysAutoGenEnableToDisable(): Unit = {
     val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
