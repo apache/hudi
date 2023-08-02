@@ -32,15 +32,25 @@ import java.util.List;
  */
 public class JavaHoodieMetadataBulkInsertPartitioner<T>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+  private String fileId = null;
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records, int outputPartitions) {
+    if (records.isEmpty()) {
+      return records;
+    }
     records.sort(Comparator.comparing(record -> record.getKey().getRecordKey()));
+    fileId = HoodieTableMetadataUtil.getFileGroupPrefix(records.get(0).getCurrentLocation().getFileId());
     return records;
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
+  }
+
+  @Override
+  public String getFileIdPfx(int partitionId) {
+    return fileId == null ? BulkInsertPartitioner.super.getFileIdPfx(partitionId) : fileId;
   }
 }
