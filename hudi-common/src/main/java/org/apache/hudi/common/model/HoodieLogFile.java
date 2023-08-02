@@ -51,6 +51,7 @@ public class HoodieLogFile implements Serializable {
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
   private transient FileStatus fileStatus;
+  private transient Path path;
   private final String pathStr;
   private final String fileId;
   private final String baseCommitTime;
@@ -58,7 +59,6 @@ public class HoodieLogFile implements Serializable {
   private final String logWriteToken;
   private final String fileExtension;
   private final String suffix;
-  private final Path path;
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
@@ -131,6 +131,9 @@ public class HoodieLogFile implements Serializable {
   }
 
   public Path getPath() {
+    if (path == null) {
+      path = new CachingPath(pathStr);
+    }
     return path;
   }
 
