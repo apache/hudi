@@ -79,10 +79,12 @@ public class HoodieBaseFile extends BaseFile {
       } else if (c == '.') {
         if (underscoreCount == 2) {
           values[1] = fileName.substring(lastUnderscoreIndex + 1, i);
-          break;
+          return values;
         }
       }
     }
+    // case where there is no '.' in file name
+    values[1] = fileName.substring(lastUnderscoreIndex + 1);
     return values;
   }
 
