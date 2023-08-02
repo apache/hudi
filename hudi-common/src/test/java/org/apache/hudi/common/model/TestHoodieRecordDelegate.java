@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.Option;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,9 +54,8 @@ public class TestHoodieRecordDelegate {
   }
 
   @Test
-  public void testSerializeDeserialize() {
+  public void testKryoSerializeDeserialize() {
     Kryo kryo = new Kryo();
-    kryo.register(HoodieRecordDelegate.class, new JavaSerializer());
     ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
     Output output = new Output(baos);
     hoodieRecordDelegate.write(kryo, output);
