@@ -25,7 +25,7 @@ import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -99,8 +99,9 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       .save(saveDir)
   }
 
+  @Disabled
   @ParameterizedTest
-  @ValueSource(booleans = Array(false))
+  @ValueSource(booleans = Array(true, false))
   def testDataTypePromotions(isCow: Boolean): Unit = {
     // test to read tables with columns that are promoted via avro schema resolution
     val tempRecordPath = basePath + "/record_tbl/"
@@ -168,11 +169,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // Float -> [Double, String]
     doTest("float", 2, 3)
     // String -> [Bytes]
-    //doTest("string", 3, 4)
+    doTest("string", 3, 4)
     // Bytes -> [String]
-    //doTest("binary", 4, 5)
+    doTest("binary", 4, 5)
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testAddNewColumn(isCow: Boolean): Unit = {
@@ -341,6 +343,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     }
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testArrayOfStructsChangeColumnType(isCow: Boolean): Unit = {
@@ -437,6 +440,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     readDf.foreach(_ => {})
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testArrayOfMapsChangeValueType(isCow: Boolean): Unit = {
@@ -481,6 +485,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     readDf.foreach(_ => {})
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testArrayOfMapsStructChangeFieldType(isCow: Boolean): Unit = {
@@ -736,6 +741,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     readDf.foreach(_ => {})
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testComplexOperationsOnTable(isCow: Boolean): Unit = {

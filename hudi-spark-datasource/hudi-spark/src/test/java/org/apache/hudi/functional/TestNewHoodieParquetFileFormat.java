@@ -106,7 +106,7 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
         .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
     assertEquals(legacyDf.count(), fileFormatDf.count());
   }
-  
+
   protected scala.collection.Seq<String> seq(String... a) {
     return scala.collection.JavaConverters.asScalaBufferConverter(Arrays.asList(a)).asScala().toSeq();
   }
