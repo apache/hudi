@@ -18,17 +18,23 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.GenericAvroSerializer;
 import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.HoodieCommonKryoRegistrar;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -55,8 +61,10 @@ public class TestHoodieRecordDelegate {
 
   @Test
   public void testKryoSerializeDeserialize() {
-    Kryo kryo = new Kryo();
+    Kryo kryo = getKryoInstance();
     ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
+    kryo.reset();
+    baos.reset();
     Output output = new Output(baos);
     hoodieRecordDelegate.write(kryo, output);
     output.close();
@@ -69,5 +77,25 @@ public class TestHoodieRecordDelegate {
     assertEquals(new HoodieKey("001", "0000/00/00"), hoodieRecordDelegate.getHoodieKey());
     assertEquals(new HoodieRecordLocation("001", "file01"), hoodieRecordDelegate.getCurrentLocation().get());
     assertEquals(new HoodieRecordLocation("001", "file-01"), hoodieRecordDelegate.getNewLocation().get());
+  }
+
+  public Kryo getKryoInstance() {
+    final Kryo kryo = new Kryo();
+    // This instance of Kryo should not require prior registration of classes
+    kryo.setRegistrationRequired(false);
+    kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
+    // Handle cases where we may have an odd classloader setup like with libjars
+    // for hadoop
+    kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
+
+    // Register Hudi's classes
+    new HoodieCommonKryoRegistrar().registerClasses(kryo);
+
+    // Register serializers
+    kryo.register(Utf8.class, new SerializationUtils.AvroUtf8Serializer());
+    kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
+
+    kryo.setRegistrationRequired(false);
+    return kryo;
   }
 }
