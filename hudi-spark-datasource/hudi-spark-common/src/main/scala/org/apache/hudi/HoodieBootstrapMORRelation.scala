@@ -112,17 +112,4 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
 
   override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapMORRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
-
-  def toHadoopFsRelation: HadoopFsRelation = {
-    fileIndex.shouldBroadcast = true
-    HadoopFsRelation(
-      location = fileIndex,
-      partitionSchema = fileIndex.partitionSchema,
-      dataSchema = fileIndex.dataSchema,
-      bucketSpec = None,
-      fileFormat =  new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR = true, isBootstrap = true),
-      optParams)(sparkSession)
-  }
 }

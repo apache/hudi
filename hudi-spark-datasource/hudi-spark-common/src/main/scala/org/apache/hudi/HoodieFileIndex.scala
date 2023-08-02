@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferenc
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -42,6 +42,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.text.SimpleDateFormat
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -152,11 +153,10 @@ case class HoodieFileIndex(spark: SparkSession,
     }
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
-        var baseFileStatuses: Seq[FileStatus] =
-          fileSlices.asScala
+        var baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
+          .asScala
             .map(fs => fs.getBaseFile.orElse(null))
-            .filter(_ != null)
-            .map(_.getFileStatus)
+            .filter(_ != null))
         if (shouldBroadcast) {
           baseFileStatuses = baseFileStatuses ++ fileSlices.asScala
             .filter(f => f.getLogFiles.findAny().isPresent && !f.getBaseFile.isPresent)
@@ -201,6 +201,23 @@ case class HoodieFileIndex(spark: SparkSession,
       listedPartitions
     } else {
       Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
+    }
+  }
+
+  /**
+   * In the fast bootstrap read code path, it gets the file status for the bootstrap base files instead of
+   * skeleton files.
+   */
+  private def getBaseFileStatus(baseFiles: mutable.Buffer[HoodieBaseFile]): mutable.Buffer[FileStatus] = {
+    if (shouldFastBootstrap) {
+     baseFiles.map(f =>
+        if (f.getBootstrapBaseFile.isPresent) {
+         f.getBootstrapBaseFile.get().getFileStatus
+        } else {
+          f.getFileStatus
+        })
+    } else {
+      baseFiles.map(_.getFileStatus)
     }
   }
 

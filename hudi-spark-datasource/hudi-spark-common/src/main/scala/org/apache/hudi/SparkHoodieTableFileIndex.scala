@@ -24,9 +24,11 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -45,7 +47,7 @@ import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -83,10 +85,18 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * Get the schema of the table.
    */
-  lazy val schema: StructType = schemaSpec.getOrElse({
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-  })
+  lazy val schema: StructType = if (shouldFastBootstrap) {
+      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+    } else {
+      rawSchema
+    }
+
+  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
+      val schemaUtil = new TableSchemaResolver(metaClient)
+      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    })
+
+  protected lazy val shouldFastBootstrap: Boolean = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 

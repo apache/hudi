@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
 public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
@@ -88,6 +89,7 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
   }
 
   protected void runComparison(String tableBasePath) {
+    testCount(tableBasePath);
     runIndividualComparison(tableBasePath);
     runIndividualComparison(tableBasePath, "partition_path");
     runIndividualComparison(tableBasePath, "_hoodie_record_key", "_hoodie_commit_time", "_hoodie_partition_path");
@@ -97,6 +99,14 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
     runIndividualComparison(tableBasePath, "_row_key", "partition_path", "_hoodie_is_deleted", "begin_lon");
   }
 
+  protected void testCount(String tableBasePath) {
+    Dataset<Row> legacyDf = sparkSession.read().format("hudi")
+        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"true").load(tableBasePath);
+    Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
+        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
+    assertEquals(legacyDf.count(), fileFormatDf.count());
+  }
+  
   protected scala.collection.Seq<String> seq(String... a) {
     return scala.collection.JavaConverters.asScalaBufferConverter(Arrays.asList(a)).asScala().toSeq();
   }

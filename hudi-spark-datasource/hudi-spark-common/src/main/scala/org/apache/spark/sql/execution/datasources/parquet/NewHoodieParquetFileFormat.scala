@@ -67,7 +67,6 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     supportBatchResult
   }
 
-
   protected val isPayloadMerge: Boolean = isMOR && mergeType.equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -131,7 +130,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                 val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
                 val partitionValues = broadcast.getInternalRow
                 val logFiles = getLogFilesFromSlice(fileSlice)
-                if (requiredSchema.isEmpty) {
+                if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                   baseFileReader(baseFile)
                 } else if (isBootstrap && bootstrapFileOpt.isPresent) {

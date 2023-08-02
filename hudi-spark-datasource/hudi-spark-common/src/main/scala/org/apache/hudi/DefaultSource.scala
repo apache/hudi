@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, SPARK_SQL_WRITES_PREPPED_KEY, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, SPARK_SQL_WRITES_PREPPED_KEY, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -28,7 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_CONCURRENCY_MODE}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -101,7 +102,8 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams +
+      (DATA_QUERIES_ONLY.key() -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), optParams.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()))))
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
@@ -245,14 +247,22 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewHudiFileFormat = !parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
-      LEGACY_HUDI_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+
+
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
+      lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
+        LEGACY_HUDI_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+       && !parameters.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()).toBoolean) {
+        Some(new NewHudiFileFormatUtils(sqlContext, metaClient, parameters, userSchema))
+      } else {
+        Option.empty
+      }
+
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -263,35 +273,51 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          val relation = new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
-          if (useNewHudiFileFormat && !relation.hasSchemaOnRead) {
-            relation.toHadoopFsRelation
+          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           } else {
-            relation
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          val relation = new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          if (useNewHudiFileFormat && !relation.hasSchemaOnRead) {
-            relation.toHadoopFsRelation
+          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+            new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           } else {
-            relation
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
           }
+
         case (_, _, true) =>
-          val relation = new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          if (useNewHudiFileFormat && !relation.hasSchemaOnRead) {
-            relation.toHadoopFsRelation
+          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+            resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           } else {
-            relation
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
           }
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
+    }
+  }
+
+  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
+                                             globPaths: Seq[Path],
+                                             userSchema: Option[StructType],
+                                             metaClient: HoodieTableMetaClient,
+                                             parameters: Map[String, String]): BaseRelation = {
+    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(parameters, sqlContext.sparkSession.sessionState.conf,
+      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
+    val isSchemaEvolutionEnabledOnRead = HoodieSparkConfUtils.getConfigValue(parameters,
+      sqlContext.sparkSession.sessionState.conf, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+    if (!enableFileIndex || isSchemaEvolutionEnabledOnRead
+      || globPaths.nonEmpty || !parameters.getOrElse(DATA_QUERIES_ONLY.key, DATA_QUERIES_ONLY.defaultValue).toBoolean) {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters + (DATA_QUERIES_ONLY.key() -> "false"))
+    } else {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
 

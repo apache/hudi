@@ -28,7 +28,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
@@ -48,7 +47,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    override val metaClient: HoodieTableMetaClient,
                                    override val optParams: Map[String, String],
                                    private val prunedDataSchema: Option[StructType] = None)
-  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) with SparkAdapterSupport {
+  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) {
 
   override type Relation = HoodieBootstrapRelation
 
@@ -60,15 +59,12 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   def toHadoopFsRelation: HadoopFsRelation = {
-    fileIndex.shouldBroadcast = true
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
       dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
-      fileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, "", mandatoryFields, isMOR = false, isBootstrap = true),
+      fileFormat = fileFormat,
       optParams)(sparkSession)
   }
 }
