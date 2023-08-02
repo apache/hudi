@@ -354,152 +354,149 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Insert Overwrite") {
     withRecordType()(withTempDir { tmp =>
-      // enable v2 table using hoodie.schema.on.read.enable
-      val seq = if (HoodieSparkUtils.gteqSpark3_2) {
-        Seq("true", "false")
-      } else {
-        Seq("false")
-      }
-      seq.foreach { v2 =>
-        val tableName = generateTableName
-        spark.sql(s"set hoodie.schema.on.read.enable=$v2")
-        // Create a partitioned table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName'
-         """.stripMargin)
-
-        //  Insert into table
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1,'a1',10,1000,'2021-01-05'),
-             | (2,'a2',10,1000,'2021-01-06')
+      Seq("cow", "mor").foreach { tableType =>
+        withTable(generateTableName) { tableName =>
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$tableName'
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 10.0, 1000, "2021-01-06")
-        )
 
-
-        // First respect hoodie.datasource.write.operation, if not set then respect hoodie.datasource.overwrite.mode,
-        // If the previous two config both not set, then respect spark.sql.sources.partitionOverwriteMode
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (3,'a3',10,1000,'2021-01-06'),
-             | (4,'a4',10,1000,'2021-01-07')
+          //  Insert into table
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,'a1',10,1000,'2021-01-05'),
+               | (2,'a2',10,1000,'2021-01-06')
           """.stripMargin)
-        // As hoodie.datasource.write.operation and hoodie.datasource.overwrite.mode both not set, respect
-        // spark.sql.sources.partitionOverwriteMode and it's default behavior is static,so insert overwrite whole table
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
-          Seq(3, "a3", 10.0, 1000, "2021-01-06"),
-          Seq(4, "a4", 10.0, 1000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 10.0, 1000, "2021-01-06")
+          )
 
-        spark.sql(s"set spark.sql.sources.partitionOverwriteMode=dynamic")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (5,'a5',10,1000,'2021-01-07')
+
+          // First respect hoodie.datasource.write.operation, if not set then respect hoodie.datasource.overwrite.mode,
+          // If the previous two config both not set, then respect spark.sql.sources.partitionOverwriteMode
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (3,'a3',10,1000,'2021-01-06'),
+               | (4,'a4',10,1000,'2021-01-07')
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
-          Seq(3, "a3", 10.0, 1000, "2021-01-06"),
-          Seq(5, "a5", 10.0, 1000, "2021-01-07")
-        )
+          // As hoodie.datasource.write.operation and hoodie.datasource.overwrite.mode both not set, respect
+          // spark.sql.sources.partitionOverwriteMode and it's default behavior is static,so insert overwrite whole table
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(3, "a3", 10.0, 1000, "2021-01-06"),
+            Seq(4, "a4", 10.0, 1000, "2021-01-07")
+          )
 
-        // Insert overwrite partitioned table with the PARTITION clause will always insert overwrite the specific
-        // partition regardless of static or dynamic mode
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName partition(dt = '2021-01-06')
-             | select * from (select 6 , 'a6', 10, 1000) limit 10
+          spark.sql(s"set spark.sql.sources.partitionOverwriteMode=dynamic")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (5,'a5',10,1000,'2021-01-07')
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
-          Seq(6, "a6", 10.0, 1000, "2021-01-06"),
-          Seq(5, "a5", 10.0, 1000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(3, "a3", 10.0, 1000, "2021-01-06"),
+            Seq(5, "a5", 10.0, 1000, "2021-01-07")
+          )
 
-        spark.sql(s"set spark.sql.sources.partitionOverwriteMode=static")
-        spark.sql(s"set hoodie.datasource.overwrite.mode=dynamic")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (7,'a7',10,1000,'2021-01-07')
+          // Insert overwrite partitioned table with the PARTITION clause will always insert overwrite the specific
+          // partition regardless of static or dynamic mode
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName partition(dt = '2021-01-06')
+               | select * from (select 6 , 'a6', 10, 1000) limit 10
           """.stripMargin)
-        // Config hoodie.datasource.overwrite.mode takes precedence over spark.sql.sources.partitionOverwriteMode
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
-          Seq(6, "a6", 10.0, 1000, "2021-01-06"),
-          Seq(7, "a7", 10.0, 1000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+            Seq(6, "a6", 10.0, 1000, "2021-01-06"),
+            Seq(5, "a5", 10.0, 1000, "2021-01-07")
+          )
 
-        spark.sql(s"set hoodie.datasource.overwrite.mode=static")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (8,'a8',10,1000,'2021-01-07'),
-             | (9,'a9',10,1000,'2021-01-08')
+          spark.sql(s"set spark.sql.sources.partitionOverwriteMode=static")
+          spark.sql(s"set hoodie.datasource.overwrite.mode=dynamic")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (7,'a7',10,1000,'2021-01-07')
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
-          Seq(8, "a8", 10.0, 1000, "2021-01-07"),
-          Seq(9, "a9", 10.0, 1000, "2021-01-08")
-        )
+          // Config hoodie.datasource.overwrite.mode takes precedence over spark.sql.sources.partitionOverwriteMode
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+            Seq(6, "a6", 10.0, 1000, "2021-01-06"),
+            Seq(7, "a7", 10.0, 1000, "2021-01-07")
+          )
 
-        // Config hoodie.datasource.write.operation always takes precedence over other configs
-        spark.sql("set hoodie.datasource.write.operation = insert_overwrite")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (10,'a10',10,1000,'2021-01-08')
+          spark.sql(s"set hoodie.datasource.overwrite.mode=static")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (8,'a8',10,1000,'2021-01-07'),
+               | (9,'a9',10,1000,'2021-01-08')
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
-          Seq(8, "a8", 10.0, 1000, "2021-01-07"),
-          Seq(10, "a10", 10.0, 1000, "2021-01-08")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by dt")(
+            Seq(8, "a8", 10.0, 1000, "2021-01-07"),
+            Seq(9, "a9", 10.0, 1000, "2021-01-08")
+          )
 
-        spark.sql("set hoodie.datasource.write.operation = insert_overwrite_table")
-        spark.sql(
-          s"""
-             | insert overwrite table $tableName values
-             | (11,'a11',10,1000,'2021-01-08'),
-             | (12,'a12',10,1000,'2021-01-09')
+          // Config hoodie.datasource.write.operation always takes precedence over other configs
+          spark.sql("set hoodie.datasource.write.operation = insert_overwrite")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (10,'a10',10,1000,'2021-01-08')
           """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
-          Seq(11, "a11", 10.0, 1000, "2021-01-08"),
-          Seq(12, "a12", 10.0, 1000, "2021-01-09")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(8, "a8", 10.0, 1000, "2021-01-07"),
+            Seq(10, "a10", 10.0, 1000, "2021-01-08")
+          )
 
-        spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
-        spark.sessionState.conf.unsetConf("hoodie.datasource.overwrite.mode")
-        spark.sessionState.conf.unsetConf("spark.sql.sources.partitionOverwriteMode")
+          spark.sql("set hoodie.datasource.write.operation = insert_overwrite_table")
+          spark.sql(
+            s"""
+               | insert overwrite table $tableName values
+               | (11,'a11',10,1000,'2021-01-08'),
+               | (12,'a12',10,1000,'2021-01-09')
+          """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(11, "a11", 10.0, 1000, "2021-01-08"),
+            Seq(12, "a12", 10.0, 1000, "2021-01-09")
+          )
 
-        // Test insert overwrite non-partitioned table (non-partitioned table always insert overwrite the whole table)
-        val tblNonPartition = generateTableName
-        spark.sql(
-          s"""
-             | create table $tblNonPartition (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             | ) using hudi
-             | tblproperties (primaryKey = 'id')
-             | location '${tmp.getCanonicalPath}/$tblNonPartition'
-           """.stripMargin)
-        spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10, 1000")
-        spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10, 1000")
-        checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
-          Seq(2, "a2", 10.0, 1000)
-        )
+          spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
+          spark.sessionState.conf.unsetConf("hoodie.datasource.overwrite.mode")
+          spark.sessionState.conf.unsetConf("spark.sql.sources.partitionOverwriteMode")
+
+          // Test insert overwrite non-partitioned table (non-partitioned table always insert overwrite the whole table)
+          val tblNonPartition = generateTableName
+          spark.sql(
+            s"""
+               | create table $tblNonPartition (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               | ) using hudi
+               | tblproperties (primaryKey = 'id')
+               | location '${tmp.getCanonicalPath}/$tblNonPartition'
+          """.stripMargin)
+          spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10, 1000")
+          spark.sql(s"insert overwrite table $tblNonPartition select 2, 'a2', 10, 1000")
+          checkAnswer(s"select id, name, price, ts from $tblNonPartition")(
+            Seq(2, "a2", 10.0, 1000)
+          )
+        }
       }
     })
   }
