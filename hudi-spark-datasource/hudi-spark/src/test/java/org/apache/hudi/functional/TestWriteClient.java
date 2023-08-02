@@ -32,6 +32,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -68,13 +70,16 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       JavaRDD<HoodieRecord> emptyRdd = context.emptyRDD();
       result = client.insert(emptyRdd, secondCommit);
       assertTrue(client.commit(secondCommit, result), "Commit should succeed");
+      // Schema Validations.
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));
-      assertEquals(numRecords, sparkSession.read().format("org.apache.hudi").load(basePath).count());
+      // Data Validations.
+      Dataset<Row> df = sparkSession.read().format("hudi").load(basePath);
+      assertEquals(numRecords, df.collectAsList().size());
     } finally {
       client.close();
     }
