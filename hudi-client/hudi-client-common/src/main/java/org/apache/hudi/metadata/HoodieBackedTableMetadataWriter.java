@@ -728,8 +728,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
     engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
-        final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
-        blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+        final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
         final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
@@ -1098,10 +1097,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       writeClient.startCommitWithTime(instantTime);
       metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
 
-      List<WriteStatus> statuses = null;
+      List<WriteStatus> statuses;
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner);
+        statuses = writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner);
       } else {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
         statuses = writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
@@ -1129,11 +1128,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param records        - records to be bulk inserted
    * @param fileGroupCount - The maximum number of file groups to which the records will be written.
    */
-  protected void bulkCommit(
+  protected abstract void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
-      int fileGroupCount) {
-    commit(instantTime, Collections.singletonMap(partitionType, records));
-  }
+      int fileGroupCount);
 
   /**
    * Tag each record with the location in the given partition.

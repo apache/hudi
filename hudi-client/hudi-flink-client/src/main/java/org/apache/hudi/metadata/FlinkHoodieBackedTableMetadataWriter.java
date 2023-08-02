@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -99,9 +98,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
-    Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
-    partitionRecordsMap.put(partitionType, records);
-    commitInternal(instantTime, partitionRecordsMap, true, Option.empty());
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.empty());
   }
 
   @Override

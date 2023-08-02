@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -89,9 +88,14 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
+  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
+  }
+
+  @Override
   protected void postInternalCommit(String instantTime, List<WriteStatus> statuses) {
     // java client does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
-    writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
+    //writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
     // reload timeline
     metadataMetaClient.reloadActiveTimeline();
