@@ -44,9 +44,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-import static org.apache.hudi.common.util.StringUtils.nonEmpty;
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-
 /**
  * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie metaserver.
  */
@@ -60,16 +57,14 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
                                      String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
-                                     HoodieMetaserverConfig config) {
+                                     String databaseName, String tableName, HoodieMetaserverConfig config) {
     super(conf, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
         config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
-    checkArgument(nonEmpty(tableConfig.getDatabaseName()), "database name is required.");
-    checkArgument(nonEmpty(tableConfig.getTableName()), "table name is required.");
-    this.databaseName = tableConfig.getDatabaseName();
-    this.tableName = tableConfig.getTableName();
+    this.databaseName = databaseName != null ? databaseName : tableConfig.getDatabaseName();
+    this.tableName = tableName != null ? tableName : tableConfig.getTableName();
     this.metaserverConfig = config;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
-    this.table = initOrGetTable(tableConfig.getDatabaseName(), tableConfig.getTableName(), config);
+    this.table = initOrGetTable(this.databaseName, this.tableName, config);
     // TODO: transfer table parameters to table config
     tableConfig.setTableVersion(HoodieTableVersion.current());
     tableConfig.setAll(config.getProps());
@@ -133,12 +128,12 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   }
 
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-      boolean applyLayoutVersionFilters) {
+                                                              boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");
   }
 
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
-      boolean applyLayoutVersionFilters) {
+                                                              boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");
   }
 
