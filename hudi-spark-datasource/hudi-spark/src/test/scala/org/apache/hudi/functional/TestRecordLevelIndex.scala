@@ -58,11 +58,11 @@ import scala.util.Using
 class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var instantTime: AtomicInteger = _
-  val metadataOpts = Map(
+  val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
   )
-  val commonOpts = Map(
+  val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
@@ -74,7 +74,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   var mergedDfList: List[DataFrame] = List.empty
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     initFileSystem()
@@ -89,7 +89,7 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupFileSystem()
     cleanupSparkContexts()
   }
@@ -521,8 +521,8 @@ class TestRecordLevelIndex extends HoodieSparkClientTestBase {
   }
 
   private def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
-    val lastInsant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+    val lastInstant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInstant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
