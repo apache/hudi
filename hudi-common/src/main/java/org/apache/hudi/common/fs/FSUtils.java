@@ -538,7 +538,7 @@ public class FSUtils {
         getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
-          .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
+          .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
   }
