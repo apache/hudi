@@ -102,7 +102,7 @@ object HoodieWriterUtils {
    */
   def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
     var isPrepped = hoodieConfig.getBooleanOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, false)
-    if (!parameters.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
+    if (!isPrepped && AutoRecordKeyGenerationUtils.isAutoGenerateRecordKeys(parameters)
       && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false") == "false"
       && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false") == "false"
       && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {

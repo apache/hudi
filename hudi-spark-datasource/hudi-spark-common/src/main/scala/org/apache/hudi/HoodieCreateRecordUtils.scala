@@ -111,7 +111,7 @@ object HoodieCreateRecordUtils {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
           }
-          val keyGenerator : Option[BaseKeyGenerator] = if (isPrepped) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
+          val keyGenerator : Option[BaseKeyGenerator] = if (isPrepped && !sqlMergeIntoPrepped) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
           val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
@@ -223,13 +223,13 @@ object HoodieCreateRecordUtils {
                                                  isPrepped: Boolean, sqlMergeIntoPrepped: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     //use keygen for sqlMergeIntoPrepped recordKey and partitionPath because the keygenerator handles
     //fetching from the meta fields if they are populated and otherwise doing keygen
-    val recordKey = if (isPrepped) {
+    val recordKey = if (isPrepped && !sqlMergeIntoPrepped) {
       avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getRecordKey(avroRec)
     }
 
-    val partitionPath = if (isPrepped) {
+    val partitionPath = if (isPrepped && !sqlMergeIntoPrepped) {
       avroRec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getPartitionPath(avroRec)

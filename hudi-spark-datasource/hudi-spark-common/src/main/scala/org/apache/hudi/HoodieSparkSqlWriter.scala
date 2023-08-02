@@ -160,7 +160,7 @@ object HoodieSparkSqlWriter {
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
     val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    var isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
+    val isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -225,12 +225,7 @@ object HoodieSparkSqlWriter {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
-      val autoGeneratorRecordKeys = isAutoGenerateRecordKeys(parameters)
-      val df = if ((autoGeneratorRecordKeys && sourceDf.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD) ) ||
-        parameters.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
-        || parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
-        // to support updates and deletes for pk less tables or for spark-sql writes.
-        isPrepped = true
+      val df = if (isPrepped || sqlMergeIntoPrepped) {
         sourceDf
       } else {
         sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS: _*)
@@ -401,7 +396,8 @@ object HoodieSparkSqlWriter {
                 hoodieRecords
               }
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation, isPrepped)
+            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
+              isPrepped || sqlMergeIntoPrepped)
             (writeResult, client)
         }
 
