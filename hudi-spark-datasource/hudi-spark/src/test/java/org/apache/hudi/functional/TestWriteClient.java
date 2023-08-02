@@ -22,9 +22,11 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
@@ -46,7 +48,9 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
   @Test
   public void testInertsWithEmptyCommitsHavingWriterSchemaAsNull() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    addConfigsForPopulateMetaFields(cfgBuilder, false);
+    // Re-init meta client with write config props.
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, cfgBuilder.build().getProps());
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     try {
       String firstCommit = "001";
@@ -57,6 +61,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
 
       // Re-init client with null writer schema.
       cfgBuilder = getConfigBuilder((String) null).withAutoCommit(false);
+      addConfigsForPopulateMetaFields(cfgBuilder, false);
       client = getHoodieWriteClient(cfgBuilder.build());
       String secondCommit = "002";
       client.startCommitWithTime(secondCommit);
