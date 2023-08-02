@@ -26,8 +26,10 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, PartitionFileSliceMapping, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, PartitionFileSliceMapping, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -35,7 +37,6 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 
 import scala.collection.mutable
@@ -171,7 +172,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   /**
    * Build file readers to read individual physical files
    */
-  def buildFileReaders(sparkSession: SparkSession, dataSchema: StructType, partitionSchema: StructType,
+ protected def buildFileReaders(sparkSession: SparkSession, dataSchema: StructType, partitionSchema: StructType,
                        requiredSchema: StructType, filters: Seq[Filter], options: Map[String, String],
                        hadoopConf: Configuration, requiredSchemaWithMandatory: StructType,
                        requiredWithoutMeta: StructType, requiredMeta: StructType):
@@ -243,7 +244,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   /**
    * Create iterator for a file slice that has bootstrap base and skeleton file
    */
-  def buildBootstrapIterator(skeletonReader: PartitionedFile => Iterator[InternalRow],
+  protected def buildBootstrapIterator(skeletonReader: PartitionedFile => Iterator[InternalRow],
                              bootstrapBaseReader: PartitionedFile => Iterator[InternalRow],
                              skeletonReaderAppend: Boolean, bootstrapBaseAppend: Boolean,
                              bootstrapBaseFile: BaseFile, hoodieBaseFile: BaseFile,
@@ -275,7 +276,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   /**
    * Merge skeleton and data file iterators
    */
-  def doBootstrapMerge(skeletonFileIterator: Iterator[Any], dataFileIterator: Iterator[Any]): Iterator[InternalRow] = {
+  protected def doBootstrapMerge(skeletonFileIterator: Iterator[Any], dataFileIterator: Iterator[Any]): Iterator[InternalRow] = {
     new Iterator[Any] {
       val combinedRow = new JoinedRow()
 
@@ -310,7 +311,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   /**
    * Create iterator for a file slice that has log files
    */
-  def buildMergeOnReadIterator(iter: Iterator[InternalRow], logFiles: List[HoodieLogFile],
+  protected def buildMergeOnReadIterator(iter: Iterator[InternalRow], logFiles: List[HoodieLogFile],
                                partitionPath: Path, inputSchema: StructType, requiredSchemaWithMandatory: StructType,
                                outputSchema: StructType, partitionSchema: StructType, partitionValues: InternalRow,
                                hadoopConf: Configuration): Iterator[InternalRow] = {
@@ -331,7 +332,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   /**
    * Append partition values to rows and project to output schema
    */
-  def appendPartitionAndProject(iter: Iterator[InternalRow],
+  protected def appendPartitionAndProject(iter: Iterator[InternalRow],
                                 inputSchema: StructType,
                                 partitionSchema: StructType,
                                 to: StructType,
@@ -339,21 +340,20 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     if (partitionSchema.isEmpty) {
       projectSchema(iter, inputSchema, to)
     } else {
-      val unsafeProjection = HoodieCatalystExpressionUtils.
-        generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
+      val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
       iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
     }
   }
 
-  def projectSchema(iter: Iterator[InternalRow],
+  protected def projectSchema(iter: Iterator[InternalRow],
                     from: StructType,
                     to: StructType): Iterator[InternalRow] = {
-    val unsafeProjection = HoodieCatalystExpressionUtils.generateUnsafeProjection(from, to)
+    val unsafeProjection = generateUnsafeProjection(from, to)
     iter.map(d => unsafeProjection(d))
   }
 
-  def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
+  protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
     fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
   }
 }
