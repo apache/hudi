@@ -827,7 +827,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
     if ((!shouldValidate && allowProjection)
         || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
-        || StringUtils.nonEmpty(config.getSchema())
+        || StringUtils.isNullOrEmpty(config.getSchema())
     ) {
       // Check not required
       return;
