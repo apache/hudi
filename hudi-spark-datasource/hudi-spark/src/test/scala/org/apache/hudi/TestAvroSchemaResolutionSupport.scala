@@ -174,7 +174,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     doTest("binary", 4, 5)
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testAddNewColumn(isCow: Boolean): Unit = {
