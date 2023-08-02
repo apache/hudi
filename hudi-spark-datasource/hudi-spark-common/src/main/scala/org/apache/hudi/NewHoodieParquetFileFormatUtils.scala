@@ -24,7 +24,9 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.ConfigProperty
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -44,11 +46,13 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
-class NewHudiFileFormatUtils(val sqlContext: SQLContext,
-                             val metaClient: HoodieTableMetaClient,
-                             val optParams: Map[String, String],
-                             private val schemaSpec: Option[StructType]) extends SparkAdapterSupport {
+class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
+                                      val metaClient: HoodieTableMetaClient,
+                                      val optParamsInput: Map[String, String],
+                                      private val schemaSpec: Option[StructType]) extends SparkAdapterSupport {
   protected val sparkSession: SparkSession = sqlContext.sparkSession
+
+  protected val optParams: Map[String, String] = optParamsInput.filter(kv => !kv._1.equals(DATA_QUERIES_ONLY.key()))
   protected def tableName: String = metaClient.getTableConfig.getTableName
 
   protected lazy val resolver: Resolver = sparkSession.sessionState.analyzer.resolver

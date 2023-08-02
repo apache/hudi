@@ -257,8 +257,9 @@ object DefaultSource {
     } else {
       lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
         LEGACY_HUDI_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
-       && !parameters.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()).toBoolean) {
-        Some(new NewHudiFileFormatUtils(sqlContext, metaClient, parameters, userSchema))
+        && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
+        Some(new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema))
       } else {
         Option.empty
       }

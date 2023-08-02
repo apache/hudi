@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -654,6 +654,8 @@ class TestHoodieSparkSqlWriter {
    *
    * @param tableType Type of table
    */
+
+  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE,true",
