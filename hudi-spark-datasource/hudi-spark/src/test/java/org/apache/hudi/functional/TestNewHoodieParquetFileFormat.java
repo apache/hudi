@@ -106,22 +106,22 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
   }
 
   protected void runIndividualComparison(String tableBasePath, String firstColumn, String... columns) {
-    Dataset<Row> relationDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
-    Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
+    Dataset<Row> legacyDf = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"true").load(tableBasePath);
+    Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
+        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
     if (firstColumn.isEmpty()) {
-      relationDf = relationDf.drop("city_to_state");
+      legacyDf = legacyDf.drop("city_to_state");
       fileFormatDf = fileFormatDf.drop("city_to_state");
     } else {
       if (columns.length > 0) {
-        relationDf = relationDf.select(firstColumn, columns);
+        legacyDf = legacyDf.select(firstColumn, columns);
         fileFormatDf = fileFormatDf.select(firstColumn, columns);
       } else {
-        relationDf = relationDf.select(firstColumn);
+        legacyDf = legacyDf.select(firstColumn);
         fileFormatDf = fileFormatDf.select(firstColumn);
       }
     }
-    compareDf(relationDf, fileFormatDf);
+    compareDf(legacyDf, fileFormatDf);
   }
 }

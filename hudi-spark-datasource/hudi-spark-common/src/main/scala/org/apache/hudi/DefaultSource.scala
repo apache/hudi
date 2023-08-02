@@ -245,7 +245,7 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewHudiFileFormat = parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
+    val useNewHudiFileFormat = !parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
       LEGACY_HUDI_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
