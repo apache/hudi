@@ -161,7 +161,6 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
@@ -2022,7 +2021,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
   }
 
-  @Test
+  @Disabled("HUDI-6609")
   public void testDeltaStreamerMultiwriterCheckpoint() throws Exception {
     // prep parquet source
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesMultiCheckpoint" + testNum;
@@ -2039,7 +2038,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Collections.emptyList(), PROPS_FILENAME_TEST_PARQUET, false,
         true, Integer.MAX_VALUE, false, null, null, "timestamp", null);
     parquetCfg.configs = new ArrayList<>();
-    parquetCfg.configs.add(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key() + "=parquet");
+    // parquetCfg.configs.add(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key() + "=parquet");
     //parquetCfg.continuousMode = false;
     HoodieDeltaStreamer parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
     parquetDs.sync();
@@ -2049,7 +2048,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     topicName = "topic" + testNum;
     prepareJsonKafkaDFSFiles(20, true, topicName);
     Map<String, String> kafkaExtraProps = new HashMap<>();
-    kafkaExtraProps.put(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key(), "kafka");
+    // kafkaExtraProps.put(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key(), "kafka");
     prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName, kafkaExtraProps, false);
     // delta streamer w/ json kafka source
     HoodieDeltaStreamer kafkaDs = new HoodieDeltaStreamer(

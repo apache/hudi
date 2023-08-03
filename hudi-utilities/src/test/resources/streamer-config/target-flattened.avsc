@@ -19,45 +19,71 @@
   "type" : "record",
   "name" : "triprec",
   "fields" : [
-  {
-    "name" : "timestamp",
-    "type" : "long"
-  }, {
-    "name" : "_row_key",
-    "type" : "string"
-  }, {
-     "name" : "partition_path",
-     "type" : "string"
-   }, {
-    "name" : "rider",
-    "type" : "string"
-  }, {
-    "name" : "driver",
-    "type" : "string"
-  }, {
-    "name" : "begin_lat",
-    "type" : "double"
-  }, {
-    "name" : "begin_lon",
-    "type" : "double"
-  }, {
-    "name" : "end_lat",
-    "type" : "double"
-  }, {
-    "name" : "end_lon",
-    "type" : "double"
-  }, {
-    "name" : "fare",
-    "type" : "double"
-  }, {
-    "name" : "currency",
-    "type" : "string"
-  }, {
-    "name" : "_hoodie_is_deleted",
-    "type" : "boolean",
-    "default" : false
-  }, {
-    "name" : "haversine_distance",
-    "type" : "double"
-  }]
+    {
+      "name": "timestamp",
+      "type": "long"
+    },
+    {
+      "name": "_row_key",
+      "type": "string"
+    },
+    {
+      "name": "partition_path",
+      "type": "string"
+    },
+    {
+      "name": "trip_type",
+      "type": {
+        "type": "enum",
+        "name": "TripType",
+        "symbols": [
+          "UNKNOWN",
+          "UBERX",
+          "BLACK"
+        ],
+        "default": "UNKNOWN"
+      }
+    },
+    {
+      "name": "rider",
+      "type": "string"
+    },
+    {
+      "name": "driver",
+      "type": "string"
+    },
+    {
+      "name": "begin_lat",
+      "type": "double"
+    },
+    {
+      "name": "begin_lon",
+      "type": "double"
+    },
+    {
+      "name": "end_lat",
+      "type": "double"
+    },
+    {
+      "name": "end_lon",
+      "type": "double"
+    },
+    {
+      "name": "fare",
+      "type": "double"
+    },
+    {
+      "name": "currency",
+      "type": "string"
+    },
+    {
+      "name": "_hoodie_is_deleted",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "haversine_distance",
+      "type": "double"
+    }
+  ]
 }

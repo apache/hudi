@@ -19,117 +19,148 @@
   "type" : "record",
   "name" : "triprec",
   "fields" : [
-  {
-    "name" : "timestamp",
-    "type" : "long"
-  }, {
-    "name" : "_row_key",
-    "type" : "string"
-  }, {
-     "name" : "partition_path",
-     "type" : "string"
-  }, {
-    "name" : "rider",
-    "type" : "string"
-  }, {
-    "name" : "driver",
-    "type" : "string"
-  }, {
-    "name" : "begin_lat",
-    "type" : "double"
-  }, {
-    "name" : "begin_lon",
-    "type" : "double"
-  }, {
-    "name" : "end_lat",
-    "type" : "double"
-  }, {
-    "name" : "end_lon",
-    "type" : "double"
-  }, {
-    "name" : "distance_in_meters",
-    "type" : "int"
-  }, {
-    "name" : "seconds_since_epoch",
-    "type" : "long"
-  }, {
-    "name" : "weight",
-    "type" : "float"
-  }, {
-    "name" : "nation",
-    "type" : "bytes"
-  },{
-    "name" : "current_date",
-    "type" : {
-      "type" : "int",
-      "logicalType" : "date"
+    {
+      "name": "timestamp",
+      "type": "long"
+    },
+    {
+      "name": "_row_key",
+      "type": "string"
+    },
+    {
+      "name": "partition_path",
+      "type": "string"
+    },
+    {
+      "name": "trip_type",
+      "type": {
+        "type": "enum",
+        "name": "TripType",
+        "symbols": [
+          "UNKNOWN",
+          "UBERX",
+          "BLACK"
+        ],
+        "default": "UNKNOWN"
       }
-  },{
-    "name" : "current_ts",
-    "type" : {
-      "type" : "long"
+    },
+    {
+      "name": "rider",
+      "type": "string"
+    },
+    {
+      "name": "driver",
+      "type": "string"
+    },
+    {
+      "name": "begin_lat",
+      "type": "double"
+    },
+    {
+      "name": "begin_lon",
+      "type": "double"
+    },
+    {
+      "name": "end_lat",
+      "type": "double"
+    },
+    {
+      "name": "end_lon",
+      "type": "double"
+    },
+    {
+      "name": "distance_in_meters",
+      "type": "int"
+    },
+    {
+      "name": "seconds_since_epoch",
+      "type": "long"
+    },
+    {
+      "name": "weight",
+      "type": "float"
+    },
+    {
+      "name": "nation",
+      "type": "bytes"
+    },
+    {
+      "name": "current_date",
+      "type": {
+        "type": "int",
+        "logicalType": "date"
       }
-  }, {
-    "name" : "height",
-    "type" : {
-      "type" : "fixed",
-      "name" : "abc",
-      "size" : 5,
-      "logicalType" : "decimal",
-      "precision" : 10,
-      "scale": 6
+    },
+    {
+      "name": "current_ts",
+      "type": {
+        "type": "long"
       }
-  }, {
-    "name" :"city_to_state",
-    "type" : {
-      "type" : "map",
-      "values": "string"
-    }
-  }, {
-    "name" : "fare",
-    "type" : {
-      "type" : "record",
-      "name" : "fare",
-       "fields" : [
-        {
-         "name" : "amount",
-         "type" : "double"
-        },
-        {
-         "name" : "currency",
-         "type" : "string"
-        }
-       ]
-    }
-  },
-  {
-    "name" : "tip_history",
-    "type" : {
-      "type" : "array",
-      "items" : {
-        "type" : "record",
-        "name" : "tip_history",
-        "fields" : [
+    },
+    {
+      "name": "height",
+      "type": {
+        "type": "fixed",
+        "name": "abc",
+        "size": 5,
+        "logicalType": "decimal",
+        "precision": 10,
+        "scale": 6
+      }
+    },
+    {
+      "name": "city_to_state",
+      "type": {
+        "type": "map",
+        "values": "string"
+      }
+    },
+    {
+      "name": "fare",
+      "type": {
+        "type": "record",
+        "name": "fare",
+        "fields": [
           {
-            "name" : "amount",
-            "type" : "double"
+            "name": "amount",
+            "type": "double"
           },
           {
-            "name" : "currency",
-            "type" : "string"
+            "name": "currency",
+            "type": "string"
           }
         ]
       }
+    },
+    {
+      "name": "tip_history",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "tip_history",
+          "fields": [
+            {
+              "name": "amount",
+              "type": "double"
+            },
+            {
+              "name": "currency",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "_hoodie_is_deleted",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "haversine_distance",
+      "type": "double"
     }
-  },
-  {
-     "name" : "_hoodie_is_deleted",
-     "type" : "boolean",
-     "default" : false
-  },
-  {
-     "name" : "haversine_distance",
-     "type" : "double"
-  }]
+  ]
 }
 

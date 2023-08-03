@@ -24,12 +24,13 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -73,6 +74,14 @@ public class OptionsResolver {
   public static boolean isInsertOperation(Configuration conf) {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT;
+  }
+
+  /**
+   * Returns whether the table operation is 'bulk_insert'.
+   */
+  public static boolean isBulkInsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.BULK_INSERT;
   }
 
   /**
@@ -281,11 +290,7 @@ public class OptionsResolver {
    * Returns whether the writer txn should be guarded by lock.
    */
   public static boolean isLockRequired(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
-        || ConfigUtils.resolveEnum(WriteConcurrencyMode.class, conf.getString(
-        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
-        == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isOptimisticConcurrencyControl(conf);
   }
 
   /**
@@ -344,6 +349,11 @@ public class OptionsResolver {
    */
   public static boolean allowCommitOnEmptyBatch(Configuration conf) {
     return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+  }
+
+  public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
+    return conf.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue())
+        .equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
   // -------------------------------------------------------------------------
