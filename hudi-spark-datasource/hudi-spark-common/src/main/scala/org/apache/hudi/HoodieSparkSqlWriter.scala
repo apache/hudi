@@ -159,8 +159,9 @@ object HoodieSparkSqlWriter {
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
     val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
 
-    val sqlMergeIntoPrepped = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
-    val isPrepped = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
+    val preppedSparkSqlMergeInto = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
+    val preppedSparkSqlWrites = parameters.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+    val preppedWriteOperation = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -225,7 +226,7 @@ object HoodieSparkSqlWriter {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
-      val df = if (isPrepped || sqlMergeIntoPrepped) {
+      val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto) {
         sourceDf
       } else {
         sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS: _*)
@@ -255,7 +256,7 @@ object HoodieSparkSqlWriter {
             val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
             // Convert to RDD[HoodieKey]
             val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
-              val keyGenerator: Option[BaseKeyGenerator] = if (isPrepped) {
+              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
                 None
               } else {
                 Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
@@ -263,12 +264,12 @@ object HoodieSparkSqlWriter {
               }
               var validatePreppedRecord = true
               it.map { avroRec =>
-                if (validatePreppedRecord && isPrepped) {
+                if (validatePreppedRecord && (preppedSparkSqlWrites || preppedWriteOperation)) {
                   // For prepped records, check the first record to make sure it has meta fields set.
                   HoodieCreateRecordUtils.validateMetaFieldsInAvroRecords(avroRec)
                   validatePreppedRecord = false
                 }
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, isPrepped, false)
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites, false, preppedWriteOperation)
               }
             }).toJavaRDD()
 
@@ -292,7 +293,7 @@ object HoodieSparkSqlWriter {
 
             // Issue deletes
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, isPrepped)
+            val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
           case WriteOperationType.DELETE_PARTITION =>
@@ -350,7 +351,7 @@ object HoodieSparkSqlWriter {
             }
 
             // Remove meta columns from writerSchema if isPrepped is true.
-            val processedDataSchema = if (isPrepped || sqlMergeIntoPrepped) {
+            val processedDataSchema = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
               HoodieAvroUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
@@ -387,7 +388,7 @@ object HoodieSparkSqlWriter {
             val hoodieRecords =
               HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(df,
                 writeConfig, parameters, avroRecordName, avroRecordNamespace, writerSchema,
-                processedDataSchema, operation, instantTime, isPrepped, sqlMergeIntoPrepped))
+                processedDataSchema, operation, instantTime, preppedSparkSqlWrites, preppedSparkSqlMergeInto, preppedWriteOperation))
 
             val dedupedHoodieRecords =
               if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
@@ -397,7 +398,7 @@ object HoodieSparkSqlWriter {
               }
             client.startCommitWithTime(instantTime, commitActionType)
             val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
-              isPrepped || sqlMergeIntoPrepped)
+              preppedSparkSqlWrites || preppedWriteOperation)
             (writeResult, client)
         }
 
