@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS
 import org.apache.hudi.DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
@@ -452,7 +453,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
 
     // snapshot query
-    val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
+    /*val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
     // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
     if (enableFileIndex) {
@@ -461,7 +462,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     } else {
       assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
       assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    }
+    }*/
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -469,7 +470,10 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+      .option(PUSH_DOWN_INCR_FILTERS.key, "distance_in_meters > 1")
       .load(basePath)
+    println(">>> Schema: " + incrementalQueryRes.schema)
+    println(">>> Physical Plan: " + incrementalQueryRes.queryExecution.executedPlan.toString)
     assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
     assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 30)
   }

@@ -383,66 +383,6 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     }
   }
 
-  /**
-   * This test mainly ensures all non-partition-prefix filter can be pushed successfully
-   */
-  @ParameterizedTest
-  @CsvSource(value = Array("true, false", "false, false", "true, true", "false, true"))
-  def testPartitionPruneWithMultiplePartitionColumnsWithComplexExpression(useMetadataTable: Boolean,
-                                                                          complexExpressionPushDown: Boolean): Unit = {
-    val _spark = spark
-    import _spark.implicits._
-
-    val partitionNames = Seq("prefix", "dt", "hh", "country")
-    val writerOpts: Map[String, String] = commonOpts ++ Map(
-      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "version",
-      PARTITIONPATH_FIELD.key -> partitionNames.mkString(","),
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
-    )
-
-    val readerOpts: Map[String, String] = queryOpts ++ Map(
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
-      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> "lazy",
-      DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key -> "true"
-    )
-
-    // Add a prefix "default" to ensure `PushDownByPartitionPrefix` not work
-    val inputDF1 = (for (i <- 0 until 10) yield (i, s"a$i", 10 + i, 10000,
-      "default", s"2021-03-0${i % 2 + 1}", i % 6 + 1, if (i % 2 == 0) "CN" else "SG"))
-      .toDF("id", "name", "price", "version", "prefix", "dt", "hh", "country")
-
-    inputDF1.write.format("hudi")
-      .options(writerOpts)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, complexExpressionPushDown.toString)
-      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, complexExpressionPushDown.toString)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    // NOTE: We're init-ing file-index in advance to additionally test refreshing capability
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, readerOpts)
-
-    val partitionFilters = EqualTo(attribute("hh"), Literal.create(5))
-
-    val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilters), Seq.empty)
-    assertEquals(1, partitionAndFilesAfterPrune.size)
-
-    assertEquals(fileIndex.areAllPartitionPathsCached(), !complexExpressionPushDown)
-
-    val PartitionDirectory(partitionActualValues, filesAfterPrune) = partitionAndFilesAfterPrune.head
-    val partitionExpectValues = Seq("default", "2021-03-01", "5", "CN")
-    assertEquals(partitionExpectValues.mkString(","), partitionActualValues.toSeq(Seq(StringType)).mkString(","))
-    assertEquals(getFileCountInPartitionPath(makePartitionPath(partitionNames, partitionExpectValues, complexExpressionPushDown)),
-      filesAfterPrune.size)
-
-    val readDF = spark.read.format("hudi").options(readerOpts).load()
-
-    assertEquals(10, readDF.count())
-    assertEquals(1, readDF.filter("hh = 5").count())
-  }
-
   @ParameterizedTest
   @CsvSource(value = Array("true", "false"))
   def testFileListingPartitionPrefixAnalysis(enablePartitionPathPrefixAnalysis: Boolean): Unit = {
@@ -745,18 +685,6 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
   private def getFileCountInPartitionPaths(partitionPaths: String*): Int = {
     partitionPaths.map(getFileCountInPartitionPath).sum
-  }
-
-  private def makePartitionPath(partitionNames: Seq[String],
-                                partitionValues: Seq[String],
-                                hiveStylePartitioning: Boolean): String = {
-    if (hiveStylePartitioning) {
-      partitionNames.zip(partitionValues).map {
-        case (name, value) => s"$name=$value"
-      }.mkString(Path.SEPARATOR)
-    } else {
-      partitionValues.mkString(Path.SEPARATOR)
-    }
   }
 }
 

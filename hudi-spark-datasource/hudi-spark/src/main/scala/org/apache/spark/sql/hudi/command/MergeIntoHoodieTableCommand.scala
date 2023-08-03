@@ -24,8 +24,8 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_NULLABLE
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -54,32 +54,32 @@ import java.util.Base64
  * Hudi's implementation of the {@code MERGE INTO} (MIT) Spark SQL statement.
  *
  * NOTE: That this implementation is restricted in a some aspects to accommodate for Hudi's crucial
- *       constraint (of requiring every record to bear unique primary-key): merging condition ([[mergeCondition]])
- *       is currently can only (and must) reference target table's primary-key columns (this is necessary to
- *       leverage Hudi's upserting capabilities including Indexes)
+ * constraint (of requiring every record to bear unique primary-key): merging condition ([[mergeCondition]])
+ * is currently can only (and must) reference target table's primary-key columns (this is necessary to
+ * leverage Hudi's upserting capabilities including Indexes)
  *
  * Following algorithm is applied:
  *
  * <ol>
- *   <li>Incoming batch ([[sourceTable]]) is reshaped such that it bears correspondingly:
- *   a) (required) "primary-key" column as well as b) (optional) "pre-combine" column; this is
- *   required since MIT statements does not restrict [[sourceTable]]s schema to be aligned w/ the
- *   [[targetTable]]s one, while Hudi's upserting flow expects such columns to be present</li>
+ * <li>Incoming batch ([[sourceTable]]) is reshaped such that it bears correspondingly:
+ * a) (required) "primary-key" column as well as b) (optional) "pre-combine" column; this is
+ * required since MIT statements does not restrict [[sourceTable]]s schema to be aligned w/ the
+ * [[targetTable]]s one, while Hudi's upserting flow expects such columns to be present</li>
  *
- *   <li>After reshaping we're writing [[sourceTable]] as a normal batch using Hudi's upserting
- *   sequence, where special [[ExpressionPayload]] implementation of the [[HoodieRecordPayload]]
- *   is used allowing us to execute updating, deleting and inserting clauses like following:</li>
+ * <li>After reshaping we're writing [[sourceTable]] as a normal batch using Hudi's upserting
+ * sequence, where special [[ExpressionPayload]] implementation of the [[HoodieRecordPayload]]
+ * is used allowing us to execute updating, deleting and inserting clauses like following:</li>
  *
- *     <ol>
- *       <li>All the matched {@code WHEN MATCHED AND ... THEN (DELETE|UPDATE ...)} conditional clauses
- *       will produce [[(condition, expression)]] tuples that will be executed w/in the
- *       [[ExpressionPayload#combineAndGetUpdateValue]] against existing (from [[targetTable]]) and
- *       incoming (from [[sourceTable]]) records producing the updated one;</li>
+ * <ol>
+ * <li>All the matched {@code WHEN MATCHED AND ... THEN (DELETE|UPDATE ...)} conditional clauses
+ * will produce [[(condition, expression)]] tuples that will be executed w/in the
+ * [[ExpressionPayload#combineAndGetUpdateValue]] against existing (from [[targetTable]]) and
+ * incoming (from [[sourceTable]]) records producing the updated one;</li>
  *
- *       <li>Not matched {@code WHEN NOT MATCHED AND ... THEN INSERT ...} conditional clauses
- *       will produce [[(condition, expression)]] tuples that will be executed w/in [[ExpressionPayload#getInsertValue]]
- *       against incoming records producing ones to be inserted into target table;</li>
- *     </ol>
+ * <li>Not matched {@code WHEN NOT MATCHED AND ... THEN INSERT ...} conditional clauses
+ * will produce [[(condition, expression)]] tuples that will be executed w/in [[ExpressionPayload#getInsertValue]]
+ * against incoming records producing ones to be inserted into target table;</li>
+ * </ol>
  * </ol>
  *
  * TODO explain workflow for MOR tables
@@ -142,10 +142,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //ensure all primary key fields are part of the merge condition
     //allow partition path to be part of the merge condition but not required
     val targetAttr2ConditionExpressions = doCasting(conditions, primaryKeyFields.isPresent)
-    val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions:_*)
-    var partitionAndKeyFields: Seq[(String,String)] = Seq.empty
+    val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions: _*)
+    var partitionAndKeyFields: Seq[(String, String)] = Seq.empty
     if (primaryKeyFields.isPresent) {
-     partitionAndKeyFields = partitionAndKeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
+      partitionAndKeyFields = partitionAndKeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
     }
     if (partitionPathFields.isPresent) {
       partitionAndKeyFields = partitionAndKeyFields ++ partitionPathFields.get().map(pp => ("partitionPath", pp)).toSeq
@@ -208,26 +208,24 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // target table side (since we're gonna be matching against primary-key column as is) expression
     // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
     // t/h "up-cast" (ie w/o any loss in precision)
+    def validateAndCastAttribute(attr: _root_.org.apache.spark.sql.catalyst.expressions.AttributeReference,
+                                 expr: _root_.org.apache.spark.sql.catalyst.expressions.Expression) = {
+      if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
+        // NOTE: It's critical we reference output attribute here and not the one from condition
+        val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
+        targetAttr -> castIfNeeded(expr, attr.dataType)
+      } else {
+        throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+          + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
+      }
+    }
+
     cleanedConditions.collect {
       case EqualTo(CoercedAttributeReference(attr), expr) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
-        if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-          // NOTE: It's critical we reference output attribute here and not the one from condition
-          val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
-          targetAttr -> castIfNeeded(expr, attr.dataType)
-        } else {
-          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
-            + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
-        }
+        validateAndCastAttribute(attr, expr)
 
       case EqualTo(expr, CoercedAttributeReference(attr)) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
-        if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-          // NOTE: It's critical we reference output attribute here and not the one from condition
-          val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
-          targetAttr -> castIfNeeded(expr, attr.dataType)
-        } else {
-          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
-            + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
-        }
+        validateAndCastAttribute(attr, expr)
 
       case expr if pkTable =>
         throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
@@ -277,7 +275,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     if (HoodieSparkUtils.isSpark2) {
       //already enabled by default for spark 3+
-      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
+      sparkSession.conf.set("spark.sql.crossJoin.enabled", "true")
     }
 
     val projectedJoinedDF: DataFrame = projectedJoinedDataset
@@ -291,17 +289,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     Seq.empty[Row]
   }
 
-  private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}
-  private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
-  private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
+  private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u }
+  private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u }
+  private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u }
 
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
    * the target table, to make sure it (at a bare minimum)
    *
    * <ol>
-   *   <li>Contains "primary-key" column (as defined by target table's config)</li>
-   *   <li>Contains "pre-combine" column (as defined by target table's config, if any)</li>
+   * <li>Contains "primary-key" column (as defined by target table's config)</li>
+   * <li>Contains "pre-combine" column (as defined by target table's config, if any)</li>
    * </ol>
    *
    * In cases when [[sourceTable]] doesn't contain aforementioned columns, following heuristic
@@ -340,7 +338,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Then we want to project the output so that we have the meta columns from the target table
     // followed by the data columns of the source table
     val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+    val joinData = sparkAdapter.getCatalystPlanUtils.createMergeIntoTableJoin(
+      mergeInto.sourceTable,
+      mergeInto.targetTable,
+      LeftOuter,
+      Some(mergeInto.mergeCondition),
+      Some(JoinHint(leftHint = None, rightHint = Some(HintInfo(Some(BROADCAST))))))
     val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
     val projectedJoinPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       Project(tableMetaCols ++ incomingDataCols, joinData)
@@ -364,12 +367,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       in case of it having different schema), we will be adding additional columns (while setting
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
-      missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
-          Seq(Alias(sourceExpression, keyAttr.name)())
+    missingAttributesMap.flatMap {
+      case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        Seq(Alias(sourceExpression, keyAttr.name)())
 
-        case _ => Seq()
-      }
+      case _ => Seq()
+    }
 
     // In case when we're not adding new columns we need to make sure that the casing of the key attributes'
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
@@ -455,14 +458,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Binds and serializes sequence of [[(Expression, Seq[Expression])]] where
    * <ul>
-   *   <li>First [[Expression]] designates condition (in update/insert clause)</li>
-   *   <li>Second [[Seq[Expression] ]] designates individual column assignments (in update/insert clause)</li>
+   * <li>First [[Expression]] designates condition (in update/insert clause)</li>
+   * <li>Second [[Seq[Expression] ]] designates individual column assignments (in update/insert clause)</li>
    * </ul>
    *
    * Such that
    * <ol>
-   *   <li>All expressions are bound against expected payload layout (and ready to be code-gen'd)</li>
-   *   <li>Serialized into Base64 string to be subsequently passed to [[ExpressionPayload]]</li>
+   * <li>All expressions are bound against expected payload layout (and ready to be code-gen'd)</li>
+   * <li>Serialized into Base64 string to be subsequently passed to [[ExpressionPayload]]</li>
    * </ol>
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
@@ -490,7 +493,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
               // Alias resulting expression w/ target table's expected column name, as well as
               // do casting if necessary
               Alias(castIfNeeded(boundExpr, attr.dataType), attr.name)()
-            }
+          }
 
           boundCondition -> boundAssignmentExprs
       }.toMap
@@ -502,10 +505,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * Re-orders assignment expressions to adhere to the ordering of that of [[targetTable]]
    */
   private def alignAssignments(
-              assignments: Seq[Assignment],
-              partialAssigmentMode: Option[PartialAssignmentMode]): Seq[Assignment] = {
+                                assignments: Seq[Assignment],
+                                partialAssigmentMode: Option[PartialAssignmentMode]): Seq[Assignment] = {
     val attr2Assignments = assignments.map {
-      case assign @ Assignment(attr: Attribute, _) => attr -> assign
+      case assign@Assignment(attr: Attribute, _) => attr -> assign
       case a =>
         throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
     }
@@ -542,13 +545,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expected combined payload of
    *
    * <ol>
-   *   <li>Source table record, joined w/</li>
-   *   <li>Target table record</li>
+   * <li>Source table record, joined w/</li>
+   * <li>Target table record</li>
    * </ol>
    *
    * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
-   *       This has to be in sync w/ [[ExpressionPayload]] that is actually performing comnbining of the
-   *       records producing final payload being persisted.
+   * This has to be in sync w/ [[ExpressionPayload]] that is actually performing comnbining of the
+   * records producing final payload being persisted.
    *
    * Joining is necessary to handle the case of the records being _updated_ (when record is present in
    * both target and the source tables), since MIT statement allows resulting record to be
@@ -653,7 +656,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
 
-        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+      // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
       //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
       //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the

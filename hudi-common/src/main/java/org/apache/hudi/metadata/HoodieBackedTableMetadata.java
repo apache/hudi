@@ -46,9 +46,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.expression.BindVisitor;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Transient;
@@ -144,26 +141,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
     Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(Collections.singletonList(key), partitionName);
     return Option.ofNullable(recordsByKeys.get(key));
-  }
-
-  @Override
-  public List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
-                                                                          Types.RecordType partitionFields,
-                                                                          Expression expression) throws IOException {
-    Expression boundedExpr = expression.accept(new BindVisitor(partitionFields, caseSensitive));
-    List<String> selectedPartitionPaths = getPartitionPathWithPathPrefixes(relativePathPrefixes);
-
-    // Can only prune partitions if the number of partition levels matches partition fields
-    // Here we'll check the first selected partition to see whether the numbers match.
-    if (hiveStylePartitioningEnabled
-        && getPathPartitionLevel(partitionFields, selectedPartitionPaths.get(0)) == partitionFields.fields().size()) {
-      return selectedPartitionPaths.stream()
-          .filter(p ->
-              (boolean) boundedExpr.eval(extractPartitionValues(partitionFields, p, urlEncodePartitioningEnabled)))
-          .collect(Collectors.toList());
-    }
-
-    return selectedPartitionPaths;
   }
 
   @Override

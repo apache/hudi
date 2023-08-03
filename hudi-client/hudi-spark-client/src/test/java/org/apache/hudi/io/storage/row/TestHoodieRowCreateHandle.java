@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -189,8 +190,16 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
       new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
+    } catch (HoodieInsertException ioe) {
+      // expected without metadata table
+      if (enableMetadataTable) {
+        fail("Should have thrown TableNotFoundException");
+      }
     } catch (TableNotFoundException e) {
-      // expected throw failure
+      // expected with metadata table
+      if (!enableMetadataTable) {
+        fail("Should have thrown HoodieInsertException");
+      }
     }
   }
 

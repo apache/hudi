@@ -16,17 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.hive.expression;
 
-import java.util.List;
+public class Literal extends LeafExpression {
 
-/**
- * Expression that without any child expressions.
- */
-public abstract class LeafExpression implements Expression {
+  private final String value;
+  private final String type;
+
+  public Literal(String value, String type) {
+    this.value = value;
+    this.type = type;
+  }
+
+  public String getValue() {
+    return value;
+  }
+
+  public String getType() {
+    return type;
+  }
 
   @Override
-  public List<Expression> getChildren() {
-    return null;
+  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
+    return exprVisitor.visitLiteral(this);
   }
 }

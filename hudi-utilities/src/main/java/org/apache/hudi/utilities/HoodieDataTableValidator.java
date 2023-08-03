@@ -297,7 +297,7 @@ public class HoodieDataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try {
       HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
-          engineContext, metaClient.getTableConfig(), engineContext.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
+          engineContext, engineContext.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
       List<Path> allDataFilePaths = HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
       if (metaClient.getActiveTimeline().firstInstant().isPresent()) {

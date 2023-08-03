@@ -235,7 +235,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
         // not other resolution errors like mismatched data types.
         val cols = p.inputSet.toSeq.map(_.sql).mkString(", ")
         // START: custom Hudi change from spark because spark 3.4 constructor is different for fail analysis
-        sparkAdapter.getCatalystPlanUtils.failAnalysisForMIT(a, cols)
+        sparkAdapter.getCatalystPlanUtils.failAnalysisForMergeIntoTable(a, cols)
         // END: custom Hudi change
       }
       resolved

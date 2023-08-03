@@ -104,6 +104,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
     //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
+    println(">>> PLAN: " + df.queryExecution.executedPlan.toString)
     injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
         Iterator.empty

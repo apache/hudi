@@ -74,7 +74,7 @@ object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
-  override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
+  override def failAnalysisForMergeIntoTable(a: Attribute, cols: String): Unit = {
     a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
   }
 }

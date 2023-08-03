@@ -66,8 +66,8 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan =
     iis.asInstanceOf[InsertIntoStatement].copy(table = targetTable, query = query)
 
-  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
-    Join(left, right, joinType, condition, JoinHint.NONE)
+  override def createMergeIntoTableJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: Option[JoinHint]): LogicalPlan = {
+    Join(left, right, joinType, condition, hint.getOrElse(JoinHint.NONE))
   }
 }
 

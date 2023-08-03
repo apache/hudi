@@ -81,7 +81,7 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
-  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
+  override def createMergeIntoTableJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: Option[JoinHint]): LogicalPlan = {
     Join(left, right, joinType, condition)
   }
 }

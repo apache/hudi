@@ -16,34 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.expression;
+package org.apache.hudi.hive.expression;
 
-import org.apache.hudi.internal.schema.Type;
+/**
+ * Visitor used to travers the expression.
+ */
+public interface ExpressionVisitor<T> {
 
-public class NameReference extends LeafExpression {
+  T visitBinaryOperator(BinaryOperator binaryOperator);
 
-  private final String name;
+  T visitLiteral(Literal literal);
 
-  public NameReference(String name) {
-    this.name = name;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  @Override
-  public Type getDataType() {
-    throw new UnsupportedOperationException("NameReference is not bound yet");
-  }
-
-  @Override
-  public <T> T accept(ExpressionVisitor<T> exprVisitor) {
-    return exprVisitor.visitNameReference(this);
-  }
-
-  @Override
-  public String toString() {
-    return "NameReference(name=" + name + ")";
-  }
+  T visitAttribute(AttributeReferenceExpression attribute);
 }
