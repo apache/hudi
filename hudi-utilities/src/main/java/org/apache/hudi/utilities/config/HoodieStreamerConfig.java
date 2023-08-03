@@ -75,14 +75,6 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .withDocumentation("Defines the character sequence that replaces invalid characters in schema field names if "
           + "hoodie.deltastreamer.source.sanitize.invalid.schema.field.names is enabled.");
 
-  public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "multiwriter.source.checkpoint.id")
-      .noDefaultValue()
-      .markAdvanced()
-      .withDocumentation("Unique Id to be used for multi-writer deltastreamer scenario. This is the "
-          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
-          + "a single deltastreamer for a table then you do not need to set this config.");
-
   public static final ConfigProperty<String> TABLES_TO_BE_INGESTED = ConfigProperty
       .key(INGESTION_PREFIX + "tablesToBeIngested")
       .noDefaultValue()
