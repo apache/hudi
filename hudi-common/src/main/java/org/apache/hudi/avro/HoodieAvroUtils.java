@@ -912,9 +912,17 @@ public class HoodieAvroUtils {
           fieldNames.pop();
         }
         return newRecord;
+      case ENUM:
+        ValidationUtils.checkArgument(
+            oldSchema.getType() == Schema.Type.STRING || oldSchema.getType() == Schema.Type.ENUM,
+            "Only ENUM or STRING type can be converted ENUM type");
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return new GenericData.EnumSymbol(newSchema, oldRecord);
+        }
+        return oldRecord;
       case ARRAY:
         ValidationUtils.checkArgument(oldRecord instanceof Collection, "cannot rewrite record with different type");
-        Collection array = (Collection)oldRecord;
+        Collection array = (Collection) oldRecord;
         List<Object> newArray = new ArrayList();
         fieldNames.push("element");
         for (Object element : array) {
@@ -1059,10 +1067,10 @@ public class HoodieAvroUtils {
         if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
           if (oldSchema.getType() == Schema.Type.STRING
-                  || oldSchema.getType() == Schema.Type.DOUBLE
-                  || oldSchema.getType() == Schema.Type.INT
-                  || oldSchema.getType() == Schema.Type.LONG
-                  || oldSchema.getType() == Schema.Type.FLOAT) {
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
