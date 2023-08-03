@@ -148,7 +148,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Return true is metadata table is enabled and record index metadata partition is enabled.
+   * Return true if metadata table is enabled and record index metadata partition is available.
    */
   private def isIndexAvailable: Boolean = {
     metadataConfig.enabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)

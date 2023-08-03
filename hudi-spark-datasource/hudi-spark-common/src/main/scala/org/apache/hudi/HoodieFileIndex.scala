@@ -225,12 +225,13 @@ case class HoodieFileIndex(spark: SparkSession,
     //          nothing CSI in particular could be applied for)
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    if (recordLevelIndex.isIndexApplicable(queryFilters)) {
-      Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters))
-    } else if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
+    if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
-    } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
+    } else if (recordLevelIndex.isIndexApplicable(queryFilters)) {
+      Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters))
+    } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
+      validateConfig()
       Option.empty
     } else {
       // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
