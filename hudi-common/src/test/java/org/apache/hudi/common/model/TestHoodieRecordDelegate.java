@@ -18,20 +18,16 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.GenericAvroSerializer;
 import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SerializationUtils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.objenesis.strategy.StdInstantiatorStrategy;
@@ -87,15 +83,8 @@ public class TestHoodieRecordDelegate {
     // Handle cases where we may have an odd classloader setup like with libjars
     // for hadoop
     kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
-
     // Register Hudi's classes
     new HoodieCommonKryoRegistrar().registerClasses(kryo);
-
-    // Register serializers
-    kryo.register(Utf8.class, new SerializationUtils.AvroUtf8Serializer());
-    kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
-
-    kryo.setRegistrationRequired(false);
     return kryo;
   }
 }
