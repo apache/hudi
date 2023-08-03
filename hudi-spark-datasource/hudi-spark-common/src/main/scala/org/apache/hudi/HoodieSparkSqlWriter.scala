@@ -432,19 +432,11 @@ object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
       operation
     } else {
-      // if no record key, no preCombine, we should treat it as append only workload
-      // and make bulk_insert as operation type.
+      // if no record key, we should treat it as append only workload and make bulk_insert as operation type.
       if (!paramsWithoutDefaults.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
-        && !paramsWithoutDefaults.containsKey(DataSourceWriteOptions.PRECOMBINE_FIELD.key())
         && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
         log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")
         operation = WriteOperationType.BULK_INSERT
-      }
-      // if no record key is set, will switch the default operation to INSERT (auto record key gen)
-      else if (!hoodieConfig.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key())
-        && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
-        log.warn(s"Choosing INSERT as the operation type since auto record key generation is applicable")
-        operation = WriteOperationType.INSERT
       }
       operation
     }
