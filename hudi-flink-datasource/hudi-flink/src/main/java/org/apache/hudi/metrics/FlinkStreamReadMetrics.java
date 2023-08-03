@@ -31,33 +31,33 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Metrics for flink stream read
+ * Metrics for flink stream read.
  */
 public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamReadMetrics.class);
 
   /**
-   * The last issued instant in streaming read
+   * The last issued instant in streaming read.
    *
    * @see StreamReadMonitoringFunction
    */
   private long issuedInstant;
 
   /**
-   * Duration between last issued instant and now
+   * Duration between last issued instant and now.
    */
   private long issuedInstantDelay;
 
   /**
-   * Latest commit of current read split
+   * Latest commit of current read split.
    *
    * @see StreamReadOperator
    */
   private long splitLatestCommit;
 
   /**
-   * Duration between splitLatestCommit and now
+   * Duration between splitLatestCommit and now.
    */
   private long splitLatestCommitDelay;
 

@@ -167,14 +167,14 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       // there is only one log message for one data bucket.
       LOG.info("Processing input split : {}", split);
       format.open(split);
+      readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }
+
     try {
       consumeAsMiniBatch(split);
     } finally {
       currentSplitState = SplitState.IDLE;
     }
-
-    readMetrics.setSplitLatestCommit(split.getLatestCommit());
 
     // Re-schedule to process the next split.
     enqueueProcessSplits();
