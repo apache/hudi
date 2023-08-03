@@ -1065,12 +1065,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     try (BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient = getWriteClient()) {
       // rollback partially failed writes if any.
-      if (writeClient.rollbackFailedWrites()) {
+      if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
       }
-      metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> compactIfNecessary(writeClient, instant.getTimestamp()));
 
-      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
+      if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         LOG.info("New commit at " + instantTime + " being applied to MDT.");
       } else {
@@ -1096,7 +1095,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       writeClient.startCommitWithTime(instantTime);
       metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
-
       List<WriteStatus> statuses;
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
