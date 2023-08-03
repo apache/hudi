@@ -33,7 +33,7 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-6568
 ## Abstract
 
 Some Spark performance optimizations are limited to only Spark's HadoopFsRelation. Currently, bootstrapped and MOR 
-tables (as well as COW tables with schema evolution) cannot take advantage of these optimizations because they are 
+tables (as well as CDC, and COW tables with schema evolution) cannot take advantage of these optimizations because they are 
 implemented as custom relations. 
 
 Our proposal is to implement bootstrap, MOR, CDC reading as a file format so we no longer need custom relations.
@@ -49,22 +49,27 @@ format level, it will no longer be necessary.
 
 ## Implementation
 
+MOR and Bootstrap:
 A new file format extending ParquetFileFormat will be created that will implement the merging required by MOR and 
 bootstrapped tables. 
 
-CDC: need to look into
+ParquetFileFormat assumes that partition columns are appended to the end of the schema. A projection will be added in 
+the planner to restore the schema to its correct order
+
+CDC: TBD
+
+Schema Evolution: TBD
 
 ## Rollout/Adoption Plan
 
 In 0.14.0, we will have a feature flag that will disable this by default
+It will contain basic mor and bootstrap read functionality
 
-
-- What impact (if any) will there be on existing users?
-- If we are changing behavior how will we phase out the older behavior?
-- If we need special migration tools, describe them here.
-- When will we remove the existing behavior
-
+In future major and minor releases we will implement CDC, schema evolution, and all other features that the legacy 
+hudi parquet file format supports. 
+After the new file format has been vetted and proved to be stable in production environments, we will enable it by default.
 
 ## Test Plan
 
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
+The new file format is nearly independent from the existing read path. The only changes to the existing read path are in
+DefaultSource, where the legacy configuration is read to decide if the new file format should be used.
