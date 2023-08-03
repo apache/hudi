@@ -351,7 +351,7 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
 }
 
 .docs-custom-styles tr td:nth-child(1) {
-  width: 20%;
+  width: 25%;
   word-break: break-all;
 }
 
@@ -361,7 +361,7 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
 }
 
 .docs-custom-styles tr td:nth-child(3) {
-  width: 65%;
+  width: 60%;
 }
 
 .docs-custom-styles th {

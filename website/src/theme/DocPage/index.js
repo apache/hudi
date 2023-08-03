@@ -128,7 +128,7 @@ function DocPageContent({
   );
 }
 
-const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`];
+const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`, `${matchPath}/timeline`, `${matchPath}/table_types`];
 const showCustomStylesForDocs = (matchPath, pathname) => arrayOfPages(matchPath).includes(pathname);
 function DocPage(props) {
   const {
