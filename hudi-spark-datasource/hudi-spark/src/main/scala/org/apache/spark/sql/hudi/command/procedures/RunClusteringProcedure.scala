@@ -143,7 +143,7 @@ class RunClusteringProcedure extends BaseProcedure
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
       .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
 
-    var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.fileterPendingInstantsAndGetOperation(
+    var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]])
 
     var client: SparkRDDWriteClient[_] = null

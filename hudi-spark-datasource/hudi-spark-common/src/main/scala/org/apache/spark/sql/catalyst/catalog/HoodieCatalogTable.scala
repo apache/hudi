@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
@@ -198,11 +199,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     if (hoodieTableExists) {
       checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
         "The database names from this hoodie path and this catalog table is not same.")
+      val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
       // just persist hoodie.table.create.schema
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
-        .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema).toString())
+        .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
         .initTable(hadoopConf, tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)

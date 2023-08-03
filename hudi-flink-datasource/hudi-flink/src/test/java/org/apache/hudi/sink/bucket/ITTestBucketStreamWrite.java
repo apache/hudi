@@ -27,15 +27,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
-import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
@@ -95,26 +92,8 @@ public class ITTestBucketStreamWrite {
   }
 
   private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
-    // make configuration and setAvroSchema
-    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
-    cfg.path = tablePath;
-    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
-
     // create metaClient
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-
-    conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableType().name());
-
-    // set the table name
-    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
-
-    // set record key field
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
-    // set partition field
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
-
-    // set table schema
-    CompactionUtil.setAvroSchema(conf, metaClient);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePath, new org.apache.hadoop.conf.Configuration());
 
     // should only contain one instant
     HoodieTimeline activeCompletedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
@@ -133,13 +112,17 @@ public class ITTestBucketStreamWrite {
     Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
     fs.delete(path);
 
+    // marker types are different for COW and MOR
+    IOType ioType = isCow ? IOType.CREATE : IOType.APPEND;
+
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯
       String[] partitionFileNameSplit = relativePath.split("/");
+      String fileInstant = FSUtils.getCommitTime(partitionFileNameSplit[1]);
       String partition = partitionFileNameSplit[0];
-      String fileName = partitionFileNameSplit[1];
+      String writeToken = isCow ? getWriteToken(partitionFileNameSplit[1]) : FSUtils.getWriteTokenFromLogPath(new Path(relativePath));
       try {
-        FileCreateUtils.createFileMarkerByFileName(tablePath, partition, commitInstant, fileName, IOType.CREATE);
+        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, fileInstant, fileId, ioType, writeToken);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

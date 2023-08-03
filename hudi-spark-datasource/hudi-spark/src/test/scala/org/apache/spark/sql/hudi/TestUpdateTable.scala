@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
     withRecordType()(withTempDir { tmp =>
-      Seq(true, false).foreach { optimizedSqlEnabled =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           // create table
@@ -50,7 +51,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
           // update data
           spark.sql(s"update $tableName set price = 20 where id = 1")
@@ -95,7 +96,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
 
         // update data
         spark.sql(s"update $tableName set price = 20 where id = 1")
@@ -256,7 +257,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test decimal type") {
     withTempDir { tmp =>
-      Seq(true, false).foreach { optimizedSqlEnabled =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         val tableName = generateTableName
         // create table
         spark.sql(
@@ -283,7 +284,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled / disabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
         spark.sql(s"update $tableName set price = 22 where id = 1")
         checkAnswer(s"select id, name, price, ts from $tableName")(

@@ -107,7 +107,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   public void close() {
     stopEmbeddedServerView(true);
     this.context.setJobStatus("", "");
-    this.heartbeatClient.stop();
+    this.heartbeatClient.close();
     this.txnManager.close();
   }
 

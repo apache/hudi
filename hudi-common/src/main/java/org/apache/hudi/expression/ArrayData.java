@@ -16,27 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.log;
+package org.apache.hudi.expression;
 
-import org.apache.hudi.common.model.HoodieLogFile;
+import java.util.List;
 
-/**
- * HoodieLogFileWriteCallback is trigger when specific log file operation happen
- */
-public interface HoodieLogFileWriteCallback {
-  default boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-    return true;
+public class ArrayData implements StructLike {
+
+  private final List<Object> data;
+
+  public ArrayData(List<Object> data) {
+    this.data = data;
   }
 
-  default boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
-    return true;
+  @Override
+  public int numFields() {
+    return data.size();
   }
 
-  default boolean preLogFileClose(HoodieLogFile logFileToClose) {
-    return true;
-  }
-
-  default boolean postLogFileClose(HoodieLogFile logFileToClose) {
-    return true;
+  @Override
+  public <T> T get(int pos, Class<T> classTag) {
+    return classTag.cast(data.get(pos));
   }
 }

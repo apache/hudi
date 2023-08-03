@@ -87,6 +87,12 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     this.recordCountForNextSizeCheck = ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
   }
 
+  /**
+   * Once we get parquet version >= 1.12 among all engines we can cleanup the reflexion hack.
+   *
+   * @param parquetWriterbuilder
+   * @param hadoopConf
+   */
   protected void handleParquetBloomFilters(ParquetWriter.Builder parquetWriterbuilder, Configuration hadoopConf) {
     // inspired from https://github.com/apache/parquet-mr/blob/master/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/ParquetOutputFormat.java#L458-L464
     hadoopConf.forEach(conf -> {
@@ -94,8 +100,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       if (key.startsWith(BLOOM_FILTER_ENABLED)) {
         String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
         try {
-          Method method = parquetWriterbuilder.getClass().getDeclaredMethod("withBloomFilterEnabled");
-          method.invoke(column, Boolean.valueOf(conf.getValue()));
+          Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterEnabled", String.class, boolean.class);
+          method.invoke(parquetWriterbuilder, column, Boolean.valueOf(conf.getValue()).booleanValue());
         } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
           // skip
         }
@@ -103,8 +109,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
         String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
         try {
-          Method method = parquetWriterbuilder.getClass().getDeclaredMethod("withBloomFilterNDV");
-          method.invoke(column, Long.valueOf(conf.getValue(), -1));
+          Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterNDV", String.class, long.class);
+          method.invoke(parquetWriterbuilder, column, Long.valueOf(conf.getValue()).longValue());
         } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
           // skip
         }

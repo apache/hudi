@@ -216,16 +216,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Append the spark config and table options to the baseConfig.
-   */
-  def withSparkConf(spark: SparkSession, options: Map[String, String])
-                   (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
-    baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
-      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(options))
-        .filterKeys(isHoodieConfigKey)
-  }
-
-  /**
    * Check if Sql options are Hoodie Config keys.
    *
    * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)

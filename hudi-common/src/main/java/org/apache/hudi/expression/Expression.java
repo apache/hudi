@@ -16,20 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.expression;
+package org.apache.hudi.expression;
 
+import org.apache.hudi.internal.schema.Type;
+
+import java.io.Serializable;
 import java.util.List;
 
-public abstract class Expression {
+public interface Expression extends Serializable {
 
-  public enum Operator {
+  enum Operator {
+    TRUE("TRUE", "TRUE"),
+    FALSE("FALSE", "FALSE"),
     AND("AND", "&&"),
     OR("OR", "||"),
     GT(">", ">"),
     LT("<", "<"),
     EQ("=", "="),
     GT_EQ(">=", ">="),
-    LT_EQ("<=", "<=");
+    LT_EQ("<=", "<="),
+    STARTS_WITH(null, null),
+    CONTAINS(null, null),
+    IS_NULL(null, null),
+    IS_NOT_NULL(null, null),
+    IN("IN", "IN"),
+    NOT("NOT", "NOT");
 
     public final String sqlOperator;
     public final String symbol;
@@ -40,14 +51,19 @@ public abstract class Expression {
     }
   }
 
-  private final List<Expression> children;
+  List<Expression> getChildren();
 
-  public Expression(List<Expression> children) {
-    this.children = children;
+  Type getDataType();
+
+  default Object eval(StructLike data) {
+    throw new UnsupportedOperationException("Cannot evaluate expression " + this);
   }
 
   /**
    * Traverses the expression with the provided {@link ExpressionVisitor}
    */
-  public abstract <T> T accept(ExpressionVisitor<T> exprVisitor);
+  <T> T accept(ExpressionVisitor<T> exprVisitor);
+
+  @Override
+  String toString();
 }
