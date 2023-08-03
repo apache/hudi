@@ -217,7 +217,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
     // Partition and file name pairs
     List<Pair<String, String>> partitionFileNameList = new ArrayList<>(baseFilesForAllPartitions.size());
-    Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size());
+    Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size(), 1);
     baseFilesForAllPartitions.forEach(pair -> {
       Pair<String, String> partitionAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
       partitionFileNameList.add(partitionAndFileName);
