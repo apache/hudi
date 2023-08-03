@@ -57,7 +57,7 @@ import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY;
-import static org.apache.hudi.DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT;
+import static org.apache.hudi.DataSourceReadOptions.LEGACY_HUDI_PARQUET_FILE_FORMAT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
