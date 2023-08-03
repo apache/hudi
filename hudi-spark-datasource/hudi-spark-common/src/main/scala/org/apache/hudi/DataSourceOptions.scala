@@ -87,12 +87,13 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val LEGACY_HUDI_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.legacy.file.format")
-    .defaultValue("false")
+  val LEGACY_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.use.legacy.parquet.file.format")
+    .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Read using the new hudi file format")
+    .withDocumentation("Read using the legacy Hudi parquet file format. The new Hudi parquet file format is " +
+      "introduced as an experimental feature in 0.14.0")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")

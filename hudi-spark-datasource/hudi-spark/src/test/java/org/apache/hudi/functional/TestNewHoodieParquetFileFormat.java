@@ -101,9 +101,9 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
 
   protected void testCount(String tableBasePath) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"true").load(tableBasePath);
+        .option(DataSourceReadOptions.LEGACY_HUDI_PARQUET_FILE_FORMAT().key(),"true").load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
+        .option(DataSourceReadOptions.LEGACY_HUDI_PARQUET_FILE_FORMAT().key(),"false").load(tableBasePath);
     assertEquals(legacyDf.count(), fileFormatDf.count());
   }
 
@@ -117,9 +117,9 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapRead {
 
   protected void runIndividualComparison(String tableBasePath, String firstColumn, String... columns) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"true").load(tableBasePath);
+        .option(DataSourceReadOptions.LEGACY_HUDI_PARQUET_FILE_FORMAT().key(),"true").load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.LEGACY_HUDI_FILE_FORMAT().key(),"false").load(tableBasePath);
+        .option(DataSourceReadOptions.LEGACY_HUDI_PARQUET_FILE_FORMAT().key(),"false").load(tableBasePath);
     if (firstColumn.isEmpty()) {
       legacyDf = legacyDf.drop("city_to_state");
       fileFormatDf = fileFormatDf.drop("city_to_state");

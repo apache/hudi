@@ -127,16 +127,16 @@ case class HoodieFileIndex(spark: SparkSession,
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-    lookupCandidateFilesInMetadataTable(dataFilters) match {
-      case Success(opt) => opt
-      case Failure(e) =>
-        logError("Failed to lookup candidate files in File Index", e)
+      lookupCandidateFilesInMetadataTable(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          logError("Failed to lookup candidate files in File Index", e)
 
-        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
-          case DataSkippingFailureMode.Fallback.value => Option.empty
-          case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
-        }
-    }
+          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+            case DataSkippingFailureMode.Fallback.value => Option.empty
+            case DataSkippingFailureMode.Strict.value   => throw new HoodieException(e);
+          }
+      }
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 

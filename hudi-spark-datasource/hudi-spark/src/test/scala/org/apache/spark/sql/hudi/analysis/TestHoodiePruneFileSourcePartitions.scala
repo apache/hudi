@@ -29,7 +29,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import org.junit.jupiter.api.{Assertions, BeforeEach, Disabled}
+import org.junit.jupiter.api.{Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -53,7 +53,6 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
-  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array(
     "cow,true", "cow,false",

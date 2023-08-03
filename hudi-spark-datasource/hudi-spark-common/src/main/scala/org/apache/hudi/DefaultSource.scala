@@ -255,8 +255,8 @@ object DefaultSource {
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
-      lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(LEGACY_HUDI_FILE_FORMAT.key,
-        LEGACY_HUDI_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+      lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(LEGACY_HUDI_PARQUET_FILE_FORMAT.key,
+        LEGACY_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
         && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
         .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
         Some(new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema))
