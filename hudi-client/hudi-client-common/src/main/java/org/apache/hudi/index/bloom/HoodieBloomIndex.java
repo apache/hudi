@@ -215,15 +215,14 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
     List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
+    // Partition and file name pairs
     List<Pair<String, String>> partitionFileNameList = new ArrayList<>(baseFilesForAllPartitions.size());
     Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size());
     baseFilesForAllPartitions.forEach(pair -> {
-      Pair<String, String> parititonAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
-      partitionFileNameList.add(parititonAndFileName);
-      partitionAndFileNameToFileId.put(parititonAndFileName, pair.getValue().getFileId());
+      Pair<String, String> partitionAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
+      partitionFileNameList.add(partitionAndFileName);
+      partitionAndFileNameToFileId.put(partitionAndFileName, pair.getValue().getFileId());
     });
-    // Partition and file name pairs
-    Collections.sort(partitionFileNameList); // TODO why does this need to be sorted?
 
     if (partitionFileNameList.isEmpty()) {
       return Collections.emptyList();
