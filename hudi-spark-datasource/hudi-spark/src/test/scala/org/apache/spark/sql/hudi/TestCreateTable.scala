@@ -468,7 +468,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         Seq(1, "a2", 1100)
       )
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   test("Test Create ro/rt Table In The Wrong Way") {

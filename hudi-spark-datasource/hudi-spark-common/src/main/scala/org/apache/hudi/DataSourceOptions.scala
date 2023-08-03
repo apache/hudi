@@ -528,13 +528,17 @@ object DataSourceWriteOptions {
 
   val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 
-  val SQL_WRITE_OPERATION: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.sql.write.operation")
+  val BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION = "bulk_insert"
+  val INSERT_SPARK_SQL_INSERT_INTO_OPERATION = "insert"
+  val UPSERT_SPARK_SQL_INSERT_INTO_OPERATION = "upsert"
+
+  val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.insert.into.operation")
     .defaultValue("insert")
-    .withValidValues("bulk_insert","insert","upsert")
+    .withValidValues(BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION, INSERT_SPARK_SQL_INSERT_INTO_OPERATION, UPSERT_SPARK_SQL_INSERT_INTO_OPERATION)
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
-      "do small file managmeent. If you prefer hudi to automatically managee small files, then you can go with \"insert\". There is no precombine " +
+      "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
       "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
       "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
       "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")

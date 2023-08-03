@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_NAME}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_NAME}
 import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
@@ -135,7 +135,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
           spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
           spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
-          spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+          spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
         }
       }
     })
@@ -330,7 +330,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -382,7 +382,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -601,7 +601,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
