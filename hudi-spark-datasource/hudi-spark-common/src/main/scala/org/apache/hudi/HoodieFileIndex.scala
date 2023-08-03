@@ -22,12 +22,13 @@ import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferenc
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieMetadataPayload
+import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -40,9 +41,9 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
+import java.util.stream.Collectors
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -96,6 +97,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
+  private var includeLogFiles = false
+
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
@@ -122,56 +125,26 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    // Look up candidate files names in the col-stats index, if all of the following conditions are true
-    //    - Data-skipping is enabled
-    //    - Col-Stats Index is present
-    //    - List of predicates (filters) is present
-    val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters) match {
-        case Success(opt) => opt
-        case Failure(e) =>
-          logError("Failed to lookup candidate files in File Index", e)
-
-          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
-            case DataSkippingFailureMode.Fallback.value => Option.empty
-            case DataSkippingFailureMode.Strict.value   => throw new HoodieException(e);
-          }
-      }
-
-    logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
-
-    var totalFileSize = 0
-    var candidateFileSize = 0
-
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
-    val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
-    val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
+    val partitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
+    val listedPartitions = filterFileSlices(dataFilters, partitionsAndFileSlices).map {
       case (partition, fileSlices) =>
-        val baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
-          .asScala
-          .map(fs => fs.getBaseFile.orElse(null))
-          .filter(_ != null))
+        val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
+          val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+          val logFilesStatus = if (includeLogFiles) {
+            fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+          } else {
+            java.util.stream.Stream.empty()
+          }
+          val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+          baseFileStatusOpt.foreach(f => files.append(f))
+          files
+        })
 
-        // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles = baseFileStatuses.filter(fs =>
-          // NOTE: This predicate is true when {@code Option} is empty
-          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
-
-        totalFileSize += baseFileStatuses.size
-        candidateFileSize += candidateFiles.size
-        PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
+        PartitionDirectory(InternalRow.fromSeq(partition.get.values), allCandidateFiles)
     }
-
-    val skippingRatio =
-      if (!areAllFileSlicesCached) -1
-      else if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble
-      else 0
-
-    logInfo(s"Total base files: $totalFileSize; " +
-      s"candidate files after data skipping: $candidateFileSize; " +
-      s"skipping percentage $skippingRatio")
 
     hasPushedDownPartitionPredicates = true
 
@@ -182,21 +155,90 @@ case class HoodieFileIndex(spark: SparkSession,
     }
   }
 
-  /**
-   * In the fast bootstrap read code path, it gets the file status for the bootstrap base files instead of
-   * skeleton files.
-   */
-  private def getBaseFileStatus(baseFiles: mutable.Buffer[HoodieBaseFile]): mutable.Buffer[FileStatus] = {
-    if (shouldFastBootstrap) {
-     baseFiles.map(f =>
-        if (f.getBootstrapBaseFile.isPresent) {
-         f.getBootstrapBaseFile.get().getFileStatus
-        } else {
-          f.getFileStatus
-        })
-    } else {
-      baseFiles.map(_.getFileStatus)
+  def filterFileSlices(dataFilters: Seq[Expression], partitionAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])])
+  : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
+    // Look up candidate files names in the col-stats index, if all of the following conditions are true
+    //    - Data-skipping is enabled
+    //    - Col-Stats Index is present
+    //    - List of predicates (filters) is present
+    val candidateFilesNamesOpt: Option[Set[String]] =
+    lookupCandidateFilesInMetadataTable(dataFilters) match {
+      case Success(opt) => opt
+      case Failure(e) =>
+        logError("Failed to lookup candidate files in File Index", e)
+
+        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+          case DataSkippingFailureMode.Fallback.value => Option.empty
+          case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
+        }
     }
+
+    logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
+
+    var totalFileSliceSize = 0
+    var candidateFileSliceSize = 0
+
+    val listedPartitions = partitionAndFileSlices.map {
+      case (partitionOpt, fileSlices) =>
+        // Filter in candidate files based on the col-stats index lookup
+        val candidateFileSlices: Seq[FileSlice] = {
+          fileSlices.filter(fs => {
+            val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+            val logFiles = fs.getLogFiles.collect(Collectors.toSet[HoodieLogFile]).asScala.toSet[HoodieLogFile]
+            // NOTE: This predicate is true when {@code Option} is empty
+            if (candidateFilesNamesOpt.forall(files => baseFileStatusOpt.exists(f => files.contains(f.getPath.getName))
+              || files.intersect(logFiles.map(f => f.getPath.getName)).nonEmpty)) {
+              true
+            } else {
+              false
+            }
+          })
+        }
+
+        totalFileSliceSize += fileSlices.size
+        candidateFileSliceSize += candidateFileSlices.size
+        (partitionOpt, candidateFileSlices)
+    }
+
+    val skippingRatio =
+      if (!areAllFileSlicesCached) -1
+      else if (allFiles.nonEmpty && totalFileSliceSize > 0) (totalFileSliceSize - candidateFileSliceSize) / totalFileSliceSize.toDouble
+      else 0
+
+    logInfo(s"Total file slices: $totalFileSliceSize; " +
+      s"candidate file slices after data skipping: $candidateFileSliceSize; " +
+      s"skipping percentage $skippingRatio")
+
+    hasPushedDownPartitionPredicates = true
+
+    listedPartitions
+  }
+
+  def getFileSlicesForPrunedPartitions(partitionFilters: Seq[Expression]) : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
+    // Prune the partition path by the partition filters
+    // NOTE: Non-partitioned tables are assumed to consist from a single partition
+    //       encompassing the whole table
+    val prunedPartitions = listMatchingPartitionPaths (partitionFilters)
+    getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
+      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala) })
+  }
+
+  /**
+   * In the fast bootstrap read code path, it gets the file status for the bootstrap base file instead of
+   * skeleton file. Returns file status for the base file if available.
+   */
+  private def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
+    baseFileOpt.map(baseFile => {
+      if (shouldFastBootstrap) {
+        if (baseFile.getBootstrapBaseFile.isPresent) {
+          baseFile.getBootstrapBaseFile.get().getFileStatus
+        } else {
+          baseFile.getFileStatus
+        }
+      } else {
+        baseFile.getFileStatus
+      }
+    })
   }
 
   private def lookupFileNamesMissingFromIndex(allIndexedFileNames: Set[String]) = {
@@ -295,6 +337,10 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
 
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
+
+  def setIncludeLogFiles(value: Boolean) = {
+    includeLogFiles = value
+  }
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {

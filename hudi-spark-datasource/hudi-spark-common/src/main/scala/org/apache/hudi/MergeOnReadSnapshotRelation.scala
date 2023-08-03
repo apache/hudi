@@ -69,6 +69,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                                prunedDataSchema: Option[StructType])
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
+  fileIndex.setIncludeLogFiles(true)
+
   override type FileSplit = HoodieMergeOnReadFileSplit
 
   /**
@@ -215,8 +217,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
 
     if (globPaths.isEmpty) {
-      val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
-      buildSplits(fileSlices.values.flatten.toSeq)
+      val fileSlices = fileIndex.filterFileSlices(dataFilters, fileIndex.getFileSlicesForPrunedPartitions(convertedPartitionFilters)).flatMap(s => s._2)
+      buildSplits(fileSlices)
     } else {
       val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
       buildSplits(fileSlices)

@@ -49,6 +49,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationTrait {
 
+  fileIndex.setIncludeLogFiles(true)
+
   override type Relation = MergeOnReadIncrementalRelation
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
@@ -108,7 +110,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
         }.toSeq
       }
 
-      buildSplits(filterFileSlices(fileSlices, globPattern))
+      var filteredFileSlices = filterFileSlices(fileSlices, globPattern)
+      filteredFileSlices = fileIndex.filterFileSlices(dataFilters, Seq((Option.empty, filteredFileSlices))).flatMap(s => s._2)
+      buildSplits(filteredFileSlices)
     }
   }
 

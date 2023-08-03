@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -123,6 +123,90 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  def testMetadataColumnStatsIndexWithSQL(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    var commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    ) ++ metadataOpts
+
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/another-input-table-json",
+      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
+    //       deferred updates), diverging from COW
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-updated2-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-updated2-column-stats-index-table.json"
+    }
+
+    createSQLTable(commonOpts, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+    val c5GT50WithDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
+
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/update-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    // verify snapshot query
+    verifySQLQueries(c5GT50WithDataSkipping, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, commonOpts)
+
+    // verify read_optimized query
+    verifySQLQueries(c5GT50WithDataSkipping, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, commonOpts)
+
+    // verify incremental query
+    verifySQLQueries(c5GT50WithDataSkipping, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts)
+    commonOpts = commonOpts + (DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key -> "true")
+    verifySQLQueries(c5GT50WithDataSkipping, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts)
+  }
+
+  private def verifySQLQueries(c5GT50WithDataSkippingAtPrevInstant: Long, queryType: String, opts: Map[String, String]): Unit = {
+    // 2 records are updated with c5 greater than 70 and one record is inserted with c5 value greater than 70
+    var commonOpts:Map[String, String] = opts
+    createSQLTable(commonOpts, queryType)
+    val increment = if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) && metaClient.getTableType == HoodieTableType.MERGE_ON_READ) {
+      1 // only one insert
+    } else {
+      3 // one insert and two upserts
+    }
+    assertEquals(spark.sql("select * from tbl where c5 > 70").count(), c5GT50WithDataSkippingAtPrevInstant + increment)
+    val c5GT50WithDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
+
+    if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
+      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp)
+      assertEquals(spark.sql("select * from tbl where c5 > 70").count(), 3)
+    }
+
+    commonOpts = opts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false")
+    createSQLTable(commonOpts, queryType)
+    val c5Gt50WithoutDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
+    assertEquals(c5GT50WithDataSkipping, c5Gt50WithoutDataSkipping)
   }
 
   @ParameterizedTest
@@ -453,6 +537,24 @@ class TestColumnStatsIndex extends HoodieSparkClientTestBase {
       assertNotNull(max)
       assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
     })
+  }
+
+  private def createSQLTable(hudiOpts: Map[String, String], queryType: String): Unit = {
+    val opts = hudiOpts + (
+      DataSourceReadOptions.QUERY_TYPE.key -> queryType,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key() -> metaClient.getActiveTimeline.getInstants.get(0).getTimestamp.replaceFirst(".", "0")
+    )
+    val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
+    inputDF1.createOrReplaceTempView("tbl")
+  }
+
+  private def createIncrementalSQLTable(hudiOpts: Map[String, String], instantTime: String): Unit = {
+    val opts = hudiOpts + (
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key() -> instantTime
+    )
+    val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
+    inputDF1.createOrReplaceTempView("tbl")
   }
 
   private def doWriteAndValidateColumnStats(testCase: ColumnStatsTestCase,
