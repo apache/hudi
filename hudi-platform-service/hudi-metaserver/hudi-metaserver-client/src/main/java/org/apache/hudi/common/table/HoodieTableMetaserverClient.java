@@ -44,6 +44,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 /**
  * HoodieTableMetaClient implementation for hoodie table whose metadata is stored in the hoodie metaserver.
  */
@@ -57,20 +60,22 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
                                      String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
-                                     String databaseName, String tableName, HoodieMetaserverConfig config) {
+                                     Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(conf, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
         config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
-    this.databaseName = databaseName != null ? databaseName : tableConfig.getDatabaseName();
-    this.tableName = tableName != null ? tableName : tableConfig.getTableName();
+    this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
+    this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
-    this.table = initOrGetTable(this.databaseName, this.tableName, config);
+    this.table = initOrGetTable(config);
     // TODO: transfer table parameters to table config
     tableConfig.setTableVersion(HoodieTableVersion.current());
     tableConfig.setAll(config.getProps());
   }
 
-  private Table initOrGetTable(String db, String tb, HoodieMetaserverConfig config) {
+  private Table initOrGetTable(HoodieMetaserverConfig config) {
+    checkArgument(nonEmpty(databaseName), "database name is required.");
+    checkArgument(nonEmpty(tableName), "table name is required.");
     Table table;
     try {
       table = metaserverClient.getTable(databaseName, tableName);
@@ -82,10 +87,10 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
         } catch (IOException ioException) {
           LOG.info("Failed to get the user", ioException);
         }
-        LOG.info(String.format("Table %s.%s doesn't exist, will create it.", db, tb));
+        LOG.info(String.format("Table %s.%s doesn't exist, will create it.", databaseName, tableName));
         table = new Table();
-        table.setDatabaseName(db);
-        table.setTableName(tb);
+        table.setDatabaseName(databaseName);
+        table.setTableName(tableName);
         table.setLocation(config.getString(HoodieWriteConfig.BASE_PATH));
         table.setOwner(user);
         table.setTableType(config.getString(HoodieTableConfig.TYPE.key()));

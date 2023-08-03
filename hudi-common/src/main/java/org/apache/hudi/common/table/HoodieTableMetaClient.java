@@ -690,7 +690,7 @@ public class HoodieTableMetaClient implements Serializable {
         ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
         new Class<?>[]{Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, FileSystemRetryConfig.class, String.class, String.class, HoodieMetaserverConfig.class},
         conf, basePath, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
-        metaserverConfig.getDatabaseName(), metaserverConfig.getTableName(), metaserverConfig)
+        Option.of(metaserverConfig.getDatabaseName()), Option.of(metaserverConfig.getTableName()), metaserverConfig)
         : new HoodieTableMetaClient(conf, basePath,
         loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy, fileSystemRetryConfig);
   }
