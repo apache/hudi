@@ -534,7 +534,7 @@ object DataSourceWriteOptions {
 
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.insert.into.operation")
-    .defaultValue("insert")
+    .defaultValue(INSERT_SPARK_SQL_INSERT_INTO_OPERATION)
     .withValidValues(BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION, INSERT_SPARK_SQL_INSERT_INTO_OPERATION, UPSERT_SPARK_SQL_INSERT_INTO_OPERATION)
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
