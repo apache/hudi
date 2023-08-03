@@ -202,19 +202,12 @@ public class Pipelines {
    * @param conf       The configuration
    * @param rowType    The input row type
    * @param dataStream The input data stream
-   * @param bounded    Whether the input stream is bounded
    * @return the appending data stream sink
    */
   public static DataStream<Object> append(
       Configuration conf,
       RowType rowType,
-      DataStream<RowData> dataStream,
-      boolean bounded) {
-    if (!bounded) {
-      // In principle, the config should be immutable, but the boundedness
-      // is only visible when creating the sink pipeline.
-      conf.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
-    }
+      DataStream<RowData> dataStream) {
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return dataStream
@@ -469,7 +462,7 @@ public class Pipelines {
     }
     return clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
-        .setParallelism(1); // compaction commit should be singleton
+        .setParallelism(1); // clustering commit should be singleton
   }
 
   public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {

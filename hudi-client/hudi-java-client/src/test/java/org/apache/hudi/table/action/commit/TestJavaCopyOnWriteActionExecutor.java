@@ -408,11 +408,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(schema.toString())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();

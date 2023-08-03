@@ -85,14 +85,13 @@ public class HoodieTableSink implements
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
       // bulk_insert mode
-      final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
-      if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
+      if (OptionsResolver.isBulkInsertOperation(conf)) {
         return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
