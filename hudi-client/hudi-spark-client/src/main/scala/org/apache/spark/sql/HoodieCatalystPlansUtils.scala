@@ -79,6 +79,12 @@ trait HoodieCatalystPlansUtils {
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
 
+  /**
+   * Spark requires file formats to append the partition path fields to the end of the schema.
+   * For tables where the partition path fields are not at the end of the schema, we don't want
+   * to return the schema in the wrong order when they do a query like "select *". To fix this
+   * behavior, we apply a projection onto FileScan when the file format is NewHudiParquetFileFormat
+   */
   def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan
 
   /**

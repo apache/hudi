@@ -247,19 +247,17 @@ object DefaultSource {
       Option(schema)
     }
 
-
-
-
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
-      lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(LEGACY_HUDI_PARQUET_FILE_FORMAT.key,
-        LEGACY_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+      lazy val newHudiFileFormatUtils = if (!parameters.getOrElse(USE_LEGACY_HUDI_PARQUET_FILE_FORMAT.key,
+        USE_LEGACY_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
         && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
         .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
-        Some(new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema))
+        val formatUtils = new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
+        if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
       } else {
         Option.empty
       }
@@ -274,7 +272,7 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+          if (newHudiFileFormatUtils.isEmpty) {
             new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           } else {
             newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
@@ -284,14 +282,14 @@ object DefaultSource {
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+          if (newHudiFileFormatUtils.isEmpty) {
             new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           } else {
             newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
           }
 
         case (_, _, true) =>
-          if (newHudiFileFormatUtils.isEmpty || newHudiFileFormatUtils.get.hasSchemaOnRead) {
+          if (newHudiFileFormatUtils.isEmpty) {
             resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           } else {
             newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)

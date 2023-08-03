@@ -87,7 +87,7 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val LEGACY_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
+  val USE_LEGACY_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.use.legacy.parquet.file.format")
     .defaultValue("true")
     .markAdvanced()

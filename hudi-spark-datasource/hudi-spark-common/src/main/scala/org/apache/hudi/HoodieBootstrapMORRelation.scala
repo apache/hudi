@@ -25,8 +25,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -59,12 +58,9 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
                                       override val optParams: Map[String, String],
                                       private val prunedDataSchema: Option[StructType] = None)
   extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient,
-    optParams, prunedDataSchema) with SparkAdapterSupport {
+    optParams, prunedDataSchema) {
 
   override type Relation = HoodieBootstrapMORRelation
-
-  protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
-    DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())

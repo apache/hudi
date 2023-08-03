@@ -153,23 +153,23 @@ case class HoodieFileIndex(spark: SparkSession,
     }
     val listedPartitions = getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map {
       case (partition, fileSlices) =>
-        var baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
-          .asScala
-            .map(fs => fs.getBaseFile.orElse(null))
-            .filter(_ != null))
         if (shouldBroadcast) {
-          baseFileStatuses = baseFileStatuses ++ fileSlices.asScala
-            .filter(f => f.getLogFiles.findAny().isPresent && !f.getBaseFile.isPresent)
-            .map(f => f.getLogFiles.findAny().get().getFileStatus)
-        }
-        // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles = baseFileStatuses.filter(fs =>
-          // NOTE: This predicate is true when {@code Option} is empty
-          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
+          val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.asScala.map(slice => {
+             if (slice.getBaseFile.isPresent) {
+               slice.getBaseFile.get().getFileStatus
+             } else if (slice.getLogFiles.findAny().isPresent) {
+               slice.getLogFiles.findAny().get().getFileStatus
+             } else {
+               null
+             }
+          }).filter(slice => slice != null)
+          // Filter in candidate files based on the col-stats index lookup
+          val candidateFiles = baseFileStatusesAndLogFileOnly.filter(fs =>
+            // NOTE: This predicate is true when {@code Option} is empty
+            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
-        totalFileSize += baseFileStatuses.size
-        candidateFileSize += candidateFiles.size
-        if (shouldBroadcast) {
+          totalFileSize += baseFileStatusesAndLogFileOnly.size
+          candidateFileSize += candidateFiles.size
           val c = fileSlices.asScala.filter(f => f.getLogFiles.findAny().isPresent
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
@@ -179,6 +179,17 @@ case class HoodieFileIndex(spark: SparkSession,
             PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
           }
         } else {
+          val baseFileStatuses: Seq[FileStatus] = getBaseFileStatus(fileSlices
+            .asScala
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null))
+          // Filter in candidate files based on the col-stats index lookup
+          val candidateFiles = baseFileStatuses.filter(fs =>
+            // NOTE: This predicate is true when {@code Option} is empty
+            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
+
+          totalFileSize += baseFileStatuses.size
+          candidateFileSize += candidateFiles.size
           PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
         }
     }
