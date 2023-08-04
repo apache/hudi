@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
@@ -133,10 +134,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   // Validate this Incremental implementation is properly configured
   validate()
 
-  protected val hollowCommitHandling: HollowCommitHandling =
-    optParams.get(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
-      .map(HollowCommitHandling.valueOf)
-      .getOrElse(HollowCommitHandling.valueOf(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
+  protected val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 

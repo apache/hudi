@@ -19,8 +19,9 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT, INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME}
+import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
+import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -67,10 +68,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
 
-  private val hollowCommitHandling: HollowCommitHandling =
-    optParams.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
-      .map(HollowCommitHandling.valueOf)
-      .getOrElse(HollowCommitHandling.valueOf(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
+  private val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 
   private val commitTimeline = handleHollowCommitIfNeeded(
     hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants,
