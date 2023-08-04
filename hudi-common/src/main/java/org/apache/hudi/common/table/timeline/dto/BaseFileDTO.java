@@ -56,7 +56,6 @@ public class BaseFileDTO {
       baseFile.setFileLen(dto.fileLen);
     }
 
-    baseFile.setBootstrapBaseFile(toBaseFile(dto.bootstrapBaseFile));
     return baseFile;
   }
 

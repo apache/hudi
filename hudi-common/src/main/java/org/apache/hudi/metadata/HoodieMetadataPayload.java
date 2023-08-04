@@ -333,15 +333,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                Option<String> instantTime) {
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
-    filesAdded.forEach((key, value) -> {
-      long fileSize = value;
+    filesAdded.forEach((fileName, fileSize) -> {
       // Assert that the file-size of the file being added is positive, since Hudi
       // should not be creating empty files
       checkState(fileSize > 0);
-      fileInfo.put(handleFileName(key, instantTime), new HoodieMetadataFileInfo(fileSize, false));
+      fileInfo.put(handleFileName(fileName, instantTime), new HoodieMetadataFileInfo(fileSize, false));
     });
 
-    filesDeleted.forEach(entry -> fileInfo.put(handleFileName(entry, instantTime), DELETE_FILE_METADATA));
+    filesDeleted.forEach(fileName -> fileInfo.put(handleFileName(fileName, instantTime), DELETE_FILE_METADATA));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
@@ -357,7 +356,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   private static String handleFileName(String fileName, Option<String> commitTime) {
     return commitTime.map(commit -> {
-      if (fileName.contains(commit)) {
+      if (fileName.contains(commit) || FSUtils.isLogFile(fileName)) {
         return fileName;
       } else {
         return ExternalFilePathUtil.prefixExternalFileWithCommitTime(fileName, commit);
