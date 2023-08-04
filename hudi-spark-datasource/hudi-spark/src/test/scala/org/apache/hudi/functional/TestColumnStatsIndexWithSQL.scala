@@ -260,7 +260,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var commonOpts: Map[String, String] = opts
     createSQLTable(commonOpts, queryType)
     val increment = if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) && hasLogFiles()
-      && !(opts(HoodieIndexConfig.INDEX_TYPE.key()) == BUCKET.name())) {
+      && !opts.get(HoodieIndexConfig.INDEX_TYPE.key()).contains(BUCKET.name())) {
       1 // only one insert
     } else if (isLastOperationDelete) {
       0 // no increment
