@@ -28,7 +28,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (

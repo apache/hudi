@@ -103,7 +103,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key +"=upsert")
           val otherTableProperties = if (tableType == "mor") {
             "'hoodie.compact.inline'='true', 'hoodie.compact.inline.max.delta.commits'='2',"
           } else {
