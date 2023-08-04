@@ -85,7 +85,7 @@ public class SparkRDDWriteClient<T> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new SparkRDDTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = (BaseHoodieTableServiceClient<JavaRDD<HoodieRecord<T>>, JavaRDD<WriteStatus>>) new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
   }
 
   @Override

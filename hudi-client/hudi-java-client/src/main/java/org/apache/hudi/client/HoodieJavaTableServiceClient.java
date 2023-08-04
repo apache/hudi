@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -33,7 +34,7 @@ import org.apache.hadoop.conf.Configuration;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<List<WriteStatus>> {
+public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClient<T, List<WriteStatus>> {
 
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
@@ -62,7 +63,7 @@ public class HoodieJavaTableServiceClient extends BaseHoodieTableServiceClient<L
   }
 
   @Override
-  protected HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable<?, List<HoodieRecord<T>>, ?, List<WriteStatus>> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieJavaTable.create(config, context);
   }
 }
