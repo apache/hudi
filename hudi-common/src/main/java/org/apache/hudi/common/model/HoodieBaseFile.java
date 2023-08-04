@@ -79,7 +79,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
-    super(handleExternallyGeneratedFileName(fileStatus));
+    super(handleExternallyGeneratedFileName(fileStatus, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
@@ -128,31 +128,20 @@ public class HoodieBaseFile extends BaseFile {
     return values;
   }
 
-  private static FileStatus handleExternallyGeneratedFileName(FileStatus fileStatus) {
+  private static FileStatus handleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
     if (fileStatus == null) {
       return null;
     }
-    String updatedFileName = handleExternallyGeneratedFileName(fileStatus.getPath().getName());
-    if (updatedFileName.equals(fileStatus.getPath().getName())) {
+    if (ExternalFilePathUtil.isExternallyCreatedFile(fileStatus.getPath().getName())) {
+      // fileId is the same as the original file name for externally created files
+      Path parent = fileStatus.getPath().getParent();
+      return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
+          fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
+          fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
+          new CachingPath(parent, createRelativePathUnsafe(fileId)));
+    } else {
       return fileStatus;
     }
-
-    Path parent = fileStatus.getPath().getParent();
-    return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
-        fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
-        fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
-        new CachingPath(parent, createRelativePathUnsafe(updatedFileName)));
-  }
-
-  private static String handleExternallyGeneratedFileName(String fileName) {
-    if (!ExternalFilePathUtil.isExternallyCreatedFile(fileName)) {
-      return fileName;
-    }
-    return pathFromExternallyManagedFileName(fileName);
-  }
-
-  private static String pathFromExternallyManagedFileName(String fileName) {
-    return fileName.split("_", 3)[2];
   }
 
   public String getFileId() {
