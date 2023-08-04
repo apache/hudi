@@ -53,8 +53,6 @@ import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoders;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -67,8 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.reflect.ClassTag;
 
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 
@@ -249,8 +245,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> createRdd(List<WriteStatus> writeStatuses) {
-    Dataset<WriteStatus> dsw = sparkSession.createDataset(writeStatuses, Encoders.javaSerialization(WriteStatus.class));
-    return new JavaRDD<>(dsw.rdd(), ClassTag.apply(WriteStatus.class));
+    return jsc.parallelize(writeStatuses, 1);
   }
 
   private WriteStatus createWriteStatus(String partitionPath, String filePath, String fileId) {
