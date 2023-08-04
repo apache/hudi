@@ -20,7 +20,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -44,6 +43,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -93,7 +93,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
     @Override
     protected Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> computeNext() {
       // Partition path and file name pair to list of keys
-      final Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
+      final Map<Pair<String, HoodieBaseFile>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
 
       while (inputItr.hasNext()) {
@@ -110,7 +110,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
           fileIDBaseFileMap.put(fileId, baseFile.get());
         }
 
-        fileToKeysMap.computeIfAbsent(Pair.of(partitionPath, fileIDBaseFileMap.get(fileId).getFileName()),
+        fileToKeysMap.computeIfAbsent(Pair.of(partitionPath, fileIDBaseFileMap.get(fileId)),
             k -> new ArrayList<>()).add(new HoodieKey(entry._2, partitionPath));
 
         if (fileToKeysMap.size() > BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH) {
@@ -122,20 +122,19 @@ public class HoodieMetadataBloomFilterProbingFunction implements
         return Collections.emptyIterator();
       }
 
-      List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>(fileToKeysMap.keySet());
+      List<Pair<String, String>> partitionNameFileNameList = fileToKeysMap.keySet().stream().map(pair -> Pair.of(pair.getLeft(), pair.getRight().getFileName())).collect(Collectors.toList());
       Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
           hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
 
       return fileToKeysMap.entrySet().stream()
           .map(entry -> {
-            Pair<String, String> partitionPathFileNamePair = entry.getKey();
             List<HoodieKey> hoodieKeyList = entry.getValue();
-
-            final String partitionPath = partitionPathFileNamePair.getLeft();
-            final String fileName = partitionPathFileNamePair.getRight();
-            final String fileId = FSUtils.getFileId(fileName);
+            final String partitionPath = entry.getKey().getLeft();
+            final HoodieBaseFile baseFile = entry.getKey().getRight();
+            final String fileId = baseFile.getFileId();
             ValidationUtils.checkState(!fileId.isEmpty());
 
+            Pair<String, String> partitionPathFileNamePair = Pair.of(partitionPath, baseFile.getFileName());
             if (!fileToBloomFilterMap.containsKey(partitionPathFileNamePair)) {
               throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
             }

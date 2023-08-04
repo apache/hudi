@@ -253,7 +253,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withSizeThreshold(config.getLogFileMaxSize())
         .withFs(fs)
         .withRolloverLogWriteToken(writeToken)
-        .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
         .withSuffix(suffix)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }

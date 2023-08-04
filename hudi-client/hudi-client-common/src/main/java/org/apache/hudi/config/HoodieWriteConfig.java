@@ -68,6 +68,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
@@ -726,6 +727,11 @@ public class HoodieWriteConfig extends HoodieConfig {
    * operation are already prepped.
    */
   public static final String SPARK_SQL_MERGE_INTO_PREPPED_KEY = "_hoodie.spark.sql.merge.into.prepped";
+
+  /**
+   * An internal config referring to fileID encoding. 0 refers to UUID based encoding and 1 refers to raw string format(random string).
+   */
+  public static final String WRITES_FILEID_ENCODING =  "_hoodie.writes.fileid.encoding";
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -2562,6 +2568,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(CLIENT_INIT_CALLBACK_CLASS_NAMES);
   }
 
+  public Integer getWritesFileIdEncoding() {
+    return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3046,6 +3056,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withClientInitCallbackClassNames(String classNames) {
       writeConfig.setValue(CLIENT_INIT_CALLBACK_CLASS_NAMES, classNames);
+      return this;
+    }
+
+    public Builder withWritesFileIdEncoding(Integer fileIdEncoding) {
+      writeConfig.setValue(WRITES_FILEID_ENCODING, Integer.toString(fileIdEncoding));
       return this;
     }
 

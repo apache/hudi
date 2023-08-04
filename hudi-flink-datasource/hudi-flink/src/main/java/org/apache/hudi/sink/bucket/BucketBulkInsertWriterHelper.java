@@ -82,7 +82,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
         close();
       }
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }
     return handles.get(fileId);

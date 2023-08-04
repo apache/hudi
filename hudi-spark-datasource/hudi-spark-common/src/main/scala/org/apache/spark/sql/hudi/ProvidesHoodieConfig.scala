@@ -28,6 +28,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -122,27 +123,29 @@ trait ProvidesHoodieConfig extends Logging {
    */
   private def deduceOperation(enableBulkInsert: Boolean, isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                               dropDuplicate: Boolean, isNonStrictMode: Boolean, isPartitionedTable: Boolean,
-                              combineBeforeInsert: Boolean, insertMode: InsertMode): String = {
-    (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-      case (true, _, _, _, false, _) =>
+                              combineBeforeInsert: Boolean, insertMode: InsertMode, autoGenerateRecordKeys: Boolean): String = {
+    (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable, autoGenerateRecordKeys) match {
+      case (true, _, _, _, false, _, _) =>
         throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-      case (true, _, _, true, _, _) =>
+      case (true, _, _, true, _, _, _) =>
         throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
           s" Please disable $INSERT_DROP_DUPS and try again.")
       // Bulk insert with overwrite table
-      case (true, false, true, _, _, _) =>
+      case (true, false, true, _, _, _, _) =>
         BULK_INSERT_OPERATION_OPT_VAL
       // Bulk insert with overwrite table partition
-      case (true, true, false, _, _, true) =>
+      case (true, true, false, _, _, true, _) =>
         BULK_INSERT_OPERATION_OPT_VAL
       // insert overwrite table
-      case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+      case (false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
       // insert overwrite partition
-      case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+      case (false, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
       // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-      case (false, false, false, false, false, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
+      case (false, false, false, false, false, _, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-      case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+      case (true, false, false, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+      // if auto record key generation is enabled, use bulk_insert
+      case (_, _, _, _, _,_,true) => BULK_INSERT_OPERATION_OPT_VAL
       // for the rest case, use the insert operation
       case _ => INSERT_OPERATION_OPT_VAL
     }
@@ -190,6 +193,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
+    val autoGenerateRecordKeys : Boolean = !combinedOpts.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
 
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
@@ -214,7 +218,7 @@ trait ProvidesHoodieConfig extends Logging {
         // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
         //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
-          isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode)
+          isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, autoGenerateRecordKeys)
       } else {
         deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
