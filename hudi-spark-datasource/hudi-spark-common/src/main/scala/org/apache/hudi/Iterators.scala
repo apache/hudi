@@ -217,7 +217,6 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
       baseFileReader.schema, dataSchema, requiredSchema, tableState, config)
   }
 
-
   // NOTE: Record-merging iterator supports 2 modes of operation merging records bearing either
   //        - Full table's schema
   //        - Projected schema

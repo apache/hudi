@@ -42,6 +42,9 @@ import org.apache.spark.util.SerializableConfiguration
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
+/**
+ * This class does bootstrap and MOR merging so that we can use hadoopfs relation.
+ */
 class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  tableSchema: Broadcast[HoodieTableSchema],
                                  tableName: String,
