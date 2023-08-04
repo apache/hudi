@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.sink.append.AutoRowDataKeyGen;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -57,8 +58,6 @@ public class RowDataKeyGen implements Serializable {
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
-  private final boolean hasRecordKey;
-
   private final String[] recordKeyFields;
   private final String[] partitionPathFields;
 
@@ -80,7 +79,7 @@ public class RowDataKeyGen implements Serializable {
 
   private boolean nonPartitioned;
 
-  private RowDataKeyGen(
+  protected RowDataKeyGen(
       String recordKeys,
       String partitionFields,
       RowType rowType,
@@ -88,27 +87,31 @@ public class RowDataKeyGen implements Serializable {
       boolean encodePartitionPath,
       boolean consistentLogicalTimestampEnabled,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
-    this.recordKeyFields = recordKeys.split(",");
     this.partitionPathFields = partitionFields.split(",");
-    List<String> fieldNames = rowType.getFieldNames();
-    List<LogicalType> fieldTypes = rowType.getChildren();
-
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
 
-    this.hasRecordKey = hasRecordKey(fieldNames);
-    if (!hasRecordKey) {
-      this.recordKeyProjection = null;
-    } else if (this.recordKeyFields.length == 1) {
-      // efficient code path
-      this.simpleRecordKey = true;
-      int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
-      this.recordKeyFieldGetter = RowData.createFieldGetter(fieldTypes.get(recordKeyIdx), recordKeyIdx);
+    boolean useAutoKeyGen = recordKeys == null;
+    List<String> fieldNames = rowType.getFieldNames();
+    List<LogicalType> fieldTypes = rowType.getChildren();
+
+    if (useAutoKeyGen) {
+      this.recordKeyFields = null;
       this.recordKeyProjection = null;
     } else {
-      this.recordKeyProjection = getProjection(this.recordKeyFields, fieldNames, fieldTypes);
+      this.recordKeyFields = recordKeys.split(",");
+      if (this.recordKeyFields.length == 1) {
+        // efficient code path
+        this.simpleRecordKey = true;
+        int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
+        this.recordKeyFieldGetter = RowData.createFieldGetter(fieldTypes.get(recordKeyIdx), recordKeyIdx);
+        this.recordKeyProjection = null;
+      } else {
+        this.recordKeyProjection = getProjection(this.recordKeyFields, fieldNames, fieldTypes);
+      }
     }
+
     if (this.partitionPathFields.length == 1) {
       // efficient code path
       if (this.partitionPathFields[0].equals("")) {
@@ -128,9 +131,9 @@ public class RowDataKeyGen implements Serializable {
   /**
    * Checks whether user provides any record key.
    */
-  private boolean hasRecordKey(List<String> fieldNames) {
-    return recordKeyFields.length != 1
-        || fieldNames.contains(recordKeyFields[0]);
+  private static boolean hasRecordKey(String recordKeys, List<String> fieldNames) {
+    return recordKeys.split(",").length != 1
+        || fieldNames.contains(recordKeys);
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
@@ -148,16 +151,26 @@ public class RowDataKeyGen implements Serializable {
         consistentLogicalTimestampEnabled,keyGeneratorOpt);
   }
 
+  /**
+   * support auto key generator
+   */
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
+    String recordKeys = conf.getString(FlinkOptions.RECORD_KEY_FIELD);
+    if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
+      return instance(conf, rowType);
+    } else {
+      boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
+      return new AutoRowDataKeyGen(taskId, instantTime, conf.getString(FlinkOptions.PARTITION_PATH_FIELD), rowType,
+          conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), consistentLogicalTimestampEnabled);
+    }
+  }
+
   public HoodieKey getHoodieKey(RowData rowData) {
     return new HoodieKey(getRecordKey(rowData), getPartitionPath(rowData));
   }
 
   public String getRecordKey(RowData rowData) {
-    if (!hasRecordKey) {
-      // should be optimized to unique values that can be easily calculated with low cost
-      // for e.g, fileId + auto inc integer
-      return EMPTY_RECORDKEY_PLACEHOLDER;
-    } else if (this.simpleRecordKey) {
+    if (this.simpleRecordKey) {
       return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
     } else {
       Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
