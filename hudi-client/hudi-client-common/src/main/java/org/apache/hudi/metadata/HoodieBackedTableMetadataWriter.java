@@ -571,7 +571,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(fileNameToSizeMap), Option.empty());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList(), Option.empty());
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
@@ -616,6 +616,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
+    if (dataWriteConfig.getMetadataConfig().isFileSystemBootstrapDisabled()) {
+      return Collections.emptyList();
+    }
     List<SerializablePath> pathsToList = new LinkedList<>();
     pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
 

@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
@@ -62,7 +63,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -177,6 +177,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * You can find more details in HUDI-3834.
    */
   private static final Lazy<HoodieMetadataColumnStats.Builder> METADATA_COLUMN_STATS_BUILDER_STUB = Lazy.lazily(HoodieMetadataColumnStats::newBuilder);
+  private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true);
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
@@ -324,31 +325,44 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param partition    The name of the partition
    * @param filesAdded   Mapping of files to their sizes for files which have been added to this partition
    * @param filesDeleted List of files which have been deleted from this partition
+   * @param instantTime  Commit time of the commit responsible for adding and/or deleting these files, will be empty during bootstrapping of the metadata table
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
-                                                                               Option<Map<String, Long>> filesAdded,
-                                                                               Option<List<String>> filesDeleted) {
-    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(filesMap ->
-        fileInfo.putAll(
-            filesMap.entrySet().stream().collect(
-                Collectors.toMap(Map.Entry::getKey, (entry) -> {
-                  long fileSize = entry.getValue();
-                  // Assert that the file-size of the file being added is positive, since Hudi
-                  // should not be creating empty files
-                  checkState(fileSize > 0);
-                  return new HoodieMetadataFileInfo(fileSize, false);
-                })))
-    );
-    filesDeleted.ifPresent(filesList ->
-        fileInfo.putAll(
-            filesList.stream().collect(
-                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
-    );
+                                                                               Map<String, Long> filesAdded,
+                                                                               List<String> filesDeleted,
+                                                                               Option<String> instantTime) {
+    int size = filesAdded.size() + filesDeleted.size();
+    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
+    filesAdded.forEach((key, value) -> {
+      long fileSize = value;
+      // Assert that the file-size of the file being added is positive, since Hudi
+      // should not be creating empty files
+      checkState(fileSize > 0);
+      fileInfo.put(handleFileName(key, instantTime), new HoodieMetadataFileInfo(fileSize, false));
+    });
+
+    filesDeleted.forEach(entry -> fileInfo.put(handleFileName(entry, instantTime), DELETE_FILE_METADATA));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieAvroRecord<>(key, payload);
+  }
+
+  /**
+   * In the case where a file was created by something other than a Hudi writer, the file name will not contain the commit time. We will prefix the file name with hudiext_[commitTime] before storing
+   * in the metadata table. The constructor for {@link org.apache.hudi.common.model.HoodieBaseFile} will properly handle this prefix.
+   * @param fileName incoming file name
+   * @param commitTime time of the commit (will be empty during bootstrap operations)
+   * @return file name with commit time prefix if the input file name does not contain the commit time, otherwise returns the original input
+   */
+  private static String handleFileName(String fileName, Option<String> commitTime) {
+    return commitTime.map(commit -> {
+      if (fileName.contains(commit)) {
+        return fileName;
+      } else {
+        return ExternalFilePathUtil.prefixExternalFileWithCommitTime(fileName, commit);
+      }
+    }).orElse(fileName);
   }
 
   /**
