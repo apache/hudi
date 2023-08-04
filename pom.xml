@@ -130,6 +130,8 @@
     <orc.flink.version>1.5.6</orc.flink.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
+    <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
+    <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark3.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
@@ -212,10 +214,10 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
-    <aws.sdk.version>1.12.22</aws.sdk.version>
+    <aws.sdk.version>2.18.40</aws.sdk.version>
     <proto.version>3.21.7</proto.version>
     <protoc.version>3.21.5</protoc.version>
-    <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
+    <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
