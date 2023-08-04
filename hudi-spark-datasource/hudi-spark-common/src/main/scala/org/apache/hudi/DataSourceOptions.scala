@@ -659,6 +659,15 @@ object DataSourceWriteOptions {
     .sinceVersion("0.14.0")
     .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
 
+  val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.overwrite.mode")
+    .noDefaultValue()
+    .withValidValues("STATIC", "DYNAMIC")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
+      "respect spark.sql.sources.partitionOverwriteMode")
+
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key()

@@ -172,7 +172,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
            |    (6, 'a6', 60, 100)
            |""".stripMargin)
 
-      // First merge with a extra input field 'flag' (insert a new record)
       spark.sql(
         s"""
            | merge into $tableName
@@ -219,7 +218,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
     for (withPrecombine <- Seq(true, false)) {
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
         val tableName = generateTableName
 
         val prekstr = if (withPrecombine) "tblproperties (preCombineField = 'ts')" else ""
@@ -242,7 +240,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |    (1, 'a1', 10, 100)
              |""".stripMargin)
 
-        // First merge with a extra input field 'flag' (insert a new record)
         spark.sql(
           s"""
              | merge into $tableName
