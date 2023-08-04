@@ -53,16 +53,25 @@ public class HoodieLogFile implements Serializable {
   private transient FileStatus fileStatus;
   private transient Path path;
   private final String pathStr;
-  private final String fileId;
-  private final String baseCommitTime;
-  private final int logVersion;
-  private final String logWriteToken;
-  private final String fileExtension;
-  private final String suffix;
+  private String fileId;
+  private String baseCommitTime;
+  private int logVersion;
+  private String logWriteToken;
+  private String fileExtension;
+  private String suffix;
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
-    this(logFile.getFileStatus(), logFile.getPath(), logFile.pathStr, logFile.getFileSize());
+    this.fileStatus = logFile.getFileStatus();
+    this.path = logFile.getPath();
+    this.pathStr = logFile.pathStr;
+    this.fileId = logFile.getFileId();
+    this.baseCommitTime = logFile.getBaseCommitTime();
+    this.logVersion = logFile.getLogVersion();
+    this.logWriteToken = logFile.getLogWriteToken();
+    this.fileExtension = logFile.getFileExtension();
+    this.suffix = logFile.getSuffix();
+    this.fileLen = logFile.getFileSize();
   }
 
   public HoodieLogFile(FileStatus fileStatus) {
@@ -85,16 +94,14 @@ public class HoodieLogFile implements Serializable {
     this.fileStatus = fileStatus;
     this.pathStr = logPathStr;
     this.fileLen = fileLen;
-    if (logPath != null) {
-      if (logPath instanceof CachingPath) {
-        this.path = logPath;
-      } else {
-        this.path = new CachingPath(logPath.getParent(), logPath.getName());
-      }
-    } else {
-      this.path = new CachingPath(pathStr);
+    this.logVersion = -1; // mark version as uninitialized
+    if (logPath instanceof CachingPath) {
+      this.path = logPath;
     }
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+  }
+
+  private void parseFieldsFromPath() {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
@@ -107,26 +114,44 @@ public class HoodieLogFile implements Serializable {
   }
 
   public String getFileId() {
+    if (fileId == null) {
+      parseFieldsFromPath();
+    }
     return fileId;
   }
 
   public String getBaseCommitTime() {
+    if (baseCommitTime == null) {
+      parseFieldsFromPath();
+    }
     return baseCommitTime;
   }
 
   public int getLogVersion() {
+    if (logVersion == -1) {
+      parseFieldsFromPath();
+    }
     return logVersion;
   }
 
   public String getLogWriteToken() {
+    if (logWriteToken == null) {
+      parseFieldsFromPath();
+    }
     return logWriteToken;
   }
 
   public String getFileExtension() {
+    if (fileExtension == null) {
+      parseFieldsFromPath();
+    }
     return fileExtension;
   }
 
   public String getSuffix() {
+    if (suffix == null) {
+      parseFieldsFromPath();
+    }
     return suffix;
   }
 
