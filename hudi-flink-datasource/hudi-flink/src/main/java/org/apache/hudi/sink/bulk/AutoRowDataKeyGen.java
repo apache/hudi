@@ -16,11 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.append;
+package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -39,9 +41,14 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       RowType rowType,
       boolean hiveStylePartitioning,
       boolean encodePartitionPath) {
-    super(null, partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, null);
+    super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, Option.empty());
     this.taskId = taskId;
     this.instantTime = instantTime;
+  }
+
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
+    return new AutoRowDataKeyGen(taskId, instantTime, conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING));
   }
 
   @Override

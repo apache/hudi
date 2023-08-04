@@ -25,7 +25,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.sink.append.AutoRowDataKeyGen;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -80,7 +79,7 @@ public class RowDataKeyGen implements Serializable {
   private boolean nonPartitioned;
 
   protected RowDataKeyGen(
-      String recordKeys,
+      Option<String> recordKeys,
       String partitionFields,
       RowType rowType,
       boolean hiveStylePartitioning,
@@ -92,15 +91,14 @@ public class RowDataKeyGen implements Serializable {
     this.encodePartitionPath = encodePartitionPath;
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
 
-    boolean useAutoKeyGen = recordKeys == null;
     List<String> fieldNames = rowType.getFieldNames();
     List<LogicalType> fieldTypes = rowType.getChildren();
 
-    if (useAutoKeyGen) {
+    if (!recordKeys.isPresent()) {
       this.recordKeyFields = null;
       this.recordKeyProjection = null;
     } else {
-      this.recordKeyFields = recordKeys.split(",");
+      this.recordKeyFields = recordKeys.get().split(",");
       if (this.recordKeyFields.length == 1) {
         // efficient code path
         this.simpleRecordKey = true;
@@ -128,14 +126,6 @@ public class RowDataKeyGen implements Serializable {
     this.keyGenOpt = keyGenOpt;
   }
 
-  /**
-   * Checks whether user provides any record key.
-   */
-  private static boolean hasRecordKey(String recordKeys, List<String> fieldNames) {
-    return recordKeys.split(",").length != 1
-        || fieldNames.contains(recordKeys);
-  }
-
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
     if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME))) {
@@ -146,23 +136,9 @@ public class RowDataKeyGen implements Serializable {
       }
     }
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-    return new RowDataKeyGen(conf.getString(FlinkOptions.RECORD_KEY_FIELD), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+    return new RowDataKeyGen(Option.of(conf.getString(FlinkOptions.RECORD_KEY_FIELD)), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled,keyGeneratorOpt);
-  }
-
-  /**
-   * support auto key generator
-   */
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
-    String recordKeys = conf.getString(FlinkOptions.RECORD_KEY_FIELD);
-    if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
-      return instance(conf, rowType);
-    } else {
-      boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-      return new AutoRowDataKeyGen(taskId, instantTime, conf.getString(FlinkOptions.PARTITION_PATH_FIELD), rowType,
-          conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), consistentLogicalTimestampEnabled);
-    }
+        consistentLogicalTimestampEnabled, keyGeneratorOpt);
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {

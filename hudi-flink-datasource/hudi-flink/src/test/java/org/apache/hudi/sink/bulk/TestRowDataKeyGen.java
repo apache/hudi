@@ -177,7 +177,7 @@ public class TestRowDataKeyGen {
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final int taskId = 3;
     final String instantTime = "000001";
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
     assertThat(keyGen1.getRecordKey(rowData1), is(instantTime + "_" + taskId + "_0"));
 
     // null record key and partition path
