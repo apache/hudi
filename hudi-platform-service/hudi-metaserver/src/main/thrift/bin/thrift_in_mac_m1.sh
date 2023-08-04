@@ -25,7 +25,7 @@
 #
 
 printf "====== INSTALL THRIFT START ======\n"
-brew install thrift@0.12.0
+brew install thrift@0.13.0
 printf "====== INSTALL THRIFT END ======\n"
 printf "====== COMPILE THRIFT SOURCE FILE START ======\n"
 PARENT_PATH=$(dirname "$PWD")
