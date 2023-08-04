@@ -145,6 +145,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
+  // true if writer requires a manual transition of the commit to inflight
+  private final boolean manuallyTransitionCommit;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
 
@@ -156,16 +158,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
+   * @param manuallyTransitionCommit   True if writer requires a manual transition of the commit to inflight
    */
   protected HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            Option<String> inflightInstantTimestamp) {
+                                            Option<String> inflightInstantTimestamp,
+                                            boolean manuallyTransitionCommit) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
     this.metrics = Option.empty();
+    this.manuallyTransitionCommit = manuallyTransitionCommit;
     this.enabledPartitionTypes = new ArrayList<>(4);
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
@@ -1094,7 +1099,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       }
 
       writeClient.startCommitWithTime(instantTime);
-      metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+      if (manuallyTransitionCommit) {
+        metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+      }
       List<WriteStatus> statuses;
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));

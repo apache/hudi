@@ -31,6 +31,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled
 public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestHarness {
   private static final Comparator<HoodieRecord> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));

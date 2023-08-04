@@ -77,7 +77,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inFlightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp, true);
   }
 
   @Override

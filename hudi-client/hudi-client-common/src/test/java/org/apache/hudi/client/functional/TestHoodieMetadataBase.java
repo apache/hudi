@@ -45,6 +45,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -119,7 +120,7 @@ abstract class TestHoodieMetadataBase extends HoodieCommonTestHarness {
         validateMetadataPayloadStateConsistency);
   }
 
-  abstract void init(HoodieTableType tableType, Option<HoodieWriteConfig> writeConfig, boolean enableMetadataTable,
+  public abstract void init(HoodieTableType tableType, Option<HoodieWriteConfig> writeConfig, boolean enableMetadataTable,
                    boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException;
 
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
@@ -134,14 +135,14 @@ abstract class TestHoodieMetadataBase extends HoodieCommonTestHarness {
     }
   }
 
-  abstract HoodieBackedTableMetadataWriter createTableMetadataWriter(HoodieWriteConfig writeConfig, HoodieEngineContext context);
+  public abstract HoodieBackedTableMetadataWriter createTableMetadataWriter(HoodieWriteConfig writeConfig, HoodieEngineContext context);
 
   @AfterEach
   public void clean() throws Exception {
     cleanupResources();
   }
 
-  abstract void cleanupResources() throws Exception;
+  public abstract void cleanupResources() throws Exception;
 
   protected void doWriteInsertAndUpsert(HoodieTestTable testTable, String commit1, String commit2, boolean nonPartitioned) throws Exception {
     testTable.doWriteOperation(commit1, INSERT, nonPartitioned ? asList("") : asList("p1", "p2"), nonPartitioned ? asList("") : asList("p1", "p2"),
@@ -304,8 +305,9 @@ abstract class TestHoodieMetadataBase extends HoodieCommonTestHarness {
     archiver.archiveIfRequired(engineContext);
   }
 
-  abstract HoodieTable createTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient);
-  abstract HoodieTable createTable(HoodieWriteConfig config, HoodieEngineContext context);
+  public abstract HoodieTable createTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient);
+
+  public abstract HoodieTable createTable(HoodieWriteConfig config, HoodieEngineContext context);
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {
     validateMetadata(testTable, emptyList());
@@ -520,5 +522,17 @@ abstract class TestHoodieMetadataBase extends HoodieCommonTestHarness {
       assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "
           + numFileVersions + " but was " + latestSlices.size());
     });
+  }
+
+  public void syncTableMetadata(HoodieWriteConfig writeConfig) {
+    if (!writeConfig.getMetadataConfig().enabled()) {
+      return;
+    }
+    // Open up the metadata table again, for syncing
+    try (HoodieTableMetadataWriter writer = createTableMetadataWriter(writeConfig, engineContext)) {
+      LOG.info("Successfully synced to metadata table");
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Error syncing to metadata table.", e);
+    }
   }
 }
