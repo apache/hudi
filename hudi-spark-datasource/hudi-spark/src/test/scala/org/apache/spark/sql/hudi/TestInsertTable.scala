@@ -833,7 +833,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test bulk insert with insert overwrite table") {
-    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION) {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { nonPartitionedTable =>
@@ -866,7 +866,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test bulk insert with insert overwrite partition") {
-    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION) {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { partitionedTable =>

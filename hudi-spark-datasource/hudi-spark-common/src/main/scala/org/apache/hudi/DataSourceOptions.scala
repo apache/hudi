@@ -441,7 +441,7 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .deprecatedAfter("0.14.0")
     .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
-      "This config is deprecated as of 0.14.0. Please use hoodie.sql.write.operation instead.")
+      "This config is deprecated as of 0.14.0. Please use hoodie.spark.sql.insert.into.operation instead.")
 
   @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
@@ -452,7 +452,7 @@ object DataSourceWriteOptions {
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
       "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use " +
-      "hoodie.sql.write.operation and hoodie.datasource.insert.dup.policy as you see fit.")
+      "hoodie.spark.sql.insert.into.operation and hoodie.datasource.insert.dup.policy as you see fit.")
 
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
@@ -528,14 +528,10 @@ object DataSourceWriteOptions {
 
   val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 
-  val BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION = "bulk_insert"
-  val INSERT_SPARK_SQL_INSERT_INTO_OPERATION = "insert"
-  val UPSERT_SPARK_SQL_INSERT_INTO_OPERATION = "upsert"
-
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.insert.into.operation")
-    .defaultValue(INSERT_SPARK_SQL_INSERT_INTO_OPERATION)
-    .withValidValues(BULK_INSERT_SPARK_SQL_INSERT_INTO_OPERATION, INSERT_SPARK_SQL_INSERT_INTO_OPERATION, UPSERT_SPARK_SQL_INSERT_INTO_OPERATION)
+    .defaultValue(WriteOperationType.INSERT.value())
+    .withValidValues(WriteOperationType.BULK_INSERT.value(), WriteOperationType.INSERT.value(), WriteOperationType.UPSERT.value())
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
       "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +

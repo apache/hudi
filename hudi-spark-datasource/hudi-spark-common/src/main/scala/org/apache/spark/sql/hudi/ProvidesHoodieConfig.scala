@@ -106,8 +106,8 @@ trait ProvidesHoodieConfig extends Logging {
   /**
    * Deduce the sql write operation for INSERT_INTO
    */
-  private def deduceSqlWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
-                                      sqlWriteOperation: String): String = {
+  private def deduceSparkSqlInsetIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
+                                                    sqlWriteOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
@@ -216,7 +216,7 @@ trait ProvidesHoodieConfig extends Logging {
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode)
       } else {
-        deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
+        deduceSparkSqlInsetIntoWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
     )
 
