@@ -244,7 +244,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     });
 
     HoodieWriteConfig config4 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
-    final SparkRDDWriteClient client4 = new SparkRDDWriteClient(context, config4);
+    final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
 
     Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + nextCommitTime3);
     fs.create(heartbeatFilePath, true);
