@@ -128,13 +128,13 @@ public class HoodieMetadataBloomFilterProbingFunction implements
 
       return fileToKeysMap.entrySet().stream()
           .map(entry -> {
-            Pair<String, HoodieBaseFile> partitionPathFileNamePair = entry.getKey();
             List<HoodieKey> hoodieKeyList = entry.getValue();
-
-            final String partitionPath = partitionPathFileNamePair.getLeft();
-            final String fileId = partitionPathFileNamePair.getRight().getFileId();
+            final String partitionPath = entry.getKey().getLeft();
+            final HoodieBaseFile baseFile = entry.getKey().getRight();
+            final String fileId = baseFile.getFileId();
             ValidationUtils.checkState(!fileId.isEmpty());
 
+            Pair<String, String> partitionPathFileNamePair = Pair.of(partitionPath, baseFile.getFileName());
             if (!fileToBloomFilterMap.containsKey(partitionPathFileNamePair)) {
               throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
             }
