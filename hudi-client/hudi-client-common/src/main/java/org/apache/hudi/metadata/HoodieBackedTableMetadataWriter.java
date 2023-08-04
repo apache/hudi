@@ -542,7 +542,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         public HoodieRecord next() {
           return forDelete
               ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime);
+              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
         }
       };
     });
@@ -1357,7 +1357,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime());
+                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
           } else {
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
