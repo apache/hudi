@@ -198,15 +198,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void validateRollback(String commitToRollbackInstantTime, HoodieInstant compactionInstant, HoodieTimeline deltacommitsSinceCompaction) {
-    // ignore, spark has more radical compression strategy, it is very probably that
-    // the latest compaction instant has greater timestamp than the instant to roll back.
-
-    // The limitation can be relaxed because the log reader of MDT only accepts valid instants
-    // based on the DT timeline, so the base file of MDT does not include un-committed instants.
-  }
-
-  @Override
   public BaseHoodieWriteClient getWriteClient() {
     if (writeClient == null) {
       writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
