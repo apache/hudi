@@ -124,7 +124,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
 
       List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>(fileToKeysMap.keySet());
       Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
-          hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
+          hoodieTable.getMetadata().getBloomFilters(partitionNameFileNameList);
 
       return fileToKeysMap.entrySet().stream()
           .map(entry -> {

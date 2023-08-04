@@ -45,6 +45,7 @@ import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -116,7 +117,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
 /**
  * Abstract implementation of a HoodieTable.
  *
- * @param <T> Sub type of HoodieRecordPayload
+ * @param <T> Subtype of HoodieRecordPayload
  * @param <I> Type of inputs
  * @param <K> Type of keys
  * @param <O> Type of outputs
@@ -128,12 +129,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
+  private final SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+  private HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
-
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
 
@@ -142,12 +142,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
-
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -166,12 +160,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(),
+          config.getViewStorageConfig(), config.getCommonConfig(), this::getMetadata);
     }
     return viewManager;
   }
 
-  public HoodieTableMetadata getMetadata() {
+  public synchronized HoodieTableMetadata getMetadata() {
+    if (null == metadata) {
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+          .fromProperties(config.getMetadataConfig().getProps())
+          .build();
+      metadata = HoodieTableMetadata.create(getContext(), metadataConfig, config.getBasePath());
+    }
     return metadata;
   }
 
@@ -889,7 +890,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public HoodieEngineContext getContext() {
     // This is to handle scenarios where this is called at the executor tasks which do not have access
-    // to engine context, and it ends up being null (as its not serializable and marked transient here).
+    // to engine context, and it ends up being null (as it is not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
   }
 
@@ -1046,10 +1047,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
-  }
-
-  public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
   }
 
   /**

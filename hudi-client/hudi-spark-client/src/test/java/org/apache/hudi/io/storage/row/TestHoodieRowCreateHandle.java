@@ -187,7 +187,9 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
 
     try {
       HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-      new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+      table.getMetadata();
+      // After #8452, the exception is caused by the creating of metadata in HoodieTable
+      // new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
     } catch (TableNotFoundException e) {
       // expected throw failure
