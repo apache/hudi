@@ -49,6 +49,8 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadSnapshotRelation
 
+  fileIndex.setIncludeLogFiles(true)
+
   override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 

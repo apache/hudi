@@ -109,12 +109,28 @@ case class HoodieFileIndex(spark: SparkSession,
    *
    * @return List of FileStatus for base files
    */
-  def allFiles: Seq[FileStatus] = {
+  def allBaseFiles: Seq[FileStatus] = {
     getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .map(fs => fs.getBaseFile.orElse(null))
       .filter(_ != null)
       .map(_.getFileStatus)
       .toSeq
+  }
+
+  /**
+   * Returns the FileStatus for all the base files and log files.
+   *
+   * @return List of FileStatus for base files and log files
+   */
+  private def allBaseFilesAndLogFiles: Seq[FileStatus] = {
+    getAllInputFileSlices.values.asScala.flatMap(_.asScala)
+      .flatMap(fs => {
+        val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+        val logFilesStatus = fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+        val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+        baseFileStatusOpt.foreach(f => files.append(f))
+        files
+      }).toSeq
   }
 
   /**
@@ -129,8 +145,8 @@ case class HoodieFileIndex(spark: SparkSession,
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
     val partitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
-    val listedPartitions = filterFileSlices(dataFilters, partitionsAndFileSlices).map {
-      case (partition, fileSlices) =>
+    val partitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionsAndFileSlices).map {
+      case (partitionOpt, fileSlices) =>
         val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
           val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
           val logFilesStatus = if (includeLogFiles) {
@@ -143,15 +159,15 @@ case class HoodieFileIndex(spark: SparkSession,
           files
         })
 
-        PartitionDirectory(InternalRow.fromSeq(partition.get.values), allCandidateFiles)
+        PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
     }
 
     hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
-      listedPartitions
+      partitionsAndFilteredFileSlices
     } else {
-      Seq(PartitionDirectory(InternalRow.empty, listedPartitions.flatMap(_.files)))
+      Seq(PartitionDirectory(InternalRow.empty, partitionsAndFilteredFileSlices.flatMap(_.files)))
     }
   }
 
@@ -161,6 +177,11 @@ case class HoodieFileIndex(spark: SparkSession,
     //    - Data-skipping is enabled
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
+
+    if (partitionAndFileSlices.isEmpty) {
+      return Seq()
+    }
+
     val candidateFilesNamesOpt: Option[Set[String]] =
     lookupCandidateFilesInMetadataTable(dataFilters) match {
       case Success(opt) => opt
@@ -178,7 +199,7 @@ case class HoodieFileIndex(spark: SparkSession,
     var totalFileSliceSize = 0
     var candidateFileSliceSize = 0
 
-    val listedPartitions = partitionAndFileSlices.map {
+    val partitionsAndFilteredFileSlices = partitionAndFileSlices.map {
       case (partitionOpt, fileSlices) =>
         // Filter in candidate files based on the col-stats index lookup
         val candidateFileSlices: Seq[FileSlice] = {
@@ -202,7 +223,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
     val skippingRatio =
       if (!areAllFileSlicesCached) -1
-      else if (allFiles.nonEmpty && totalFileSliceSize > 0) (totalFileSliceSize - candidateFileSliceSize) / totalFileSliceSize.toDouble
+      else if (getAllFiles().nonEmpty && totalFileSliceSize > 0)
+        (totalFileSliceSize - candidateFileSliceSize) / totalFileSliceSize.toDouble
       else 0
 
     logInfo(s"Total file slices: $totalFileSliceSize; " +
@@ -211,7 +233,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
     hasPushedDownPartitionPredicates = true
 
-    listedPartitions
+    partitionsAndFilteredFileSlices
   }
 
   def getFileSlicesForPrunedPartitions(partitionFilters: Seq[Expression]) : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
@@ -242,8 +264,8 @@ case class HoodieFileIndex(spark: SparkSession,
   }
 
   private def lookupFileNamesMissingFromIndex(allIndexedFileNames: Set[String]) = {
-    val allBaseFileNames = allFiles.map(f => f.getPath.getName).toSet
-    allBaseFileNames -- allIndexedFileNames
+    val allFileNames = getAllFiles().map(f => f.getPath.getName).toSet
+    allFileNames -- allIndexedFileNames
   }
 
   /**
@@ -271,7 +293,7 @@ case class HoodieFileIndex(spark: SparkSession,
       validateConfig()
       Option.empty
     } else if (recordLevelIndex.isIndexApplicable(queryFilters)) {
-      Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters))
+      Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), queryFilters))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
       Option.empty
@@ -323,8 +345,12 @@ case class HoodieFileIndex(spark: SparkSession,
     hasPushedDownPartitionPredicates = false
   }
 
+  private def getAllFiles(): Seq[FileStatus] = {
+    if (includeLogFiles) allBaseFilesAndLogFiles else allBaseFiles
+  }
+
   override def inputFiles: Array[String] =
-    allFiles.map(_.getPath.toString).toArray
+    getAllFiles().map(_.getPath.toString).toArray
 
   override def sizeInBytes: Long = getTotalCachedFilesSize
 
