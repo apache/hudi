@@ -689,7 +689,7 @@ public class HoodieTableMetaClient implements Serializable {
         new Class<?>[] {Configuration.class, String.class, ConsistencyGuardConfig.class, String.class,
             FileSystemRetryConfig.class, Option.class, Option.class, HoodieMetaserverConfig.class},
         conf, basePath, consistencyGuardConfig, recordMergerStrategy, fileSystemRetryConfig,
-        Option.of(metaserverConfig.getDatabaseName()), Option.of(metaserverConfig.getTableName()), metaserverConfig)
+        Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig)
         : new HoodieTableMetaClient(conf, basePath,
         loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy, fileSystemRetryConfig);
   }
