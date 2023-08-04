@@ -220,7 +220,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 200, true);
+    createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200, true);
 
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
