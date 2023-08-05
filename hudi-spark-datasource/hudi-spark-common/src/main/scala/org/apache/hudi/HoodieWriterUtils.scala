@@ -103,8 +103,8 @@ object HoodieWriterUtils {
   def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
     var isPrepped = false
     if (AutoRecordKeyGenerationUtils.isAutoGenerateRecordKeys(parameters)
-      && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false") == "false"
-      && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false") == "false"
+      && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").equals("false")
+      && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").equals("false")
       && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
       // with pk less table, writes using spark-ds writer can potentially use the prepped path if meta fields are present in the incoming df.
       if (operation == WriteOperationType.UPSERT) {

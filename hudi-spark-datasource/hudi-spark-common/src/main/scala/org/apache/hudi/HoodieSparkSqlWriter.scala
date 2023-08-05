@@ -157,7 +157,7 @@ object HoodieSparkSqlWriter {
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
     val tableType = HoodieTableType.valueOf(hoodieConfig.getString(TABLE_TYPE))
-    val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults)
+    val operation = deduceOperation(hoodieConfig, paramsWithoutDefaults, sourceDf)
 
     val preppedSparkSqlMergeInto = parameters.getOrDefault(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
     val preppedSparkSqlWrites = parameters.getOrDefault(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
@@ -262,14 +262,8 @@ object HoodieSparkSqlWriter {
                 Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
                   .asInstanceOf[BaseKeyGenerator])
               }
-              var validatePreppedRecord = true
               it.map { avroRec =>
-                if (validatePreppedRecord && (preppedSparkSqlWrites || preppedWriteOperation)) {
-                  // For prepped records, check the first record to make sure it has meta fields set.
-                  HoodieCreateRecordUtils.validateMetaFieldsInAvroRecords(avroRec)
-                  validatePreppedRecord = false
-                }
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites, false, preppedWriteOperation)
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedWriteOperation)
               }
             }).toJavaRDD()
 
@@ -422,7 +416,7 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  def deduceOperation(hoodieConfig: HoodieConfig, paramsWithoutDefaults : Map[String, String]): WriteOperationType = {
+  def deduceOperation(hoodieConfig: HoodieConfig, paramsWithoutDefaults : Map[String, String], df: Dataset[Row]): WriteOperationType = {
     var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
     // TODO clean up
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
@@ -438,9 +432,9 @@ object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
       operation
     } else {
-      // if no record key, we should treat it as append only workload and make bulk_insert as operation type.
+      // if no record key, and no meta fields, we should treat it as append only workload and make bulk_insert as operation type.
       if (!paramsWithoutDefaults.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
-        && !paramsWithoutDefaults.containsKey(OPERATION.key())) {
+        && !paramsWithoutDefaults.containsKey(OPERATION.key()) && !df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
         log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")
         operation = WriteOperationType.BULK_INSERT
       }

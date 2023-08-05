@@ -301,7 +301,8 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     assertEquals(5, snapshotDf1.filter("rider == 'rider-123456'").count())
 
     // delete the same 5 records.
-    snapshotDf1.filter("rider == 'rider-123456'").write.format("hudi")
+    snapshotDf1.filter("rider == 'rider-123456'")
+      .write.format("hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, "delete")
       .mode(SaveMode.Append)

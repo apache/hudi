@@ -127,16 +127,9 @@ object HoodieCreateRecordUtils {
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
 
           // handle dropping partition columns
-          var validatePreppedRecord = true
           it.map { avroRec =>
-            if (validatePreppedRecord && usePreppedInsteadOfKeyGen) {
-              // For prepped records, check the first record to make sure it has meta fields set.
-              validateMetaFieldsInAvroRecords(avroRec)
-              validatePreppedRecord = false
-            }
-
             val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
-              preppedSparkSqlWrites, preppedSparkSqlMergeInto, preppedWriteOperation)
+              preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
             } else {
@@ -186,17 +179,10 @@ object HoodieCreateRecordUtils {
           // NOTE: To make sure we properly transform records
           val finalStructTypeRowWriter = getCachedUnsafeRowWriter(sourceStructType, finalStructType)
 
-          var validatePreppedRecord = true
           it.map { sourceRow =>
-            if (validatePreppedRecord && usePreppedInsteadOfKeyGen) {
-              // For prepped records, check the record schema to make sure it has meta fields set.
-              validateMetaFieldsInSparkRecords(sourceStructType)
-              validatePreppedRecord = false
-            }
             val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) =
-              HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType, preppedSparkSqlWrites, preppedSparkSqlMergeInto,
-                preppedWriteOperation)
-
+              HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType,
+                preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val targetRow = finalStructTypeRowWriter(sourceRow)
             val hoodieSparkRecord = new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
             if (recordLocation.isDefined) {
@@ -208,53 +194,31 @@ object HoodieCreateRecordUtils {
     }
   }
 
-  private def validateMetaFieldsInSparkRecords(schema: StructType): Boolean = {
-    if (!schema.fieldNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-      || !schema.fieldNames.contains(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
-      || !schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-      || !schema.fieldNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
-      || !schema.fieldNames.contains(HoodieRecord.FILENAME_METADATA_FIELD)) {
-      throw new HoodieException("Metadata fields missing from spark prepared record.")
-    }
-    true
-  }
-
-  def validateMetaFieldsInAvroRecords(avroRec: GenericRecord): Unit = {
-    val avroSchema = avroRec.getSchema;
-    if (avroSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.PARTITION_PATH_METADATA_FIELD) == null
-      || avroSchema.getField(HoodieRecord.FILENAME_METADATA_FIELD) == null) {
-      throw new HoodieException("Metadata fields missing from avro prepared record.")
-    }
-  }
-
   def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: Option[BaseKeyGenerator], avroRec: GenericRecord,
-                                                 preppedSparkSqlWrites: Boolean, preppedSparkSqlMergeInto: Boolean,
-                                                 preppedWriteOperation: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                 useMetaFieldsForRecordKeyAndPartition: Boolean, fetchRecordLocationFromMetaFields: Boolean):
+  (HoodieKey, Option[HoodieRecordLocation]) = {
     //use keygen for sqlMergeIntoPrepped recordKey and partitionPath because the keygenerator handles
     //fetching from the meta fields if they are populated and otherwise doing keygen
-    val recordKey = if (preppedSparkSqlWrites || preppedWriteOperation) {
+    val recordKey = if (useMetaFieldsForRecordKeyAndPartition) {
       avroRec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getRecordKey(avroRec)
     }
 
-    val partitionPath = if (preppedSparkSqlWrites || preppedWriteOperation) {
+    val partitionPath = if (useMetaFieldsForRecordKeyAndPartition) {
       avroRec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString
     } else {
       keyGenerator.get.getPartitionPath(avroRec)
     }
 
     val hoodieKey = new HoodieKey(recordKey, partitionPath)
-    val instantTime: Option[String] = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
+    val instantTime: Option[String] = if (fetchRecordLocationFromMetaFields) {
       Option(avroRec.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).map(_.toString)
     }
     else {
       None
     }
-    val fileName: Option[String] = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
+    val fileName: Option[String] = if (fetchRecordLocationFromMetaFields) {
       Option(avroRec.get(HoodieRecord.FILENAME_METADATA_FIELD)).map(_.toString)
     }
     else {
@@ -271,29 +235,29 @@ object HoodieCreateRecordUtils {
 
   def getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator: Option[SparkKeyGeneratorInterface],
                                                   sourceRow: InternalRow, schema: StructType,
-                                                  preppedSparkSqlWrites: Boolean, preppedSparkSqlMergeInto: Boolean,
-                                                  preppedWriteOperation: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
+                                                  useMetaFieldsForRecordKeyAndPartition: Boolean,
+                                                  fetchRecordLocationFromMetaFields: Boolean): (HoodieKey, Option[HoodieRecordLocation]) = {
     //use keygen for sqlMergeIntoPrepped recordKey and partitionPath because the keygenerator handles
     //fetching from the meta fields if they are populated and otherwise doing keygen
-    val recordKey = if (preppedSparkSqlWrites || preppedWriteOperation) {
+    val recordKey = if (useMetaFieldsForRecordKeyAndPartition) {
       sourceRow.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD)
     } else {
       sparkKeyGenerator.get.getRecordKey(sourceRow, schema).toString
     }
 
-    val partitionPath = if (preppedSparkSqlWrites || preppedWriteOperation) {
+    val partitionPath = if (useMetaFieldsForRecordKeyAndPartition) {
       sourceRow.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     } else {
       sparkKeyGenerator.get.getPartitionPath(sourceRow, schema).toString
     }
 
-    val instantTime: Option[String] = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
+    val instantTime: Option[String] = if (fetchRecordLocationFromMetaFields) {
       Option(sourceRow.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD))
     } else {
       None
     }
 
-    val fileName: Option[String] = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
+    val fileName: Option[String] = if (fetchRecordLocationFromMetaFields) {
       Option(sourceRow.getString(HoodieRecord.FILENAME_META_FIELD_ORD))
     } else {
       None
