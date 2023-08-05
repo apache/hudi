@@ -833,7 +833,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test bulk insert with insert overwrite table") {
-    withSQLConf("hoodie.sql.write.operation" -> "bulk_insert") {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { nonPartitionedTable =>
@@ -866,7 +866,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test bulk insert with insert overwrite partition") {
-    withSQLConf("hoodie.sql.write.operation" -> "bulk_insert") {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { partitionedTable =>
@@ -1674,7 +1674,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
    * When neither of strict mode nor sql.write.operation is set, sql write operation takes precedence and default value is chosen.
    */
   test("Test sql write operation with INSERT_INTO No explicit configs") {
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
@@ -1693,7 +1693,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(WriteOperationType.INSERT, WriteOperationType.BULK_INSERT, WriteOperationType.UPSERT).foreach { operation =>
           withTable(generateTableName) { tableName =>
             ingestAndValidateData(tableType, tableName, tmp, operation,
-              List("set hoodie.sql.write.operation = " + operation.value(), "set hoodie.sql.insert.mode = upsert"))
+              List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value(), "set hoodie.sql.insert.mode = upsert"))
           }
         }
       }
@@ -1706,7 +1706,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(WriteOperationType.INSERT, WriteOperationType.BULK_INSERT, WriteOperationType.UPSERT).foreach { operation =>
           withTable(generateTableName) { tableName =>
             ingestAndValidateData(tableType, tableName, tmp, operation,
-              List("set hoodie.sql.write.operation = " + operation.value()))
+              List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value()))
           }
         }
       }
@@ -1714,7 +1714,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test sql write operation with INSERT_INTO override only strict mode") {
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
@@ -1789,7 +1789,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2_2", 30.0, "2021-07-18")
       )
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
@@ -1802,7 +1802,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY).foreach { dupPolicy =>
           withTable(generateTableName) { tableName =>
             ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
-              List("set hoodie.sql.write.operation = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
+              List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
               dupPolicy)
           }
         }
@@ -1817,7 +1817,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         val dupPolicy = NONE_INSERT_DUP_POLICY
             withTable(generateTableName) { tableName =>
               ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
-                List("set hoodie.sql.write.operation = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
+                List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
                 dupPolicy)
             }
       }
@@ -1831,7 +1831,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         val dupPolicy = DROP_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
           ingestAndValidateDropDupPolicyBulkInsert(tableType, tableName, tmp, operation,
-            List("set hoodie.sql.write.operation = " + operation.value(),
+            List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value(),
               "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy))
         }
       }
@@ -1845,7 +1845,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         val dupPolicy = FAIL_INSERT_DUP_POLICY
             withTable(generateTableName) { tableName =>
               ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
-                List("set hoodie.sql.write.operation = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
+                List("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = " + operation.value(), "set " + DataSourceWriteOptions.INSERT_DUP_POLICY.key() + " = " + dupPolicy),
                 dupPolicy, true)
             }
           }
@@ -1947,7 +1947,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         }
       }
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
@@ -1991,7 +1991,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           throw root
       }
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
