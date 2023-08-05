@@ -27,7 +27,7 @@ import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
 import scala.collection.{JavaConverters, mutable}
 
@@ -46,7 +46,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   def getCandidateFiles(allFiles: Seq[FileStatus], queryFilters: Seq[Expression]): Set[String] = {
-    val (_, recordKeys) = filterQueryFiltersWithRecordKey(queryFilters)
+    val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -123,28 +123,47 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
-  private def filterQueryFiltersWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+  private def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
     var recordKeyQueries: List[Expression] = List.empty
     var recordKeys: List[String] = List.empty
     for (query <- queryFilters) {
-      query match {
-        case equalToQuery: EqualTo =>
-          val (attribute, literal) = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
-          if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name)) {
-            recordKeys = recordKeys :+ literal.value.toString
-            recordKeyQueries = recordKeyQueries :+ equalToQuery
-          }
-        case _ =>
-      }
+      filterQueryWithRecordKey(query).foreach({
+        case (exp: Expression, recKeys: List[String]) =>
+          recordKeys = recordKeys ++ recKeys
+          recordKeyQueries = recordKeyQueries :+ exp
+      })
     }
+
     Tuple2.apply(recordKeyQueries, recordKeys)
   }
 
-  /**
+  private def filterQueryWithRecordKey(queryFilter: Expression): Option[(Expression, List[String])] = {
+    queryFilter match {
+      case equalToQuery: EqualTo =>
+        val (attribute, literal) = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
+        if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name)) {
+          return Option.apply(equalToQuery, List.apply(literal.value.toString))
+        }
+      case inQuery: In =>
+        val attribute = inQuery.value match {
+          case attr: AttributeReference => attr
+          case _ => return Option.empty
+        }
+        var literals: List[String] = List.empty
+        inQuery.list.foreach {
+          case literal: Literal => literals = literals :+ literal.value.toString
+          case _ => return Option.empty
+        }
+        return Option.apply(attribute, literals)
+    }
+    Option.empty
+  }
+
+    /**
    * Returns true in cases when metadata table is enabled and Record Level Index is built.
    */
   def isIndexApplicable(queryFilters: Seq[Expression]): Boolean = {
-    isIndexAvailable && filterQueryFiltersWithRecordKey(queryFilters)._1.nonEmpty
+    isIndexAvailable && filterQueriesWithRecordKey(queryFilters)._1.nonEmpty
   }
 
   /**
