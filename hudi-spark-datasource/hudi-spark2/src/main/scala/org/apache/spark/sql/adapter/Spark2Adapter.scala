@@ -22,8 +22,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieTableSchema, HoodieTableState, Spark2HoodieFileScanRDD, Spark2RowSerDe}
-import org.apache.spark.broadcast.Broadcast
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,7 +44,6 @@ import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
-import java.net.URI
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -202,10 +200,6 @@ class Spark2Adapter extends SparkAdapter {
     }
 
     DataSourceStrategy.translateFilter(predicate)
-  }
-
-  override def getFilePath(file: PartitionedFile): Path = {
-    new Path(new URI(file.filePath))
   }
 
   override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {

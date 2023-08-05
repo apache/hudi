@@ -18,7 +18,6 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.Spark34HoodieFileScanRDD
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -88,10 +87,6 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark34LegacyHoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def getFilePath(file: PartitionedFile): Path = {
-    file.filePath.toPath
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

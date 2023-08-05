@@ -167,8 +167,6 @@ trait SparkAdapter extends Serializable {
    */
   def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 
-  def getFilePath(file: PartitionedFile): Path
-
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**

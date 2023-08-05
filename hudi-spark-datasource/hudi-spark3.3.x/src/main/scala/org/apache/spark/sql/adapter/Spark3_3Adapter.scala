@@ -18,9 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark33HoodieFileScanRDD}
-import org.apache.spark.broadcast.Broadcast
+import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -41,8 +39,6 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-
-import java.net.URI
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
@@ -91,10 +87,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark33LegacyHoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def getFilePath(file: PartitionedFile): Path = {
-    new Path(new URI(file.filePath))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

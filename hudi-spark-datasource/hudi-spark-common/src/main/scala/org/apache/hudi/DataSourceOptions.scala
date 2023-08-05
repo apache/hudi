@@ -93,7 +93,8 @@ object DataSourceReadOptions {
     .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("Read using the legacy Hudi parquet file format. The new Hudi parquet file format is " +
-      "introduced as an experimental feature in 0.14.0")
+      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
+      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")

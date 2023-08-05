@@ -18,9 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{HoodieTableSchema, HoodieTableState, Spark32HoodieFileScanRDD}
-import org.apache.spark.broadcast.Broadcast
+import org.apache.hudi.Spark32HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -34,15 +32,13 @@ import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark32PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_2ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-
-import java.net.URI
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
@@ -90,10 +86,6 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark32LegacyHoodieParquetFileFormat(appendPartitionValues))
-  }
-
-  override def getFilePath(file: PartitionedFile): Path = {
-    new Path(new URI(file.filePath))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

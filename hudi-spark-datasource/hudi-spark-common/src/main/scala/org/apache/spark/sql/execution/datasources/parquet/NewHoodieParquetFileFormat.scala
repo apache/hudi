@@ -115,7 +115,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     (file: PartitionedFile) => {
       file.partitionValues match {
         case broadcast: PartitionFileSliceMapping =>
-          val filePath = sparkAdapter.getFilePath(file)
+          val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
           if (FSUtils.isLogFile(filePath)) {
             //no base file
             val fileSlice = broadcast.getSlice(FSUtils.getFileId(filePath.getName).substring(1)).get
@@ -134,7 +134,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                 if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                   baseFileReader(baseFile)
-                } else if (isBootstrap && bootstrapFileOpt.isPresent) {
+                } else if (bootstrapFileOpt.isPresent) {
                   val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
                     skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
                     needMetaCols, needDataCols)
@@ -148,7 +148,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                     case (false, true) => throw new IllegalStateException("should not be log files if not mor table")
                   }
                 } else {
-                  if (isMOR && logFiles.nonEmpty) {
+                  if (logFiles.nonEmpty) {
                     val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                     buildMergeOnReadIterator(preMergeBaseFileReader(baseFile), logFiles, filePath.getParent, requiredSchemaWithMandatory,
                       requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)

@@ -121,6 +121,7 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.USE_LEGACY_HUDI_PARQUET_FILE_FORMAT().key(),"false").load(tableBasePath);
     if (firstColumn.isEmpty()) {
+      //df.except(df) does not work with map type cols
       legacyDf = legacyDf.drop("city_to_state");
       fileFormatDf = fileFormatDf.drop("city_to_state");
     } else {

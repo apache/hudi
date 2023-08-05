@@ -27,7 +27,9 @@ import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFil
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{AtomicType, StructType}
 
-
+/**
+ *
+ */
 class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
 
   override def shortName(): String = FILE_FORMAT_ID
