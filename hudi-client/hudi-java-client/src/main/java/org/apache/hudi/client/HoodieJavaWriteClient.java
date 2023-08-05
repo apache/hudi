@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -153,14 +152,19 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime) {
-    throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
+    return bulkInsert(records, instantTime, Option.empty());
   }
 
   @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime,
                                       Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
-    throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.BULK_INSERT, Option.ofNullable(instantTime));
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.bulkInsert(context, instantTime, records, userDefinedBulkInsertPartitioner);
+    return postWrite(result, instantTime, table);
   }
 
   public void transitionInflight(String instantTime) {
@@ -227,24 +231,28 @@ public class HoodieJavaWriteClient<T> extends
   public void commitCompaction(String compactionInstantTime,
                                HoodieCommitMetadata metadata,
                                Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaClient");
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata,
                                     HoodieTable table,
                                     String compactionCommitTime) {
-    throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaClient");
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
   }
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
                                       boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaClient");
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table = HoodieJavaTable.create(config, context);
+    preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
+    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table = HoodieJavaTable.create(config, context);
+    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+    return tableServiceClient.cluster(clusteringInstant, shouldComplete);
   }
 }

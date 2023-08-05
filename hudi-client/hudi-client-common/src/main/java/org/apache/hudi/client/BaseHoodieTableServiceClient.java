@@ -22,7 +22,6 @@ import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -90,7 +89,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
-public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClient implements RunsTableService {
+public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieClient implements RunsTableService {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
 
@@ -193,7 +192,7 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, O> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
 
     // Check if a commit or compaction instant with a greater timestamp is on the timeline.
     // If an instant is found then abort log compaction, since it is no longer needed.
@@ -220,11 +219,12 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
     }
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
-    HoodieWriteMetadata<O> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    if (shouldComplete && writeMetadata.getCommitMetadata().isPresent()) {
-      completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, logCompactionInstantTime);
+    HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
+    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(writeMetadata);
+    if (shouldComplete && logCompactionMetadata.getCommitMetadata().isPresent()) {
+      completeLogCompaction(logCompactionMetadata.getCommitMetadata().get(), table, logCompactionInstantTime);
     }
-    return writeMetadata;
+    return logCompactionMetadata;
   }
 
   /**
@@ -282,7 +282,7 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, O> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
@@ -290,12 +290,12 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
       table.getMetaClient().reloadActiveTimeline();
     }
     compactionTimer = metrics.getCompactionCtx();
-    HoodieWriteMetadata<O> writeMetadata = table.compact(context, compactionInstantTime);
-    HoodieWriteMetadata<HoodieData<WriteStatus>> compactionMetadata = convertWriteStatus(writeMetadata);
+    HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
+    HoodieWriteMetadata<O> compactionMetadata = convertToOutputMetadata(writeMetadata);
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeCompaction(compactionMetadata.getCommitMetadata().get(), table, compactionInstantTime);
     }
-    return writeMetadata;
+    return compactionMetadata;
   }
 
   /**
@@ -435,7 +435,7 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable<?, I, ?, O> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
@@ -444,8 +444,8 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
     }
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
-    HoodieWriteMetadata<O> writeMetadata = table.cluster(context, clusteringInstant);
-    HoodieWriteMetadata<HoodieData<WriteStatus>> clusteringMetadata = convertWriteStatus(writeMetadata);
+    HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
+    HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(writeMetadata);
     // Validation has to be done after cloning. if not, it could result in referencing the write status twice which means clustering could get executed twice.
     validateClusteringCommit(clusteringMetadata, clusteringInstant, table);
 
@@ -460,25 +460,16 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
-      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, writeStatuses);
+      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(convertToWriteStatus(writeMetadata)));
     }
-    return writeMetadata;
+    return clusteringMetadata;
   }
 
-  private void validateClusteringCommit(HoodieWriteMetadata<HoodieData<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
-    if (clusteringMetadata.getWriteStatuses().isEmpty()) {
-      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
-              table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringCommitTime))
-          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
-              "Unable to read clustering plan for instant: " + clusteringCommitTime));
-      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringCommitTime
-          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
-          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
-          + " write statuses");
-    }
-  }
+  protected abstract void validateClusteringCommit(HoodieWriteMetadata<O> clusteringMetadata, String clusteringCommitTime, HoodieTable table);
 
-  protected abstract HoodieWriteMetadata<HoodieData<WriteStatus>> convertWriteStatus(HoodieWriteMetadata<O> writeMetadata);
+  protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
+
+  protected abstract HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<T> writeMetadata);
 
   private void completeClustering(HoodieReplaceCommitMetadata metadata,
                                   HoodieTable table,
@@ -644,7 +635,7 @@ public abstract class BaseHoodieTableServiceClient<I, O> extends BaseHoodieClien
     return option;
   }
 
-  protected abstract HoodieTable<?, I, ?, O> createTable(HoodieWriteConfig config, Configuration hadoopConf);
+  protected abstract HoodieTable<?, I, ?, T> createTable(HoodieWriteConfig config, Configuration hadoopConf);
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
