@@ -12,6 +12,12 @@ import TabItem from '@theme/TabItem';
 
 ## Migration Guide
 
+With 0.11.0, we have added a checksum mechanism for validating the `hoodie.proerties`, which introduces a new table version, `4`.
+  Whenever a Hudi job is launched with this release on a table with older table version, an upgrade step is executed automatically to upgrade the table to table version `4`.
+  This automatic upgrade step happens just once per Hudi table as the hoodie.table.version will be updated in property file after upgrade is completed.
+  Similarly, a command line tool for Downgrading (command - downgrade) is added if in case some users want to downgrade Hudi
+  from table version `4` to `3` or move from Hudi 0.11.0 to pre 0.11.0. This needs to be executed from a 0.11.0 hudi-cli binary/script.
+
 ### Bundle usage updates
 
 - Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
