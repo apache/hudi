@@ -263,7 +263,7 @@ object HoodieSparkSqlWriter {
                   .asInstanceOf[BaseKeyGenerator])
               }
               it.map { avroRec =>
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedWriteOperation)
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
               }
             }).toJavaRDD()
 
