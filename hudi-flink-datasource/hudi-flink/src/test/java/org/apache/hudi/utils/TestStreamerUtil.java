@@ -41,6 +41,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,6 +83,16 @@ public class TestStreamerUtil {
         .build();
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
     assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
+
+    // Test no explicit preCombine field.
+    conf.removeConfig(FlinkOptions.PRECOMBINE_FIELD);
+    FileIOUtils.deleteDirectory(tempFile);
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieTableMetaClient metaClient3 = HoodieTableMetaClient.builder()
+        .setBasePath(tempFile.getAbsolutePath())
+        .setConf(new org.apache.hadoop.conf.Configuration())
+        .build();
+    assertNull(metaClient3.getTableConfig().getPreCombineField());
   }
 
   @Test

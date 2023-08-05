@@ -127,6 +127,17 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the preCombine field
+   * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE} or the user does not config it explicitly.
+   */
+  public static String getPreCombineFieldNoDefaultValue(Configuration conf) {
+    if (!conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
+      return null;
+    }
+    return getPreCombineField(conf);
+  }
+
+  /**
    * Returns whether the compaction strategy is based on elapsed delta time.
    */
   public static boolean isDeltaTimeCompaction(Configuration conf) {
