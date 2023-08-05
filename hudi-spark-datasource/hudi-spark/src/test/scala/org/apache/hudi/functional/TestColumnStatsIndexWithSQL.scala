@@ -19,6 +19,9 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.async.SparkAsyncCompactService
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
@@ -26,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.index.HoodieIndex.IndexType.BUCKET
+import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
@@ -34,6 +37,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -67,7 +71,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
-  def testMetadataColumnStatsIndexSQLWithBucketIndex(testCase: ColumnStatsTestCase): Unit = {
+  def testMetadataColumnStatsIndexSQLWithInMemoryIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
@@ -83,7 +87,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      HoodieIndexConfig.INDEX_TYPE.key() -> BUCKET.name()
+      HoodieIndexConfig.INDEX_TYPE.key() -> INMEMORY.name()
     ) ++ metadataOpts
 
     doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
@@ -92,13 +96,13 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       shouldValidate = false)
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/another-input-table-json",
-      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      shouldValidate = false)
-    verifyFileIndexAndSQLQueries(commonOpts, isTableDataSameAsAfterSecondInstant = true, verifyFileCount = false)
+
+    assertEquals(4, getLatestDataFilesCount(commonOpts))
+    assertEquals(0, getLatestDataFilesCount(commonOpts, includeLogFiles = false))
+    var dataFilter = GreaterThan(attribute("c5"), literal("90"))
+    verifyPruningFileCount(commonOpts, dataFilter, 3)
+    dataFilter = GreaterThan(attribute("c5"), literal("95"))
+    verifyPruningFileCount(commonOpts, dataFilter, 1)
   }
 
   @ParameterizedTest
@@ -163,6 +167,39 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
 
+    assertFalse(hasLogFiles())
+    verifyFileIndexAndSQLQueries(commonOpts)
+  }
+
+  @Disabled("Needs more work")
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
+  def testMetadataColumnStatsIndexAsyncCompactionWithSQL(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1"
+    ) ++ metadataOpts
+    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(commonOpts))
+    writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
+    val compactionService = new SparkAsyncCompactService(new HoodieSparkEngineContext(jsc), writeClient)
+    compactionService.enqueuePendingAsyncServiceInstant(metaClient.reloadActiveTimeline().lastInstant().get())
+    compactionService.start(JFunction.toJavaFunction(b => true))
+    compactionService.waitTillPendingAsyncServiceInstantsReducesTo(0)
     assertFalse(hasLogFiles())
     verifyFileIndexAndSQLQueries(commonOpts)
   }
@@ -242,13 +279,14 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     assertEquals(filteredFilesCount, numFiles)
   }
 
-  private def getLatestDataFilesCount(opts: Map[String, String]) = {
+  private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
     getTableFileSystenView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
-          slice => totalLatestDataFiles += slice.getLogFiles.count() + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+          slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
+            + (if (slice.getBaseFile.isPresent) 1 else 0)))))
     totalLatestDataFiles
   }
 
@@ -277,8 +315,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     // 2 records are updated with c5 greater than 70 and one record is inserted with c5 value greater than 70
     var commonOpts: Map[String, String] = opts
     createSQLTable(commonOpts, queryType)
-    val increment = if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) && hasLogFiles()
-      && !opts.get(HoodieIndexConfig.INDEX_TYPE.key()).contains(BUCKET.name())) {
+    val increment = if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) && hasLogFiles()) {
       1 // only one insert
     } else if (isLastOperationDelete) {
       0 // no increment
