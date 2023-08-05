@@ -258,29 +258,21 @@ public class ClusteringUtils {
                 ? cleanInstant
                 : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
             .getEarliestInstantToRetain();
-        String instantTimeLowerBound;
-        String stateTransitionTimeLowerBound;
+
         if (earliestInstantToRetain != null && !StringUtils.isNullOrEmpty(earliestInstantToRetain.getTimestamp())) {
-          instantTimeLowerBound = earliestInstantToRetain.getTimestamp();
-          Option<HoodieInstant> earliestRetainedInstant = activeTimeline.getInstantByTimestampAndState(earliestInstantToRetain.getTimestamp(), HoodieInstant.State.COMPLETED);
-          if (earliestRetainedInstant.isPresent()) {
-            stateTransitionTimeLowerBound = earliestRetainedInstant.get().getStateTransitionTime();
-          } else {
-            LOG.warn("Fail to find earliestInstantToRetain " + earliestInstantToRetain.getTimestamp() + " in active timeline,"
-                + " may result in archive uncleaned replace commits, causing data duplication.");
-            stateTransitionTimeLowerBound = null;
-          }
+          oldestInstantToRetain = replaceTimeline.filter(instant ->
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestInstantToRetain.getTimestamp())
+          ).firstInstant();
         } else {
           // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
           // retain first instant after clean instant
-          instantTimeLowerBound = cleanInstant.getTimestamp();
-          stateTransitionTimeLowerBound = cleanInstant.getStateTransitionTime();
+          String instantTimeLowerBound = cleanInstant.getTimestamp();
+          String stateTransitionTimeLowerBound = cleanInstant.getStateTransitionTime();
+          oldestInstantToRetain = replaceTimeline.filter(instant ->
+              HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTimeLowerBound)
+                  || stateTransitionTimeLowerBound != null && instant.getStateTransitionTime().compareTo(stateTransitionTimeLowerBound) > 0
+          ).firstInstant();
         }
-
-        oldestInstantToRetain = replaceTimeline.filter(instant ->
-            HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTimeLowerBound)
-                || stateTransitionTimeLowerBound != null && instant.getStateTransitionTime().compareTo(stateTransitionTimeLowerBound) > 0
-        ).firstInstant();
       } else {
         oldestInstantToRetain = replaceTimeline.firstInstant();
       }
