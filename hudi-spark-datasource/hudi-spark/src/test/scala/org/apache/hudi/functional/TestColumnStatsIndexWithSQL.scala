@@ -290,7 +290,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystenView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
     new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
   }
 
