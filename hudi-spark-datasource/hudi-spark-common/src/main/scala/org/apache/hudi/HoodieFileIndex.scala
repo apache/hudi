@@ -173,67 +173,68 @@ case class HoodieFileIndex(spark: SparkSession,
 
   def filterFileSlices(dataFilters: Seq[Expression], partitionAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])])
   : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
-    // Look up candidate files names in the col-stats index, if all of the following conditions are true
-    //    - Data-skipping is enabled
-    //    - Col-Stats Index is present
-    //    - List of predicates (filters) is present
+    // If there are no data filters, return all the file slices.
+    // If there are no file slices, return empty list.
+    if (partitionAndFileSlices.isEmpty || dataFilters.isEmpty) {
+      partitionAndFileSlices
+    } else {
+      // Look up candidate files names in the col-stats index, if all of the following conditions are true
+      //    - Data-skipping is enabled
+      //    - Col-Stats Index is present
+      //    - List of predicates (filters) is present
+      val candidateFilesNamesOpt: Option[Set[String]] =
+      lookupCandidateFilesInMetadataTable(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          logError("Failed to lookup candidate files in File Index", e)
 
-    if (partitionAndFileSlices.isEmpty) {
-      return Seq()
+          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+            case DataSkippingFailureMode.Fallback.value => Option.empty
+            case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
+          }
+      }
+
+      logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
+
+      var totalFileSliceSize = 0
+      var candidateFileSliceSize = 0
+
+      val partitionsAndFilteredFileSlices = partitionAndFileSlices.map {
+        case (partitionOpt, fileSlices) =>
+          // Filter in candidate files based on the col-stats index lookup
+          val candidateFileSlices: Seq[FileSlice] = {
+            fileSlices.filter(fs => {
+              val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+              val logFiles = fs.getLogFiles.collect(Collectors.toSet[HoodieLogFile]).asScala.toSet[HoodieLogFile]
+              // NOTE: This predicate is true when {@code Option} is empty
+              if (candidateFilesNamesOpt.forall(files => baseFileStatusOpt.exists(f => files.contains(f.getPath.getName))
+                || files.intersect(logFiles.map(f => f.getPath.getName)).nonEmpty)) {
+                true
+              } else {
+                false
+              }
+            })
+          }
+
+          totalFileSliceSize += fileSlices.size
+          candidateFileSliceSize += candidateFileSlices.size
+          (partitionOpt, candidateFileSlices)
+      }
+
+      val skippingRatio =
+        if (!areAllFileSlicesCached) -1
+        else if (getAllFiles().nonEmpty && totalFileSliceSize > 0)
+          (totalFileSliceSize - candidateFileSliceSize) / totalFileSliceSize.toDouble
+        else 0
+
+      logInfo(s"Total file slices: $totalFileSliceSize; " +
+        s"candidate file slices after data skipping: $candidateFileSliceSize; " +
+        s"skipping percentage $skippingRatio")
+
+      hasPushedDownPartitionPredicates = true
+
+      partitionsAndFilteredFileSlices
     }
-
-    val candidateFilesNamesOpt: Option[Set[String]] =
-    lookupCandidateFilesInMetadataTable(dataFilters) match {
-      case Success(opt) => opt
-      case Failure(e) =>
-        logError("Failed to lookup candidate files in File Index", e)
-
-        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
-          case DataSkippingFailureMode.Fallback.value => Option.empty
-          case DataSkippingFailureMode.Strict.value => throw new HoodieException(e);
-        }
-    }
-
-    logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
-
-    var totalFileSliceSize = 0
-    var candidateFileSliceSize = 0
-
-    val partitionsAndFilteredFileSlices = partitionAndFileSlices.map {
-      case (partitionOpt, fileSlices) =>
-        // Filter in candidate files based on the col-stats index lookup
-        val candidateFileSlices: Seq[FileSlice] = {
-          fileSlices.filter(fs => {
-            val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-            val logFiles = fs.getLogFiles.collect(Collectors.toSet[HoodieLogFile]).asScala.toSet[HoodieLogFile]
-            // NOTE: This predicate is true when {@code Option} is empty
-            if (candidateFilesNamesOpt.forall(files => baseFileStatusOpt.exists(f => files.contains(f.getPath.getName))
-              || files.intersect(logFiles.map(f => f.getPath.getName)).nonEmpty)) {
-              true
-            } else {
-              false
-            }
-          })
-        }
-
-        totalFileSliceSize += fileSlices.size
-        candidateFileSliceSize += candidateFileSlices.size
-        (partitionOpt, candidateFileSlices)
-    }
-
-    val skippingRatio =
-      if (!areAllFileSlicesCached) -1
-      else if (getAllFiles().nonEmpty && totalFileSliceSize > 0)
-        (totalFileSliceSize - candidateFileSliceSize) / totalFileSliceSize.toDouble
-      else 0
-
-    logInfo(s"Total file slices: $totalFileSliceSize; " +
-      s"candidate file slices after data skipping: $candidateFileSliceSize; " +
-      s"skipping percentage $skippingRatio")
-
-    hasPushedDownPartitionPredicates = true
-
-    partitionsAndFilteredFileSlices
   }
 
   def getFileSlicesForPrunedPartitions(partitionFilters: Seq[Expression]) : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
