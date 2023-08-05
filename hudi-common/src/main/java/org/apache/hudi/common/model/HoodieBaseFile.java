@@ -79,7 +79,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
-    super(handleExternallyGeneratedFileName(fileStatus, fileId));
+    super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
@@ -128,7 +128,14 @@ public class HoodieBaseFile extends BaseFile {
     return values;
   }
 
-  private static FileStatus handleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
+  /**
+   * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
+   * that the actual file can be found and read.
+   * @param fileStatus an input file status that may require updating
+   * @param fileId the fileId for the file
+   * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
+   */
+  private static FileStatus maybeHandleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
     if (fileStatus == null) {
       return null;
     }
