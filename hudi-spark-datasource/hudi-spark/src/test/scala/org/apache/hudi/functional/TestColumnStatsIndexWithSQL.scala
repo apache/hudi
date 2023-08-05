@@ -242,41 +242,41 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, "false")
       .load(basePath)
     inputDF1.createOrReplaceTempView("tbl")
-    val numRecordsWithC5ColumnGreaterThan70 = spark.sql("select * from tbl where c5 > 70").count()
+    val numRecordsForQuery = spark.sql("select * from tbl where c5 > 70").count()
     // verify snapshot query
-    verifySQLQueries(numRecordsWithC5ColumnGreaterThan70, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
+    verifySQLQueries(numRecordsForQuery, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
     // verify read_optimized query
-    verifySQLQueries(numRecordsWithC5ColumnGreaterThan70, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
+    verifySQLQueries(numRecordsForQuery, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
     // verify incremental query
-    verifySQLQueries(numRecordsWithC5ColumnGreaterThan70, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
+    verifySQLQueries(numRecordsForQuery, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
     commonOpts = commonOpts + (DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key -> "true")
-    verifySQLQueries(numRecordsWithC5ColumnGreaterThan70, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
+    verifySQLQueries(numRecordsForQuery, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
-    if (verifyFileCount) {
-      // First commit creates 4 parquet files
-      // Second commit creates 4 parquet files
-      // Last commit creates one parquet file and 4 log files - total 5 files (for MOR)
-      // and 4 parquet files and no log file (for COW)
-      // therefore on deletion all those 5 files create a new log file whereas COW file count remains same
-      var numFiles = if (isTableMOR && isTableDataSameAsAfterSecondInstant) 17 else if (hasLogFiles()) 12 else 8
-      var dataFilter = GreaterThan(attribute("c5"), literal("70"))
-      verifyPruningFileCount(commonOpts, dataFilter, numFiles)
+    // First commit creates 4 parquet files
+    // Second commit creates 4 parquet files
+    // Last commit creates one parquet file and 4 log files - total 5 files (for MOR)
+    // and 4 parquet files and no log file (for COW)
+    // therefore on deletion all those 5 files create a new log file whereas COW file count remains same
+    var numFiles = if (isTableMOR && isTableDataSameAsAfterSecondInstant) 17 else if (hasLogFiles()) 12 else 8
+    var dataFilter = GreaterThan(attribute("c5"), literal("70"))
+    verifyPruningFileCount(commonOpts, dataFilter, numFiles, verifyFileCount)
 
-      dataFilter = GreaterThan(attribute("c5"), literal("90"))
-      numFiles = if (isTableMOR && isTableDataSameAsAfterSecondInstant) 11 else if (hasLogFiles()) 7 else 4
-      verifyPruningFileCount(commonOpts, dataFilter, numFiles)
-    }
+    dataFilter = GreaterThan(attribute("c5"), literal("90"))
+    numFiles = if (isTableMOR && isTableDataSameAsAfterSecondInstant) 11 else if (hasLogFiles()) 7 else 4
+    verifyPruningFileCount(commonOpts, dataFilter, numFiles, verifyFileCount)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int): Unit = {
+  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, verifyFileCount: Boolean = true): Unit = {
     val fileIndex = HoodieFileIndex(spark, metaClient, None, opts + ("path" -> basePath))
     fileIndex.setIncludeLogFiles(isTableMOR())
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
-    assertEquals(filteredFilesCount, numFiles)
+    if (verifyFileCount) {
+      assertEquals(filteredFilesCount, numFiles)
+    }
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
@@ -311,7 +311,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     Literal.create(value)
   }
 
-  private def verifySQLQueries(numRecordsWithC5ColumnGreaterThan70AtPrevInstant: Long, queryType: String, opts: Map[String, String], isLastOperationDelete: Boolean): Unit = {
+  private def verifySQLQueries(numRecordsForQueryAtPrevInstant: Long, queryType: String, opts: Map[String, String], isLastOperationDelete: Boolean): Unit = {
     // 2 records are updated with c5 greater than 70 and one record is inserted with c5 value greater than 70
     var commonOpts: Map[String, String] = opts
     createSQLTable(commonOpts, queryType)
@@ -322,8 +322,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     } else {
       3 // one insert and two upserts
     }
-    assertEquals(spark.sql("select * from tbl where c5 > 70").count(), numRecordsWithC5ColumnGreaterThan70AtPrevInstant + increment)
-    val numRecordsWithC5ColumnGreaterThan50WithDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
+    assertEquals(spark.sql("select * from tbl where c5 > 70").count(), numRecordsForQueryAtPrevInstant + increment)
+    val numRecordsForQueryWithDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
 
     if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
       createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp)
@@ -332,8 +332,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     commonOpts = opts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false")
     createSQLTable(commonOpts, queryType)
-    val numRecordsWithC5ColumnGreaterThan50WithoutDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
-    assertEquals(numRecordsWithC5ColumnGreaterThan50WithDataSkipping, numRecordsWithC5ColumnGreaterThan50WithoutDataSkipping)
+    val numRecordsForQueryWithoutDataSkipping = spark.sql("select * from tbl where c5 > 70").count()
+    assertEquals(numRecordsForQueryWithDataSkipping, numRecordsForQueryWithoutDataSkipping)
   }
 
   private def createSQLTable(hudiOpts: Map[String, String], queryType: String): Unit = {
