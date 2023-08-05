@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLogCompactException;
@@ -89,6 +90,12 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
+/**
+ * Base class for all shared logic between table service clients regardless of engine.
+ * @param <I> The {@link HoodieTable} implementation's input type
+ * @param <T> The {@link HoodieTable} implementation's output type
+ * @param <O> The {@link BaseHoodieWriteClient} implementation's output type (differs in case of spark)
+ */
 public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieClient implements RunsTableService {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
@@ -322,7 +329,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      updateTableMetadata(table, metadata, compactionInstant, context.emptyHoodieData());
+      writeTableMetadata(table, compactionCommitTime, COMPACTION_ACTION, metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
@@ -375,6 +382,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
     final HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
@@ -1171,8 +1179,18 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
     if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
-      throw new HoodieClusteringException(tableServiceType + " failed to write to files:"
-          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(",")));
+      String message = tableServiceType + " failed to write to files:"
+          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(","));
+      switch (tableServiceType) {
+        case CLUSTER:
+          throw new HoodieClusteringException(message);
+        case LOG_COMPACT:
+          throw new HoodieLogCompactException(message);
+        case COMPACT:
+          throw new HoodieCompactionException(message);
+        default:
+          throw new HoodieException(message);
+      }
     }
   }
 }

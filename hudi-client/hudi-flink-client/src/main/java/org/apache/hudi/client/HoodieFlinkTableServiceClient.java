@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
-import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
@@ -30,12 +28,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -170,16 +167,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected void validateClusteringCommit(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
-    if (clusteringMetadata.getWriteStatuses().isEmpty()) {
-      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
-              table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringCommitTime))
-          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
-              "Unable to read clustering plan for instant: " + clusteringCommitTime));
-      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringCommitTime
-          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
-          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
-          + " write statuses");
-    }
+    throw new UnsupportedOperationException("Clustering is not supported yet.");
   }
 
   @Override
@@ -242,5 +230,10 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // delete the metadata table if it was enabled but is now disabled
       table.maybeDeleteMetadataTable();
     }
+  }
+
+  @Override
+  protected void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
+    // No-op
   }
 }
