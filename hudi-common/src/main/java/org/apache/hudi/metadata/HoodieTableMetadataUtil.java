@@ -99,10 +99,10 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -247,8 +247,8 @@ public class HoodieTableMetadataUtil {
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapStatisticValueWrapper(columnStats.getMinValue()),
-        unwrapStatisticValueWrapper(columnStats.getMaxValue()),
+        unwrapAvroValueWrapper(columnStats.getMinValue()),
+        unwrapAvroValueWrapper(columnStats.getMaxValue()),
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),

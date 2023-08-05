@@ -29,11 +29,9 @@ import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.hadoop.CachingPath
-import org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
-import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -44,7 +42,6 @@ import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
@@ -99,7 +96,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
     })
 
-  protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
+  protected lazy val shouldFastBootstrap: Boolean = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 
@@ -115,14 +112,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // Note that key generator class name could be null
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
       if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
+        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
         val partitionFields = partitionColumns.get().filter(column => nameFieldMap.contains(column))
           .map(column => nameFieldMap.apply(column))
 
-        if (partitionFields.size != partitionColumns.get().size) {
+        if (partitionFields.length != partitionColumns.get().length) {
           val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
           if (isBootstrapTable) {
             // For bootstrapped tables its possible the schema does not contain partition field when source table

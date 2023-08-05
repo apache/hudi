@@ -36,7 +36,7 @@ public class BaseFile implements Serializable {
 
   private transient FileStatus fileStatus;
   private final String fullPath;
-  private final String fileName;
+  protected final String fileName;
   private long fileLen;
 
   public BaseFile(BaseFile dataFile) {

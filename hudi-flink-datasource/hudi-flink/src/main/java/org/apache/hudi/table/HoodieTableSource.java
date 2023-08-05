@@ -334,6 +334,9 @@ public class HoodieTableSource implements
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
         metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+    if (!fsView.getLastInstant().isPresent()) {
+      return Collections.emptyList();
+    }
     String latestCommit = fsView.getLastInstant().get().getTimestamp();
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceWriteOptions, config}
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -28,6 +28,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -39,6 +40,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsin
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
 import org.apache.spark.sql.types.StructType
 
 import java.util.Locale
@@ -108,9 +110,9 @@ trait ProvidesHoodieConfig extends Logging {
   private def deduceSqlWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                                       sqlWriteOperation: String): String = {
     if (isOverwriteTable) {
-      WriteOperationType.INSERT_OVERWRITE_TABLE.name()
+      INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
-      WriteOperationType.INSERT_OVERWRITE.name()
+      INSERT_OVERWRITE_OPERATION_OPT_VAL
     } else {
       sqlWriteOperation
     }
@@ -121,27 +123,29 @@ trait ProvidesHoodieConfig extends Logging {
    */
   private def deduceOperation(enableBulkInsert: Boolean, isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                               dropDuplicate: Boolean, isNonStrictMode: Boolean, isPartitionedTable: Boolean,
-                              combineBeforeInsert: Boolean, insertMode: InsertMode): String = {
-    (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
-      case (true, _, _, _, false, _) =>
+                              combineBeforeInsert: Boolean, insertMode: InsertMode, autoGenerateRecordKeys: Boolean): String = {
+    (enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate, isNonStrictMode, isPartitionedTable, autoGenerateRecordKeys) match {
+      case (true, _, _, _, false, _, _) =>
         throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-      case (true, _, _, true, _, _) =>
+      case (true, _, _, true, _, _, _) =>
         throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
           s" Please disable $INSERT_DROP_DUPS and try again.")
       // Bulk insert with overwrite table
-      case (true, false, true, _, _, _) =>
+      case (true, false, true, _, _, _, _) =>
         BULK_INSERT_OPERATION_OPT_VAL
       // Bulk insert with overwrite table partition
-      case (true, true, false, _, _, true) =>
+      case (true, true, false, _, _, true, _) =>
         BULK_INSERT_OPERATION_OPT_VAL
       // insert overwrite table
-      case (false, false, true, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+      case (false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
       // insert overwrite partition
-      case (false, true, false, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+      case (false, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
       // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-      case (false, false, false, false, false, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
+      case (false, false, false, false, false, _, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-      case (true, false, false, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
+      case (true, false, false, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+      // if auto record key generation is enabled, use bulk_insert
+      case (_, _, _, _, _,_,true) => BULK_INSERT_OPERATION_OPT_VAL
       // for the rest case, use the insert operation
       case _ => INSERT_OPERATION_OPT_VAL
     }
@@ -189,6 +193,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
+    val autoGenerateRecordKeys : Boolean = !combinedOpts.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
 
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
@@ -208,16 +213,42 @@ trait ProvidesHoodieConfig extends Logging {
     // or when both configs are set, or when only sql write operation is set), we honor sql write operation and ignore
     // the insert mode.
     val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
-    val operation = combinedOpts.getOrElse(OPERATION.key,
+    var operation = combinedOpts.getOrElse(OPERATION.key,
       if (useLegacyInsertModeFlow) {
         // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
         //       we'd prefer that value over auto-deduced operation. Otherwise, we deduce target operation type
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
-          isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode)
+          isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, autoGenerateRecordKeys)
       } else {
         deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
     )
+
+    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
+      if (isOverwriteTable) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+      } else if (isOverwritePartition) {
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
+      } else {
+        Map()
+      }
+    } else if (operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
+      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+        operation = BULK_INSERT_OPERATION_OPT_VAL
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+      } else {
+        Map()
+      }
+    } else if (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
+      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+        operation = BULK_INSERT_OPERATION_OPT_VAL
+        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
+      } else {
+        Map()
+      }
+    } else {
+      Map()
+    }
 
     // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
@@ -257,17 +288,6 @@ trait ProvidesHoodieConfig extends Logging {
       null
     }
 
-    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
-      if (isOverwriteTable) {
-        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
-      } else if (isOverwritePartition) {
-        Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
-      } else {
-        Map()
-      }
-    } else {
-      Map()
-    }
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
@@ -297,6 +317,44 @@ trait ProvidesHoodieConfig extends Logging {
       )
     } else {
       Map()
+    }
+  }
+
+  def deduceIsOverwriteTable(sparkSession: SparkSession,
+                             catalogTable: HoodieCatalogTable,
+                             partitionSpec: Map[String, Option[String]],
+                             extraOptions: Map[String, String]): Boolean = {
+    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = Map.empty, overridingOpts = extraOptions)
+    val operation = combinedOpts.getOrElse(OPERATION.key, null)
+    operation match {
+      case INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL =>
+        true
+      case INSERT_OVERWRITE_OPERATION_OPT_VAL =>
+        false
+      case _ =>
+        // NonPartitioned table always insert overwrite whole table
+        if (catalogTable.partitionFields.isEmpty) {
+          true
+        } else {
+          // Insert overwrite partitioned table with PARTITION clause will always insert overwrite the specific partition
+          if (partitionSpec.nonEmpty) {
+            false
+          } else {
+            // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
+            val hoodieOverwriteMode = combinedOpts.getOrElse(OVERWRITE_MODE.key,
+              sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
+
+            hoodieOverwriteMode match {
+              case "STATIC" =>
+                true
+              case "DYNAMIC" =>
+                false
+              case _ =>
+                throw new IllegalArgumentException("Config hoodie.datasource.overwrite.mode is illegal")
+            }
+          }
+        }
     }
   }
 

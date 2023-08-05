@@ -213,17 +213,7 @@ public abstract class AbstractStreamWriteFunction<I>
     }
   }
 
-  private void sendBootstrapEvent() {
-    int attemptId = getRuntimeContext().getAttemptNumber();
-    if (attemptId > 0) {
-      // either a partial or global failover, reuses the current inflight instant
-      if (this.currentInstant != null) {
-        LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
-        this.currentInstant = null;
-        return;
-      }
-      // the JM may have also been rebooted, sends the bootstrap event either
-    }
+  protected void sendBootstrapEvent() {
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }

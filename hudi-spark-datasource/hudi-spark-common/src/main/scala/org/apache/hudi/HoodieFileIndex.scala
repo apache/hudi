@@ -79,7 +79,7 @@ case class HoodieFileIndex(spark: SparkSession,
     spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
-    configProperties = getConfigProperties(spark, options),
+    configProperties = getConfigProperties(spark, options, metaClient),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
@@ -93,6 +93,8 @@ case class HoodieFileIndex(spark: SparkSession,
    *       is handled by the Spark's driver
    */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+
+  @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
@@ -223,10 +225,13 @@ case class HoodieFileIndex(spark: SparkSession,
     //          nothing CSI in particular could be applied for)
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
+    if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
-    } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
+    } else if (recordLevelIndex.isIndexApplicable(queryFilters)) {
+      Option.apply(recordLevelIndex.getCandidateFiles(allFiles, queryFilters))
+    } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
+      validateConfig()
       Option.empty
     } else {
       // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
@@ -324,7 +329,7 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], metaClient: HoodieTableMetaClient) = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -341,6 +346,16 @@ object HoodieFileIndex extends Logging {
       DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, null)
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
+    }
+    val partitionColumns = metaClient.getTableConfig.getPartitionFields
+    if (partitionColumns.isPresent) {
+      // NOTE: Multiple partition fields could have non-encoded slashes in the partition value.
+      //       We might not be able to properly parse partition-values from the listed partition-paths.
+      //       Fallback to eager listing in this case.
+      if (partitionColumns.get().length > 1
+        && (listingModeOverride == null || DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY.equals(listingModeOverride))) {
+        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, DataSourceReadOptions.FILE_INDEX_LISTING_MODE_EAGER)
+      }
     }
 
     properties

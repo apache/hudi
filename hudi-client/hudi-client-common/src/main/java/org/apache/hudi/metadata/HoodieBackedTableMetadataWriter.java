@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -164,7 +165,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
     this.metrics = Option.empty();
-    this.enabledPartitionTypes = new ArrayList<>();
+    this.enabledPartitionTypes = new ArrayList<>(4);
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
@@ -481,10 +482,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     fsView.loadAllPartitions();
-    final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
+    final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = new ArrayList<>();
     for (String partition : partitions) {
       partitionBaseFilePairs.addAll(fsView.getLatestBaseFiles(partition)
-          .map(basefile -> Pair.of(partition, basefile.getFileName())).collect(Collectors.toList()));
+          .map(basefile -> Pair.of(partition, basefile)).collect(Collectors.toList()));
     }
 
     LOG.info("Initializing record index from " + partitionBaseFilePairs.size() + " base files in "
@@ -509,7 +510,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Read the record keys from base files in partitions and return records.
    */
   private HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
-                                                               List<Pair<String, String>> partitionBaseFilePairs,
+                                                               List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                boolean forDelete) {
     if (partitionBaseFilePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
@@ -517,13 +518,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from " + partitionBaseFilePairs.size() + " base files");
     final int parallelism = Math.min(partitionBaseFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-    return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(p -> {
-      final String partition = p.getKey();
-      final String filename = p.getValue();
+    return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
+      final String filename = baseFile.getFileName();
       Path dataFilePath = new Path(dataWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
 
-      final String fileId = FSUtils.getFileId(filename);
-      final String instantTime = FSUtils.getCommitTime(filename);
+      final String fileId = baseFile.getFileId();
+      final String instantTime = baseFile.getCommitTime();
       HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
@@ -542,7 +544,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         public HoodieRecord next() {
           return forDelete
               ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime);
+              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
         }
       };
     });
@@ -999,16 +1001,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // The deltacommit that will be rolled back
       HoodieInstant deltaCommitInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
 
-      // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
-      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-        final String compactionInstantTime = compactionInstant.getTimestamp();
-        if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
-          throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
-                  + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
-              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
-        }
-      }
+      validateRollback(commitToRollbackInstantTime, compactionInstant, deltacommitsSinceCompaction);
 
       // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
       // a. any log files as part of RB commit metadata that was added
@@ -1028,6 +1021,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             commitToRollbackInstantTime, instantTime));
       }
       closeInternal();
+    }
+  }
+
+  protected void validateRollback(
+      String commitToRollbackInstantTime,
+      HoodieInstant compactionInstant,
+      HoodieTimeline deltacommitsSinceCompaction) {
+    // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+    // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+    if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+      final String compactionInstantTime = compactionInstant.getTimestamp();
+      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+        throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
+                + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
+            deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+      }
     }
   }
 
@@ -1350,7 +1359,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime());
+                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
           } else {
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
@@ -1363,10 +1372,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
         dataMetaClient.getActiveTimeline(), metadata);
-    List<Pair<String, String>> partitionBaseFilePairs = replaceCommitMetadata
+    List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
         .getPartitionToReplaceFileIds()
         .keySet().stream().flatMap(partition
-            -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f.getFileName())))
+            -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
         .collect(Collectors.toList());
 
     return readRecordKeysFromBaseFiles(engineContext, partitionBaseFilePairs, true);

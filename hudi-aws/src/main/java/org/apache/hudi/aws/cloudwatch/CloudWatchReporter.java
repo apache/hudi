@@ -21,13 +21,12 @@ package org.apache.hudi.aws.cloudwatch;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.util.Option;
 
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsync;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
-import com.amazonaws.services.cloudwatch.model.Dimension;
-import com.amazonaws.services.cloudwatch.model.MetricDatum;
-import com.amazonaws.services.cloudwatch.model.PutMetricDataRequest;
-import com.amazonaws.services.cloudwatch.model.PutMetricDataResult;
-import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.cloudwatch.model.Dimension;
+import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Counting;
@@ -41,8 +40,8 @@ import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -63,7 +62,7 @@ public class CloudWatchReporter extends ScheduledReporter {
 
   private static final Logger LOG = LoggerFactory.getLogger(CloudWatchReporter.class);
 
-  private final AmazonCloudWatchAsync cloudWatchClientAsync;
+  private final CloudWatchAsyncClient cloudWatchClientAsync;
   private final Clock clock;
   private final String prefix;
   private final String namespace;
@@ -139,7 +138,7 @@ public class CloudWatchReporter extends ScheduledReporter {
           durationUnit);
     }
 
-    CloudWatchReporter build(AmazonCloudWatchAsync amazonCloudWatchAsync) {
+    CloudWatchReporter build(CloudWatchAsyncClient amazonCloudWatchAsync) {
       return new CloudWatchReporter(registry,
           amazonCloudWatchAsync,
           clock,
@@ -153,7 +152,7 @@ public class CloudWatchReporter extends ScheduledReporter {
   }
 
   protected CloudWatchReporter(MetricRegistry registry,
-                               AmazonCloudWatchAsync cloudWatchClientAsync,
+                               CloudWatchAsyncClient cloudWatchClientAsync,
                                Clock clock,
                                String prefix,
                                String namespace,
@@ -169,9 +168,9 @@ public class CloudWatchReporter extends ScheduledReporter {
     this.maxDatumsPerRequest = maxDatumsPerRequest;
   }
 
-  private static AmazonCloudWatchAsync getAmazonCloudWatchClient(Properties props) {
-    return AmazonCloudWatchAsyncClientBuilder.standard()
-        .withCredentials(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
+  private static CloudWatchAsyncClient getAmazonCloudWatchClient(Properties props) {
+    return CloudWatchAsyncClient.builder()
+        .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
         .build();
   }
 
@@ -213,7 +212,7 @@ public class CloudWatchReporter extends ScheduledReporter {
   }
 
   private void report(List<MetricDatum> metricsData) {
-    List<Future<PutMetricDataResult>> cloudWatchFutures = new ArrayList<>(metricsData.size());
+    List<Future<PutMetricDataResponse>> cloudWatchFutures = new ArrayList<>(metricsData.size());
     List<List<MetricDatum>> partitions = new ArrayList<>();
 
     for (int i = 0; i < metricsData.size(); i += maxDatumsPerRequest) {
@@ -222,14 +221,15 @@ public class CloudWatchReporter extends ScheduledReporter {
     }
 
     for (List<MetricDatum> partition : partitions) {
-      PutMetricDataRequest request = new PutMetricDataRequest()
-          .withNamespace(namespace)
-          .withMetricData(partition);
+      PutMetricDataRequest request = PutMetricDataRequest.builder()
+          .namespace(namespace)
+          .metricData(partition)
+          .build();
 
-      cloudWatchFutures.add(cloudWatchClientAsync.putMetricDataAsync(request));
+      cloudWatchFutures.add(cloudWatchClientAsync.putMetricData(request));
     }
 
-    for (final Future<PutMetricDataResult> cloudWatchFuture : cloudWatchFutures) {
+    for (final Future<PutMetricDataResponse> cloudWatchFuture : cloudWatchFutures) {
       try {
         cloudWatchFuture.get(30, TimeUnit.SECONDS);
       } catch (final Exception ex) {
@@ -250,7 +250,7 @@ public class CloudWatchReporter extends ScheduledReporter {
         .ifPresent(value -> stageMetricDatum(metricName,
             value.doubleValue(),
             DIMENSION_GAUGE_TYPE_VALUE,
-            StandardUnit.None,
+            StandardUnit.NONE,
             timestampMilliSec,
             metricData));
   }
@@ -262,7 +262,7 @@ public class CloudWatchReporter extends ScheduledReporter {
     stageMetricDatum(metricName,
         counter.getCount(),
         DIMENSION_COUNT_TYPE_VALUE,
-        StandardUnit.Count,
+        StandardUnit.COUNT,
         timestampMilliSec,
         metricData);
   }
@@ -277,22 +277,25 @@ public class CloudWatchReporter extends ScheduledReporter {
     String tableName = metricNameParts[0];
 
 
-    metricData.add(new MetricDatum()
-        .withTimestamp(new Date(timestampMilliSec))
-        .withMetricName(prefix(metricNameParts[1]))
-        .withValue(metricValue)
-        .withDimensions(getDimensions(tableName, metricType))
-        .withUnit(standardUnit));
+    metricData.add(MetricDatum.builder()
+        .timestamp(Instant.ofEpochMilli(timestampMilliSec))
+        .metricName(prefix(metricNameParts[1]))
+        .value(metricValue)
+        .dimensions(getDimensions(tableName, metricType))
+        .unit(standardUnit)
+        .build());
   }
 
   private List<Dimension> getDimensions(String tableName, String metricType) {
     List<Dimension> dimensions = new ArrayList<>();
-    dimensions.add(new Dimension()
-        .withName(DIMENSION_TABLE_NAME_KEY)
-        .withValue(tableName));
-    dimensions.add(new Dimension()
-        .withName(DIMENSION_METRIC_TYPE_KEY)
-        .withValue(metricType));
+    dimensions.add(Dimension.builder()
+        .name(DIMENSION_TABLE_NAME_KEY)
+        .value(tableName)
+        .build());
+    dimensions.add(Dimension.builder()
+        .name(DIMENSION_METRIC_TYPE_KEY)
+        .value(metricType)
+        .build());
     return dimensions;
   }
 
@@ -306,7 +309,7 @@ public class CloudWatchReporter extends ScheduledReporter {
       super.stop();
     } finally {
       try {
-        cloudWatchClientAsync.shutdown();
+        cloudWatchClientAsync.close();
       } catch (Exception ex) {
         LOG.warn("Exception while shutting down CloudWatch client.", ex);
       }
