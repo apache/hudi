@@ -140,7 +140,7 @@ public class ConfigGroups {
             + "on both datasource and WriteClient levels.";
         break;
       case METRICS:
-        description = "These set of configs are used to enable monitoring and reporting of key"
+        description = "These set of configs are used to enable monitoring and reporting of key "
             + "Hudi stats and metrics.";
         break;
       case KAFKA_CONNECT:
