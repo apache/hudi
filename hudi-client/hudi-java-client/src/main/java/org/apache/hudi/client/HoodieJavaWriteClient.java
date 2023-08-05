@@ -226,33 +226,4 @@ public class HoodieJavaWriteClient<T> extends
     }
     return result.getWriteStatuses();
   }
-
-  @Override
-  public void commitCompaction(String compactionInstantTime,
-                               HoodieCommitMetadata metadata,
-                               Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
-  }
-
-  @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata,
-                                    HoodieTable table,
-                                    String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
-  }
-
-  @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
-                                      boolean shouldComplete) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table = HoodieJavaTable.create(config, context);
-    preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
-    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table = HoodieJavaTable.create(config, context);
-    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
-    return tableServiceClient.cluster(clusteringInstant, shouldComplete);
-  }
 }
