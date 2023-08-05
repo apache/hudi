@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -103,7 +104,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String fileId1 = fileIdAndName1.getLeft();
     String fileName1 = fileIdAndName1.getRight();
     String filePath1 = getPath(partitionPath1, fileName1);
-    WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
+    WriteStatus writeStatus1 = createWriteStatus(instantTime1, partitionPath1, filePath1, fileId1);
     JavaRDD<WriteStatus> rdd1 = createRdd(Collections.singletonList(writeStatus1));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
     writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
@@ -116,7 +117,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String fileId2 = fileIdAndName2.getLeft();
     String fileName2 = fileIdAndName2.getRight();
     String filePath2 = getPath(partitionPath1, fileName2);
-    WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
+    WriteStatus newWriteStatus = createWriteStatus(instantTime2, partitionPath1, filePath2, fileId2);
     JavaRDD<WriteStatus> rdd2 = createRdd(Collections.singletonList(newWriteStatus));
     Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
     partitionToReplacedFileIds.put(partitionPath1, Collections.singletonList(fileId1));
@@ -132,7 +133,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String fileId3 = fileIdAndName3.getLeft();
     String fileName3 = fileIdAndName3.getRight();
     String filePath3 = getPath(partitionPath2, fileName3);
-    WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
+    WriteStatus writeStatus3 = createWriteStatus(instantTime3, partitionPath2, filePath3, fileId3);
     JavaRDD<WriteStatus> rdd3 = createRdd(Collections.singletonList(writeStatus3));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
     writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
@@ -248,13 +249,13 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     return jsc.parallelize(writeStatuses, 1);
   }
 
-  private WriteStatus createWriteStatus(String partitionPath, String filePath, String fileId) {
+  private WriteStatus createWriteStatus(String commitTime, String partitionPath, String filePath, String fileId) {
     WriteStatus writeStatus = new WriteStatus();
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
     writeStat.setFileId(fileId);
-    writeStat.setPath(filePath);
+    writeStat.setPath(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(filePath, commitTime));
     writeStat.setPartitionPath(partitionPath);
     writeStat.setNumWrites(3);
     writeStat.setNumDeletes(0);

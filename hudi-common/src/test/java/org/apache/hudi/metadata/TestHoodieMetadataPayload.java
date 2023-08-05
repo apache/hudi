@@ -51,7 +51,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     );
 
     HoodieRecord<HoodieMetadataPayload> firstPartitionFilesRecord =
-        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, firstCommitAddedFiles, Collections.emptyList(), Option.empty());
+        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, firstCommitAddedFiles, Collections.emptyList());
 
     Map<String, Long> secondCommitAddedFiles = createImmutableMap(
         // NOTE: This is an append
@@ -63,7 +63,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     List<String> secondCommitDeletedFiles = Collections.singletonList("file1.parquet");
 
     HoodieRecord<HoodieMetadataPayload> secondPartitionFilesRecord =
-        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, secondCommitAddedFiles, secondCommitDeletedFiles, Option.empty());
+        HoodieMetadataPayload.createPartitionFilesRecord(partitionName, secondCommitAddedFiles, secondCommitDeletedFiles);
 
     HoodieMetadataPayload combinedPartitionFilesRecordPayload =
         secondPartitionFilesRecord.getData().preCombine(firstPartitionFilesRecord.getData());
@@ -76,8 +76,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
                 Pair.of("file4.parquet", 4000L),
                 Pair.of("file5.parquet", 5000L)
             ),
-            Collections.emptyList(),
-            Option.empty()
+            Collections.emptyList()
         ).getData();
 
     assertEquals(expectedCombinedPartitionedFilesRecordPayload, combinedPartitionFilesRecordPayload);

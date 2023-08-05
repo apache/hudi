@@ -18,14 +18,29 @@
 
 package org.apache.hudi.common.util;
 
+/**
+ * Utility methods for handling externally created files.
+ */
 public class ExternalFilePathUtil {
-  private static final String EXTERNAL_FILE_PREFIX = "hudiext_";
+  // Suffix acts as a marker when appended to a file path that the path was created by an external system and not a Hudi writer.
+  private static final String EXTERNAL_FILE_SUFFIX = "_hudiext";
 
-  public static String prefixExternalFileWithCommitTime(String fileName, String commitTime) {
-    return EXTERNAL_FILE_PREFIX + commitTime + "_" + fileName;
+  /**
+   * Appends the commit time and external file marker to the file path. Hudi relies on the commit time in the file name for properly generating views of the files in a table.
+   * @param filePath The original file path
+   * @param commitTime The time of the commit that added this file to the table
+   * @return The file path with this additional information appended
+   */
+  public static String appendCommitTimeAndExternalFileMarker(String filePath, String commitTime) {
+    return filePath + "_" + commitTime + EXTERNAL_FILE_SUFFIX;
   }
 
-  public static boolean isExternallyCreatedFile(String fullFileName) {
-    return fullFileName.startsWith(EXTERNAL_FILE_PREFIX);
+  /**
+   * Checks if the file name was created by an external system by checking for the external file marker at the end of the file name.
+   * @param fileName The file name
+   * @return True if the file was created by an external system, false otherwise
+   */
+  public static boolean isExternallyCreatedFile(String fileName) {
+    return fileName.endsWith(EXTERNAL_FILE_SUFFIX);
   }
 }

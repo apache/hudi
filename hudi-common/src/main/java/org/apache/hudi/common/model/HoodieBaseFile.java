@@ -120,11 +120,11 @@ public class HoodieBaseFile extends BaseFile {
 
   private static String[] handleExternallyGeneratedFile(String fileName) {
     String[] values = new String[2];
-    // file name has format hudiext_<commitTime>_<originalFileName> and originalFileName is used as fileId
-    int startingIndex = fileName.indexOf(UNDERSCORE) + 1;
-    int splitPoint = fileName.indexOf(UNDERSCORE, startingIndex);
-    values[0] = fileName.substring(splitPoint + 1);
-    values[1] = fileName.substring(startingIndex, splitPoint);
+    // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
+    int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
+    int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
+    values[0] = fileName.substring(0, secondToLastUnderscore);
+    values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
     return values;
   }
 

@@ -71,7 +71,7 @@ public class TestHoodieBaseFile {
   @Test
   void createFromExternalFileStatus() {
     String fileName = "parquet_file_1.parquet";
-    String storedPathString = "file:/tmp/hoodie/2021/01/01/" + "hudiext_" + baseCommitTime + "_" + fileName;
+    String storedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName + "_" + baseCommitTime + "_hudiext";
     String expectedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName;
     FileStatus inputFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(storedPathString));
     FileStatus expectedFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(expectedPathString));
