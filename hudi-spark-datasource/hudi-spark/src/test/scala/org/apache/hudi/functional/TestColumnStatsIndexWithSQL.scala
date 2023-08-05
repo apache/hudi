@@ -281,7 +281,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystenView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
@@ -328,6 +328,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
       createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp)
       assertEquals(spark.sql("select * from tbl where c5 > 70").count(), if (isLastOperationDelete) 0 else 3)
+      assertEquals(spark.sql("select * from tbl where c5 > 70 and c6 >= '2020-03-28'").count(), if (isLastOperationDelete) 0 else 2)
     }
 
     commonOpts = opts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false")
