@@ -479,7 +479,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val expectedListedFiles = if (enablePartitionPathPrefixAnalysis) {
       getFileCountInPartitionPaths("2021/03/01/0", "2021/03/01/1", "2021/03/01/2")
     } else {
-      fileIndex.allFiles.length
+      fileIndex.allBaseFiles.length
     }
 
     assertEquals(expectedListedFiles, perPartitionFilesSeq.map(_.size).sum)
@@ -592,7 +592,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       val expectedPartitionPaths = if (testCase._3) {
         testCase._4.map(e => e._1 + "/" + e._2)
       } else {
-        fileIndex.allFiles
+        fileIndex.allBaseFiles
           .map(file => extractPartitionPathFromFilePath(file.getPath))
           .distinct
           .sorted

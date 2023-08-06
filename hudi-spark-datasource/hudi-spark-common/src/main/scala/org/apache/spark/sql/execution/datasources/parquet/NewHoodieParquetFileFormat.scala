@@ -53,6 +53,12 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  isMOR: Boolean,
                                  isBootstrap: Boolean) extends ParquetFileFormat with SparkAdapterSupport {
 
+  override def isSplitable(sparkSession: SparkSession,
+                           options: Map[String, String],
+                           path: Path): Boolean = {
+    false
+  }
+
   //Used so that the planner only projects once and does not stack overflow
   var isProjected = false
 

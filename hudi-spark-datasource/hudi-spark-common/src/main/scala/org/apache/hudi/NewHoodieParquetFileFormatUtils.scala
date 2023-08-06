@@ -59,9 +59,6 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
 
   private lazy val metaFieldNames = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
 
-  protected lazy val fileIndex: HoodieFileIndex =
-    HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession))
-
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
 
@@ -115,25 +112,6 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
         field
       }
     })
-  }
-
-  protected lazy val tableState: HoodieTableState = {
-    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
-    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
-      Option(metaClient.getTableConfig.getRecordMergerStrategy))
-
-    // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(
-      tablePath = basePath.toString,
-      latestCommitTimestamp = queryTimestamp,
-      recordKeyField = recordKeyField,
-      preCombineFieldOpt = preCombineFieldOpt,
-      usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = fileIndex.metadataConfig,
-      recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = recordMergerStrategy
-    )
   }
 
   protected lazy val preCombineFieldOpt: Option[String] =
@@ -196,6 +174,25 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
   def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
 
   def getHadoopFsRelation(isMOR: Boolean, isBootstrap: Boolean): BaseRelation = {
+
+    val fileIndex = HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), isMOR)
+    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
+    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getRecordMergerStrategy))
+
+    val tableState = // Subset of the state of table's configuration as of at the time of the query
+      HoodieTableState(
+        tablePath = basePath.toString,
+        latestCommitTimestamp = queryTimestamp,
+        recordKeyField = recordKeyField,
+        preCombineFieldOpt = preCombineFieldOpt,
+        usesVirtualKeys = !tableConfig.populateMetaFields(),
+        recordPayloadClassName = tableConfig.getPayloadClass,
+        metadataConfig = fileIndex.metadataConfig,
+        recordMergerImpls = recordMergerImpls,
+        recordMergerStrategy = recordMergerStrategy
+      )
+
     val mandatoryFields = if (isMOR) {
       mandatoryFieldsForMerging
     } else {
