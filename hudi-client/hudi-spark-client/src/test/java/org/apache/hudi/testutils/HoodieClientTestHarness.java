@@ -507,9 +507,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     // Partitions should match
-    List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
+    List<Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
-    fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
+    fsPartitionPaths.forEach(entry -> {
+      int index = entry.toString().indexOf(basePath + Path.SEPARATOR);
+      int len = (basePath + Path.SEPARATOR).length();
+      fsPartitions.add(entry.toString().substring(index + len));
+    });
     if (fsPartitions.isEmpty() && testTable.isNonPartitioned()) {
       fsPartitions.add("");
     }

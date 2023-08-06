@@ -729,9 +729,19 @@ public class HoodieTestTable {
     return new Path(Paths.get(basePath, partition).toUri());
   }
 
-  public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
-    java.nio.file.Path basePathPath = Paths.get(basePath);
-    return FileCreateUtils.getPartitionPaths(basePathPath);
+  public List<Path> getAllPartitionPaths() throws IOException {
+    return Files.list(Paths.get(basePath))
+        .filter(path -> !path.endsWith(HoodieTableMetaClient.METAFOLDER_NAME))
+        .flatMap(path -> {
+          try {
+            return FileSystemTestUtils.listRecursive(fs, new Path(path.toString())).stream();
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage());
+          }
+        })
+        .filter(status -> status.getPath().getName().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+        .map(status -> status.getPath().getParent())
+        .collect(Collectors.toList());
   }
 
   public Path getBaseFilePath(String partition, String fileId) {

@@ -54,11 +54,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
@@ -426,16 +423,6 @@ public class FileCreateUtils {
     }
     return Files.list(parentPath).filter(p -> p.getFileName().toString()
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
-  }
-
-  public static List<Path> getPartitionPaths(Path basePath) throws IOException {
-    if (Files.notExists(basePath)) {
-      return Collections.emptyList();
-    }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-            && !isBaseOrLogFilename(entry.getFileName().toString())
-            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
-        .collect(Collectors.toList());
   }
 
   public static boolean isBaseOrLogFilename(String filename) {
