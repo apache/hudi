@@ -154,7 +154,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
-
   private static Stream<Arguments> rollbackAfterConsistencyCheckFailureParams() {
     return Stream.of(
         Arguments.of(true, true),
@@ -791,28 +790,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         -1, recordGenFunction, HoodieJavaWriteClient::upsert, true, 150, 150, 1, false,
         populateMetaFields);
   }
-
-  private String getFullPartitionPath(String relativePartitionPath) {
-    return getFullPartitionPaths(relativePartitionPath)[0];
-  }
-
-  private String[] getFullPartitionPaths(String... relativePartitionPaths) {
-    String[] fullPartitionPaths = new String[relativePartitionPaths.length];
-    for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, relativePartitionPaths[i]);
-    }
-    return fullPartitionPaths;
-  }
-
-//  @ParameterizedTest
-//  @MethodSource("populateMetaFieldsParams")
-//  public void testSimpleClustering(boolean populateMetaFields) throws Exception {
-//    // setup clustering config.
-//    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-//        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-//        .build();
-//    testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
-//  }
 
   @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
