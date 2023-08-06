@@ -38,6 +38,8 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.LogReaderUtils;
+import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -2693,13 +2695,29 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testGetRecordPositions(boolean addRecordPositionsHeader) throws IOException {
+    Map<HeaderMetadataType, String> header = new HashMap<>();
+    List<Long> positions = new ArrayList<>();
+    if (addRecordPositionsHeader) {
+      positions = TestLogReaderUtils.generatePositions();
+      String content = LogReaderUtils.encodePositions(positions);
+      header.put(HeaderMetadataType.RECORD_POSITIONS, content);
+    }
+    HoodieLogBlock logBlock = new HoodieDeleteBlock(new DeleteRecord[0], header);
+    if (addRecordPositionsHeader) {
+      TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
+    }
+  }
+
   private static HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
-                                       Map<HeaderMetadataType, String> header) {
+                                              Map<HeaderMetadataType, String> header) {
     return getDataBlock(dataBlockType, records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, new Path("dummy_path"));
   }
 
   private static HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<HoodieRecord> records,
-                                       Map<HeaderMetadataType, String> header, Path pathForReader) {
+                                              Map<HeaderMetadataType, String> header, Path pathForReader) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
         return new HoodieCDCDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);

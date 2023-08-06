@@ -152,6 +152,12 @@
       <artifactId>orc-core</artifactId>
     </dependency>
 
+    <!-- RoaringBitmap -->
+    <dependency>
+      <groupId>org.roaringbitmap</groupId>
+      <artifactId>RoaringBitmap</artifactId>
+    </dependency>
+
     <!-- Httpcomponents -->
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
