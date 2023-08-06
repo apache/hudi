@@ -142,7 +142,7 @@ public class HoodieMergeOnReadTestUtils {
       fields = schema.getFields();
     }
     final Schema projectedSchema = Schema.createRecord(fields.stream()
-        .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+        .map(f -> new Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
         .collect(Collectors.toList()));
 
     List<GenericRecord> records = new ArrayList<>();
@@ -179,7 +179,7 @@ public class HoodieMergeOnReadTestUtils {
 
   private static void setPropsForInputFormat(FileInputFormat inputFormat, JobConf jobConf, Schema schema, String hiveColumnTypes, boolean projectCols, List<String> projectedCols,
                                              boolean populateMetaFieldsConfigValue) {
-    List<Schema.Field> fields = schema.getFields();
+    List<Field> fields = schema.getFields();
     final List<String> projectedColNames;
     if (!projectCols) {
       projectedColNames = fields.stream().map(Field::name).collect(Collectors.toList());
@@ -195,7 +195,7 @@ public class HoodieMergeOnReadTestUtils {
         .map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     String hiveColumnNames = fields.stream()
         .filter(field -> !field.name().equalsIgnoreCase("datestr"))
-        .map(Schema.Field::name).collect(Collectors.joining(","));
+        .map(Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
 
     Configuration conf = HoodieTestUtils.getDefaultHadoopConf();

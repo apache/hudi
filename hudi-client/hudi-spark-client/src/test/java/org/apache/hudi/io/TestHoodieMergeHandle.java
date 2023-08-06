@@ -350,7 +350,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     return dataSet;
   }
 
-  HoodieWriteConfig.Builder getConfigBuilder() {
+  protected HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)

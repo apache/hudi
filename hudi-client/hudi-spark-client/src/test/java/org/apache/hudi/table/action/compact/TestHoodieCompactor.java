@@ -90,7 +90,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  private HoodieWriteConfig getConfig() {
+  public HoodieWriteConfig getConfig() {
     return getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withMetricsConfig(getMetricsConfig())
@@ -109,7 +109,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     return counters.containsKey(metricName) ? counters.get(metricName).getCount() : 0;
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
