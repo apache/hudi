@@ -405,11 +405,57 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Create Table As Select With Auto record key gen") {
+    withTempDir { tmp =>
+      // Create Non-Partitioned table
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName1 using hudi
+           | tblproperties(
+           |    type = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName1'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+       """.stripMargin)
+
+      assertResult(WriteOperationType.BULK_INSERT) {
+        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName1").getOperationType
+      }
+      checkAnswer(s"select id, name, price, ts from $tableName1")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+
+      // Create Partitioned table
+      val tableName2 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName2 using hudi
+           | partitioned by (dt)
+           | tblproperties(
+           |    type = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName2'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
+         """.stripMargin
+      )
+
+      assertResult(WriteOperationType.BULK_INSERT) {
+        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName2").getOperationType
+      }
+      checkAnswer(s"select id, name, price, dt from $tableName2")(
+        Seq(1, "a1", 10, "2021-04-01")
+      )
+    }
+  }
+
   test("Test Create ro/rt Table In The Right Way") {
     withTempDir { tmp =>
       val parentPath = tmp.getCanonicalPath
       val tableName1 = generateTableName
-      spark.sql("set hoodie.sql.write.operation=upsert")
+      spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
       spark.sql(
         s"""
            |create table $tableName1 (
@@ -468,7 +514,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         Seq(1, "a2", 1100)
       )
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   test("Test Create ro/rt Table In The Wrong Way") {

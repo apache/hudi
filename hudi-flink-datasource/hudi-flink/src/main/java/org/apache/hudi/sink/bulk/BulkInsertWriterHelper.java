@@ -53,7 +53,7 @@ public class BulkInsertWriterHelper {
 
   protected final String instantTime;
   protected final int taskPartitionId;
-  protected final long taskId;
+  protected final long totalSubtaskNum;
   protected final long taskEpochId;
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
@@ -70,24 +70,24 @@ public class BulkInsertWriterHelper {
   protected final RowDataKeyGen keyGen;
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
-    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType, false);
+                                String instantTime, int taskPartitionId, long totalSubtaskNum, long taskEpochId, RowType rowType) {
+    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, false);
   }
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType,
+                                String instantTime, int taskPartitionId, long totalSubtaskNum, long taskEpochId, RowType rowType,
                                 boolean preserveHoodieMetadata) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
     this.taskPartitionId = taskPartitionId;
-    this.taskId = taskId;
+    this.totalSubtaskNum = totalSubtaskNum;
     this.taskEpochId = taskEpochId;
     this.rowType = preserveHoodieMetadata ? rowType : addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf) && conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGen.instance(conf, rowType);
+    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
   }
 
   /**
@@ -127,7 +127,7 @@ public class BulkInsertWriterHelper {
 
       LOG.info("Creating new file for partition path " + partitionPath);
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
@@ -135,7 +135,7 @@ public class BulkInsertWriterHelper {
       LOG.info("Rolling max-size file for partition path " + partitionPath);
       writeStatusList.add(handles.remove(partitionPath).close());
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
     }
     return handles.get(partitionPath);

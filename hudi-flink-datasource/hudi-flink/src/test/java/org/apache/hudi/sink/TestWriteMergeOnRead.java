@@ -144,6 +144,11 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testPartialFailover() {
+    // partial failover is only valid for append mode.
+  }
+
+  @Test
   public void testInsertAppendMode() {
     // append mode is only valid for cow table.
   }

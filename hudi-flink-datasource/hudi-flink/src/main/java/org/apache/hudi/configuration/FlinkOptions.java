@@ -39,6 +39,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.ClientIds;
 
@@ -612,6 +613,16 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(128)
       .withDescription("Sort memory in MB, default 128MB");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_PARTITION_OVERWRITE_MODE = ConfigOptions
+      .key("write.partition.overwrite.mode")
+      .stringType()
+      .defaultValue(PartitionOverwriteMode.STATIC.name())
+      .withDescription("When INSERT OVERWRITE a partitioned data source table, we currently support 2 modes: static and dynamic. "
+          + "Static mode deletes all the partitions that match the partition specification(e.g. PARTITION(a=1,b)) in the INSERT statement, before overwriting. "
+          + "Dynamic mode doesn't delete partitions ahead, and only overwrite those partitions that have data written into it at runtime. "
+          + "By default we use static mode to keep the same behavior of previous version.");
 
   // this is only for internal use
   @AdvancedConfig

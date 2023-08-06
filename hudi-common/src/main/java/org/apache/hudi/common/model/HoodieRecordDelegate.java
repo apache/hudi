@@ -20,6 +20,12 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 
 import javax.annotation.Nullable;
 
@@ -32,19 +38,19 @@ import java.io.Serializable;
  * instead of passing back the full {@link HoodieRecord}, this lean delegate
  * of it will be passed instead.
  */
-public class HoodieRecordDelegate implements Serializable {
+public class HoodieRecordDelegate implements Serializable, KryoSerializable {
 
-  private final HoodieKey hoodieKey;
+  private HoodieKey hoodieKey;
 
   /**
    * Current location of record on storage. Filled in by looking up index
    */
-  private final Option<HoodieRecordLocation> currentLocation;
+  private Option<HoodieRecordLocation> currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
-  private final Option<HoodieRecordLocation> newLocation;
+  private Option<HoodieRecordLocation> newLocation;
 
   private HoodieRecordDelegate(HoodieKey hoodieKey,
                                @Nullable HoodieRecordLocation currentLocation,
@@ -121,5 +127,21 @@ public class HoodieRecordDelegate implements Serializable {
         + ", currentLocation=" + currentLocation
         + ", newLocation=" + newLocation
         + '}';
+  }
+
+  @VisibleForTesting
+  @Override
+  public final void write(Kryo kryo, Output output) {
+    kryo.writeObjectOrNull(output, hoodieKey, HoodieKey.class);
+    kryo.writeClassAndObject(output, currentLocation.isPresent() ? currentLocation.get() : null);
+    kryo.writeClassAndObject(output, newLocation.isPresent() ? newLocation.get() : null);
+  }
+
+  @VisibleForTesting
+  @Override
+  public final void read(Kryo kryo, Input input) {
+    this.hoodieKey = kryo.readObjectOrNull(input, HoodieKey.class);
+    this.currentLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
+    this.newLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
   }
 }

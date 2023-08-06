@@ -141,6 +141,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .jobFailover()
         .assertNextEvent()
         .checkLastPendingInstantCompleted()
+        .end();
+  }
+
+  @Test
+  public void testPartialFailover() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    // open the function and ingest data
+    preparePipeline()
         // triggers subtask failure for multiple times to simulate partial failover, for partial over,
         // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
         .subTaskFails(0, 1)

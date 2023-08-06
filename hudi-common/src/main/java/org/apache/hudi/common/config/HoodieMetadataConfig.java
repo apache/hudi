@@ -344,6 +344,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
+  public boolean isRecordIndexEnabled() {
+    return getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+  }
+
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }

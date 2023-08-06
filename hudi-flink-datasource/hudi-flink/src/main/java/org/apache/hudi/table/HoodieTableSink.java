@@ -148,7 +148,7 @@ public class HoodieTableSink implements
   @Override
   public void applyStaticPartition(Map<String, String> partitions) {
     // #applyOverwrite should have been invoked.
-    if (this.overwrite && partitions.size() > 0) {
+    if (this.overwrite && !partitions.isEmpty()) {
       this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
     }
   }
@@ -156,9 +156,12 @@ public class HoodieTableSink implements
   @Override
   public void applyOverwrite(boolean overwrite) {
     this.overwrite = overwrite;
-    // set up the operation as INSERT_OVERWRITE_TABLE first,
-    // if there are explicit partitions, #applyStaticPartition would overwrite the option.
-    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    if (OptionsResolver.overwriteDynamicPartition(conf)) {
+      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+    } else {
+      // if there are explicit partitions, #applyStaticPartition would overwrite the option.
+      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    }
   }
 
   @Override

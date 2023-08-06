@@ -777,8 +777,8 @@ public class ITTestHoodieDataSource {
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE);
 
-    // overwrite the whole table
-    final String insertInto3 = "insert overwrite t1 values\n"
+    // overwrite the dynamic partition
+    final String insertInto3 = "insert overwrite t1 /*+ OPTIONS('write.partition.overwrite.mode'='dynamic') */ values\n"
         + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1'),\n"
         + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02', 'par2')\n";
 
@@ -786,16 +786,31 @@ public class ITTestHoodieDataSource {
 
     List<Row> result3 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "["
-        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
-        + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
-    assertRowsEquals(result3, expected);
+    assertRowsEquals(result3, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION);
 
     // execute the same statement again and check the result
     execInsertSql(tableEnv, insertInto3);
+    assertRowsEquals(result3, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION);
+
+    // overwrite the whole table
+    final String insertInto4 = "insert overwrite t1 values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1'),\n"
+        + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02', 'par2')\n";
+
+    execInsertSql(tableEnv, insertInto4);
+
     List<Row> result4 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
     assertRowsEquals(result4, expected);
+
+    // execute the same statement again and check the result
+    execInsertSql(tableEnv, insertInto4);
+    List<Row> result5 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result5, expected);
   }
 
   @ParameterizedTest
