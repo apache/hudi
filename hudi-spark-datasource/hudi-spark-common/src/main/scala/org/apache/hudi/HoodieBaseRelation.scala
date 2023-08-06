@@ -254,7 +254,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
-      FileStatusCache.getOrCreate(sparkSession))
+      FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
   lazy val tableState: HoodieTableState = {
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
@@ -643,6 +643,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                              defaultValueOption: Option[String]=Option.empty): String = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
+  }
+
+  /**
+   * Determines if fileIndex should consider log files when filtering file slices. Defaults to false.
+   * The subclass can have their own implementation based on the table or relation type.
+   */
+  protected def shouldIncludeLogFiles(): Boolean = {
+    false
   }
 }
 

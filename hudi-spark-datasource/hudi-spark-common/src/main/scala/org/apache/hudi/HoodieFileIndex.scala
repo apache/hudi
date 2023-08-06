@@ -75,7 +75,8 @@ case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
-                           @transient fileStatusCache: FileStatusCache = NoopCache)
+                           @transient fileStatusCache: FileStatusCache = NoopCache,
+                           includeLogFiles: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -96,8 +97,6 @@ case class HoodieFileIndex(spark: SparkSession,
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
-
-  private var includeLogFiles = false
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
@@ -141,11 +140,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    // Prune the partition path by the partition filters
-    // NOTE: Non-partitioned tables are assumed to consist from a single partition
-    //       encompassing the whole table
-    val partitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
-    val partitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionsAndFileSlices).map {
+    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
           val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
@@ -165,18 +160,29 @@ case class HoodieFileIndex(spark: SparkSession,
     hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
-      partitionsAndFilteredFileSlices
+      prunedPartitionsAndFilteredFileSlices
     } else {
-      Seq(PartitionDirectory(InternalRow.empty, partitionsAndFilteredFileSlices.flatMap(_.files)))
+      Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
     }
   }
 
-  def filterFileSlices(dataFilters: Seq[Expression], partitionAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])])
+  /**
+   * The functions prunes the partition paths based on the input partition filters. For every partition path, the file
+   * slices are further filtered after querying metadata table based on the data filters.
+   *
+   * @param dataFilters data columns filters
+   * @param partitionFilters partition column filters
+   * @return A sequence of pruned partitions and corresponding filtered file slices
+   */
+  def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression])
   : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
+
+    val prunedPartitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
+
     // If there are no data filters, return all the file slices.
     // If there are no file slices, return empty list.
-    if (partitionAndFileSlices.isEmpty || dataFilters.isEmpty) {
-      partitionAndFileSlices
+    if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
+      prunedPartitionsAndFileSlices
     } else {
       // Look up candidate files names in the col-stats index, if all of the following conditions are true
       //    - Data-skipping is enabled
@@ -199,20 +205,17 @@ case class HoodieFileIndex(spark: SparkSession,
       var totalFileSliceSize = 0
       var candidateFileSliceSize = 0
 
-      val partitionsAndFilteredFileSlices = partitionAndFileSlices.map {
+      val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlices.map {
         case (partitionOpt, fileSlices) =>
           // Filter in candidate files based on the col-stats index lookup
           val candidateFileSlices: Seq[FileSlice] = {
             fileSlices.filter(fs => {
+              val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getPath.getName))
+                .collect(Collectors.toSet[String])
               val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-              val logFiles = fs.getLogFiles.collect(Collectors.toSet[HoodieLogFile]).asScala.toSet[HoodieLogFile]
+              baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getPath.getName))
               // NOTE: This predicate is true when {@code Option} is empty
-              if (candidateFilesNamesOpt.forall(files => baseFileStatusOpt.exists(f => files.contains(f.getPath.getName))
-                || files.intersect(logFiles.map(f => f.getPath.getName)).nonEmpty)) {
-                true
-              } else {
-                false
-              }
+              candidateFilesNamesOpt.forall(files => files.exists(elem => fileSliceFiles.contains(elem)))
             })
           }
 
@@ -233,7 +236,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
       hasPushedDownPartitionPredicates = true
 
-      partitionsAndFilteredFileSlices
+      prunedPartitionsAndFilteredFileSlices
     }
   }
 
@@ -364,10 +367,6 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
 
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
-
-  def setIncludeLogFiles(value: Boolean) = {
-    includeLogFiles = value
-  }
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
