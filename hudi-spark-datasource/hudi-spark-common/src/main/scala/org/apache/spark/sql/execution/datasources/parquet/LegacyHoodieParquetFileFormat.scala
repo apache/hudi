@@ -28,7 +28,8 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{AtomicType, StructType}
 
 /**
- *
+ * This legacy parquet file format implementation to support Hudi will be replaced by
+ * [[NewHoodieParquetFileFormat]] in the future.
  */
 class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
 
