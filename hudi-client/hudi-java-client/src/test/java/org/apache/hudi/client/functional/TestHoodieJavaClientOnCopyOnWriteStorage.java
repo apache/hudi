@@ -747,13 +747,12 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     recordGenFunction = (String instantTime, Integer numRecordsInThisCommit) -> {
       List<HoodieRecord> fewRecordsForDelete = recordsInFirstBatch.subList(0, 50);
-      List<HoodieRecord> fewRecordsForUpdate = recordsInFirstBatch.subList(50, 100);
       recordsInSecondBatch.addAll(dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete));
-      recordsInSecondBatch.addAll(fewRecordsForUpdate);
+      recordsInSecondBatch.addAll(dataGen.generateInserts(instantTime, 25));
       return recordsInSecondBatch;
     };
-    writeBatch(client, newCommitTime, prevCommitTime, Option.empty(), initCommitTime, 100, recordGenFunction,
-        HoodieJavaWriteClient::upsert, true, 50, 150, 2, false,
+    writeBatch(client, newCommitTime, prevCommitTime, Option.empty(), initCommitTime, 75, recordGenFunction,
+        HoodieJavaWriteClient::upsert, true, 25, 175, 2, false,
         populateMetaFields);
   }
 
