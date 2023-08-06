@@ -118,8 +118,8 @@ class RecordLevelIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Given query filters, it filters the EqualTo queries on simple record key columns and returns a tuple of list of such
-   * queries and list of record key literals present in the query.
+   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * list of such queries and list of record key literals present in the query.
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
@@ -137,6 +137,13 @@ class RecordLevelIndexSupport(spark: SparkSession,
     Tuple2.apply(recordKeyQueries, recordKeys)
   }
 
+  /**
+   * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
+   * list of the query and list of record key literals present in the query otherwise returns an empty option.
+   *
+   * @param queryFilter The query that need to be filtered.
+   * @return Tuple of filtered query and list of record key literals that need to be matched
+   */
   private def filterQueryWithRecordKey(queryFilter: Expression): Option[(Expression, List[String])] = {
     queryFilter match {
       case equalToQuery: EqualTo =>
@@ -169,7 +176,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
   /**
    * Return true if metadata table is enabled and record index metadata partition is available.
    */
-  private def isIndexAvailable: Boolean = {
+  def isIndexAvailable: Boolean = {
     metadataConfig.enabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
   }
 }
