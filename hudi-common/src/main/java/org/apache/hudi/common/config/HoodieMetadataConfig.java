@@ -312,12 +312,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Maximum size in bytes of a single log file. Larger log files can contain larger log blocks "
           + "thereby reducing the number of blocks to search for keys");
 
-  public static final ConfigProperty<Boolean> DISABLE_FILESYSTEM_BOOTSTRAP = ConfigProperty
-      .key(METADATA_PREFIX + ".filesystem.bootstrap.disabled")
-      .defaultValue(false)
+  public static final ConfigProperty<Boolean> AUTO_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".auto.initialize")
+      .defaultValue(true)
       .sinceVersion("0.14.0")
-      .withDocumentation("Disable bootstrapping metadata table from the file system when the table is first created. "
-          + "Warning: This should only be used when manually constructing the metadata table outside of typical Hudi writer flows.");
+      .markAdvanced()
+      .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
+          + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
@@ -447,8 +448,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(RECORD_INDEX_MAX_PARALLELISM);
   }
 
-  public boolean isFileSystemBootstrapDisabled() {
-    return getBoolean(DISABLE_FILESYSTEM_BOOTSTRAP);
+  public boolean shouldAutoInitialize() {
+    return getBoolean(AUTO_INITIALIZE);
   }
 
   public static class Builder {
@@ -626,11 +627,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxLogFileSizeBytes(long sizeInBytes) {
       metadataConfig.setValue(MAX_LOG_FILE_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
-      return this;
-    }
-
-    public Builder withFileSystemBootstrapDisabled(boolean disabled) {
-      metadataConfig.setValue(DISABLE_FILESYSTEM_BOOTSTRAP, String.valueOf(disabled));
       return this;
     }
 

@@ -376,7 +376,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
-    List<DirectoryInfo> partitionInfoList = filesPartitionAvailable ? listAllPartitionsFromMDT(initializationTime) : listAllPartitionsFromFilesystem(initializationTime);
+    List<DirectoryInfo> partitionInfoList;
+    if (filesPartitionAvailable) {
+      partitionInfoList = listAllPartitionsFromMDT(initializationTime);
+    } else {
+      // if auto initialization is enabled, then we need to list all partitions from the file system
+      if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
+        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime);
+      } else {
+        // if auto initialization is disabled, we can return an empty list
+        partitionInfoList = Collections.emptyList();
+      }
+    }
     Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
         .map(p -> {
           String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
@@ -616,9 +627,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
-    if (dataWriteConfig.getMetadataConfig().isFileSystemBootstrapDisabled()) {
-      return Collections.emptyList();
-    }
     List<SerializablePath> pathsToList = new LinkedList<>();
     pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
 

@@ -64,6 +64,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,16 +83,18 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   @MethodSource("getArgs")
   public void testFlow(FileIdAndNameGenerator fileIdAndNameGenerator, List<String> partitions) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    Properties properties = new Properties();
+    properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePathV2().toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2)
-            .withFileSystemBootstrapDisabled(true)
             .enable(true)
             .withMetadataIndexColumnStats(true)
             .withColumnStatsIndexForColumns(FIELD_1 + "," + FIELD_2)
+            .withProperties(properties)
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
