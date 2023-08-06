@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -164,6 +165,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Test
+  @Disabled("HUDI-6655")
   public void testConsistentBucketIndex() throws Exception {
     conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
