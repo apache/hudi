@@ -50,7 +50,6 @@ import scala.language.implicitConversions
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
-  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
@@ -87,12 +86,12 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val USE_LEGACY_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.legacy.parquet.file.format")
-    .defaultValue("true")
+  val USE_EXPERIMENTAL_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.use.experimental.parquet.file.format")
+    .defaultValue("false")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Read using the legacy Hudi parquet file format. The new Hudi parquet file format is " +
+    .withDocumentation("Read using the new experimental Hudi parquet file format. The new Hudi parquet file format is " +
       "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
       "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
 
