@@ -186,7 +186,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     Dataset<Row> hudiDf = sparkSession.read().format("hudi").load(hudiBasePath);
     Dataset<Row> bootstrapDf = sparkSession.read().format("hudi").load(bootstrapTargetPath);
     Dataset<Row> fastBootstrapDf = sparkSession.read().format("hudi").option(DATA_QUERIES_ONLY.key(), "true").load(bootstrapTargetPath);
-    boolean shouldTestFastBootstrap = tableType.equals(COPY_ON_WRITE) && !Boolean.parseBoolean(USE_EXPERIMENTAL_HUDI_PARQUET_FILE_FORMAT().defaultValue());
+    boolean shouldTestFastBootstrap = tableType.equals(COPY_ON_WRITE) && !Boolean.parseBoolean(USE_NEW_HUDI_PARQUET_FILE_FORMAT().defaultValue());
     if (nPartitions == 0) {
       compareDf(hudiDf.drop(dropColumns), bootstrapDf.drop(dropColumns));
       if (shouldTestFastBootstrap) {
