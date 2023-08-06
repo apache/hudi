@@ -20,7 +20,6 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -36,7 +35,6 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -52,13 +50,11 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
@@ -105,7 +101,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -116,7 +111,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -136,14 +130,11 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
-import static org.apache.hudi.config.HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -155,32 +146,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-@Tag("functional")
 public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTestHarness {
 
   private static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
-  private static final Map<String, String> STRATEGY_PARAMS = new HashMap<String, String>() {
-    {
-      put("sortColumn", "record_key");
-    }
-  };
-
-  private static Stream<Arguments> smallInsertHandlingParams() {
-    return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
-  }
 
   private static Stream<Arguments> populateMetaFieldsParams() {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
-  private static Stream<Arguments> rollbackFailedCommitsParams() {
-    return Stream.of(
-        Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, true),
-        Arguments.of(HoodieFailedWritesCleaningPolicy.LAZY, false),
-        Arguments.of(HoodieFailedWritesCleaningPolicy.NEVER, true),
-        Arguments.of(HoodieFailedWritesCleaningPolicy.NEVER, false)
-    );
-  }
 
   private static Stream<Arguments> rollbackAfterConsistencyCheckFailureParams() {
     return Stream.of(
@@ -192,8 +165,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   private HoodieTestTable testTable;
-
-  private static final String COUNT_SQL_QUERY_FOR_VALIDATION = "select count(*) from <TABLE_NAME>";
 
   @BeforeEach
   public void setUpTestTable() {
@@ -367,7 +338,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(1, dedupedRecs.size());
     assertEquals(dedupedRecs.get(0).getPartitionPath(), recordThree.getPartitionPath());
-    //assertNodupesWithinPartition(dedupedRecs); TODO
+    assertNodupesWithinPartition(dedupedRecs);
 
     // non-Global dedup should be done based on both recordKey and partitionPath
     index = mock(HoodieIndex.class);
@@ -378,7 +349,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     dedupedRecs = dedupedRecsRdd.collectAsList();
     assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
     assertEquals(2, dedupedRecs.size());
-    //assertNodupesWithinPartition(dedupedRecs);
+    assertNodupesWithinPartition(dedupedRecs);
 
     // Perform write-action and check
     List<HoodieRecord> recordList = Arrays.asList(recordOne, recordTwo, recordThree);
@@ -880,37 +851,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     }
   }
 
-//  @Test
-//  public void testRollbackOfRegularCommitWithPendingReplaceCommitInTimeline() throws Exception {
-//    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-//        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-//        .build();
-//    // trigger clustering, but do not complete
-//    testInsertAndClustering(clusteringConfig, true, false, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
-//
-//    // trigger another partial commit, followed by valid commit. rollback of partial commit should succeed.
-//    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-//    HoodieJavaWriteClient client = getHoodieWriteClient(cfgBuilder.build());
-//    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
-//    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
-//    client.startCommitWithTime(commitTime1);
-//    List<WriteStatus> statuses = client.upsert(records1, commitTime1);
-//    assertNoWriteErrors(statuses);
-//
-//    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
-//    assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
-//
-//    // trigger another commit. this should rollback latest partial commit.
-//    records1 = dataGen.generateInserts(commitTime1, 200);
-//    client.startCommitWithTime(commitTime1);
-//    statuses = client.upsert(records1, commitTime1);
-//    assertNoWriteErrors(statuses);
-//    client.commit(commitTime1, statuses);
-//    metaClient.reloadActiveTimeline();
-//    // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
-//    assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
-//  }
-
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testInlineScheduleClustering(boolean scheduleInlineClustering) throws IOException {
@@ -943,21 +883,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     } else {
       assertEquals(0, pendingClusteringPlans.size());
     }
-  }
-
-//  @ParameterizedTest
-//  @MethodSource("populateMetaFieldsParams")
-//  public void testClusteringWithSortColumns(boolean populateMetaFields) throws Exception {
-//    // setup clustering config.
-//    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-//        .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key")
-//        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
-//        .build();
-//    testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
-//  }
-
-  private List<HoodieRecord> testInsertAndClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields, boolean completeClustering) throws Exception {
-    return testInsertAndClustering(clusteringConfig, populateMetaFields, completeClustering, false, "", "", "");
   }
 
   private List<HoodieRecord> testInsertAndClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields,
@@ -1660,50 +1585,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     return Pair.of(markerFilePath.get(), result);
   }
 
-  /**
-   * Build Hoodie Write Config for small data file sizes.
-   */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize) {
-    return getSmallInsertWriteConfig(insertSplitSize, false);
-  }
-
-  /**
-   * Build Hoodie Write Config for small data file sizes.
-   */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema) {
-    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, false);
-  }
-
-  /**
-   * Build Hoodie Write Config for small data file sizes.
-   */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, boolean mergeAllowDuplicateInserts) {
-    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, dataGen.getEstimatedFileSizeInBytes(150), mergeAllowDuplicateInserts);
-  }
-
-  /**
-   * Build Hoodie Write Config for specified small file sizes.
-   */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize) {
-    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, smallFileSize, false);
-  }
-
-  /**
-   * Build Hoodie Write Config for specified small file sizes.
-   */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA;
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeAllowDuplicateInserts);
-  }
-
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize) {
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false);
-  }
-
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeAllowDuplicateInserts, true, new Properties());
-  }
-
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean populateMetaFields, Properties props) {
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false, populateMetaFields, props);
   }
@@ -1727,17 +1608,6 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
         .withProps(props)
         .build();
-  }
-
-  protected HoodieInstant createRequestedReplaceInstant(HoodieTableMetaClient metaClient, String clusterTime, List<FileSlice>[] fileSlices) throws IOException {
-    HoodieClusteringPlan clusteringPlan =
-        ClusteringUtils.createClusteringPlan(EXECUTION_STRATEGY_CLASS_NAME.defaultValue(), STRATEGY_PARAMS, fileSlices, Collections.emptyMap());
-
-    HoodieInstant clusteringInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, clusterTime);
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-        .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-    return clusteringInstant;
   }
 
   private HoodieWriteConfig getParallelWritingWriteConfig(HoodieFailedWritesCleaningPolicy cleaningPolicy, boolean populateMetaFields) {

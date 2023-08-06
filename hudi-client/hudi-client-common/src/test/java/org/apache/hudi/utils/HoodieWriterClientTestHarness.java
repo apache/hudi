@@ -12,6 +12,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -24,13 +25,17 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
@@ -187,5 +192,23 @@ public class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
   public interface Function3<R, T1, T2, T3> {
 
     R apply(T1 v1, T2 v2, T3 v3) throws IOException;
+  }
+
+  /**
+   * Assert that there is no duplicate key at the partition level.
+   *
+   * @param records List of Hoodie records
+   */
+  public static void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
+    Map<String, Set<String>> partitionToKeys = new HashMap<>();
+    for (HoodieRecord r : records) {
+      String key = r.getRecordKey();
+      String partitionPath = r.getPartitionPath();
+      if (!partitionToKeys.containsKey(partitionPath)) {
+        partitionToKeys.put(partitionPath, new HashSet<>());
+      }
+      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
+      partitionToKeys.get(partitionPath).add(key);
+    }
   }
 }
