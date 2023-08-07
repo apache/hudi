@@ -61,7 +61,7 @@ public class HoodieInMemoryHashIndex
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+      HoodieTable hoodieTable, Option<String> instantTime) {
     return records.mapPartitions(hoodieRecordIterator -> {
       List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       HoodieTimeline commitsTimeline = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants();

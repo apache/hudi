@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -119,7 +120,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = makeConfig();
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     HoodieSimpleBucketIndex bucketIndex = new HoodieSimpleBucketIndex(config);
-    HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table);
+    HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table, Option.empty());
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
 
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA);
@@ -135,7 +136,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     }
 
     taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context,
-        HoodieSparkTable.create(config, context, metaClient));
+        HoodieSparkTable.create(config, context, metaClient), Option.empty());
     assertFalse(taggedRecordRDD.collectAsList().stream().filter(r -> r.isCurrentLocationKnown())
         .filter(r -> BucketIdentifier.bucketIdFromFileId(r.getCurrentLocation().getFileId())
             != getRecordBucketId(r)).findAny().isPresent());

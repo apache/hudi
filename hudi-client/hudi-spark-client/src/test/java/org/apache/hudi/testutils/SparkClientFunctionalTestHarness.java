@@ -237,7 +237,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected JavaRDD<HoodieRecord> tagLocation(
       HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(records), context, table));
+        index.tagLocation(HoodieJavaRDD.of(records), context, table, Option.empty()));
   }
 
   protected JavaRDD<WriteStatus> updateLocation(

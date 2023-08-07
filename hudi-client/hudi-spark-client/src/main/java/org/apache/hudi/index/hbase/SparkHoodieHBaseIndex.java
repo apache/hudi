@@ -326,7 +326,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+      HoodieTable hoodieTable, Option<String> instantTime) {
     return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records)
         .mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true));
   }

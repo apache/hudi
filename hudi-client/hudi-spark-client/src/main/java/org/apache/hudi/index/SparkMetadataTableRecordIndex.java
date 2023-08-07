@@ -19,12 +19,12 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -66,7 +66,8 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   }
 
   @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable, Option<String> instantTime)
+      throws HoodieIndexException {
     int fileGroupSize;
     try {
       ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
@@ -84,13 +85,14 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       // Fallback index needs to be a global index like record index
       ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
 
-      return fallbackIndex.tagLocation(records, context, hoodieTable);
+      return fallbackIndex.tagLocation(records, context, hoodieTable, instantTime);
     }
 
     final int numFileGroups = fileGroupSize;
 
-    if (config.getRecordIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    if (config.getRecordIndexUseCaching() && instantTime.isPresent()) {
+      String storageLevel = config.getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+      records.persist(storageLevel, context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime.get()));
     }
 
     // Partition the record keys to lookup such that each partition looks up one record index shard
@@ -112,10 +114,6 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
     // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
     // keyToLocationPairRDD and records RDD.
-
-    if (config.getRecordIndexUseCaching()) {
-      records.unpersist();
-    }
 
     return taggedRecords;
   }

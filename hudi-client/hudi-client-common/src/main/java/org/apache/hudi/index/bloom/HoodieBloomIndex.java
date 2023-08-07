@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -75,11 +74,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+      HoodieTable hoodieTable, Option<String> instantTime) {
     // Step 0: cache the input records if needed
-    if (config.getBloomIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    if (config.getBloomIndexUseCaching() && instantTime.isPresent()) {
+      String storageLevel = config.getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+      records.persist(storageLevel, context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime.get()));
     }
 
     // Step 1: Extract out thinner pairs of (partitionPath, recordKey)
@@ -91,9 +90,9 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         lookupIndex(partitionRecordKeyPairs, context, hoodieTable);
 
     // Cache the result, for subsequent stages.
-    if (config.getBloomIndexUseCaching()) {
-      keyFilenamePairs.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+    if (config.getBloomIndexUseCaching() && instantTime.isPresent()) {
+      String storageLevel = config.getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+      keyFilenamePairs.persist(storageLevel, context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime.get()));
     }
     if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
@@ -102,11 +101,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
     HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records, hoodieTable);
-
-    if (config.getBloomIndexUseCaching()) {
-      records.unpersist();
-      keyFilenamePairs.unpersist();
-    }
 
     return taggedRecords;
   }

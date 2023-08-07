@@ -68,7 +68,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable)
+      HoodieTable hoodieTable, Option<String> instantTime)
       throws HoodieIndexException {
     // Get bucket location mapper for the given partitions
     List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();

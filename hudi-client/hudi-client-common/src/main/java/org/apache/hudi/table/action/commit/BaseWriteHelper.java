@@ -24,10 +24,10 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
@@ -60,7 +60,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
-        taggedRecords = tag(dedupedRecords, context, table);
+        taggedRecords = tag(dedupedRecords, context, table, Option.of(instantTime));
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
@@ -76,7 +76,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
   }
 
   protected abstract I tag(
-      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
+      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table, Option<String> instantTime);
 
   public I combineOnCondition(
       boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {

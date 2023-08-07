@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -52,8 +53,8 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
-    return tagLocationInternal(records, context, hoodieTable);
+      HoodieTable hoodieTable, Option<String> instantTime) {
+    return tagLocationInternal(records, context, hoodieTable, instantTime);
   }
 
   /**
@@ -62,12 +63,13 @@ public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
    * @param inputRecords {@link HoodieData} of incoming records
    * @param context      instance of {@link HoodieEngineContext} to use
    * @param hoodieTable  instance of {@link HoodieTable} to use
+   * @param instantTime  timestamp of the {@link HoodieInstant} associated with the indexing operation
    * @return {@link HoodieData} of records with record locations set
    */
   @Override
   protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+      HoodieTable hoodieTable, Option<String> instantTime) {
     List<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable);
     HoodiePairData<String, HoodieRecordGlobalLocation> allKeysAndLocations =
         fetchRecordGlobalLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism(), latestBaseFiles);

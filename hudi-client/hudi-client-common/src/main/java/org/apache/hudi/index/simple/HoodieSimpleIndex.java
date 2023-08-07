@@ -20,7 +20,6 @@
 package org.apache.hudi.index.simple;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -28,8 +27,8 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -87,8 +86,8 @@ public class HoodieSimpleIndex
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
-    return tagLocationInternal(records, context, hoodieTable);
+      HoodieTable hoodieTable, Option<String> instantTime) {
+    return tagLocationInternal(records, context, hoodieTable, instantTime);
   }
 
   /**
@@ -97,14 +96,15 @@ public class HoodieSimpleIndex
    * @param inputRecords {@link HoodieData} of incoming records
    * @param context      instance of {@link HoodieEngineContext} to use
    * @param hoodieTable  instance of {@link HoodieTable} to use
+   * @param instantTime  timestamp of the {@link HoodieInstant} associated with the indexing operation
    * @return {@link HoodieData} of records with record locations set
    */
   protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
-    if (config.getSimpleIndexUseCaching()) {
-      inputRecords.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      HoodieTable hoodieTable, Option<String> instantTime) {
+    if (config.getSimpleIndexUseCaching() && instantTime.isPresent()) {
+      String storageLevel = config.getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+      inputRecords.persist(storageLevel, context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime.get()));
     }
 
     int inputParallelism = inputRecords.getNumPartitions();
@@ -113,7 +113,7 @@ public class HoodieSimpleIndex
     int targetParallelism =
         configuredSimpleIndexParallelism > 0 ? configuredSimpleIndexParallelism : inputParallelism;
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
-        inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
+        inputRecords.mapToPair(record -> Pair.of(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
             targetParallelism);
@@ -125,9 +125,6 @@ public class HoodieSimpleIndex
           return tagAsNewRecordIfNeeded(untaggedRecord, location);
         });
 
-    if (config.getSimpleIndexUseCaching()) {
-      inputRecords.unpersist();
-    }
     return taggedRecords;
   }
 

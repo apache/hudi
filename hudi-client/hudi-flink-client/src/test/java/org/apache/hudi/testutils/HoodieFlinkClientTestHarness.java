@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -98,7 +99,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
   protected List<HoodieRecord> tagLocation(
       HoodieIndex index, List<HoodieRecord> records, HoodieTable table) {
-    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.eager(records), context, table)).collectAsList();
+    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.eager(records), context, table, Option.empty())).collectAsList();
   }
 
   /**

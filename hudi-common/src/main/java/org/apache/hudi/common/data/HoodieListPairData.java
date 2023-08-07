@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -82,7 +83,17 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public int getId() {
+    return -1;
+  }
+
+  @Override
   public void persist(String cacheConfig) {
+    // no-op
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieData.HoodieDataCacheKey cacheKey) {
     // no-op
   }
 
