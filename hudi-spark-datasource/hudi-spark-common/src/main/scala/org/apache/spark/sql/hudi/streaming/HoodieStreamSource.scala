@@ -70,11 +70,11 @@ class HoodieStreamSource(
 
   /**
    * When hollow commits are found while doing streaming read , unlike batch incremental query,
-   * we do not use [[HollowCommitHandling.EXCEPTION]] by default, instead we use [[HollowCommitHandling.BLOCK]]
+   * we do not use [[HollowCommitHandling.FAIL]] by default, instead we use [[HollowCommitHandling.BLOCK]]
    * to block processing data from going beyond the hollow commits to avoid unintentional skip.
    *
    * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
-   * [[HollowCommitHandling.USE_STATE_TRANSITION_TIME]] to avoid the blocking behavior.
+   * [[HollowCommitHandling.USE_TRANSITION_TIME]] to avoid the blocking behavior.
    */
   private val hollowCommitHandling: HollowCommitHandling =
     parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
@@ -115,7 +115,7 @@ class HoodieStreamSource(
       metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
-        val timestamp = if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
+        val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
           activeInstants.getInstantsOrderedByStateTransitionTime
             .skip(activeInstants.countInstants() - 1)
             .findFirst()

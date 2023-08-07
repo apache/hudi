@@ -587,7 +587,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     Stream<String> completed = Stream.of("001", "005");
     HoodieTimeline completedTimeline = new MockHoodieTimeline(completed, Stream.empty());
     switch (handlingMode) {
-      case EXCEPTION:
+      case FAIL:
         HoodieException e = assertThrows(HoodieException.class, () ->
             handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode));
         assertTrue(e.getMessage().startsWith("Found hollow commit:"));
@@ -599,7 +599,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         assertFalse(filteredTimeline.containsInstant("005"));
         break;
       }
-      case USE_STATE_TRANSITION_TIME: {
+      case USE_TRANSITION_TIME: {
         HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
         assertTrue(filteredTimeline.containsInstant("001"));
         assertFalse(filteredTimeline.containsInstant("003"));

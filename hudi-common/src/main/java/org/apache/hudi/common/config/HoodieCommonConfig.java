@@ -85,19 +85,19 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
   public static final ConfigProperty<String> INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT = ConfigProperty
-      .key("hoodie.datasource.read.handle.hollow.commit")
-      .defaultValue(HollowCommitHandling.EXCEPTION.name())
+      .key("hoodie.read.timeline.holes.resolution.policy")
+      .defaultValue(HollowCommitHandling.FAIL.name())
       .sinceVersion("0.14.0")
       .markAdvanced()
       .withValidValues(enumNames(HollowCommitHandling.class))
       .withDocumentation("When doing incremental queries, there could be hollow commits (requested or inflight commits that are not the latest)"
           + " that are produced by concurrent writers and could lead to potential data loss. This config allows users to have different ways of handling this situation."
           + " The valid values are " + Arrays.toString(enumNames(HollowCommitHandling.class)) + ":"
-          + " Use `" + HollowCommitHandling.EXCEPTION + "` to throw an exception when hollow commit is detected. This is helpful when hollow commits"
+          + " Use `" + HollowCommitHandling.FAIL + "` to throw an exception when hollow commit is detected. This is helpful when hollow commits"
           + " are not expected."
           + " Use `" + HollowCommitHandling.BLOCK + "` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits"
           + " to finish is acceptable."
-          + " Use `" + HollowCommitHandling.USE_STATE_TRANSITION_TIME + "` (experimental) to query commits in range by state transition time (completion time), instead"
+          + " Use `" + HollowCommitHandling.USE_TRANSITION_TIME + "` (experimental) to query commits in range by state transition time (completion time), instead"
           + " of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime` "
           + " instead of the instant's commit time."
       );

@@ -59,12 +59,12 @@ public class IncrSourceHelper {
 
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
-   * unlike batch incremental query, we do not use {@link HollowCommitHandling#EXCEPTION} by default,
+   * unlike batch incremental query, we do not use {@link HollowCommitHandling#FAIL} by default,
    * instead we use {@link HollowCommitHandling#BLOCK} to block processing data from going beyond the
    * hollow commits to avoid unintentional skip.
    * <p>
    * Users can set {@link DataSourceReadOptions#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT} to
-   * {@link HollowCommitHandling#USE_STATE_TRANSITION_TIME} to avoid the blocking behavior.
+   * {@link HollowCommitHandling#USE_TRANSITION_TIME} to avoid the blocking behavior.
    */
   public static HollowCommitHandling getHollowCommitHandleMode(TypedProperties props) {
     return HollowCommitHandling.valueOf(
@@ -90,7 +90,7 @@ public class IncrSourceHelper {
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
-    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME
+    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME
         ? instant.getStateTransitionTime() : instant.getTimestamp();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
