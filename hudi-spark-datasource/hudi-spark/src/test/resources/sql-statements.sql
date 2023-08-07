@@ -33,7 +33,7 @@ set hoodie.delete.shuffle.parallelism = 1;
 
 # CTAS
 
-create table h0 using hudi options(type = '${tableType}', primaryKey = 'id')
+create table h0 using hudi options(type = '${tableType}', primaryKey = 'id', preCombineField = 'price')
 location '${tmpDir}/h0'
 as select 1 as id, 'a1' as name, 10 as price;
 +----------+
@@ -46,7 +46,7 @@ select id, name, price from h0;
 +-----------+
 
 create table h0_p using hudi partitioned by(dt)
-options(type = '${tableType}', primaryKey = 'id')
+options(type = '${tableType}', primaryKey = 'id', preCombineField = 'price')
 location '${tmpDir}/h0_p'
 as select cast('2021-05-07 00:00:00' as timestamp) as dt,
  1 as id, 'a1' as name, 10 as price;

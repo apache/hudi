@@ -834,6 +834,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       tableType => {
         withTempDir { tmp =>
           val tableName = generateTableName
+          val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'ts'" else ""
           spark.sql(
             s"""
                | create table $tableName (
@@ -846,6 +847,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                | tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id'
+               |  $preCombineKeyString
                | )
                | partitioned by(dt)
                | location '${tmp.getCanonicalPath}'
@@ -866,10 +868,16 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                | when not matched then insert *
          """.stripMargin
           )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a1", 10.1, 1000, "2021-03-21"),
-            Seq(1, "a2", 10.2, 1002, "2021-03-21")
-          )
+          if (tableType == "cow") {
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1", 10.1, 1000, "2021-03-21"),
+              Seq(1, "a2", 10.2, 1002, "2021-03-21")
+            )
+          } else {
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a2", 10.2, 1002, "2021-03-21")
+            )
+          }
 
           // Insert data with matched condition
           spark.sql(
@@ -885,11 +893,18 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                | when not matched then insert *
          """.stripMargin
           )
-          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
-            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
-            Seq(3, "a3", 10.3, 1003, "2021-03-21")
-          )
+          if (tableType == "cow") {
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+              Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+              Seq(3, "a3", 10.3, 1003, "2021-03-21")
+            )
+          } else {
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+              Seq(3, "a3", 10.3, 1003, "2021-03-21")
+            )
+          }
         }
       }
     }
