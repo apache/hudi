@@ -52,6 +52,8 @@ import java.util.stream.Collectors;
 public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
+  public static final String HOODIE_VERSION_KEY = "hudi.version";
+  public static final String ENGINE_KEY = "hudi.engine";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;

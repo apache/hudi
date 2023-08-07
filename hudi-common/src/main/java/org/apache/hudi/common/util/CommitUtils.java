@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.HoodieVersion;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -86,18 +88,29 @@ public class CommitUtils {
                                                    Option<Map<String, String>> extraMetadata,
                                                    WriteOperationType operationType,
                                                    String schemaToStoreInCommit,
-                                                   String commitActionType) {
+                                                   String commitActionType,
+                                                   Option<HoodieEngineContext> engineContext) {
 
     HoodieCommitMetadata commitMetadata = buildMetadataFromStats(writeStats, partitionToReplaceFileIds, commitActionType, operationType);
 
-    // add in extra metadata
-    if (extraMetadata.isPresent()) {
-      extraMetadata.get().forEach(commitMetadata::addMetadata);
-    }
+    buildExtraMetadata(extraMetadata, engineContext).forEach(commitMetadata::addMetadata);
+
     commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR))
         ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
+  }
+
+  public static Map<String, String> buildExtraMetadata(Option<Map<String, String>> extraMetadataOptional, Option<HoodieEngineContext> engineContext) {
+    // add HUDI version, write config and engine specific extra metadata
+    Map<String, String> extraMetadata = extraMetadataOptional.orElseGet(HashMap::new);
+    extraMetadata.put(HoodieCommitMetadata.HOODIE_VERSION_KEY, HoodieVersion.get());
+    if (engineContext.isPresent()) {
+      final String engineName = engineContext.get().getClass().getSimpleName();
+      extraMetadata.put(HoodieCommitMetadata.ENGINE_KEY, engineName);
+      engineContext.get().getInfo().forEach((k, v) -> extraMetadata.put(engineName + "." + k, v));
+    }
+    return extraMetadata;
   }
 
   private static HoodieCommitMetadata buildMetadataFromStats(List<HoodieWriteStat> writeStats,

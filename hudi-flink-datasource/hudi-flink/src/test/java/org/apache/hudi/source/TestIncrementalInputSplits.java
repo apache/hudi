@@ -136,7 +136,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             Option.empty(),
             WriteOperationType.CLUSTER,
             "",
-            HoodieTimeline.REPLACE_COMMIT_ACTION);
+            HoodieTimeline.REPLACE_COMMIT_ACTION,
+            Option.empty());
     timeline.transitionReplaceInflightToComplete(
             HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
             Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

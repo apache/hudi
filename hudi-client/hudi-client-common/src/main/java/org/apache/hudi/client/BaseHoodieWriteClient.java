@@ -220,11 +220,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
       return true;
     }
+
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
+        extraMetadata, operationType, config.getWriteSchema(), commitActionType, Option.of(context));
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),

@@ -112,7 +112,7 @@ public class EmbeddedTimelineService {
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from spark config");
-      this.hostAddr = NetworkUtils.getHostname();
+      this.hostAddr = NetworkUtils.getHostAddr();
     }
   }
 

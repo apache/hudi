@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -105,4 +106,8 @@ public abstract class HoodieEngineContext {
   public abstract void cancelJob(String jobId);
 
   public abstract void cancelAllJobs();
+
+  public Map<String, String> getInfo() {
+    return Collections.emptyMap();
+  }
 }

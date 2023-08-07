@@ -137,7 +137,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(),
-        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType(), Option.of(context))));
   }
 
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result,

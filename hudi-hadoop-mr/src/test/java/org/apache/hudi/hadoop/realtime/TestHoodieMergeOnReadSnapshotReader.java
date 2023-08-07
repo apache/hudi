@@ -113,7 +113,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
         HoodieTableType.MERGE_ON_READ);
 
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
+        schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION, Option.empty());
     FileCreateUtils.createDeltaCommit(basePath.toString(), baseInstant, commitMetadata);
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
