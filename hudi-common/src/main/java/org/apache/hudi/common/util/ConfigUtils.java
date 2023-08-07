@@ -320,14 +320,18 @@ public class ConfigUtils {
 
   public static Map<String, Object> filterProperties(TypedProperties props,
                                                      List<ConfigProperty<String>> configPropertyList) {
-    Set<String> persistedKeys = configPropertyList.stream().flatMap(configProperty -> {
+    Set<String> persistedKeys = getAllConfigKeys(configPropertyList);
+    return props.entrySet().stream()
+        .filter(p -> persistedKeys.contains(String.valueOf(p.getKey())))
+        .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  public static Set<String> getAllConfigKeys(List<ConfigProperty<String>> configPropertyList) {
+    return configPropertyList.stream().flatMap(configProperty -> {
       List<String> keys = new ArrayList<>();
       keys.add(configProperty.key());
       keys.addAll(configProperty.getAlternatives());
       return keys.stream();
     }).collect(Collectors.toSet());
-    return props.entrySet().stream()
-        .filter(p -> persistedKeys.contains(String.valueOf(p.getKey())))
-        .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 }
