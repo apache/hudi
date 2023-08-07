@@ -32,6 +32,7 @@ import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExec
 import org.apache.hudi.table.action.compact.HoodieJavaMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
 
 import java.util.List;
@@ -40,6 +41,11 @@ import java.util.Map;
 public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T> {
   protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> hoodieRecords) {
+    return new JavaUpsertDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config, this, instantTime, hoodieRecords).execute();
   }
 
   @Override
@@ -74,5 +80,19 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
         context, config, this, compactionInstantTime, new HoodieJavaMergeOnReadTableCompactor(),
         new HoodieJavaCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
+  }
+
+  @Override
+  public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    ScheduleCompactionActionExecutor scheduleLogCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT);
+    return scheduleLogCompactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> logCompact(HoodieEngineContext context, String logCompactionInstantTime) {
+    RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
+        logCompactionInstantTime, new HoodieJavaMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
+    return logCompactionExecutor.execute();
   }
 }

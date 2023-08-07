@@ -134,7 +134,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
-  protected BaseHoodieTableServiceClient<O> tableServiceClient;
+  protected BaseHoodieTableServiceClient<?, ?, O> tableServiceClient;
 
   /**
    * Create a write client, with new hudi index.
@@ -176,7 +176,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return this.operationType;
   }
 
-  public BaseHoodieTableServiceClient<O> getTableServiceClient() {
+  public BaseHoodieTableServiceClient<?, ?, O> getTableServiceClient() {
     return tableServiceClient;
   }
 
@@ -341,7 +341,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadata commit metadata for which pre commit is being invoked.
    */
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // To be overridden by specific engines to perform conflict resolution if any.
+    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
+    HoodieTable table = createTable(config, hadoopConf);
+    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
   /**
@@ -523,7 +526,24 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param hoodieTable Hoodie Table
    * @return Write Status
    */
-  public abstract O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable);
+  public O postWrite(HoodieWriteMetadata<O> result, String instantTime, HoodieTable hoodieTable) {
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
+    }
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+      mayBeCleanAndArchive(hoodieTable);
+
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
+    }
+    return result.getWriteStatuses();
+  }
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
@@ -1041,13 +1061,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadata All the metadata that gets stored along with a commit
    * @param extraMetadata Extra Metadata to be stored
    */
-  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                                        Option<Map<String, String>> extraMetadata);
+  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
+                                        Option<Map<String, String>> extraMetadata) {
+    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
+  }
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime);
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
+    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
+  }
 
   /**
    * Schedules a new log compaction instant.
@@ -1086,14 +1110,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
                                   Option<Map<String, String>> extraMetadata) {
-    throw new UnsupportedOperationException("Log compaction is not supported yet.");
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
+    completeLogCompaction(metadata, table, logCompactionInstantTime);
   }
 
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable<T, I, K, O> table, String logCompactionCommitTime) {
-    throw new UnsupportedOperationException("Log compaction is not supported yet.");
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
   }
 
   /**
@@ -1102,7 +1128,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
+  protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
+    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
+  }
 
   /**
    * Schedules compaction inline.
@@ -1116,11 +1146,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Ensures compaction instant is in expected state and performs Log Compaction for the workload stored in instant-time.s
    *
-   * @param compactionInstantTime Compaction Instant Time
+   * @param logCompactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected HoodieWriteMetadata<O> logCompact(String compactionInstantTime, boolean shouldComplete) {
-    throw new UnsupportedOperationException("Log compaction is not supported yet.");
+  protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
+    return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
   }
 
   /**
@@ -1155,7 +1187,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param clusteringInstant Clustering Instant Time
    * @return Collection of Write Status
    */
-  public abstract HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete);
+  public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+    return tableServiceClient.cluster(clusteringInstant, shouldComplete);
+  }
 
   /**
    * Schedule table services such as clustering, compaction & cleaning.

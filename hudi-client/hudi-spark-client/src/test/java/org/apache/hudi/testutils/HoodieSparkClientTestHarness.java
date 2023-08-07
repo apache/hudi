@@ -41,16 +41,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -66,6 +63,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
+import org.apache.hudi.utils.HoodieWriterClientTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -112,10 +110,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
+public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTestHarness {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
-  protected static int timelineServicePort = FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkClientTestHarness.class);
 
   @AfterAll
   public static void tearDownAll() throws IOException {
@@ -332,26 +329,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     // to avoid port reuse causing failures
     timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
     return timelineServicePort;
-  }
-
-  protected Properties getPropertiesForMetadataTable() {
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    properties.put("hoodie.datasource.write.recordkey.field", "key");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "key");
-    return properties;
-  }
-
-  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
-                                                 boolean isMetadataTable) {
-    if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : HoodieClientTestUtils.getPropertiesForKeyGen()))
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
-    }
-  }
-
-  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
-    addConfigsForPopulateMetaFields(configBuilder, populateMetaFields, false);
   }
 
   /**

@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,7 +54,7 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS
 import static org.apache.hudi.utilities.testutils.CloudObjectTestUtils.deleteMessagesInQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestCloudObjectsSelector extends HoodieClientTestHarness {
+public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
 
   static final String REGION_NAME = "us-east-1";
 
