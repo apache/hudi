@@ -957,7 +957,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
-    getWriteClient().restoreToInstant(restoreToInstantTime, false);
+    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
+      writeClient.restoreToInstant(restoreToInstantTime, false);
+    }
 
     // At this point we have also reverted the cleans which have occurred after the restoreToInstantTime. Hence, a sync
     // is required to bring back those cleans.
@@ -1015,8 +1017,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
-        if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
-          throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+        try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
+          if (!writeClient.rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
+            throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+          }
         }
       } else {
         LOG.info(String.format("Ignoring rollback of instant %s at %s. The commit to rollback is not found in MDT",
@@ -1194,8 +1198,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void performTableServices(Option<String> inFlightInstantTimestamp) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
-    try {
-      BaseHoodieWriteClient writeClient = getWriteClient();
+    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
       // Run any pending table services operations.
       runPendingTableServicesOperations(writeClient);
 
