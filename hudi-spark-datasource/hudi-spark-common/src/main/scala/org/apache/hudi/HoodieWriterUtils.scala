@@ -21,14 +21,17 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
+import org.slf4j.LoggerFactory
 
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -39,6 +42,7 @@ import scala.collection.JavaConverters._
  */
 object HoodieWriterUtils {
 
+  private val log = LoggerFactory.getLogger(getClass)
   /**
     * Add default options for unspecified write options keys.
     *
@@ -84,6 +88,34 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  /**
+   * Determines whether writes need to take prepped path or regular non-prepped path.
+   * - For spark-sql writes (UPDATES, DELETES), we could use prepped flow due to the presences of meta fields.
+   * - For pkless tables, if incoming df has meta fields, we could use prepped flow.
+   * @param hoodieConfig hoodie config of interest.
+   * @param parameters raw parameters.
+   * @param operation operation type.
+   * @param df incoming dataframe
+   * @return true if prepped writes, false otherwise.
+   */
+  def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
+    var isPrepped = false
+    if (AutoRecordKeyGenerationUtils.isAutoGenerateRecordKeys(parameters)
+      && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").equals("false")
+      && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").equals("false")
+      && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+      // with pk less table, writes using spark-ds writer can potentially use the prepped path if meta fields are present in the incoming df.
+      if (operation == WriteOperationType.UPSERT) {
+        log.warn("Changing operation type to UPSERT PREPPED for pk less table upserts ")
+        isPrepped = true
+      } else if (operation == WriteOperationType.DELETE) {
+        log.warn("Changing operation type to DELETE PREPPED for pk less table deletes ")
+        isPrepped = true
+      }
+    }
+    isPrepped
   }
 
   /**

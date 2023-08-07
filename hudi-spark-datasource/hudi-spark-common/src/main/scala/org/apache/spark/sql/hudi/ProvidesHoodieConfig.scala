@@ -107,8 +107,8 @@ trait ProvidesHoodieConfig extends Logging {
   /**
    * Deduce the sql write operation for INSERT_INTO
    */
-  private def deduceSqlWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
-                                      sqlWriteOperation: String): String = {
+  private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
+                                                    sqlWriteOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
@@ -198,9 +198,9 @@ trait ProvidesHoodieConfig extends Logging {
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val insertModeSet = combinedOpts.contains(SQL_INSERT_MODE.key)
-    val sqlWriteOperationOpt = combinedOpts.get(SQL_WRITE_OPERATION.key())
+    val sqlWriteOperationOpt = combinedOpts.get(SPARK_SQL_INSERT_INTO_OPERATION.key())
     val sqlWriteOperationSet = sqlWriteOperationOpt.nonEmpty
-    val sqlWriteOperation = sqlWriteOperationOpt.getOrElse(SQL_WRITE_OPERATION.defaultValue())
+    val sqlWriteOperation = sqlWriteOperationOpt.getOrElse(SPARK_SQL_INSERT_INTO_OPERATION.defaultValue())
     val insertDupPolicyOpt = combinedOpts.get(INSERT_DUP_POLICY.key())
     val insertDupPolicySet = insertDupPolicyOpt.nonEmpty
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
@@ -220,7 +220,7 @@ trait ProvidesHoodieConfig extends Logging {
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, autoGenerateRecordKeys)
       } else {
-        deduceSqlWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
+        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sqlWriteOperation)
       }
     )
 

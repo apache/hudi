@@ -114,7 +114,7 @@ public class HoodieMetadataWriteUtils {
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(
-                writeConfig.getMinCommitsToKeep(), writeConfig.getMaxCommitsToKeep())
+                writeConfig.getMinCommitsToKeep() + 1, writeConfig.getMaxCommitsToKeep() + 1)
             .withAutoArchive(false)
             .build())
         // we will trigger compaction manually, to control the instant times

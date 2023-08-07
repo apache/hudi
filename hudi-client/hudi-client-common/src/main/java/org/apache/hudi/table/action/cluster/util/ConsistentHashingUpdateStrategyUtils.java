@@ -83,7 +83,7 @@ public class ConsistentHashingUpdateStrategyUtils {
       ValidationUtils.checkState(p != null, "Clustering plan does not has partition info, plan: " + plan);
       // Skip unrelated clustering group
       if (!recordPartitions.contains(p)) {
-        return;
+        continue;
       }
 
       String preInstant = partitionToInstant.putIfAbsent(p, instant);

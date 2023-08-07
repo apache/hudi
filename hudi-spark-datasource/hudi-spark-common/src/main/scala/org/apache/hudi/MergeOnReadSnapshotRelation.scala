@@ -52,6 +52,10 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
+  override protected def shouldIncludeLogFiles(): Boolean = {
+    true
+  }
+
 }
 
 /**
@@ -215,8 +219,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
 
     if (globPaths.isEmpty) {
-      val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
-      buildSplits(fileSlices.values.flatten.toSeq)
+      val fileSlices = fileIndex.filterFileSlices(dataFilters, convertedPartitionFilters).flatMap(s => s._2)
+      buildSplits(fileSlices)
     } else {
       val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
       buildSplits(fileSlices)

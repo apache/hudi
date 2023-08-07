@@ -108,6 +108,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private Properties lockProperties = null;
 
+
+  /**
+   * super is not thread safe!!
+   **/
+  @Override
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return new SparkRDDWriteClient(context, cfg);
+  }
+
   @BeforeEach
   public void setup() throws IOException {
     if (lockProperties == null) {
@@ -207,9 +216,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, InProcessLockProvider.class, earlyConflictDetectionStrategy);
     }
 
+    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
+
     // Create the first commit
     final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 200, true);
+    createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200, true);
 
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
@@ -261,6 +272,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (server != null) {
       server.close();
     }
+    client1.close();
+    client2.close();
+    client3.close();
+    client4.close();
   }
 
   @ParameterizedTest
@@ -342,6 +357,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
     assertTrue(writer1Completed.get() && writer2Completed.get());
+    client1.close();
+    client2.close();
   }
 
   @ParameterizedTest
@@ -368,17 +385,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withLockProvider(InProcessLockProvider.class)
             .build())
         .withAutoCommit(false)
+        .withEmbeddedTimelineServerEnabled(false)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withProperties(lockProperties)
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
-            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
         .build();
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
     createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
-
+    client.close();
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
 
@@ -390,6 +409,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
           createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          writeClient.close();
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
@@ -577,6 +597,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
     assertTrue(validInstants.containsAll(completedInstants));
+
+    client.close();
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @ParameterizedTest
@@ -663,6 +688,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     future1.get();
     future3.get();
+    client.close();
+    client1.close();
+    client2.close();
   }
 
   @ParameterizedTest
@@ -719,6 +747,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     } catch (Exception e) {
       // Expected
     }
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @Test
@@ -751,6 +782,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(updates2, 4);
 
     runConcurrentAndAssert(writeRecords1, writeRecords2, client1, client2, SparkRDDWriteClient::upsert, true);
+    client1.close();
+    client2.close();
   }
 
   private void runConcurrentAndAssert(JavaRDD<HoodieRecord> writeRecords1, JavaRDD<HoodieRecord> writeRecords2,
@@ -835,6 +868,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(updates2, 1);
 
     runConcurrentAndAssert(writeRecords1, writeRecords2, client1, client2, SparkRDDWriteClient::bulkInsert, false);
+    client1.close();
+    client2.close();
   }
 
   private void ingestBatch(Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,

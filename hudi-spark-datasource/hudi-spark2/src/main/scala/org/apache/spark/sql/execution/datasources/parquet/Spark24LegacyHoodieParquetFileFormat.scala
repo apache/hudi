@@ -50,7 +50,7 @@ import java.net.URI
  *   <li>Avoiding appending partition values to the rows read from the data file</li>
  * </ol>
  */
-class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark24LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
