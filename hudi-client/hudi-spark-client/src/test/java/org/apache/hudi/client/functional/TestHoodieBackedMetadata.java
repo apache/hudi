@@ -718,7 +718,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // metadata writer to delete column_stats partition
-      HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+      HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter = metadataWriter(client);
       assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
       metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
@@ -3295,7 +3295,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     });
 
-    HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+    HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter = metadataWriter(client);
     assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
 
     // Validate write config for metadata table
@@ -3395,8 +3395,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     return allfiles;
   }
 
-  private HoodieBackedTableMetadataWriter metadataWriter(SparkRDDWriteClient client) {
-    return (HoodieBackedTableMetadataWriter) SparkHoodieBackedTableMetadataWriter
+  private HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter(SparkRDDWriteClient client) {
+    return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>) SparkHoodieBackedTableMetadataWriter
         .create(hadoopConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
   }
 

@@ -119,8 +119,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
  * Writer implementation backed by an internal hudi table. Partition and file listing are saved within an internal MOR table
  * called Metadata Table. This table is created by listing files and partitions (first time)
  * and kept in sync using the instants on the main dataset.
+ *
+ * @param <I> Type of input for the write client
+ * @param <O> Type of output for the write client
  */
-public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWriter {
+public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
@@ -1060,15 +1063,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   protected abstract void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap);
 
+  /**
+   * Converts the input records to the input format expected by the write client.
+   * @param records records to be converted
+   * @return converted records
+   */
+  protected abstract I convertRecordsToWriteClientInput(HoodieData<HoodieRecord> records);
+
   protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
-    List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
+    I preppedRecordInputs = convertRecordsToWriteClientInput(preppedRecords);
 
     //  Flink engine does not optimize initialCommit to MDT as bulk insert is not yet supported
 
-    try (BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient = getWriteClient()) {
+    try (BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient()) {
       // rollback partially failed writes if any.
       if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
@@ -1102,13 +1112,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (manuallyTransitionCommit) {
         metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
       }
-      List<WriteStatus> statuses;
+      O statuses;
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        statuses = writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner);
+        statuses = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
       } else {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        statuses = writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
+        statuses = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
       }
 
       postInternalCommit(instantTime, statuses);
@@ -1118,7 +1128,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
   }
 
-  protected void postInternalCommit(String instantTime, List<WriteStatus> statuses) {
+  protected void postInternalCommit(String instantTime, O statuses) {
     metadataMetaClient.reloadActiveTimeline();
   }
 
@@ -1490,7 +1500,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     return initialized;
   }
 
-  protected abstract BaseHoodieWriteClient getWriteClient();
+  protected abstract BaseHoodieWriteClient<?, I, ?, O> getWriteClient();
 
   /**
    * A class which represents a directory and the files and directories inside it.

@@ -16,14 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.client;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -85,7 +83,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -117,7 +114,6 @@ import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -135,7 +131,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -175,10 +170,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Tag("functional")
-public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
+public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestJavaHoodieBackedMetadata.class);
 
   public static List<Arguments> tableTypeAndEnableOperationArgs() {
     return asList(
@@ -1659,7 +1653,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // Parallel commits for separate partitions
-    List<Future> futures = new LinkedList<>();
+    List<Future> futures = new ArrayList<>(dataGen.getPartitionPaths().length);
     for (int i = 0; i < dataGen.getPartitionPaths().length; ++i) {
       final int index = i;
       String newCommitTime = "000000" + (index + 2);
@@ -2362,48 +2356,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
   }
 
-  @Test
-  public void testDuplicatesDuringRecordIndexBootstrap() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE, true);
-    HoodieEngineContext engineContext = new HoodieJavaEngineContext(hadoopConf);
-    List<String> commitTimestamps = new ArrayList<>();
-    HoodieWriteConfig customConfig = getWriteConfigBuilder(true, true, false)
-        .build();
-
-    List<HoodieRecord> recordsFirstBatch = new ArrayList<>();
-    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, customConfig)) {
-      // Create a commit, with record index disabled
-      List<HoodieRecord> insertRecords = dataGen.generateInserts(firstCommitTime, 100);
-      recordsFirstBatch.addAll(insertRecords);
-      // To test duplicates during bootstrap, insert duplicates in the first batch.
-      recordsFirstBatch.addAll(insertRecords);
-      client.startCommitWithTime(firstCommitTime);
-      List<WriteStatus> writeStatuses = client.insert(recordsFirstBatch, firstCommitTime);
-      assertNoWriteErrors(writeStatuses);
-      commitTimestamps.add(firstCommitTime);
-    }
-    assertEquals(false, fs.exists(new Path(metaClient.getMetaPath(), "metadata/record_index")));
-
-    // bootstrap record index
-    customConfig = getWriteConfigBuilder(false, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .enableMetrics(false)
-            .ignoreSpuriousDeletes(false)
-            .withEnableRecordIndex(true)
-            .build())
-        .build();
-
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, customConfig)) {
-      // Create a commit, with record index enabled
-      String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
-      List<HoodieRecord> recordsSecondBatch = dataGen.generateInserts(secondCommitTime, 100);
-      client.startCommitWithTime(secondCommitTime);
-      assertThrows(HoodieException.class, () -> client.insert(recordsSecondBatch, secondCommitTime));
-    }
-  }
-
   /**
    * Test duplicate operation with same instant timestamp.
    * <p>
@@ -2755,9 +2707,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
         fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-        fileGroups.forEach(g -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(g.toString()));
-        fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(b.toString())));
-        fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(s.toString())));
+        fileGroups.forEach(g -> LoggerFactory.getLogger(TestJavaHoodieBackedMetadata.class).info(g.toString()));
+        fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LoggerFactory.getLogger(TestJavaHoodieBackedMetadata.class).info(b.toString())));
+        fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LoggerFactory.getLogger(TestJavaHoodieBackedMetadata.class).info(s.toString())));
 
         long numFiles = fileGroups.stream()
             .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
@@ -2769,7 +2721,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     });
 
-    HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> metadataWriter = metadataWriter(client);
     assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
 
     // Validate write config for metadata table
@@ -2859,7 +2811,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Returns the list of all files in the dataset by iterating over the metadata table.
    */
   private List<Path> getAllFiles(HoodieTableMetadata metadata) throws Exception {
-    List<Path> allfiles = new LinkedList<>();
+    List<Path> allfiles = new ArrayList<>();
     for (String partition : metadata.getAllPartitionPaths()) {
       for (FileStatus status : metadata.getAllFilesInPartition(new Path(basePath, partition))) {
         allfiles.add(status.getPath());
@@ -2869,7 +2821,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     return allfiles;
   }
 
-  private HoodieBackedTableMetadataWriter metadataWriter(HoodieJavaWriteClient client) {
+  private HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> metadataWriter(HoodieJavaWriteClient client) {
     return metadataWriter(client.getConfig());
   }
 

@@ -38,7 +38,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
+public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
   private transient BaseHoodieWriteClient writeClient;
 
   /**
@@ -52,7 +52,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
    */
   protected JavaHoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy, HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, true);
   }
 
   public static HoodieTableMetadataWriter create(Configuration conf,
@@ -85,6 +85,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
+  }
+
+  @Override
+  protected List<HoodieRecord> convertRecordsToWriteClientInput(HoodieData<HoodieRecord> records) {
+    return records.collectAsList();
   }
 
   @Override

@@ -19,12 +19,15 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -34,6 +37,8 @@ import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
 import java.util.List;
 import java.util.Map;
@@ -94,5 +99,17 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
     RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
         logCompactionInstantTime, new HoodieJavaMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
     return logCompactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants, boolean skipLocking) {
+    return new MergeOnReadRollbackActionExecutor<>(
+        context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
+  }
+
+  @Override
+  public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+    return new MergeOnReadRestoreActionExecutor<>(
+        context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
 }
