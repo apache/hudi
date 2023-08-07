@@ -81,7 +81,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inFlightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp, true);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
   }
 
   @Override
@@ -101,7 +101,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected List<HoodieRecord> convertRecordsToWriteClientInput(HoodieData<HoodieRecord> records) {
+  protected List<HoodieRecord> convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records) {
     return records.collectAsList();
   }
 
@@ -151,7 +151,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       }
 
       writeClient.startCommitWithTime(instantTime);
-      metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+      preCommit(instantTime);
 
       List<WriteStatus> statuses = isInitializing
           ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
@@ -198,5 +198,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig);
     }
     return writeClient;
+  }
+
+  @Override
+  protected void preCommit(String instantTime) {
+    metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
   }
 }

@@ -31,8 +31,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
@@ -225,5 +228,34 @@ public class HoodieJavaWriteClient<T> extends
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
     return result.getWriteStatuses();
+  }
+
+  @Override
+  protected void initMetadataTable(Option<String> instantTime) {
+    // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
+    // if it didn't exist before
+    // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
+    initializeMetadataTable(instantTime);
+  }
+
+  /**
+   * Initialize the metadata table if needed. Creating the metadata table writer
+   * will trigger the initial bootstrapping from the data table.
+   *
+   * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
+   */
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+    if (!config.isMetadataTableEnabled()) {
+      return;
+    }
+
+    try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+        context, inFlightInstantTimestamp)) {
+      if (writer.isInitialized()) {
+        writer.performTableServices(inFlightInstantTimestamp);
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to instantiate Metadata table ", e);
+    }
   }
 }

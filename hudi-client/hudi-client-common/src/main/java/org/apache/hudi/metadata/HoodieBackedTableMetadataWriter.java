@@ -121,7 +121,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
  * and kept in sync using the instants on the main dataset.
  *
  * @param <I> Type of input for the write client
- * @param <O> Type of output for the write client
  */
 public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
 
@@ -148,8 +147,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
-  // true if writer requires a manual transition of the commit to inflight
-  private final boolean manuallyTransitionCommit;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
 
@@ -161,19 +158,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
-   * @param manuallyTransitionCommit   True if writer requires a manual transition of the commit to inflight
    */
   protected HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            Option<String> inflightInstantTimestamp,
-                                            boolean manuallyTransitionCommit) {
+                                            Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
     this.metrics = Option.empty();
-    this.manuallyTransitionCommit = manuallyTransitionCommit;
     this.enabledPartitionTypes = new ArrayList<>(4);
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
@@ -1068,13 +1062,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param records records to be converted
    * @return converted records
    */
-  protected abstract I convertRecordsToWriteClientInput(HoodieData<HoodieRecord> records);
+  protected abstract I convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records);
 
   protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
-    I preppedRecordInputs = convertRecordsToWriteClientInput(preppedRecords);
+    I preppedRecordInputs = convertHoodieDataToEngineSpecificInput(preppedRecords);
 
     try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
       // rollback partially failed writes if any.
@@ -1107,9 +1101,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
 
       writeClient.startCommitWithTime(instantTime);
-      if (manuallyTransitionCommit) {
-        metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
-      }
+      preCommit(instantTime);
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
         writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
@@ -1123,6 +1115,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
+  }
+
+  /**
+   * Allows the implementation to perform any pre-commit operations like transitioning a commit to inflight if required.
+   * @param instantTime time of commit
+   */
+  protected void preCommit(String instantTime) {
+    // Default is No-Op
   }
 
   /**

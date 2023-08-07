@@ -92,7 +92,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
   @Override
@@ -118,7 +118,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected JavaRDD<HoodieRecord> convertRecordsToWriteClientInput(HoodieData<HoodieRecord> records) {
+  protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
   }
 
