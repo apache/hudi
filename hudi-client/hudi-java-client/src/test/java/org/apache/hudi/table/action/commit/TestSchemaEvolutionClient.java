@@ -31,7 +31,6 @@ import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -43,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests for schema evolution client api.
  */
-@Disabled
 public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestSchemaEvolutionClient.class, "/exampleSchema.avsc");

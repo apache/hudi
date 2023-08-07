@@ -88,14 +88,10 @@ public class HoodieCommonTestHarness {
    * @throws IOException
    */
   protected void initMetaClient() throws IOException {
-    initMetaClient(getTableType());
-  }
-
-  protected void initMetaClient(HoodieTableType tableType) throws IOException {
     if (basePath == null) {
       initPath();
     }
-    metaClient = HoodieTestUtils.init(basePath, tableType);
+    metaClient = HoodieTestUtils.init(basePath, getTableType());
   }
 
   protected void cleanMetaClient() {
