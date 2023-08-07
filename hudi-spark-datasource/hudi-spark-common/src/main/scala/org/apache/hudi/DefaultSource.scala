@@ -246,6 +246,16 @@ object DefaultSource {
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
+      lazy val newHudiFileFormatUtils = if (parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+        && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
+        val formatUtils = new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
+        if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
+      } else {
+        Option.empty
+      }
+
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -256,16 +266,28 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          if (newHudiFileFormatUtils.isEmpty) {
+            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
+          }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          if (newHudiFileFormatUtils.isEmpty) {
+            new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
+          }
 
         case (_, _, true) =>
-          resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          if (newHudiFileFormatUtils.isEmpty) {
+            resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
+          }
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +

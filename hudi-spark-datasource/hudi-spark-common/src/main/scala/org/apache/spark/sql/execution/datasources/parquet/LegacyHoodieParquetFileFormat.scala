@@ -23,12 +23,15 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSup
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat.FILE_FORMAT_ID
+import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{AtomicType, StructType}
 
-
-class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
+/**
+ * This legacy parquet file format implementation to support Hudi will be replaced by
+ * [[NewHoodieParquetFileFormat]] in the future.
+ */
+class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
 
   override def shortName(): String = FILE_FORMAT_ID
 
@@ -55,11 +58,11 @@ class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
 
     sparkAdapter
-      .createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }
 
-object HoodieParquetFileFormat {
+object LegacyHoodieParquetFileFormat {
   val FILE_FORMAT_ID = "hoodie-parquet"
 }

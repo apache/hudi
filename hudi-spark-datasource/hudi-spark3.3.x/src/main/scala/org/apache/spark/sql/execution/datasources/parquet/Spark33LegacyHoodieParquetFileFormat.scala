@@ -1,18 +1,20 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.spark.sql.execution.datasources.parquet
@@ -41,7 +43,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.parquet.Spark32HoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark33LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -60,7 +62,7 @@ import java.net.URI
  * <li>Schema on-read</li>
  * </ol>
  */
-class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -172,7 +174,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           //       and unfortunately won't compile against Spark 3.2.0
           //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
           val datetimeRebaseSpec =
-            DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+          DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           new ParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -271,7 +273,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             //       and unfortunately won't compile against Spark 3.2.0
             //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
             val int96RebaseSpec =
-              DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             new VectorizedParquetRecordReader(
@@ -337,7 +339,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           //       and unfortunately won't compile against Spark 3.2.0
           //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
           val int96RebaseSpec =
-            DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+          DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           val datetimeRebaseSpec =
             DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           new ParquetReadSupport(
@@ -409,7 +411,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
   }
 }
 
-object Spark32HoodieParquetFileFormat {
+object Spark33LegacyHoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0
@@ -514,4 +516,3 @@ object Spark32HoodieParquetFileFormat {
     }
   }
 }
-

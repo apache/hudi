@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -100,6 +100,8 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
+  var shouldBroadcast: Boolean = false
+
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
    * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
@@ -142,26 +144,49 @@ case class HoodieFileIndex(spark: SparkSession,
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
-        val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
-          val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-          val logFilesStatus = if (includeLogFiles) {
-            fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+        if (shouldBroadcast) {
+          val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
+            if (slice.getBaseFile.isPresent) {
+              slice.getBaseFile.get().getFileStatus
+            } else if (slice.getLogFiles.findAny().isPresent) {
+              slice.getLogFiles.findAny().get().getFileStatus
+            } else {
+              null
+            }
+          }).filter(slice => slice != null)
+          val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
+            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
+            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          if (c.nonEmpty) {
+            PartitionDirectory(new PartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), spark.sparkContext.broadcast(c)), baseFileStatusesAndLogFileOnly)
           } else {
-            java.util.stream.Stream.empty()
+            PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
-          val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
-          baseFileStatusOpt.foreach(f => files.append(f))
-          files
-        })
 
-        PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+        } else {
+          val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
+            val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+            val logFilesStatus = if (includeLogFiles) {
+              fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+            } else {
+              java.util.stream.Stream.empty()
+            }
+            val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+            baseFileStatusOpt.foreach(f => files.append(f))
+            files
+          })
+          PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+        }
     }
 
     hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
       prunedPartitionsAndFilteredFileSlices
-    } else {
+    } else if (shouldBroadcast) {
+      assert(partitionSchema.isEmpty)
+      prunedPartitionsAndFilteredFileSlices
+    }else {
       Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
     }
   }
@@ -244,7 +269,11 @@ case class HoodieFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     // NOTE: Non-partitioned tables are assumed to consist from a single partition
     //       encompassing the whole table
-    val prunedPartitions = listMatchingPartitionPaths (partitionFilters)
+    val prunedPartitions = if (shouldBroadcast) {
+      listMatchingPartitionPaths(convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
+    } else {
+      listMatchingPartitionPaths(partitionFilters)
+    }
     getInputFileSlices(prunedPartitions: _*).asScala.toSeq.map(
       { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala) })
   }

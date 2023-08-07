@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.WholeStageCodegenExec
-import org.apache.spark.sql.execution.datasources.parquet.Spark34HoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark34LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -57,7 +57,7 @@ import org.apache.spark.util.SerializableConfiguration
  *   <li>Schema on-read</li>
  * </ol>
  */
-class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -427,7 +427,7 @@ class Spark34HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
   }
 }
 
-object Spark34HoodieParquetFileFormat {
+object Spark34LegacyHoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0

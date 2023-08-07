@@ -30,7 +30,7 @@ import org.apache.hudi.LogFileIterator._
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.fs.FSUtils.{buildInlineConf, getRelativePartitionPath}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
@@ -61,15 +61,26 @@ import scala.util.Try
 class LogFileIterator(logFiles: List[HoodieLogFile],
                       partitionPath: Path,
                       tableSchema: HoodieTableSchema,
-                      requiredSchema: HoodieTableSchema,
+                      requiredStructTypeSchema: StructType,
+                      requiredAvroSchema: Schema,
                       tableState: HoodieTableState,
                       config: Configuration)
   extends CachingIterator[InternalRow] with AvroDeserializerSupport {
 
+  def this(logFiles: List[HoodieLogFile],
+            partitionPath: Path,
+            tableSchema: HoodieTableSchema,
+            requiredSchema: HoodieTableSchema,
+            tableState: HoodieTableState,
+            config: Configuration) {
+    this(logFiles, partitionPath, tableSchema, requiredSchema.structTypeSchema,
+      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+  }
   def this(split: HoodieMergeOnReadFileSplit,
            tableSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema,
-           tableState: HoodieTableState, config: Configuration) {
+           tableState: HoodieTableState,
+           config: Configuration) {
     this(split.logFiles, getPartitionPath(split), tableSchema, requiredSchema, tableState, config)
   }
   private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -83,8 +94,8 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
     }
     .getOrElse(new TypedProperties())
 
-  protected override val avroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
-  protected override val structTypeSchema: StructType = requiredSchema.structTypeSchema
+  protected override val avroSchema: Schema = requiredAvroSchema
+  protected override val structTypeSchema: StructType = requiredStructTypeSchema
 
   protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
@@ -142,20 +153,22 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
  * Base file as well as all of the Delta Log files simply returning concatenation of these streams, while not
  * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
  */
-private class SkipMergeIterator(logFiles: List[HoodieLogFile],
+class SkipMergeIterator(logFiles: List[HoodieLogFile],
                                 partitionPath: Path,
                                 baseFileIterator: Iterator[InternalRow],
                                 readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
-                                requiredSchema: HoodieTableSchema,
+                                requiredStructTypeSchema: StructType,
+                                requiredAvroSchema: Schema,
                                 tableState: HoodieTableState,
                                 config: Configuration)
-  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
 
   def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
     this(split.logFiles, getPartitionPath(split), baseFileReader(split.dataFile.get),
-      baseFileReader.schema, dataSchema, requiredSchema, tableState, config)
+      baseFileReader.schema, dataSchema, requiredSchema.structTypeSchema,
+      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
   }
 
   private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
@@ -181,11 +194,23 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
                                 baseFileIterator: Iterator[InternalRow],
                                 readerSchema: StructType,
                                 dataSchema: HoodieTableSchema,
-                                requiredSchema: HoodieTableSchema,
+                                requiredStructTypeSchema: StructType,
+                                requiredAvroSchema: Schema,
                                 tableState: HoodieTableState,
                                 config: Configuration)
-  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
 
+  def this(logFiles: List[HoodieLogFile],
+           partitionPath: Path,
+           baseFileIterator: Iterator[InternalRow],
+           readerSchema: StructType,
+           dataSchema: HoodieTableSchema,
+           requiredSchema: HoodieTableSchema,
+           tableState: HoodieTableState,
+           config: Configuration) {
+    this(logFiles, partitionPath, baseFileIterator, readerSchema, dataSchema, requiredSchema.structTypeSchema,
+      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+  }
   def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
     this(split.logFiles, getPartitionPath(split), baseFileReader(split.dataFile.get),
