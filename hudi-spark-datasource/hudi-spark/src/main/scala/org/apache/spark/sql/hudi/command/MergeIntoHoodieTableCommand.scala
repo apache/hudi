@@ -172,8 +172,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           expressionSet.remove((attr, expr))
           (attr, expr)
       }
-      if (resolving.isEmpty && rk._1.equals("primaryKey")) {
-        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
+      if (resolving.isEmpty && rk._1.equals("primaryKey") && sparkSession.conf.get(SPARK_SQL_OPTIMIZED_WRITES.key, SPARK_SQL_OPTIMIZED_WRITES.defaultValue()).toBoolean) {
+        log.warn(s"Hudi tables with primary key should to match on all primary key colums (and partition if using non global index). Column: '${rk._2}' not found")
       }
       resolving
     }).filter(_.nonEmpty).map(_.get)

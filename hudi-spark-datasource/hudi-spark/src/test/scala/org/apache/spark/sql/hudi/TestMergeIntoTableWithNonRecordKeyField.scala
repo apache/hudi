@@ -105,38 +105,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |when matched then update set oldData.name = $tableName2.name
              |when not matched then insert *
              |""".stripMargin)(errorMessage)
-
-        //test with multiple pks
-        val tableName3 = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName3 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName3'
-             | tblproperties (
-             |  primaryKey ='id,name',
-             |  preCombineField = 'ts'
-             | )
-       """.stripMargin)
-
-        val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_1) {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
-        } else {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
-        }
-
-        checkException(
-          s"""
-             |merge into $tableName3 as oldData
-             |using $tableName2
-             |on oldData.id = $tableName2.id
-             |when matched then update set oldData.name = $tableName2.name
-             |when not matched then insert *
-             |""".stripMargin)(errorMessage2)
       }
     }
   }

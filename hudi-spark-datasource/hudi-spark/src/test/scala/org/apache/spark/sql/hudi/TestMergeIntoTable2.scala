@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.Row
@@ -940,6 +941,134 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.1, 1003, "2021-03-21"),
         Seq(3, "a3", 10.0, 2000, "2021-03-21")
       )
+    }
+  }
+
+  test("Verify multiple primary key behavior") {
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey ='id,name',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+        val tableName2 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName2 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName2'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |    (1, 'a1', 10, 100),
+             |    (2, 'a2', 20, 100),
+             |    (3, 'a3', 30, 100)
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |insert into $tableName2 values
+             |    (1, 'u1', 99, 999),
+             |    (2, 'u2', 99, 999),
+             |    (3, 'u3', 99, 999),
+             |    (4, 'u4', 99, 999)
+             |""".stripMargin)
+
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+        var mergeCond = if (sparkSqlOptimizedWrites) {
+          s"oldData.id = $tableName2.id and oldData.name = $tableName2.name"
+        } else {
+          s"oldData.id = $tableName2.id"
+        }
+        spark.sql(
+          s"""
+             |merge into $tableName as oldData
+             |using $tableName2
+             |on $mergeCond
+             |when matched then update set oldData.price = $tableName2.price
+             |when not matched then insert *
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 100),
+          Seq(1, "u1", 99.0, 999),
+          Seq(2, "a2", 20.0, 100),
+          Seq(2, "u2", 99.0, 999),
+          Seq(3, "a3", 30.0, 100),
+          Seq(3, "u3", 99.0, 999),
+          Seq(4, "u4", 99.0, 999)
+        )
+
+        val tableName3 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName3 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName3'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName3 values
+             |    (1, 'a1', 100, 1000),
+             |    (2, 'a2', 100, 1000),
+             |    (3, 'a3', 100, 1000),
+             |    (4, 'a4', 100, 1000)
+             |""".stripMargin)
+        mergeCond = if (sparkSqlOptimizedWrites) {
+          s"oldData.id = $tableName3.id and oldData.name = $tableName3.name"
+        } else {
+          s"oldData.id = $tableName3.id"
+        }
+        spark.sql(
+          s"""
+             |merge into $tableName as oldData
+             |using $tableName3
+             |on $mergeCond
+             |when matched then update set oldData.price = $tableName3.price
+             |when not matched then insert *
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 100.0, 100),
+          Seq(1, "u1", 99.0, 999),
+          Seq(2, "a2", 100.0, 100),
+          Seq(2, "u2", 99.0, 999),
+          Seq(3, "a3", 100.0, 100),
+          Seq(3, "u3", 99.0, 999),
+          Seq(4, "a4", 100.0, 1000),
+          Seq(4, "u4", 99.0, 999)
+        )
+      }
     }
   }
 }
