@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -43,7 +43,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestDFSPathSelectorCommonMethods extends HoodieClientTestHarness {
+public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarness {
 
   TypedProperties props;
   Path inputPath;

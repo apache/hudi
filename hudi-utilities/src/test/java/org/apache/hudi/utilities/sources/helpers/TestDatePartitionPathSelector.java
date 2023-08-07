@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -46,7 +46,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.D
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
+public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness {
 
   private transient HoodieSparkEngineContext context = null;
   static List<LocalDate> totalDates;

@@ -110,9 +110,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieClientTestHarness extends HoodieWriterClientTestHarness {
+public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTestHarness {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkClientTestHarness.class);
 
   @AfterAll
   public static void tearDownAll() throws IOException {

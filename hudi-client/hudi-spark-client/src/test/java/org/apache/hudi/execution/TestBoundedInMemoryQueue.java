@@ -33,7 +33,7 @@ import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
@@ -63,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
+public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 

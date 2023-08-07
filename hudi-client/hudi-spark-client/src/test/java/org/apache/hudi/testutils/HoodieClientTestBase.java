@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
-public class HoodieClientTestBase extends HoodieClientTestHarness {
+public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestBase.class);
 

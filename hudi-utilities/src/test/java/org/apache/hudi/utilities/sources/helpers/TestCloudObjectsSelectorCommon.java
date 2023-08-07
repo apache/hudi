@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.List;
 
-public class TestCloudObjectsSelectorCommon extends HoodieClientTestHarness {
+public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   void setUp() {

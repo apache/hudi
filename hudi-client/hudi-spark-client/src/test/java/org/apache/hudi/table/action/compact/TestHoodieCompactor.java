@@ -48,7 +48,7 @@ import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import com.codahale.metrics.Counter;
 import org.apache.hadoop.conf.Configuration;
@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieCompactor extends HoodieClientTestHarness {
+public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
   private Configuration hadoopConf;
   private HoodieTableMetaClient metaClient;

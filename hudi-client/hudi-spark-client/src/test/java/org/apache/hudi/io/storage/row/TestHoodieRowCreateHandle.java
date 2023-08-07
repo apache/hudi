@@ -28,7 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Unit tests {@link HoodieRowCreateHandle}.
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
+public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
   private static final Random RANDOM = new Random();
 

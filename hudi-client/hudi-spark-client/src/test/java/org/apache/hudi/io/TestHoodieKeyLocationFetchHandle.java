@@ -40,7 +40,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -69,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests {@link HoodieKeyLocationFetchHandle}.
  */
-public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
+public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
 

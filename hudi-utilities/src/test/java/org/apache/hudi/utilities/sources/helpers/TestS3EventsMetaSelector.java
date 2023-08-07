@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import org.apache.hadoop.fs.Path;
@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
+public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
 
   TypedProperties props;
   String sqsUrl;

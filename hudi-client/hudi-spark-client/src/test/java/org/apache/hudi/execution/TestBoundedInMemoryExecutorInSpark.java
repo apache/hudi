@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.TaskContext;
@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestBoundedInMemoryExecutorInSpark extends HoodieClientTestHarness {
+public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 

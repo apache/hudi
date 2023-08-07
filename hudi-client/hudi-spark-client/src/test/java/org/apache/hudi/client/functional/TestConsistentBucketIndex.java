@@ -46,7 +46,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -78,7 +78,7 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGG
  * Test consistent hashing index
  */
 @Tag("functional")
-public class TestConsistentBucketIndex extends HoodieClientTestHarness {
+public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random(1);
   private HoodieIndex index;

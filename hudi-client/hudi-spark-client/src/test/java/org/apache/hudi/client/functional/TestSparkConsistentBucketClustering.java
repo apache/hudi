@@ -50,7 +50,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -85,7 +85,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTE
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 
 @Tag("functional")
-public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness {
+public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
