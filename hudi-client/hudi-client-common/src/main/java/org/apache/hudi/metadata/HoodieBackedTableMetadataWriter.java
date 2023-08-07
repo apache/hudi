@@ -1105,7 +1105,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
 
       writeClient.startCommitWithTime(instantTime);
-      preCommit(instantTime);
+      preWrite(instantTime);
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
         writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
@@ -1125,7 +1125,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Allows the implementation to perform any pre-commit operations like transitioning a commit to inflight if required.
    * @param instantTime time of commit
    */
-  protected void preCommit(String instantTime) {
+  protected void preWrite(String instantTime) {
     // Default is No-Op
   }
 

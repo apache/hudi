@@ -151,7 +151,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       }
 
       writeClient.startCommitWithTime(instantTime);
-      preCommit(instantTime);
+      preWrite(instantTime);
 
       List<WriteStatus> statuses = isInitializing
           ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
@@ -201,7 +201,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void preCommit(String instantTime) {
+  protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
   }
 }

@@ -111,7 +111,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void preCommit(String instantTime) {
+  protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
   }
 }
