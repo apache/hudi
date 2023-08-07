@@ -156,27 +156,29 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         cleanTime,
         Option.empty(),
         cleanStats);
-    HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get();
-    hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
-    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
-        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
-    // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
+    try (HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get()) {
+      hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
+      metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
+          TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+      // make sure we still get the same results as before
+      assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
+      assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
-    // trigger archiver manually
-    writeClient.archive();
-    // assert commit was archived
-    Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
-    // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
+      // trigger archiver manually
+      writeClient.archive();
+      // assert commit was archived
+      Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
+      // make sure we still get the same results as before
+      assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
+      assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
-    // assert that column stats are correct
-    HoodieBackedTableMetadata hoodieBackedTableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
-    assertEmptyColStats(hoodieBackedTableMetadata, partitionPath1, fileName1);
-    assertColStats(hoodieBackedTableMetadata, partitionPath1, fileName2);
-    assertColStats(hoodieBackedTableMetadata, partitionPath2, fileName3);
+      // assert that column stats are correct
+      HoodieBackedTableMetadata hoodieBackedTableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
+      assertEmptyColStats(hoodieBackedTableMetadata, partitionPath1, fileName1);
+      assertColStats(hoodieBackedTableMetadata, partitionPath1, fileName2);
+      assertColStats(hoodieBackedTableMetadata, partitionPath2, fileName3);
+    }
+
   }
 
   static Stream<Arguments> getArgs() {
