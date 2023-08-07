@@ -704,7 +704,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, writeStatuses, instantTime);
       } catch (Exception e) {
-        throw new HoodieException("Failed to update metadata", e);
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to update metadata", e);
+        }
       }
     }
   }

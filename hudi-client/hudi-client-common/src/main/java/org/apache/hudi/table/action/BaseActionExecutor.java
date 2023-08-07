@@ -66,7 +66,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, writeStatus, instantTime);
       } catch (Exception e) {
-        throw new HoodieException("Failed to update metadata", e);
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to update metadata", e);
+        }
       }
     }
   }
@@ -81,7 +85,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
-        throw new HoodieException("Failed to apply clean commit to metadata", e);
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply clean commit to metadata", e);
+        }
       }
     }
   }
@@ -96,7 +104,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
-        throw new HoodieException("Failed to apply rollbacks in metadata", e);
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply rollbacks in metadata", e);
+        }
       }
     }
   }
@@ -111,7 +123,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
-        throw new HoodieException("Failed to apply restore to metadata", e);
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply restore to metadata", e);
+        }
       }
     }
   }

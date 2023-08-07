@@ -365,10 +365,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.update(metadata, writeStatuses, instantTime);
         } catch (Exception e) {
-          throw new HoodieException("Failed to update metadata", e);
+          if (e instanceof HoodieException) {
+            throw (HoodieException) e;
+          } else {
+            throw new HoodieException("Failed to update metadata", e);
+          }
         }
       }
-
     }
   }
 
@@ -1028,7 +1031,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.dropMetadataPartitions(partitionTypes);
         } catch (Exception e) {
-          throw new HoodieException("Failed to drop partitions from metadata", e);
+          if (e instanceof HoodieException) {
+            throw (HoodieException) e;
+          } else {
+            throw new HoodieException("Failed to drop partitions from metadata", e);
+          }
         }
       }
     } finally {
