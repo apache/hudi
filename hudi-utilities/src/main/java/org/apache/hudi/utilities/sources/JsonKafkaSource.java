@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
@@ -96,7 +97,8 @@ public class JsonKafkaSource extends KafkaSource<String> {
   }
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
-    String postProcessorClassName = this.props.getString(JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS.key(), null);
+    String postProcessorClassName = getStringWithAltKeys(
+        this.props, JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS);
     // no processor, do nothing
     if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
       return jsonStringRDD;

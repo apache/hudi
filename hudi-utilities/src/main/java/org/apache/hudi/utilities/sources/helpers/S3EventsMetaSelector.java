@@ -40,6 +40,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * S3 events metadata selector class. This class provides methods to process the
  * messages from SQS for {@link org.apache.hudi.utilities.sources.S3EventsSource}.
@@ -60,10 +62,8 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * S3EventsMetaSelector}
    */
   public static S3EventsMetaSelector createSourceSelector(TypedProperties props) {
-    String sourceSelectorClass =
-        props.getString(
-            DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
-            S3EventsMetaSelector.class.getName());
+    String sourceSelectorClass = getStringWithAltKeys(
+        props, DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR, S3EventsMetaSelector.class.getName());
     try {
       S3EventsMetaSelector selector =
           (S3EventsMetaSelector)

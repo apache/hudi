@@ -25,7 +25,7 @@ BASE_PATH=$(cd `dirname $0`; pwd)
 ${BASE_PATH}/hudi-streamer \
 --hoodie-conf hoodie.datasource.write.recordkey.field=uuid \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=driver \
---hoodie-conf hoodie.deltastreamer.source.dfs.root=hudi-examples/hudi-examples-spark/src/main/resources/streamer-config/dfs \
+--hoodie-conf hoodie.streamer.source.dfs.root=hudi-examples/hudi-examples-spark/src/main/resources/streamer-config/dfs \
 --target-base-path /tmp/hoodie/streamertable \
 --table-type MERGE_ON_READ \
 --target-table streamertable \

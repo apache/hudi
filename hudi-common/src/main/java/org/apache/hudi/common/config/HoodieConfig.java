@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
@@ -113,18 +115,7 @@ public class HoodieConfig implements Serializable {
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
-      return Option.ofNullable(props.get(configProperty.key()));
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return Option.ofNullable(props.get(alternative));
-      }
-    }
-    return Option.empty();
+    return getRawValueWithAltKeys(props, configProperty);
   }
 
   protected void setDefaults(String configClassName) {

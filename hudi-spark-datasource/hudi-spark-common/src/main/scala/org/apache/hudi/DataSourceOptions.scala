@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
+import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
@@ -33,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
@@ -50,7 +50,6 @@ import scala.language.implicitConversions
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
-  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
@@ -645,8 +644,9 @@ object DataSourceWriteOptions {
   val ASYNC_CLUSTERING_ENABLE = HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
+    .key(STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.class")
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
+    .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.class")
     .markAdvanced()
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
@@ -896,7 +896,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val KAFKA_AVRO_VALUE_DESERIALIZER = KAFKA_AVRO_VALUE_DESERIALIZER_CLASS.key()
   @Deprecated
-  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
+  val SCHEMA_PROVIDER_CLASS_PROP = STREAMER_CONFIG_PREFIX + "schemaprovider.class"
 }
 
 object DataSourceOptionsHelper {
@@ -978,7 +978,7 @@ object DataSourceOptionsHelper {
     // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
     // or else use query type from QUERY_TYPE.
     val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ parameters
-    val queryType = paramsWithGlobalProps.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+    val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))
 

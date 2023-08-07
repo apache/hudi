@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -66,6 +67,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -963,17 +966,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    private void set(String key, Object value) {
-      if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
-        this.others.put(key, value);
-      }
-    }
-
     public PropertyBuilder set(Map<String, Object> props) {
-      for (String key : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
-        Object value = props.get(key);
+      for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+        String value = getStringWithAltKeys(props, configProperty);
         if (value != null) {
-          set(key, value);
+          this.others.put(configProperty.key(), value);
         }
       }
       return this;
@@ -990,10 +987,10 @@ public class HoodieTableMetaClient implements Serializable {
     public PropertyBuilder fromProperties(Properties properties) {
       HoodieConfig hoodieConfig = new HoodieConfig(properties);
 
-      for (String key : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
-        Object value = hoodieConfig.getString(key);
+      for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+        String value = hoodieConfig.getString(configProperty);
         if (value != null) {
-          set(key, value);
+          this.others.put(configProperty.key(), value);
         }
       }
 

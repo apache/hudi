@@ -110,6 +110,9 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * Bunch of helper methods.
  */
@@ -525,9 +528,10 @@ public class UtilHelpers {
       return provider;
     }
 
-    String schemaPostProcessorClass = cfg.getString(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key(), null);
-    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key(), "true"));
-
+    String schemaPostProcessorClass = getStringWithAltKeys(
+        cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR);
+    boolean enableSparkAvroPostProcessor =
+        getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
         && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();

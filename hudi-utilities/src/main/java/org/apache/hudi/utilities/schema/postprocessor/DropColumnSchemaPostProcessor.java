@@ -36,13 +36,15 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * A {@link SchemaPostProcessor} that support to delete column(s) from given schema.
  * <p>
  * Multiple columns are separated by commas.
  * For example:
  * <p>
- * properties.put("hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns", "column1,column2").
+ * properties.put("hoodie.streamer.schemaprovider.schema_post_processor.delete.columns", "column1,column2").
  */
 public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
@@ -62,7 +64,8 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
   @Override
   public Schema processSchema(Schema schema) {
 
-    String columnToDeleteStr = this.config.getString(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
+    String columnToDeleteStr = getStringWithAltKeys(
+        this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
       LOG.warn(String.format("Param %s is null or empty, return original schema",

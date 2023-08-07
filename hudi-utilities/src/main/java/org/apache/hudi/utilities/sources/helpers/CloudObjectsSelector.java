@@ -17,11 +17,13 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.config.S3SourceConfig;
 
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.BatchResultErrorEntry;
@@ -33,9 +35,6 @@ import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
-import org.json.JSONObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -49,6 +48,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * This class has methods for processing cloud objects.
@@ -79,15 +82,16 @@ public class CloudObjectsSelector {
    * Cloud Objects Selector Class. {@link CloudObjectsSelector}
    */
   public CloudObjectsSelector(TypedProperties props) {
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(S3SourceConfig.S3_SOURCE_QUEUE_URL.key(), S3SourceConfig.S3_SOURCE_QUEUE_REGION.key()));
+    checkRequiredConfigProperties(props, Arrays.asList(
+        S3SourceConfig.S3_SOURCE_QUEUE_URL, S3SourceConfig.S3_SOURCE_QUEUE_REGION));
     this.props = props;
-    this.queueUrl = props.getString(S3SourceConfig.S3_SOURCE_QUEUE_URL.key());
-    this.regionName = props.getString(S3SourceConfig.S3_SOURCE_QUEUE_REGION.key());
-    this.fsName = props.getString(S3SourceConfig.S3_SOURCE_QUEUE_FS.key(), "s3").toLowerCase();
-    this.longPollWait = props.getInteger(S3SourceConfig.S3_QUEUE_LONG_POLL_WAIT.key(), 20);
-    this.maxMessagePerBatch = props.getInteger(S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH.key(), 5);
-    this.maxMessagesPerRequest = props.getInteger(S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST.key(), 10);
-    this.visibilityTimeout = props.getInteger(S3SourceConfig.S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT.key(), 30);
+    this.queueUrl = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_URL);
+    this.regionName = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_REGION);
+    this.fsName = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_FS);
+    this.longPollWait = getIntWithAltKeys(props, S3SourceConfig.S3_QUEUE_LONG_POLL_WAIT);
+    this.maxMessagePerBatch = getIntWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH);
+    this.maxMessagesPerRequest = getIntWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST);
+    this.visibilityTimeout = getIntWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT);
   }
 
   /**

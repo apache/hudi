@@ -485,8 +485,8 @@ object HoodieFileIndex extends Logging {
 
     if (keyGenerator != null && (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
         keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName))) {
-      val inputFormat = tableConfig.getString(TIMESTAMP_INPUT_DATE_FORMAT.key())
-      val outputFormat = tableConfig.getString(TIMESTAMP_OUTPUT_DATE_FORMAT.key())
+      val inputFormat = tableConfig.getString(TIMESTAMP_INPUT_DATE_FORMAT)
+      val outputFormat = tableConfig.getString(TIMESTAMP_OUTPUT_DATE_FORMAT)
       if (StringUtils.isNullOrEmpty(inputFormat) || StringUtils.isNullOrEmpty(outputFormat) ||
         inputFormat.equals(outputFormat)) {
         partitionFilters

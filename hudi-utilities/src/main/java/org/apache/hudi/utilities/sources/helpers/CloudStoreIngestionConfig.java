@@ -84,7 +84,7 @@ public class CloudStoreIngestionConfig {
 
   /**
    * A JSON string passed to the Spark DataFrameReader while loading the dataset.
-   * Example: hoodie.deltastreamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
+   * Example: hoodie.streamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
    */
   @Deprecated
   public static final String SPARK_DATASOURCE_OPTIONS = CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key();
@@ -102,9 +102,4 @@ public class CloudStoreIngestionConfig {
    */
   @Deprecated
   public static final String DATAFILE_FORMAT = CloudSourceConfig.DATAFILE_FORMAT.key();
-
-  /**
-   * A comma delimited list of path-based partition fields in the source file structure
-   */
-  public static final String PATH_BASED_PARTITION_FIELDS = "hoodie.deltastreamer.source.cloud.data.partition.fields.from.path";
 }
