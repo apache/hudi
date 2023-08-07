@@ -62,18 +62,12 @@ public class TestLogReaderUtils {
 
   @Test
   public void testCompatibilityOfDecodingPositions() throws IOException {
-    List<Long> expectedPositions;
-    try (InputStream inputStream = TestLogReaderUtils.class
-        .getResourceAsStream("/format/expected_record_positions.data")) {
-      expectedPositions = Arrays.stream(FileIOUtils.readAsUTFString(inputStream, 20000).split(","))
-          .map(Long::parseLong).collect(Collectors.toList());
-    }
-    try (InputStream inputStream = TestLogReaderUtils.class
-        .getResourceAsStream("/format/record_positions_header_v3.data")) {
-      String content = FileIOUtils.readAsUTFString(inputStream, 20000);
-      Roaring64NavigableMap roaring64NavigableMap = LogReaderUtils.decodeRecordPositionsHeader(content);
-      assertPositionEquals(expectedPositions, roaring64NavigableMap);
-    }
+    List<Long> expectedPositions = Arrays.stream(
+            readLastLineFromResourceFile("/format/expected_record_positions.data").split(","))
+        .map(Long::parseLong).collect(Collectors.toList());
+    String content = readLastLineFromResourceFile("/format/record_positions_header_v3.data");
+    Roaring64NavigableMap roaring64NavigableMap = LogReaderUtils.decodeRecordPositionsHeader(content);
+    assertPositionEquals(expectedPositions, roaring64NavigableMap);
   }
 
   public static List<Long> generatePositions() {
@@ -97,5 +91,12 @@ public class TestLogReaderUtils {
     }
     assertFalse(expectedIterator.hasNext());
     assertFalse(iterator.hasNext());
+  }
+
+  private String readLastLineFromResourceFile(String resourceName) throws IOException {
+    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
+      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
+      return lines.get(lines.size() - 1);
+    }
   }
 }
