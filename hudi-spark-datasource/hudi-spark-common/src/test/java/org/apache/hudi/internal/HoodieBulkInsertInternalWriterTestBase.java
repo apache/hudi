@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
-import static org.apache.hudi.testutils.SparkDatasetTestUtils.getConfigBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -82,7 +81,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
       properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     }
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), hiveStylePartitioningValue);
-    return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
+    return SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
   protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size,

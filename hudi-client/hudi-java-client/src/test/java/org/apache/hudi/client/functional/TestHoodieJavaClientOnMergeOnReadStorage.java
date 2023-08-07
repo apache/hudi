@@ -114,6 +114,56 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
+  @Test
+  public void testAsyncCompactionOnMORTable() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    // Do insert and updates thrice one after the other.
+    // Insert
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty());
+
+    // Update
+    String commitTimeBetweenPrevAndNew = commitTime;
+    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
+        false, false, 5, 100, 2, config.populateMetaFields());
+
+    // Schedule compaction but do not run it
+    Option<String> timeStamp = client.scheduleCompaction(Option.empty());
+    assertTrue(timeStamp.isPresent());
+
+    commitTimeBetweenPrevAndNew = commitTime;
+    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
+        false, false, 5, 150, 2, config.populateMetaFields());
+    // Verify all the records.
+    metaClient.reloadActiveTimeline();
+    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+
+    // now run compaction
+    client.compact(timeStamp.get());
+    // Verify all the records.
+    metaClient.reloadActiveTimeline();
+    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+
+    commitTimeBetweenPrevAndNew = commitTime;
+    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
+        false, false, 5, 200, 2, config.populateMetaFields());
+    // Verify all the records.
+    metaClient.reloadActiveTimeline();
+    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+  }
+
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
