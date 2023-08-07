@@ -65,6 +65,10 @@ public class HoodieClusteringJob {
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // add default lock config options if MDT is enabled.
+      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+    }
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
@@ -131,7 +135,7 @@ public class HoodieClusteringJob {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
-          + "   --modee " + runningMode + ", \n"
+          + "   --mode " + runningMode + ", \n"
           + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs + ", \n"
@@ -193,7 +197,7 @@ public class HoodieClusteringJob {
           return doCluster(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
         }
       }

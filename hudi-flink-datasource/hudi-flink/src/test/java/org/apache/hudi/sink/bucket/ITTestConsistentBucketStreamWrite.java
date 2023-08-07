@@ -21,11 +21,11 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -187,8 +187,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
     // bulk_insert mode
-    final String writeOperation = conf.get(FlinkOptions.OPERATION);
-    if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
+    if (OptionsResolver.isBulkInsertOperation(conf)) {
       Pipelines.bulkInsert(conf, rowType, dataStream);
     } else {
       DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);

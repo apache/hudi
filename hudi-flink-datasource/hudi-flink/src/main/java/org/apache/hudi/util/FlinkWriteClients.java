@@ -227,16 +227,11 @@ public class FlinkWriteClients {
     if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
       // configure the fs lock provider by default
       builder.withLockConfig(HoodieLockConfig.newBuilder()
+          .fromProperties(FileSystemBasedLockProvider.getLockConfig(conf.getString(FlinkOptions.PATH)))
           .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))
-          .withLockProvider(FileSystemBasedLockProvider.class)
-          .withLockWaitTimeInMillis(2000L) // 2s
-          .withFileSystemLockExpire(1) // 1 minute
-          .withClientNumRetries(30)
-          .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
           .build());
     }
 
-    // do not configure cleaning strategy as LAZY until multi-writers is supported.
     HoodieWriteConfig writeConfig = builder.build();
     if (loadFsViewStorageConfig && !conf.containsKey(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key())) {
       // do not use the builder to give a change for recovering the original fs view storage config

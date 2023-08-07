@@ -62,6 +62,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -97,7 +98,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -728,24 +728,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         return;
       }
 
-      // we are not including log appends for update here, since they are already fail-safe.
-      // but log files created is included
-      Set<String> invalidFilePaths = getInvalidDataPaths(markers);
-      Set<String> validFilePaths = stats.stream()
+      // we are not including log appends here, since they are already fail-safe.
+      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
+      Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
-          .collect(Collectors.toSet());
-      Set<String> validCdcFilePaths = stats.stream()
-          .map(HoodieWriteStat::getCdcStats)
-          .filter(Objects::nonNull)
-          .flatMap(cdcStat -> cdcStat.keySet().stream())
+          .filter(p -> p.endsWith(this.getBaseFileExtension()))
           .collect(Collectors.toSet());
 
       // Contains list of partially created files. These needs to be cleaned up.
-      invalidFilePaths.removeAll(validFilePaths);
-      invalidFilePaths.removeAll(validCdcFilePaths);
-      if (!invalidFilePaths.isEmpty()) {
-        LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidFilePaths);
-        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidFilePaths.stream()
+      invalidDataPaths.removeAll(validDataPaths);
+
+      if (!invalidDataPaths.isEmpty()) {
+        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
+        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 
@@ -831,7 +826,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     boolean shouldValidate = config.shouldValidateAvroSchema();
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
     if ((!shouldValidate && allowProjection)
-        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
+        || StringUtils.isNullOrEmpty(config.getSchema())
+    ) {
       // Check not required
       return;
     }

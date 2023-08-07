@@ -31,6 +31,7 @@ import java.util.stream.Stream;
  */
 public class StringUtils {
 
+  public static final char[] HEX_CHAR = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   public static final String EMPTY_STRING = "";
 
   /**
@@ -86,11 +87,20 @@ public class StringUtils {
   }
 
   public static String toHexString(byte[] bytes) {
-    StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      sb.append(String.format("%02x", b));
+    return new String(encodeHex(bytes));
+  }
+
+  public static char[] encodeHex(byte[] data) {
+    int l = data.length;
+    char[] out = new char[l << 1];
+    int i = 0;
+
+    for (int var4 = 0; i < l; ++i) {
+      out[var4++] = HEX_CHAR[(240 & data[i]) >>> 4];
+      out[var4++] = HEX_CHAR[15 & data[i]];
     }
-    return sb.toString();
+
+    return out;
   }
 
   public static boolean isNullOrEmpty(String str) {

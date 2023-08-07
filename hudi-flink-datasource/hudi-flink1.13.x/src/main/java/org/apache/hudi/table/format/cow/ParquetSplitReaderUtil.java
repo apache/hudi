@@ -271,6 +271,30 @@ public class ParquetSplitReaderUtil {
           tv.fill(TimestampData.fromLocalDateTime((LocalDateTime) value));
         }
         return tv;
+      case ARRAY:
+        HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
+        if (value == null) {
+          arrayVector.fillWithNulls();
+          return arrayVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create array with default value.");
+        }
+      case MAP:
+        HeapMapColumnVector mapVector = new HeapMapColumnVector(batchSize, null, null);
+        if (value == null) {
+          mapVector.fillWithNulls();
+          return mapVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create map with default value.");
+        }
+      case ROW:
+        HeapRowColumnVector rowVector = new HeapRowColumnVector(batchSize);
+        if (value == null) {
+          rowVector.fillWithNulls();
+          return rowVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create row with default value.");
+        }
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }

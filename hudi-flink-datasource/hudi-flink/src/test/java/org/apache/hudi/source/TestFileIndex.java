@@ -137,7 +137,9 @@ public class TestFileIndex {
             .dataPruner(DataPruner.newInstance(Collections.singletonList(new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
-                Arrays.asList(new FieldReferenceExpression("uuid", DataTypes.BIGINT(), 0, 0), new ValueLiteralExpression(5L, DataTypes.BIGINT().notNull())),
+                Arrays.asList(
+                    new FieldReferenceExpression("uuid", DataTypes.BIGINT(), 0, 0), 
+                    new ValueLiteralExpression((byte) 5, DataTypes.TINYINT().notNull())),
                 DataTypes.BOOLEAN()
             ))))
             .partitionPruner(null)

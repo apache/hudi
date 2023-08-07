@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeli
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
-import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 
@@ -140,10 +140,17 @@ class RunClusteringProcedure extends BaseProcedure
         logInfo("No options")
     }
 
+    if (metaClient.getTableConfig.isMetadataTableAvailable) {
+      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
+        logInfo("Auto config filesystem lock provider for metadata table")
+      }
+    }
+
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
       .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
 
-    var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.fileterPendingInstantsAndGetOperation(
+    var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]])
 
     var client: SparkRDDWriteClient[_] = null

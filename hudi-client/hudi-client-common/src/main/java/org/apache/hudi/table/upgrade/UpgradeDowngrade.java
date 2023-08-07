@@ -151,7 +151,8 @@ public class UpgradeDowngrade {
         fromVersion = prevVersion;
       }
     }
-
+    // Reload the meta client to get the latest table config (which could have been updated due to metadata table)
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     // Write out the current version in hoodie.properties.updated file
     for (Map.Entry<ConfigProperty, String> entry : tableProps.entrySet()) {
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());

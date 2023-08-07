@@ -26,11 +26,15 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieWrapperFileSystem {
@@ -40,11 +44,23 @@ class TestHoodieWrapperFileSystem {
   private static MiniDFSCluster dfsCluster;
 
   @BeforeAll
-  public static void prepareFs() throws IOException {
-    hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
-    dfsCluster = hdfsTestService.start(true);
-    fs = dfsCluster.getFileSystem();
-    basePath = fs.getWorkingDirectory().toString();
+  public static void setUp() throws IOException {
+    if (shouldUseExternalHdfs()) {
+      fs = useExternalHdfs();
+    } else {
+      hdfsTestService = new HdfsTestService(HoodieTestUtils.getDefaultHadoopConf());
+      dfsCluster = hdfsTestService.start(true);
+      fs = dfsCluster.getFileSystem();
+    }
+    basePath = fs.getWorkingDirectory() + "/TestHoodieWrapperFileSystem/";
+    fs.mkdirs(new Path(basePath));
+  }
+
+  @AfterAll
+  public static void cleanUp() {
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+    }
   }
 
   @Test
@@ -58,6 +74,6 @@ class TestHoodieWrapperFileSystem {
     fs.createImmutableFileInPath(testFile, Option.of(testContent.getBytes()));
 
     assertEquals(1, fs.listStatus(new Path(basePath)).length,
-        "create same file twice should only have on file exists");
+        "create same file twice should only have one file exists, files: " + fs.listStatus(new Path(basePath)));
   }
 }

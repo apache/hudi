@@ -339,6 +339,11 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder logFileDataBlockFormat(String format) {
+      storageConfig.setValue(LOGFILE_DATA_BLOCK_FORMAT, format);
+      return this;
+    }
+
     public Builder logFileDataBlockMaxSize(long dataBlockSize) {
       storageConfig.setValue(LOGFILE_DATA_BLOCK_MAX_SIZE, String.valueOf(dataBlockSize));
       return this;

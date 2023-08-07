@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -129,11 +130,12 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   @Override
-  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
-    super.addRollback(instantTime, rollbackMetadata);
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, HoodieRollbackPlan rollbackPlan) throws IOException {
+    super.addRollback(instantTime, rollbackMetadata, rollbackPlan);
     if (writer != null) {
       writer.update(rollbackMetadata, instantTime);
     }
+    super.addRollbackCompleted(instantTime, rollbackMetadata, false);
     return this;
   }
 

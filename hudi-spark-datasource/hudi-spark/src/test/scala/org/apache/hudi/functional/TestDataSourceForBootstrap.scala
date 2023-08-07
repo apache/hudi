@@ -17,9 +17,8 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
-import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
+import org.apache.hudi.client.bootstrap.selector.{FullRecordBootstrapModeSelector, MetadataOnlyBootstrapModeSelector}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
@@ -30,9 +29,11 @@ import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger}
+
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -75,12 +76,14 @@ class TestDataSourceForBootstrap {
   val verificationCol: String = "driver"
   val originalVerificationVal: String = "driver_0"
   val updatedVerificationVal: String = "driver_update"
+  val metadataOnlySelector: String = classOf[MetadataOnlyBootstrapModeSelector].getCanonicalName
+  val fullRecordSelector: String = classOf[FullRecordBootstrapModeSelector].getCanonicalName
 
   /**
    * TODO rebase onto existing test base-class to avoid duplication
    */
   @BeforeEach
-  def initialize(@TempDir tempDir: java.nio.file.Path) {
+  def initialize(@TempDir tempDir: java.nio.file.Path): Unit = {
     val sparkConf = HoodieClientTestUtils.getSparkConfForTest(getClass.getSimpleName)
 
     spark = SparkSession.builder.config(sparkConf).getOrCreate
@@ -119,7 +122,7 @@ class TestDataSourceForBootstrap {
     // Perform bootstrap
     val bootstrapKeygenClass = classOf[NonpartitionedKeyGenerator].getName
     val options = commonOpts.-(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       extraOpts = options ++ Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> bootstrapKeygenClass),
       bootstrapKeygenClass = bootstrapKeygenClass
@@ -166,13 +169,13 @@ class TestDataSourceForBootstrap {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "METADATA_ONLY,AVRO",
+    "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector,AVRO",
     // TODO(HUDI-5807) enable for spark native records
-    /* "METADATA_ONLY,SPARK", */
-    "FULL_RECORD,AVRO",
-    "FULL_RECORD,SPARK"
+    /* "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK", */
+    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,AVRO",
+    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK"
   ))
-  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String, recordType: HoodieRecordType): Unit = {
+  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapSelector: String, recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -189,11 +192,11 @@ class TestDataSourceForBootstrap {
     val readOpts = commonOpts ++ Map(
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr",
         DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
-        HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode
+        HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key -> bootstrapSelector
     )
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       readOpts ++ getRecordTypeOpts(recordType),
       classOf[SimpleKeyGenerator].getName)
@@ -201,10 +204,10 @@ class TestDataSourceForBootstrap {
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
-    val expectedDF = bootstrapMode match {
-      case "METADATA_ONLY" =>
+    val expectedDF = bootstrapSelector match {
+      case `metadataOnlySelector` =>
         sort(sourceDF)
-      case "FULL_RECORD" =>
+      case `fullRecordSelector` =>
         sort(sourceDF)
     }
 
@@ -271,7 +274,7 @@ class TestDataSourceForBootstrap {
     )
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
@@ -346,7 +349,7 @@ class TestDataSourceForBootstrap {
     )
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
@@ -414,7 +417,7 @@ class TestDataSourceForBootstrap {
     )
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
@@ -481,7 +484,7 @@ class TestDataSourceForBootstrap {
     )
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+    val commitInstantTime1 = runBootstrapAndVerifyCommit(
       DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
@@ -616,9 +619,9 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  def runMetadataBootstrapAndVerifyCommit(tableType: String,
-                                          extraOpts: Map[String, String] = Map.empty,
-                                          bootstrapKeygenClass: String): String = {
+  def runBootstrapAndVerifyCommit(tableType: String,
+                                  extraOpts: Map[String, String] = Map.empty,
+                                  bootstrapKeygenClass: String): String = {
     val bootstrapDF = spark.emptyDataFrame
     bootstrapDF.write
       .format("hudi")
@@ -632,7 +635,8 @@ class TestDataSourceForBootstrap {
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     val expectedBootstrapInstant =
-      if ("FULL_RECORD".equals(extraOpts.getOrElse(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key, HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.defaultValue)))
+      if (fullRecordSelector.equals(extraOpts.getOrElse(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key,
+        HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.defaultValue)))
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
       else HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS
     assertEquals(expectedBootstrapInstant, commitInstantTime1)
@@ -689,9 +693,9 @@ class TestDataSourceForBootstrap {
 
 object TestDataSourceForBootstrap {
 
-  def sort(df: DataFrame) = df.sort("_row_key")
+  def sort(df: DataFrame): Dataset[Row] = df.sort("_row_key")
 
-  def dropMetaCols(df: DataFrame) =
+  def dropMetaCols(df: DataFrame): DataFrame =
     df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
 
 }

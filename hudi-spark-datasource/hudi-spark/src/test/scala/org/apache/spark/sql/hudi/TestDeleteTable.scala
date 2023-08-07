@@ -26,7 +26,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
   test("Test Delete Table") {
     withTempDir { tmp =>
-      Seq(true, false).foreach { optimizedSqlEnabled =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           // create table
@@ -47,7 +47,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
           // insert data to table
           spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
@@ -97,7 +97,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
    """.stripMargin)
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=true")
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
 
         // insert data to table
         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
@@ -279,7 +279,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
   Seq(false, true).foreach { urlencode =>
     test(s"Test Delete single-partition table' partitions, urlencode: $urlencode") {
-      Seq(true, false).foreach { optimizedSqlEnabled =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -308,7 +308,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
                |""".stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set hoodie.spark.sql.writes.optimized.enable=$optimizedSqlEnabled")
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
           // delete 2021-10-01 partition
           if (urlencode) {

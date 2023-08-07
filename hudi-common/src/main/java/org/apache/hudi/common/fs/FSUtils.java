@@ -191,10 +191,14 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (isLogFile(fullFileName)) {
-      return fullFileName.split("_")[1].split("\\.")[0];
+    try {
+      if (isLogFile(fullFileName)) {
+        return fullFileName.split("_")[1].split("\\.", 2)[0];
+      }
+      return fullFileName.split("_")[2].split("\\.", 2)[0];
+    } catch (ArrayIndexOutOfBoundsException e) {
+      throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
     }
-    return fullFileName.split("_")[2].split("\\.")[0];
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
@@ -202,7 +206,7 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_")[0];
+    return fullFileName.split("_", 2)[0];
   }
 
   /**
@@ -302,7 +306,7 @@ public class FSUtils {
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
                                                                String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr, true)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -450,15 +454,6 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
-  public static String getSuffixFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
-    }
-    String val = matcher.group(10);
-    return val == null ? "" : val;
-  }
-
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)
@@ -543,7 +538,7 @@ public class FSUtils {
         getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
-          .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
+          .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
   }

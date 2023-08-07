@@ -173,7 +173,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     writeStatus.setStat(new HoodieWriteStat());
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
-      writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
+      writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
@@ -268,7 +268,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
     boolean isDelete = false;
     if (combineRecordOpt.isPresent()) {
-      updatedRecordsWritten++;
       if (oldRecord.getData() != combineRecordOpt.get().getData()) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(newRecord.getOperation());
@@ -276,6 +275,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         // the incoming record is dropped
         return false;
       }
+      updatedRecordsWritten++;
     }
     return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
@@ -471,7 +471,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
               writeStatus.getFileId(), writeStatus.getPartitionPath(),
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
-              FSUtils.getCommitTime(oldFilePath.toString()), oldNumWrites));
+              baseFileToMerge.getCommitTime(), oldNumWrites));
     }
   }
 

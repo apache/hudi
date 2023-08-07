@@ -87,6 +87,15 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
+  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.use.new.parquet.file.format")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
+      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
+      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
+
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()
@@ -311,9 +320,10 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-   * Config key with boolean value that indicates whether record being written is already prepped.
+   * Config key with boolean value that indicates whether record being written during UPDATE or DELETE Spark SQL
+   * operations are already prepped.
    */
-  val DATASOURCE_WRITE_PREPPED_KEY = "_hoodie.datasource.write.prepped";
+  val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
     * May be derive partition path from incoming df if not explicitly set.
@@ -440,7 +450,7 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .deprecatedAfter("0.14.0")
     .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
-      "This config is deprecated as of 0.14.0. Please use hoodie.sql.write.operation instead.")
+      "This config is deprecated as of 0.14.0. Please use hoodie.spark.sql.insert.into.operation instead.")
 
   @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
@@ -451,7 +461,7 @@ object DataSourceWriteOptions {
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
       "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use " +
-      "hoodie.sql.write.operation and hoodie.datasource.insert.dup.policy as you see fit.")
+      "hoodie.spark.sql.insert.into.operation and hoodie.datasource.insert.dup.policy as you see fit.")
 
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
@@ -525,13 +535,15 @@ object DataSourceWriteOptions {
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
-  val SQL_WRITE_OPERATION: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.sql.write.operation")
-    .defaultValue("insert")
-    .withValidValues("bulk_insert","insert","upsert")
+  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
+
+  val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.insert.into.operation")
+    .defaultValue(WriteOperationType.INSERT.value())
+    .withValidValues(WriteOperationType.BULK_INSERT.value(), WriteOperationType.INSERT.value(), WriteOperationType.UPSERT.value())
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
-      "do small file managmeent. If you prefer hudi to automatically managee small files, then you can go with \"insert\". There is no precombine " +
+      "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
       "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
       "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
       "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
@@ -641,12 +653,21 @@ object DataSourceWriteOptions {
 
   val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
-  val ENABLE_OPTIMIZED_SQL_WRITES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.spark.sql.writes.optimized.enable")
+  val SPARK_SQL_OPTIMIZED_WRITES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.optimized.writes.enable")
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql optimized update is enabled.")
+    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
+
+  val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.overwrite.mode")
+    .noDefaultValue()
+    .withValidValues("STATIC", "DYNAMIC")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
+      "respect spark.sql.sources.partitionOverwriteMode")
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated

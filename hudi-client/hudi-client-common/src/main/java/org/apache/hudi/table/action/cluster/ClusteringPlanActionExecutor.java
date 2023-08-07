@@ -65,14 +65,14 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         .countInstants();
 
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
+      LOG.warn("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getInlineClusterMaxCommits());
       return Option.empty();
     }
 
     if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
+      LOG.warn("Not scheduling async clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getAsyncClusterMaxCommits());
       return Option.empty();

@@ -158,7 +158,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    */
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
@@ -172,6 +172,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+    if (StringUtils.nonEmpty(schemaStr)) {
+      builder.withSchema(schemaStr);
+    }
+    return builder;
   }
 
   public HoodieSparkTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
@@ -770,6 +774,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
+        .withHeartbeatTolerableMisses(0)
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {

@@ -101,7 +101,6 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
@@ -136,7 +135,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -160,7 +158,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SP
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.MUTLI_WRITER_SOURCE_CHECKPOINT_ID;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_FORCE_SKIP_PROP;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
@@ -175,7 +172,6 @@ public class StreamSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(StreamSync.class);
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Delta Sync Config.
@@ -266,17 +262,6 @@ public class StreamSync implements Serializable, Closeable {
   private transient HoodieIngestionMetrics metrics;
   private transient HoodieMetrics hoodieMetrics;
 
-  /**
-   * Unique identifier of the deltastreamer
-   */
-  private transient Option<String> multiwriterIdentifier;
-
-  /**
-   * The last checkpoint that THIS deltastreamer instance wrote.
-   * NOT the last checkpoint in the timeline.
-   */
-  private transient String latestCheckpointWritten;
-
   private final boolean autoGenerateRecordKeys;
 
   @Deprecated
@@ -307,11 +292,6 @@ public class StreamSync implements Serializable, Closeable {
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
     this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
     this.conf = conf;
-    String id = conf.get(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
-    if (StringUtils.isNullOrEmpty(id)) {
-      id = props.getProperty(MUTLI_WRITER_SOURCE_CHECKPOINT_ID.key());
-    }
-    this.multiwriterIdentifier = StringUtils.isNullOrEmpty(id) ? Option.empty() : Option.of(id);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
@@ -714,7 +694,7 @@ public class StreamSync implements Serializable, Closeable {
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
-          resumeCheckpointStr = multiwriterIdentifier.isPresent() ? readCheckpointValue(value, multiwriterIdentifier.get()) : Option.of(value);
+          resumeCheckpointStr = Option.of(value);
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieStreamerException(
@@ -732,19 +712,6 @@ public class StreamSync implements Serializable, Closeable {
       }
     }
     return resumeCheckpointStr;
-  }
-
-  public static Option<String> readCheckpointValue(String value, String id) {
-    try {
-      Map<String, String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
-      if (!checkpointMap.containsKey(id)) {
-        return Option.empty();
-      }
-      String checkpointVal = checkpointMap.get(id);
-      return Option.of(checkpointVal);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to parse checkpoint as map", e);
-    }
   }
 
   protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
@@ -838,14 +805,9 @@ public class StreamSync implements Serializable, Closeable {
     boolean hasErrors = totalErrorRecords > 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc = Option.empty();
       if (!props.getBoolean(CHECKPOINT_FORCE_SKIP_PROP, DEFAULT_CHECKPOINT_FORCE_SKIP_PROP)) {
         if (checkpointStr != null) {
-          if (multiwriterIdentifier.isPresent()) {
-            extraPreCommitFunc = Option.of(new StreamerMultiWriterCkptUpdateFunc(this, checkpointStr, latestCheckpointWritten));
-          } else {
-            checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
-          }
+          checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
         }
         if (cfg.checkpoint != null) {
           checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
@@ -875,11 +837,9 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
       }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds,
-          extraPreCommitFunc);
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
-        latestCheckpointWritten = checkpointStr;
         this.formatAdapter.getSource().onCommit(checkpointStr);
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
@@ -1242,9 +1202,5 @@ public class StreamSync implements Serializable, Closeable {
   private Set<String> getPartitionColumns(TypedProperties props) {
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
     return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
-  }
-
-  public String getMultiwriterIdentifier() {
-    return multiwriterIdentifier.get();
   }
 }

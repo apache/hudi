@@ -99,7 +99,7 @@ object HoodieProcedureUtils {
     }
   }
 
-  def fileterPendingInstantsAndGetOperation(pendingInstants: Seq[String], specificInstants: Option[String], op: Option[String]): (Seq[String], Operation) = {
+  def filterPendingInstantsAndGetOperation(pendingInstants: Seq[String], specificInstants: Option[String], op: Option[String]): (Seq[String], Operation) = {
     specificInstants match {
       case Some(inst) =>
         if (op.exists(o => !Execute.value.equalsIgnoreCase(o))) {
