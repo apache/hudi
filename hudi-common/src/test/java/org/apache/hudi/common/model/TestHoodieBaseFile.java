@@ -68,7 +68,23 @@ public class TestHoodieBaseFile {
     assertFileGetters(null, hoodieBaseFile, -1, Option.of(bootstrapBaseFile));
   }
 
+  @Test
+  void createFromExternalFileStatus() {
+    String fileName = "parquet_file_1.parquet";
+    String storedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName + "_" + baseCommitTime + "_hudiext";
+    String expectedPathString = "file:/tmp/hoodie/2021/01/01/" + fileName;
+    FileStatus inputFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(storedPathString));
+    FileStatus expectedFileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(expectedPathString));
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputFileStatus);
+
+    assertFileGetters(expectedFileStatus, hoodieBaseFile, length, Option.empty(), fileName, expectedPathString, fileName);
+  }
+
   private void assertFileGetters(FileStatus fileStatus, HoodieBaseFile hoodieBaseFile, long fileLength, Option<HoodieBaseFile> bootstrapBaseFile) {
+    assertFileGetters(fileStatus, hoodieBaseFile, fileLength, bootstrapBaseFile, fileId, pathStr, fileName);
+  }
+
+  private void assertFileGetters(FileStatus fileStatus, HoodieBaseFile hoodieBaseFile, long fileLength, Option<HoodieBaseFile> bootstrapBaseFile, String fileId, String pathStr, String fileName) {
     assertEquals(fileId, hoodieBaseFile.getFileId());
     assertEquals(baseCommitTime, hoodieBaseFile.getCommitTime());
     assertEquals(bootstrapBaseFile, hoodieBaseFile.getBootstrapBaseFile());

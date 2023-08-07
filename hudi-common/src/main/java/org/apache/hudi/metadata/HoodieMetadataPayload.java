@@ -62,7 +62,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -177,6 +176,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * You can find more details in HUDI-3834.
    */
   private static final Lazy<HoodieMetadataColumnStats.Builder> METADATA_COLUMN_STATS_BUILDER_STUB = Lazy.lazily(HoodieMetadataColumnStats::newBuilder);
+  private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true);
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
@@ -326,25 +326,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param filesDeleted List of files which have been deleted from this partition
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
-                                                                               Option<Map<String, Long>> filesAdded,
-                                                                               Option<List<String>> filesDeleted) {
-    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(filesMap ->
-        fileInfo.putAll(
-            filesMap.entrySet().stream().collect(
-                Collectors.toMap(Map.Entry::getKey, (entry) -> {
-                  long fileSize = entry.getValue();
-                  // Assert that the file-size of the file being added is positive, since Hudi
-                  // should not be creating empty files
-                  checkState(fileSize > 0);
-                  return new HoodieMetadataFileInfo(fileSize, false);
-                })))
-    );
-    filesDeleted.ifPresent(filesList ->
-        fileInfo.putAll(
-            filesList.stream().collect(
-                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
-    );
+                                                                               Map<String, Long> filesAdded,
+                                                                               List<String> filesDeleted) {
+    int size = filesAdded.size() + filesDeleted.size();
+    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
+    filesAdded.forEach((fileName, fileSize) -> {
+      // Assert that the file-size of the file being added is positive, since Hudi
+      // should not be creating empty files
+      checkState(fileSize > 0);
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
+    });
+
+    filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);

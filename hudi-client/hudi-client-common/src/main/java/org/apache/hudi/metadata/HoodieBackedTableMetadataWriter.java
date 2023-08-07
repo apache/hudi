@@ -376,7 +376,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
-    List<DirectoryInfo> partitionInfoList = filesPartitionAvailable ? listAllPartitionsFromMDT(initializationTime) : listAllPartitionsFromFilesystem(initializationTime);
+    List<DirectoryInfo> partitionInfoList;
+    if (filesPartitionAvailable) {
+      partitionInfoList = listAllPartitionsFromMDT(initializationTime);
+    } else {
+      // if auto initialization is enabled, then we need to list all partitions from the file system
+      if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
+        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime);
+      } else {
+        // if auto initialization is disabled, we can return an empty list
+        partitionInfoList = Collections.emptyList();
+      }
+    }
     Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
         .map(p -> {
           String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
@@ -571,7 +582,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(fileNameToSizeMap), Option.empty());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList());
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
