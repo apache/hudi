@@ -106,7 +106,6 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |when not matched then insert *
              |""".stripMargin)(errorMessage)
 
-        if (sparkSqlOptimizedWrites) {
           //test with multiple pks
           val tableName3 = generateTableName
           spark.sql(
@@ -129,7 +128,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                |insert into $tableName3 values
                |    (1, 'a1', 10, 100),
                |    (2, 'a2', 20, 200),
-               |    (3, 'a3', 20, 100)
+               |    (3, 'u3', 20, 100)
                |""".stripMargin)
 
           spark.sql(
@@ -144,11 +143,19 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
            """.stripMargin
           )
-
+        if (sparkSqlOptimizedWrites) {
           checkAnswer(s"select id, name, price, ts from $tableName3")(
             Seq(1, "a1", 10.0, 999),
             Seq(2, "a2", 20.0, 200),
-            Seq(3, "a3", 20.0, 9999),
+            Seq(3, "u3", 20.0, 9999),
+            Seq(4, "u4", 40.0, 99999)
+          )
+        } else {
+          checkAnswer(s"select id, name, price, ts from $tableName3")(
+            Seq(1, "a1", 10.0, 100),
+            Seq(1, "u1", 10.0, 999),
+            Seq(2, "a2", 20.0, 200),
+            Seq(3, "u3", 20.0, 9999),
             Seq(4, "u4", 40.0, 99999)
           )
         }
