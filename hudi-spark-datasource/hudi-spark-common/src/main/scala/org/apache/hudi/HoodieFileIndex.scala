@@ -96,6 +96,10 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
+  /**
+   * NOTE: [[RecordLevelIndexSupport]] is a transient state, since it's only relevant while logical plan
+   * is handled by the Spark's driver
+   */
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
@@ -209,9 +213,10 @@ case class HoodieFileIndex(spark: SparkSession,
     if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
       prunedPartitionsAndFileSlices
     } else {
-      // Look up candidate files names in the col-stats index, if all of the following conditions are true
+      // Look up candidate files names in the col-stats or record level index, if all of the following conditions are true
       //    - Data-skipping is enabled
       //    - Col-Stats Index is present
+      //    - Record-level Index is present
       //    - List of predicates (filters) is present
       val candidateFilesNamesOpt: Option[Set[String]] =
       lookupCandidateFilesInMetadataTable(dataFilters) match {
@@ -225,14 +230,14 @@ case class HoodieFileIndex(spark: SparkSession,
           }
       }
 
-      logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
+      logDebug(s"Overlapping candidate files from Column Stats or Record Level Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
       var totalFileSliceSize = 0
       var candidateFileSliceSize = 0
 
       val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlices.map {
         case (partitionOpt, fileSlices) =>
-          // Filter in candidate files based on the col-stats index lookup
+          // Filter in candidate files based on the col-stats or record level index lookup
           val candidateFileSlices: Seq[FileSlice] = {
             fileSlices.filter(fs => {
               val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getPath.getName))
@@ -303,30 +308,35 @@ case class HoodieFileIndex(spark: SparkSession,
 
   /**
    * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
-   * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
-   * bearing "min", "max", "num_nulls" statistics for all columns.
+   * conditions, by leveraging Metadata Table's Record Level Index and Column Statistics index (hereon referred as
+   * ColStats for brevity) bearing "min", "max", "num_nulls" statistics for all columns.
    *
    * NOTE: This method has to return complete set of candidate files, since only provided candidates will
    * ultimately be scanned as part of query execution. Hence, this method has to maintain the
-   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
+   * invariant of conservatively including every base-file and log file's name, that is NOT referenced in its index.
    *
    * @param queryFilters list of original data filters passed down from querying engine
-   * @return list of pruned (data-skipped) candidate base-files' names
+   * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
+    // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
     //          CSI only contains stats for top-level columns, in this case for "struct")
     //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
     //          nothing CSI in particular could be applied for)
+    //       For record index, Data Skipping is only effective when one of the query filter is of type EqualTo
+    //       or IN query on simple record keys. In such a case the record index is used to filter the file slices
+    //       and candidate files are obtained from these file slices.
+
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
+    lazy val (_, recordKeys) = recordLevelIndex.filterQueriesWithRecordKey(queryFilters)
     if (!isMetadataTableEnabled || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
-    } else if (recordLevelIndex.isIndexApplicable(queryFilters)) {
-      Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), queryFilters))
+    } else if (recordKeys.nonEmpty) {
+      Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
       Option.empty
@@ -359,12 +369,12 @@ case class HoodieFileIndex(spark: SparkSession,
             .toSet
 
         // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-        //       base-file: since it's bound to clustering, which could occur asynchronously
+        //       base-file or log file: since it's bound to clustering, which could occur asynchronously
         //       at arbitrary point in time, and is not likely to be touching all of the base files.
         //
         //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-        //       files and all outstanding base-files, and make sure that all base files not
-        //       represented w/in the index are included in the output of this method
+        //       files and all outstanding base-files or log files, and make sure that all base files and
+        //       log file not represented w/in the index are included in the output of this method
         val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
         Some(prunedCandidateFileNames ++ notIndexedFileNames)
@@ -397,10 +407,15 @@ case class HoodieFileIndex(spark: SparkSession,
 
   private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
 
+  private def isRecordIndexEnabled: Boolean = recordLevelIndex.isIndexAvailable
+
+  private def isIndexEnabled: Boolean = isColumnStatsIndexEnabled || isRecordIndexEnabled
+
   private def validateConfig(): Unit = {
-    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
-      logWarning("Data skipping requires both Metadata Table and Column Stats Index to be enabled as well! " +
-        s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
+    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
+      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index or Record Level Index" +
+        " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
+        + s", isRecordIndexApplicable = $isRecordIndexEnabled)")
     }
   }
 
