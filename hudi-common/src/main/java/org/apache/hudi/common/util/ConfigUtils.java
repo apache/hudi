@@ -194,6 +194,19 @@ public class ConfigUtils {
     return true;
   }
 
+  public static boolean containsConfigProperty(Map<String, Object> props,
+                                               ConfigProperty<?> configProperty) {
+    if (!props.containsKey(configProperty.key())) {
+      for (String alternative : configProperty.getAlternatives()) {
+        if (props.containsKey(alternative)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
@@ -260,15 +273,16 @@ public class ConfigUtils {
   public static String getStringWithAltKeys(Map<String, Object> props,
                                             ConfigProperty<String> configProperty) {
     Object value = props.get(configProperty.key());
-    if (value == null) {
-      for (String alternative : configProperty.getAlternatives()) {
-        value = props.get(alternative);
-        if (value != null) {
-          LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                  + "and may be removed in the future. Please use the new key '%s' instead.",
-              alternative, configProperty.key()));
-          return value.toString();
-        }
+    if (value != null) {
+      return value.toString();
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      value = props.get(alternative);
+      if (value != null) {
+        LOG.warn(String.format("The configuration key '%s' has been deprecated "
+                + "and may be removed in the future. Please use the new key '%s' instead.",
+            alternative, configProperty.key()));
+        return value.toString();
       }
     }
     return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;

@@ -68,6 +68,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
@@ -968,9 +969,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
-        String value = getStringWithAltKeys(props, configProperty);
-        if (value != null) {
-          this.others.put(configProperty.key(), value);
+        if (containsConfigProperty(props, configProperty)) {
+          String value = getStringWithAltKeys(props, configProperty);
+          if (value != null) {
+            this.others.put(configProperty.key(), value);
+          }
         }
       }
       return this;
