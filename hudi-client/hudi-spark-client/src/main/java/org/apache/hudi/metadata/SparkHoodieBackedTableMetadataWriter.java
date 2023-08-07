@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -47,7 +46,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
+public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
   private transient BaseHoodieWriteClient writeClient;

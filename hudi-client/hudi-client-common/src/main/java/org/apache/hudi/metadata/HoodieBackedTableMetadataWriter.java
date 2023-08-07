@@ -123,7 +123,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
  * @param <I> Type of input for the write client
  * @param <O> Type of output for the write client
  */
-public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTableMetadataWriter {
+public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
@@ -1076,7 +1076,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     I preppedRecordInputs = convertRecordsToWriteClientInput(preppedRecords);
 
-    try (BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient()) {
+    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
       // rollback partially failed writes if any.
       if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
         metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
@@ -1110,13 +1110,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (manuallyTransitionCommit) {
         metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
       }
-      O statuses;
       if (isInitializing) {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        statuses = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+        writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
       } else {
         engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        statuses = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+        writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
       }
 
       metadataMetaClient.reloadActiveTimeline();
@@ -1494,7 +1493,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return initialized;
   }
 
-  protected abstract BaseHoodieWriteClient<?, I, ?, O> getWriteClient();
+  protected abstract BaseHoodieWriteClient<?, I, ?, ?> getWriteClient();
 
   /**
    * A class which represents a directory and the files and directories inside it.

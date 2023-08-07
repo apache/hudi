@@ -2721,7 +2721,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     });
 
-    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> metadataWriter = metadataWriter(client);
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>> metadataWriter = metadataWriter(client);
     assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
 
     // Validate write config for metadata table
@@ -2821,7 +2821,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     return allfiles;
   }
 
-  private HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> metadataWriter(HoodieJavaWriteClient client) {
+  private HoodieBackedTableMetadataWriter<List<HoodieRecord>> metadataWriter(HoodieJavaWriteClient client) {
     return metadataWriter(client.getConfig());
   }
 

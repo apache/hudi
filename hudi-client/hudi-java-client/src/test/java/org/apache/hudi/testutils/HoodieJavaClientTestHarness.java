@@ -21,7 +21,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineProperty;
@@ -313,7 +312,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       }
     });
     if (doFullValidation) {
-      runFullValidation(table.getConfig().getMetadataConfig(), writeConfig, metadataTableBasePath, engineContext);
+      runFullValidation(writeConfig, metadataTableBasePath, engineContext);
     }
 
     LOG.info("Validation time=" + timer.endTimer());
@@ -369,8 +368,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
         .create(hadoopConf, clientConfig, new HoodieJavaEngineContext(hadoopConf), Option.empty());
   }
 
-  private void runFullValidation(HoodieMetadataConfig metadataConfig,
-                                 HoodieWriteConfig writeConfig,
+  private void runFullValidation(HoodieWriteConfig writeConfig,
                                  String metadataTableBasePath,
                                  HoodieEngineContext engineContext) {
     HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(writeConfig);

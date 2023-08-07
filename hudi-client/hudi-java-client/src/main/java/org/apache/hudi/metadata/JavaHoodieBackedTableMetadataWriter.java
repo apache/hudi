@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -38,7 +37,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
+public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
   private transient BaseHoodieWriteClient writeClient;
 
   /**

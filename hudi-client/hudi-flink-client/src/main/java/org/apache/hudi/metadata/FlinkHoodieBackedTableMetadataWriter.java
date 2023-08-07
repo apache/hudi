@@ -50,7 +50,7 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 /**
  * Flink hoodie backed table metadata writer.
  */
-public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
+public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
   private transient BaseHoodieWriteClient writeClient;
 
