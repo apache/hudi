@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -43,8 +44,10 @@ import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -114,6 +117,16 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
+  }
+
+  @BeforeEach
+  protected void initResources() {
+    basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toUri().getPath();
+    hadoopConf = new Configuration();
+    taskContextSupplier = new TestJavaTaskContextSupplier();
+    context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
+    initFileSystem(basePath, hadoopConf);
+    initTestDataGenerator();
   }
 
   @AfterEach
