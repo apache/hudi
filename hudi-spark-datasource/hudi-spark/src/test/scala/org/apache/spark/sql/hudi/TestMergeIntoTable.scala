@@ -120,6 +120,50 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
+  test("Test MergeInto Non-Partitioned With Join on Extra Column") {
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = false")
+        val tableName = generateTableName
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 11, 1000)")
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+        // merge into
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts
+             | ) s0
+             | on t0.id = s0.id and t0.name = s0.name
+             | when matched then update set *
+             | WHEN NOT MATCHED THEN INSERT *
+           """.stripMargin)
+        // The record of "name = 'a2'" will be filter
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1" , 12.0, 1003),
+          Seq(2, "a2" , 11.0, 1000)
+        )
+      })
+    }
+  }
+
   /**
    * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
    * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`

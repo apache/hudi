@@ -178,11 +178,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       resolving
     }).filter(_.nonEmpty).map(_.get)
 
-    if (expressionSet.nonEmpty && primaryKeyFields.isPresent) {
-      //if pkless additional expressions are allowed
-      throw new AnalysisException(s"Only simple conditions of the form `t.id = s.id` using primary key or partition path columns are allowed on tables with primary key. " +
-        s"(illegal column(s) used: `${expressionSet.map(x => x._1.name).mkString("`,`")}`")
-    }
     resolvedCols
   }
 
