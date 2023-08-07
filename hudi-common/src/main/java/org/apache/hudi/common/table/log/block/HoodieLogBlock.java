@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -240,6 +241,8 @@ public abstract class HoodieLogBlock {
       while (metadataCount > 0) {
         int metadataEntryIndex = dis.readInt();
         int metadataEntrySize = dis.readInt();
+        ValidationUtils.checkArgument(metadataEntryIndex >= 0 && metadataEntryIndex < HeaderMetadataType.values().length,
+            "MetadataEntry index is invalid " + metadataEntryIndex);
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
         metadata.put(HeaderMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
@@ -255,7 +258,7 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
+  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, long contentLength, boolean readLazily)
       throws IOException {
     if (readLazily) {
       // Seek to the end of the content block
@@ -265,8 +268,9 @@ public abstract class HoodieLogBlock {
 
     // TODO re-use buffer if stream is backed by buffer
     // Read the contents in memory
-    byte[] content = new byte[contentLength];
-    inputStream.readFully(content, 0, contentLength);
+    ValidationUtils.checkArgument(contentLength <= Integer.MAX_VALUE, String.format("Content length %d exceeds maximum value of %d", contentLength, Integer.MAX_VALUE));
+    byte[] content = new byte[(int)contentLength];
+    inputStream.readFully(content, 0, (int)contentLength);
     return Option.of(content);
   }
 
