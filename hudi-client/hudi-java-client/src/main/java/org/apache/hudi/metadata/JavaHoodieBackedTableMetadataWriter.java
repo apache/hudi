@@ -39,7 +39,6 @@ import java.util.Map;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
 public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
-  private transient BaseHoodieWriteClient writeClient;
 
   /**
    * Hudi backed table metadata writer.
@@ -88,7 +87,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected List<HoodieRecord> convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records) {
+  protected List<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return records.collectAsList();
   }
 
@@ -98,11 +97,8 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected BaseHoodieWriteClient getWriteClient() {
-    if (writeClient == null) {
-      writeClient = new HoodieJavaWriteClient(engineContext, metadataWriteConfig);
-    }
-    return writeClient;
+  protected BaseHoodieWriteClient<?, List<HoodieRecord>, ?, ?> initializeWriteClient() {
+    return new HoodieJavaWriteClient(engineContext, metadataWriteConfig);
   }
 
   @Override

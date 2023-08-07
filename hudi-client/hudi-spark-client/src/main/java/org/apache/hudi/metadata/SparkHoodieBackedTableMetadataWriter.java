@@ -49,7 +49,6 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
-  private transient BaseHoodieWriteClient writeClient;
 
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
@@ -118,7 +117,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records) {
+  protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
   }
 
@@ -135,19 +134,14 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
 
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
-      String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
-      writeClient.startCommitWithTime(instantTime, actionType);
-      writeClient.deletePartitions(partitionsToDrop, instantTime);
-    }
-    closeInternal();
+    SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
+    String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
+    writeClient.startCommitWithTime(instantTime, actionType);
+    writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 
   @Override
-  public BaseHoodieWriteClient getWriteClient() {
-    if (writeClient == null) {
-      writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
-    }
-    return writeClient;
+  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
   }
 }

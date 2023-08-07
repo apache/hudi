@@ -136,6 +136,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
   private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
+  private transient BaseHoodieWriteClient<?, I, ?, ?> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
@@ -957,9 +958,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
-    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
-      writeClient.restoreToInstant(restoreToInstantTime, false);
-    }
+    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    writeClient.restoreToInstant(restoreToInstantTime, false);
 
     // At this point we have also reverted the cleans which have occurred after the restoreToInstantTime. Hence, a sync
     // is required to bring back those cleans.
@@ -1017,10 +1017,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
-        try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
-          if (!writeClient.rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
-            throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
-          }
+        if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
         }
       } else {
         LOG.info(String.format("Ignoring rollback of instant %s at %s. The commit to rollback is not found in MDT",
@@ -1051,6 +1049,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (metadata != null) {
       metadata.close();
     }
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
   }
 
   /**
@@ -1066,56 +1068,55 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param records records to be converted
    * @return converted records
    */
-  protected abstract I convertHoodieDataToEngineSpecificInput(HoodieData<HoodieRecord> records);
+  protected abstract I convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records);
 
   protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
-    I preppedRecordInputs = convertHoodieDataToEngineSpecificInput(preppedRecords);
+    I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
-    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
-      // rollback partially failed writes if any.
-      if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
-        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    // rollback partially failed writes if any.
+    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
+      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+    }
+
+    if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
+      // if this is a new commit being applied to metadata for the first time
+      LOG.info("New commit at " + instantTime + " being applied to MDT.");
+    } else {
+      // this code path refers to a re-attempted commit that:
+      //   1. got committed to metadata table, but failed in datatable.
+      //   2. failed while committing to metadata table
+      // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+      // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+      // are upserts to metadata table and so only a new delta commit will be created.
+      // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
+      // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
+      Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+          .lastInstant();
+      LOG.info(String.format("%s completed commit at %s being applied to MDT.",
+          alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
+
+      // Rollback the previous commit
+      if (!writeClient.rollback(instantTime)) {
+        throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
       }
-
-      if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
-        // if this is a new commit being applied to metadata for the first time
-        LOG.info("New commit at " + instantTime + " being applied to MDT.");
-      } else {
-        // this code path refers to a re-attempted commit that:
-        //   1. got committed to metadata table, but failed in datatable.
-        //   2. failed while committing to metadata table
-        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-        // are upserts to metadata table and so only a new delta commit will be created.
-        // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
-        // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
-        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
-            .lastInstant();
-        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
-            alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
-
-        // Rollback the previous commit
-        if (!writeClient.rollback(instantTime)) {
-          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
-        }
-        metadataMetaClient.reloadActiveTimeline();
-      }
-
-      writeClient.startCommitWithTime(instantTime);
-      preWrite(instantTime);
-      if (isInitializing) {
-        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
-      } else {
-        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
-      }
-
       metadataMetaClient.reloadActiveTimeline();
     }
+
+    writeClient.startCommitWithTime(instantTime);
+    preWrite(instantTime);
+    if (isInitializing) {
+      engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+      writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+    } else {
+      engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    }
+
+    metadataMetaClient.reloadActiveTimeline();
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
@@ -1198,7 +1199,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void performTableServices(Option<String> inFlightInstantTimestamp) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
-    try (BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient()) {
+    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    try {
       // Run any pending table services operations.
       runPendingTableServicesOperations(writeClient);
 
@@ -1496,7 +1498,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return initialized;
   }
 
-  protected abstract BaseHoodieWriteClient<?, I, ?, ?> getWriteClient();
+  protected BaseHoodieWriteClient<?, I, ?, ?> getWriteClient() {
+    if (writeClient == null) {
+      writeClient = initializeWriteClient();
+    }
+    return writeClient;
+  }
+
+  protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
 
   /**
    * A class which represents a directory and the files and directories inside it.
