@@ -496,7 +496,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         preCommit(metadata);
       }
       // Update table's metadata (table)
-      updateTableMetadata(table, metadata, clusteringInstant, writeStatuses.orElse(context.emptyHoodieData()));
+      writeTableMetadata(table, clusteringInstant.getTimestamp(), clusteringInstant.getAction(), metadata, writeStatuses.orElse(context.emptyHoodieData()));
 
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
 
@@ -1166,15 +1166,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     asyncCleanerService = null;
     // Stop timeline-server if running
     super.close();
-  }
-
-  protected void updateTableMetadata(HoodieTable table, HoodieCommitMetadata commitMetadata,
-                                   HoodieInstant hoodieInstant,
-                                   HoodieData<WriteStatus> writeStatuses) {
-    // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-    // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-    table.getMetadataWriter(hoodieInstant.getTimestamp())
-        .ifPresent(writer -> ((HoodieTableMetadataWriter) writer).update(commitMetadata, writeStatuses, hoodieInstant.getTimestamp()));
   }
 
   protected void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
