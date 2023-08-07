@@ -98,15 +98,6 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void postInternalCommit(String instantTime, List<WriteStatus> statuses) {
-    // java client does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
-    //writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
-
-    // reload timeline
-    metadataMetaClient.reloadActiveTimeline();
-  }
-
-  @Override
   protected BaseHoodieWriteClient getWriteClient() {
     if (writeClient == null) {
       writeClient = new HoodieJavaWriteClient(engineContext, metadataWriteConfig);

@@ -1076,8 +1076,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     I preppedRecordInputs = convertRecordsToWriteClientInput(preppedRecords);
 
-    //  Flink engine does not optimize initialCommit to MDT as bulk insert is not yet supported
-
     try (BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient()) {
       // rollback partially failed writes if any.
       if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
@@ -1121,15 +1119,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         statuses = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
       }
 
-      postInternalCommit(instantTime, statuses);
+      metadataMetaClient.reloadActiveTimeline();
     }
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
-  }
-
-  protected void postInternalCommit(String instantTime, O statuses) {
-    metadataMetaClient.reloadActiveTimeline();
   }
 
   /**
