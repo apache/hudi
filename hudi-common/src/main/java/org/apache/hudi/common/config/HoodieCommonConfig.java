@@ -85,7 +85,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
   public static final ConfigProperty<String> INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT = ConfigProperty
-      .key("hoodie.datasource.read.handle.hollow.commit")
+      .key("hoodie.read.timeline.holes.resolution.policy")
       .defaultValue(HollowCommitHandling.FAIL.name())
       .sinceVersion("0.14.0")
       .markAdvanced()
