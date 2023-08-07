@@ -21,7 +21,6 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -46,8 +45,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -62,9 +59,6 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
 public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBase.class);
-
   protected static HoodieTestTable testTable;
   protected String metadataTableBasePath;
   protected HoodieTableType tableType;
@@ -135,11 +129,6 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     validateMetadata(testTable);
   }
 
-  protected void doWriteOperationAndValidateMetadata(HoodieTestTable testTable, String commitTime) throws Exception {
-    doWriteOperation(testTable, commitTime);
-    validateMetadata(testTable);
-  }
-
   protected void doWriteOperation(HoodieTestTable testTable, String commitTime) throws Exception {
     doWriteOperation(testTable, commitTime, UPSERT);
   }
@@ -169,10 +158,6 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
   }
 
-  protected HoodieCommitMetadata doWriteOperationWithMeta(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
-    return testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
-  }
-
   protected void doClean(HoodieTestTable testTable, String commitTime, List<String> commitsToClean) throws IOException {
     doCleanInternal(testTable, commitTime, commitsToClean, false);
   }
@@ -188,20 +173,12 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     }
   }
 
-  protected void doCompactionNonPartitioned(HoodieTestTable testTable, String commitTime) throws Exception {
-    doCompactionInternal(testTable, commitTime, false, true);
-  }
-
   protected void doCompaction(HoodieTestTable testTable, String commitTime, boolean nonPartitioned) throws Exception {
     doCompactionInternal(testTable, commitTime, false, nonPartitioned);
   }
 
   protected void doCompaction(HoodieTestTable testTable, String commitTime) throws Exception {
     doCompactionInternal(testTable, commitTime, false, false);
-  }
-
-  protected void doCompactionNonPartitionedAndValidate(HoodieTestTable testTable, String commitTime) throws Exception {
-    doCompactionInternal(testTable, commitTime, true, true);
   }
 
   protected void doCompactionAndValidate(HoodieTestTable testTable, String commitTime) throws Exception {
@@ -245,10 +222,6 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
     }
   }
 
-  protected void doPreBootstrapWriteOperation(HoodieTestTable testTable, String commitTime) throws Exception {
-    doPreBootstrapWriteOperation(testTable, UPSERT, commitTime);
-  }
-
   protected void doPreBootstrapWriteOperation(HoodieTestTable testTable, WriteOperationType writeOperationType, String commitTime) throws Exception {
     doPreBootstrapWriteOperation(testTable, writeOperationType, commitTime, 2);
   }
@@ -256,30 +229,6 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   protected void doPreBootstrapWriteOperation(HoodieTestTable testTable, WriteOperationType writeOperationType, String commitTime, int filesPerPartition) throws Exception {
     testTable.doWriteOperation(commitTime, writeOperationType, asList("p1", "p2"), asList("p1", "p2"),
         filesPerPartition, true);
-  }
-
-  protected void doPreBootstrapClean(HoodieTestTable testTable, String commitTime, List<String> commitsToClean) throws Exception {
-    testTable.doCleanBasedOnCommits(commitTime, commitsToClean);
-  }
-
-  protected void doPreBootstrapRollback(HoodieTestTable testTable, String rollbackTime, String commitToRollback) throws Exception {
-    testTable.doRollback(commitToRollback, rollbackTime);
-  }
-
-  protected void doPrebootstrapCompaction(HoodieTestTable testTable, String commitTime) throws Exception {
-    doPrebootstrapCompaction(testTable, commitTime, Arrays.asList("p1", "p2"));
-  }
-
-  protected void doPrebootstrapCompaction(HoodieTestTable testTable, String commitTime, List<String> partitions) throws Exception {
-    testTable.doCompaction(commitTime, partitions);
-  }
-
-  protected void doPreBootstrapCluster(HoodieTestTable testTable, String commitTime) throws Exception {
-    testTable.doCluster(commitTime, new HashMap<>(), Arrays.asList("p1", "p2"), 2);
-  }
-
-  protected void doPreBootstrapRestore(HoodieTestTable testTable, String restoreTime, String commitToRestore) throws Exception {
-    testTable.doRestore(commitToRestore, restoreTime);
   }
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {

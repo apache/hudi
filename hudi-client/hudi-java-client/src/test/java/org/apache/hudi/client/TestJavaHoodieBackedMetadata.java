@@ -1573,7 +1573,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = "20210101000500000";
-        client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
+        boolean tmp = client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
         validateMetadata(client);
       }
