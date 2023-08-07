@@ -102,7 +102,9 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
         // if records are sorted, we can close all existing handles
         close();
       }
-      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, String.valueOf(fileId.getLeft()), getNextBucketFileId(bucketId),
+      String partitionPath = String.valueOf(fileId.getLeft());
+      LOG.info("Creating new file for partition path " + partitionPath);
+      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }
