@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.INIT_INSTANT_TS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -95,7 +96,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         "s3.object.key", "s3.object.size");
     Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         emptyDataset, 50L, queryInfo, new CloudObjectIncrCheckpoint(null, null));
-    assertEquals("000", result.getKey().toString());
+    assertEquals(INIT_INSTANT_TS, result.getKey().toString());
     assertEquals(emptyDataset, result.getRight());
   }
 
