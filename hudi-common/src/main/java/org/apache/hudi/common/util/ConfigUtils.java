@@ -274,6 +274,18 @@ public class ConfigUtils {
     return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
   }
 
+  public static String getStringWithAltKeys(TypedProperties props,
+                                            String key, String altKey,
+                                            String defaultValue) {
+    if (props.containsKey(altKey)) {
+      return props.getString(altKey);
+    }
+    if (props.containsKey(key)) {
+      return props.getString(key);
+    }
+    return defaultValue;
+  }
+
   public static boolean getBooleanWithAltKeys(TypedProperties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);

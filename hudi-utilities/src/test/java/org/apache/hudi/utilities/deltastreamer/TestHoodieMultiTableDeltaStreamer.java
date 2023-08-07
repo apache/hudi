@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -135,13 +136,19 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getTableExecutionContexts().size());
     assertEquals(basePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
-    assertEquals("topic1", executionContext.getProperties().getString(HoodieStreamerConfig.KAFKA_TOPIC.key()));
-    assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
-    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
-    assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key()));
-    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+    assertEquals("topic1",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieStreamerConfig.KAFKA_TOPIC));
+    assertEquals("_row_key",
+        getStringWithAltKeys(executionContext.getProperties(), DataSourceWriteOptions.RECORDKEY_FIELD()));
+    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(),
+        getStringWithAltKeys(executionContext.getProperties(), DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME()));
+    assertEquals("uber_hive_dummy_table",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieSyncConfig.META_SYNC_TABLE_NAME));
+    assertEquals("http://localhost:8081/subjects/random-value/versions/latest",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
     assertEquals("http://localhost:8081/subjects/topic2-value/versions/latest",
-        streamer.getTableExecutionContexts().get(0).getProperties().getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+        getStringWithAltKeys(streamer.getTableExecutionContexts().get(0).getProperties(),
+            HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
   }
 
   @Test

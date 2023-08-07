@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -40,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
@@ -87,11 +89,14 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testSqlFileBasedTransformerIllegalArguments() {
+  public void testSqlFileBasedTransformerWithoutRequiredConfig() {
     // Test if the class throws illegal argument exception when argument not present.
-    assertThrows(
-        IllegalArgumentException.class,
+    HoodieTransformException exception = assertThrows(
+        HoodieTransformException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
+    assertEquals(
+        "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")",
+        exception.getMessage());
   }
 
   @Test

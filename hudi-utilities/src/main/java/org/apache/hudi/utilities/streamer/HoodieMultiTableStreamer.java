@@ -127,10 +127,8 @@ public class HoodieMultiTableStreamer {
       String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
       String configProp = HoodieStreamerConfig.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
       String oldConfigProp = HoodieStreamerConfig.OLD_INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
-      String configFilePath = properties.getString(configProp);
-      if (StringUtils.isNullOrEmpty(configFilePath)) {
-        configFilePath = properties.getString(oldConfigProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
-      }
+      String configFilePath = getStringWithAltKeys(properties, configProp, oldConfigProp,
+          Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
       TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<>()).getProps();
       properties.forEach((k, v) -> {

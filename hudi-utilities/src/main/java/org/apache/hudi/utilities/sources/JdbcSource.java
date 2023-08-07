@@ -115,7 +115,7 @@ public class JdbcSource extends RowSource {
 
       addExtraJdbcOptions(properties, dataFrameReader);
 
-      if (containsConfigProperty(properties, JdbcSourceConfig.IS_INCREMENTAL)) {
+      if (getBooleanWithAltKeys(properties, JdbcSourceConfig.IS_INCREMENTAL)) {
         checkRequiredConfigProperties(properties, Collections.singletonList(JdbcSourceConfig.INCREMENTAL_COLUMN));
       }
       return dataFrameReader;
