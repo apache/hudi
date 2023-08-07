@@ -18,9 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
@@ -42,10 +40,10 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Test the if {@link HoodieFileStatus} is serializable
+ * Test the if {@link HoodieSerializableFileStatus} is serializable
  */
 @TestInstance(Lifecycle.PER_CLASS)
-public class TestHoodieFileStatusSerialization extends HoodieClientTestHarness {
+public class TestHoodieSerializableFileStatus extends HoodieClientTestHarness {
 
   HoodieEngineContext engineContext;
   List<Path> testPaths;
@@ -80,9 +78,9 @@ public class TestHoodieFileStatusSerialization extends HoodieClientTestHarness {
 
   @Test
   public void testHoodieFileStatusSerialization() {
-    List<HoodieFileStatus> statuses = engineContext.flatMap(testPaths, path -> {
+    List<HoodieSerializableFileStatus> statuses = engineContext.flatMap(testPaths, path -> {
       FileSystem fileSystem = new NonSerializableFileSystem();
-      return Arrays.stream(FileStatusUtils.fromFileStatuses(fileSystem.listStatus(path)));
+      return Arrays.stream(HoodieSerializableFileStatus.fromFileStatuses(fileSystem.listStatus(path)));
     }, 5);
   }
 }
