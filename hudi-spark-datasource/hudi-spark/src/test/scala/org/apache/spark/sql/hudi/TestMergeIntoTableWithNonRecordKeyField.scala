@@ -106,37 +106,52 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |when not matched then insert *
              |""".stripMargin)(errorMessage)
 
-        //test with multiple pks
-        val tableName3 = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName3 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName3'
-             | tblproperties (
-             |  primaryKey ='id,name',
-             |  preCombineField = 'ts'
-             | )
+        if (sparkSqlOptimizedWrites) {
+          //test with multiple pks
+          val tableName3 = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName3 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName3'
+               | tblproperties (
+               |  primaryKey ='id,name',
+               |  preCombineField = 'ts'
+               | )
        """.stripMargin)
 
-        val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_1) {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
-        } else {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
-        }
+          spark.sql(
+            s"""
+               |insert into $tableName3 values
+               |    (1, 'a1', 10, 100),
+               |    (2, 'a2', 20, 200),
+               |    (3, 'a3', 20, 100)
+               |""".stripMargin)
 
-        checkException(
-          s"""
-             |merge into $tableName3 as oldData
-             |using $tableName2
-             |on oldData.id = $tableName2.id
-             |when matched then update set oldData.name = $tableName2.name
-             |when not matched then insert *
-             |""".stripMargin)(errorMessage2)
+          spark.sql(
+            s"""
+               | merge into $tableName3 as t0
+               | using (
+               |  select * from $tableName2
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set id = t0.id, name = t0.name,
+               |  price = t0.price, ts = s0.ts
+               | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
+           """.stripMargin
+          )
+
+          checkAnswer(s"select id, name, price, ts from $tableName3")(
+            Seq(1, "a1", 10.0, 999),
+            Seq(2, "a2", 20.0, 200),
+            Seq(3, "a3", 20.0, 9999),
+            Seq(4, "u4", 40.0, 99999)
+          )
+        }
       }
     }
   }
