@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceReadOptions;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
@@ -36,6 +35,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
  * This class will fetch comitted files from the current commit to support size based batching.
@@ -48,8 +50,8 @@ public class QueryRunner {
 
   public QueryRunner(SparkSession sparkSession, TypedProperties props) {
     this.sparkSession = sparkSession;
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key()));
-    this.sourcePath = props.getString(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key());
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
+    this.sourcePath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
   }
 
   public Dataset<Row> run(QueryInfo queryInfo) {
