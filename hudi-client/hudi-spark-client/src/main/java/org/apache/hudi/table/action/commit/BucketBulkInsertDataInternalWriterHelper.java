@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Helper class for native row writer for bulk_insert with bucket index.
@@ -69,8 +70,10 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
       int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, bucketNum);
-      Pair<UTF8String, Integer> fileId = Pair.of(partitionPath, bucketId);
-      if (lastFileId == null || !lastFileId.equals(fileId)) {
+      if (lastFileId == null || !Objects.equals(lastFileId.getKey(), partitionPath) || !Objects.equals(lastFileId.getValue(), bucketId)) {
+        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
+        //       a mutable underlying buffer
+        Pair<UTF8String, Integer> fileId = Pair.of(partitionPath.clone(), bucketId);
         handle = getBucketRowCreateHandle(fileId, bucketId);
         lastFileId = fileId;
       }
