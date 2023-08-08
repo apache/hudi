@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -45,7 +46,7 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLL
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.calculateBeginAndEndInstants;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
 public class HoodieIncrSource extends RowSource {
@@ -58,7 +59,7 @@ public class HoodieIncrSource extends RowSource {
      * {@link #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.
      */
     @Deprecated
-    static final String HOODIE_SRC_BASE_PATH = HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key();
+    public static final String HOODIE_SRC_BASE_PATH = HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key();
 
     /**
      * {@link #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched.
@@ -154,21 +155,23 @@ public class HoodieIncrSource extends RowSource {
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
-    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = calculateBeginAndEndInstants(sparkContext, srcPath,
-        numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode);
+    QueryInfo queryInfo = generateQueryInfo(sparkContext, srcPath,
+        numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode,
+        HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        null, false, Option.empty());
 
-    if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
-      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getValue().getKey());
+    if (queryInfo.areStartAndEndInstantsEqual()) {
+      LOG.info("Already caught up. No new data to process");
+      return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
 
     Dataset<Row> source;
     // Do Incr pull. Set end instant if available
-    if (queryTypeAndInstantEndpts.getKey().equals(QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+    if (queryInfo.isIncremental()) {
       source = sparkSession.read().format("org.apache.hudi")
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getLeft())
-          .option(END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getRight())
+          .option(BEGIN_INSTANTTIME().key(), queryInfo.getStartInstant())
+          .option(END_INSTANTTIME().key(), queryInfo.getEndInstant())
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()))
@@ -181,9 +184,9 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath)
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getLeft()))
+              queryInfo.getStartInstant()))
           .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryTypeAndInstantEndpts.getRight().getRight()));
+              queryInfo.getEndInstant()));
     }
 
     HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
@@ -199,6 +202,6 @@ public class HoodieIncrSource extends RowSource {
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
     final Dataset<Row> src = source.drop(colsToDrop);
-    return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
+    return Pair.of(Option.of(src), queryInfo.getEndInstant());
   }
 }
