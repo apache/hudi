@@ -51,8 +51,8 @@ public class TestOptionsInference {
       try (ClientIds clientIds = ClientIds.builder().conf(conf).build()) {
         OptionsInference.setupClientId(conf);
         String expectedId = i == 0 ? ClientIds.INIT_CLIENT_ID : i + "";
-        assertThat("The client id should auto inc to " + expectedId,
-            conf.getString(FlinkOptions.WRITE_CLIENT_ID), is(expectedId));
+        assertThat("The client id should be a random uuid",
+            ClientIds.INIT_CLIENT_ID.equals(conf.getString(FlinkOptions.WRITE_CLIENT_ID)), is(i == 0));
       }
     }
 
@@ -62,10 +62,10 @@ public class TestOptionsInference {
     try (ClientIds clientIds = ClientIds.builder()
         .conf(conf)
         .heartbeatIntervalInMs(10) // max 10 milliseconds tolerable heartbeat timeout
-        .numTolerableHeartbeatMisses(1). build()) {
+        .numTolerableHeartbeatMisses(1).build()) {
       String nextId = clientIds.nextId(conf);
       assertThat("The inactive client id should be reused",
-          nextId, is(""));
+          nextId, is(ClientIds.INIT_CLIENT_ID));
     }
   }
 
