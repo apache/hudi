@@ -20,7 +20,7 @@ const JoinCommunity = () => {
       icon: SlackIcon,
       title: "Slack",
       linkText: "Join community",
-      url: "https://apache-hudi.slack.com/join/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w",
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg",
     },
     {
       icon: TwitterIcon,
