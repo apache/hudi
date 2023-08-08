@@ -26,10 +26,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
@@ -44,6 +43,10 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
@@ -67,38 +70,38 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
  absolute_path_to/mysql-connector-java-8.0.30.jar
 
  This class can be invoked via spark-submit as follows. There's a bunch of optional hive sync flags at the end.
-  $ bin/spark-submit \
-  --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
-  --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
-  --driver-memory 4g \
-  --executor-memory 4g \
+ $ bin/spark-submit \
+ --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
+ --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
+ --driver-memory 4g \
+ --executor-memory 4g \
  --class org.apache.hudi.utilities.streamer.HoodieStreamer \
  absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
-  --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
-  --op INSERT \
-  --hoodie-conf hoodie.deltastreamer.source.hoodieincr.file.format="parquet" \
-  --hoodie-conf hoodie.deltastreamer.source.cloud.data.select.file.extension="jsonl" \
-  --hoodie-conf hoodie.deltastreamer.source.cloud.data.datafile.format="json" \
-  --hoodie-conf hoodie.deltastreamer.source.cloud.data.select.relpath.prefix="country" \
-  --hoodie-conf hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix="blah" \
-  --hoodie-conf hoodie.deltastreamer.source.cloud.data.ignore.relpath.substring="blah" \
-  --hoodie-conf hoodie.datasource.write.recordkey.field=id \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field= \
-  --filter-dupes \
-  --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
-  --hoodie-conf hoodie.combine.before.insert=true \
-  --source-ordering-field id \
-  --table-type COPY_ON_WRITE \
-  --target-base-path file:\/\/\/absolute_path_to/data-gcs \
-  --target-table gcs_data \
-  --continuous \
-  --source-limit 100 \
-  --min-sync-interval-seconds 60 \
-  --hoodie-conf hoodie.deltastreamer.source.hoodieincr.path=file:\/\/\/absolute_path_to/meta-gcs \
-  --hoodie-conf hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT \
-  --enable-hive-sync \
-  --hoodie-conf hoodie.datasource.hive_sync.database=default \
-  --hoodie-conf hoodie.datasource.hive_sync.table=gcs_data \
+ --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
+ --op INSERT \
+ --hoodie-conf hoodie.streamer.source.hoodieincr.file.format="parquet" \
+ --hoodie-conf hoodie.streamer.source.cloud.data.select.file.extension="jsonl" \
+ --hoodie-conf hoodie.streamer.source.cloud.data.datafile.format="json" \
+ --hoodie-conf hoodie.streamer.source.cloud.data.select.relpath.prefix="country" \
+ --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.prefix="blah" \
+ --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.substring="blah" \
+ --hoodie-conf hoodie.datasource.write.recordkey.field=id \
+ --hoodie-conf hoodie.datasource.write.partitionpath.field= \
+ --filter-dupes \
+ --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
+ --hoodie-conf hoodie.combine.before.insert=true \
+ --source-ordering-field id \
+ --table-type COPY_ON_WRITE \
+ --target-base-path file:\/\/\/absolute_path_to/data-gcs \
+ --target-table gcs_data \
+ --continuous \
+ --source-limit 100 \
+ --min-sync-interval-seconds 60 \
+ --hoodie-conf hoodie.streamer.source.hoodieincr.path=file:\/\/\/absolute_path_to/meta-gcs \
+ --hoodie-conf hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT \
+ --enable-hive-sync \
+ --hoodie-conf hoodie.datasource.hive_sync.database=default \
+ --hoodie-conf hoodie.datasource.hive_sync.table=gcs_data
  */
 public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
@@ -121,7 +124,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     this(props, jsc, spark, schemaProvider,
         new GcsObjectMetadataFetcher(props, getSourceFileFormat(props)),
-        new CloudDataFetcher(props, props.getString(DATAFILE_FORMAT.key(), DATAFILE_FORMAT.defaultValue())),
+        new CloudDataFetcher(props, getStringWithAltKeys(props, DATAFILE_FORMAT, true)),
         new QueryRunner(spark, props)
     );
   }
@@ -130,11 +133,11 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
                             SchemaProvider schemaProvider, GcsObjectMetadataFetcher gcsObjectMetadataFetcher, CloudDataFetcher gcsObjectDataFetcher, QueryRunner queryRunner) {
     super(props, jsc, spark, schemaProvider);
 
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH.key()));
-    srcPath = props.getString(HOODIE_SRC_BASE_PATH.key());
+    checkRequiredConfigProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH));
+    srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     missingCheckpointStrategy = getMissingCheckpointStrategy(props);
-    numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH.key(), NUM_INSTANTS_PER_FETCH.defaultValue());
-    checkIfFileExists = props.getBoolean(ENABLE_EXISTS_CHECK.key(), ENABLE_EXISTS_CHECK.defaultValue());
+    numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
+    checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
 
     this.gcsObjectMetadataFetcher = gcsObjectMetadataFetcher;
     this.gcsObjectDataFetcher = gcsObjectDataFetcher;
@@ -190,7 +193,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   private static String getSourceFileFormat(TypedProperties props) {
-    return props.getString(SOURCE_FILE_FORMAT.key(), SOURCE_FILE_FORMAT.defaultValue());
+    return getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true);
   }
 
 }

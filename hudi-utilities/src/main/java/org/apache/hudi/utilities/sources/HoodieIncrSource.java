@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceReadOptions;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
@@ -45,6 +44,11 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
@@ -129,7 +133,7 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
 
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key()));
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
 
     /*
      * DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH,
@@ -138,14 +142,15 @@ public class HoodieIncrSource extends RowSource {
      * extractor = DataSourceUtils.createPartitionExtractor(props.getString( Config.HOODIE_SRC_PARTITION_EXTRACTORCLASS,
      * Config.DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS));
      */
-    String srcPath = props.getString(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key());
-    int numInstantsPerFetch = props.getInteger(HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.key(),
-        HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.defaultValue());
-    boolean readLatestOnMissingCkpt = props.getBoolean(HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.key(),
-        HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
+    String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
+    int numInstantsPerFetch = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
+    boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(
+        props, HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT);
     IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy =
-        (props.containsKey(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key()))
-            ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY.key())) : null;
+        (containsConfigProperty(props, HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY))
+            ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(
+            getStringWithAltKeys(props, HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY))
+            : null;
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
@@ -191,8 +196,8 @@ public class HoodieIncrSource extends RowSource {
 
     HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
 
-    boolean shouldDropMetaFields = props.getBoolean(HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.key(),
-        HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue())
+    boolean shouldDropMetaFields = getBooleanWithAltKeys(
+        props, HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE)
         // NOTE: In case when Spark native [[RecordMerger]] is used, we have to make sure
         //       all meta-fields have been properly cleaned up from the incoming dataset
         //

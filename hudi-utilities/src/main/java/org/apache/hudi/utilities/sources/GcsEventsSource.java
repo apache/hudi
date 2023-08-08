@@ -44,6 +44,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
@@ -79,9 +82,9 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
 --hoodie-conf hoodie.combine.before.insert=true \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
---hoodie-conf hoodie.deltastreamer.source.gcs.project.id=infra-dev-358110 \
---hoodie-conf hoodie.deltastreamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \
---hoodie-conf hoodie.deltastreamer.source.cloud.meta.ack=true \
+--hoodie-conf hoodie.streamer.source.gcs.project.id=infra-dev-358110 \
+--hoodie-conf hoodie.streamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \
+--hoodie-conf hoodie.streamer.source.cloud.meta.ack=true \
 --table-type COPY_ON_WRITE \
 --target-base-path file:\/\/\/absolute_path_to/meta-gcs \
 --target-table gcs_meta \
@@ -112,8 +115,9 @@ public class GcsEventsSource extends RowSource {
     this(
             props, jsc, spark, schemaProvider,
             new PubsubMessagesFetcher(
-                    props.getString(GOOGLE_PROJECT_ID.key()), props.getString(PUBSUB_SUBSCRIPTION_ID.key()),
-                    props.getInteger(BATCH_SIZE_CONF.key(), BATCH_SIZE_CONF.defaultValue())
+                getStringWithAltKeys(props, GOOGLE_PROJECT_ID),
+                getStringWithAltKeys(props, PUBSUB_SUBSCRIPTION_ID),
+                getIntWithAltKeys(props, BATCH_SIZE_CONF)
             )
     );
   }
@@ -123,7 +127,7 @@ public class GcsEventsSource extends RowSource {
     super(props, jsc, spark, schemaProvider);
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
-    this.ackMessages = props.getBoolean(ACK_MESSAGES.key(), ACK_MESSAGES.defaultValue());
+    this.ackMessages = getBooleanWithAltKeys(props, ACK_MESSAGES);
     this.schemaProvider = schemaProvider;
 
     LOG.info("Created GcsEventsSource");

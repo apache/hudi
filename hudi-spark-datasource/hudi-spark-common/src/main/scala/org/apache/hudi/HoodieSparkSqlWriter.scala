@@ -42,10 +42,11 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
-import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
+import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.HoodieIndex
@@ -1146,7 +1147,8 @@ object HoodieSparkSqlWriter {
                                                                 params: Map[String, String]): Map[String, String] = {
     if (classOf[TimestampBasedKeyGenerator].getCanonicalName.equals(keyGenerator) ||
       classOf[TimestampBasedAvroKeyGenerator].getCanonicalName.equals(keyGenerator)) {
-      params.filterKeys(HoodieTableConfig.PERSISTED_CONFIG_LIST.contains)
+      val allKeys = getAllConfigKeys(HoodieTableConfig.PERSISTED_CONFIG_LIST)
+      params.filterKeys(allKeys.contains)
     } else {
       Map.empty
     }

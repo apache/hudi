@@ -34,6 +34,8 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
   // these are native kafka's config. do not change the config names.
@@ -77,7 +79,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.key(), KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+    if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }

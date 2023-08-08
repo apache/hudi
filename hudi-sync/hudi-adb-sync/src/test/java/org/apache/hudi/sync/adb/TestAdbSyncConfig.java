@@ -19,7 +19,7 @@
 
 package org.apache.hudi.sync.adb;
 
-import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 
 import org.junit.jupiter.api.Test;
 

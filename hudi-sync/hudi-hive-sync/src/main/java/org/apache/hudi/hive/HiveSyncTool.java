@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
@@ -30,7 +31,6 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;

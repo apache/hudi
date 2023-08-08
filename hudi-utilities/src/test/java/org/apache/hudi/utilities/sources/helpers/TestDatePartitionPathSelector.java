@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.CURRENT_DATE;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
@@ -202,7 +203,7 @@ public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness 
     TypedProperties props = getProps(basePath + "/" + tableName, dateFormat, datePartitionDepth, numPrevDaysToList, currentDate);
     DatePartitionPathSelector pathSelector = new DatePartitionPathSelector(props, jsc.hadoopConfiguration());
 
-    Path root = new Path(props.getString(ROOT_INPUT_PATH.key()));
+    Path root = new Path(getStringWithAltKeys(props, ROOT_INPUT_PATH));
     int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH.key()) - 1;
 
     // Create parent dir

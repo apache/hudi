@@ -18,10 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -29,6 +25,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -40,12 +38,18 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Scanner;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.EMIT_EPOCH_CHECKPOINT;
+import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.SOURCE_SQL_FILE;
+
 /**
  * File-based SQL Source that uses SQL queries in a file to read from any table.
  *
  * <p>SQL file path should be configured using this hoodie config:
  *
- * <p>hoodie.deltastreamer.source.sql.file = 'hdfs://xxx/source.sql'
+ * <p>hoodie.streamer.source.sql.file = 'hdfs://xxx/source.sql'
  *
  * <p>File-based SQL Source is used for one time backfill scenarios, this won't update the deltastreamer.checkpoint.key
  * to the processed commit, instead it will fetch the latest successful checkpoint key and set that value as
@@ -67,10 +71,9 @@ public class SqlFileBasedSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(
-        props, Collections.singletonList(SqlFileBasedSource.Config.SOURCE_SQL_FILE));
-    sourceSqlFile = props.getString(SqlFileBasedSource.Config.SOURCE_SQL_FILE);
-    shouldEmitCheckPoint = props.getBoolean(Config.EMIT_EPOCH_CHECKPOINT, false);
+    checkRequiredConfigProperties(props, Collections.singletonList(SOURCE_SQL_FILE));
+    sourceSqlFile = getStringWithAltKeys(props, SOURCE_SQL_FILE);
+    shouldEmitCheckPoint = getBooleanWithAltKeys(props, EMIT_EPOCH_CHECKPOINT);
   }
 
   @Override
@@ -93,13 +96,5 @@ public class SqlFileBasedSource extends RowSource {
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }
-  }
-
-  /**
-   * Configs supported.
-   */
-  public static class Config {
-    public static final String SOURCE_SQL_FILE = "hoodie.deltastreamer.source.sql.file";
-    public static final String EMIT_EPOCH_CHECKPOINT = "hoodie.deltastreamer.source.sql.checkpoint.emit";
   }
 }

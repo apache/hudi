@@ -50,7 +50,6 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -183,11 +182,6 @@ public class StreamerUtil {
       }
     }
     return new TypedProperties(properties);
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop ->
-        Preconditions.checkState(props.containsKey(prop), "Required property " + prop + " is missing"));
   }
 
   /**

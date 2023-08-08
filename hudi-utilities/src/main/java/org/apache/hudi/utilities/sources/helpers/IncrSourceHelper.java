@@ -44,6 +44,9 @@ import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.spark.sql.functions.col;
@@ -106,7 +109,7 @@ public class IncrSourceHelper {
                                             boolean sourceLimitBasedBatching,
                                             Option<String> lastCheckpointKey) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
-        "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
+        "Make sure the config hoodie.streamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
@@ -123,7 +126,7 @@ public class IncrSourceHelper {
         }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
-            + "committed instant set hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
+            + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
       }
     });
 
@@ -227,15 +230,14 @@ public class IncrSourceHelper {
    * @return
    */
   public static MissingCheckpointStrategy getMissingCheckpointStrategy(TypedProperties props) {
-    boolean readLatestOnMissingCkpt = props.getBoolean(
-        READ_LATEST_INSTANT_ON_MISSING_CKPT.key(), READ_LATEST_INSTANT_ON_MISSING_CKPT.defaultValue());
+    boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(props, READ_LATEST_INSTANT_ON_MISSING_CKPT);
 
     if (readLatestOnMissingCkpt) {
       return MissingCheckpointStrategy.READ_LATEST;
     }
 
-    if (props.containsKey(MISSING_CHECKPOINT_STRATEGY.key())) {
-      return MissingCheckpointStrategy.valueOf(props.getString(MISSING_CHECKPOINT_STRATEGY.key()));
+    if (containsConfigProperty(props, MISSING_CHECKPOINT_STRATEGY)) {
+      return MissingCheckpointStrategy.valueOf(getStringWithAltKeys(props, MISSING_CHECKPOINT_STRATEGY));
     }
 
     return null;

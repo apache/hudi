@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
@@ -26,7 +27,6 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
