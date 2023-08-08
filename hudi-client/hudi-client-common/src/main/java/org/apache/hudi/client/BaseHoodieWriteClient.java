@@ -30,6 +30,8 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.transaction.lock.LockManager;
+import org.apache.hudi.client.utils.LockUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -125,6 +127,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
+  private final LockManager lockManager;
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
 
@@ -163,6 +166,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+    this.lockManager = LockUtils.getFileSystemLockManager(writeConfig, fs);
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -826,7 +830,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().getTimestamp(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    final String restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    final String restoreInstantTimestamp = createNewInstantTime();
     return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
   }
 
@@ -867,7 +871,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   public HoodieCleanMetadata clean() {
-    return clean(HoodieActiveTimeline.createNewInstantTime());
+    return clean(createNewInstantTime());
   }
 
   /**
@@ -878,7 +882,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @Deprecated
   public HoodieCleanMetadata clean(boolean skipLocking) {
-    return clean(HoodieActiveTimeline.createNewInstantTime());
+    return clean(createNewInstantTime());
   }
 
   /**
@@ -915,9 +919,29 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
 
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     startCommit(instantTime, actionType, metaClient);
     return instantTime;
+  }
+
+  /**
+   * Creates a new instant time in the correct format.
+   * <p>
+   * Ensures each instant time is at least 1 millis second apart since we create instant times at second granularity.
+   *
+   * @return Instant time to be generated.
+   */
+  public String createNewInstantTime() {
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      try {
+        lockManager.lock();
+        return HoodieActiveTimeline.createNewInstantTime();
+      } finally {
+        lockManager.unlock();
+      }
+    } else {
+      return HoodieActiveTimeline.createNewInstantTime();
+    }
   }
 
   /**
@@ -978,7 +1002,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -998,7 +1022,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return instant time for the requested INDEX action
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf)
         .scheduleIndexing(context, instantTime, partitionTypes);
     return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
@@ -1021,7 +1045,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void dropIndex(List<MetadataPartitionType> partitionTypes) {
     HoodieTable table = createTable(config, hadoopConf);
-    String dropInstant = HoodieActiveTimeline.createNewInstantTime();
+    String dropInstant = createNewInstantTime();
     HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
@@ -1093,7 +1117,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     return scheduleLogCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -1175,7 +1199,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -1217,7 +1241,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return The given instant time option or empty if no table service plan is scheduled
    */
   public Option<String> scheduleTableService(Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     return scheduleTableService(instantTime, extraMetadata, tableServiceType);
   }
 
@@ -1539,7 +1563,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
     Schema schema = AvroInternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName()));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = createNewInstantTime();
     startCommitWithTime(instantTime, commitActionType, metaClient);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();

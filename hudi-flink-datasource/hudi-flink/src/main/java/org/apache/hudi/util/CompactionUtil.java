@@ -65,7 +65,7 @@ public class CompactionUtil {
       // if there are no new commits and the compaction trigger strategy is based on elapsed delta time,
       // schedules the compaction anyway.
       metaClient.reloadActiveTimeline();
-      Option<String> compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+      Option<String> compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient, writeClient);
       if (compactionInstantTime.isPresent()) {
         writeClient.scheduleCompactionAtInstant(compactionInstantTime.get(), Option.empty());
       }
@@ -75,7 +75,7 @@ public class CompactionUtil {
   /**
    * Gets compaction Instant time.
    */
-  public static Option<String> getCompactionInstantTime(HoodieTableMetaClient metaClient) {
+  public static Option<String> getCompactionInstantTime(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
     Option<HoodieInstant> firstPendingInstant = metaClient.getCommitsTimeline()
         .filterPendingExcludingCompaction().firstInstant();
     Option<HoodieInstant> lastCompleteInstant = metaClient.getActiveTimeline().getWriteTimeline()
@@ -89,7 +89,7 @@ public class CompactionUtil {
       LOG.info("No instants to schedule the compaction plan");
       return Option.empty();
     } else {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      return Option.of(writeClient.createNewInstantTime());
     }
   }
 
