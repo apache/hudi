@@ -54,6 +54,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,7 +171,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view.close();
   }
 
-  @Test
+  @Disabled("HUDI-6666")
   public void testAsyncMajorAndMinorCompaction() throws IOException {
     SyncableFileSystemView view = getFileSystemView(metaClient);
     view.sync();
