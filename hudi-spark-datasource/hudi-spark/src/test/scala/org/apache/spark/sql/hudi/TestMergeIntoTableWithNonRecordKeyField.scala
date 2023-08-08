@@ -89,22 +89,21 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
           Seq(2, "a2", 20.0, 200)
         )
 
-        val errorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
-          "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
-            "columns are allowed on tables with primary key. (illegal column(s) used: `price`"
-        } else {
-          "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
-            "columns are allowed on tables with primary key. (illegal column(s) used: `price`;"
-        }
-
-        checkException(
+        spark.sql(
           s"""
              |merge into $tableName as oldData
              |using $tableName2
              |on oldData.id = $tableName2.id and oldData.price = $tableName2.price
              |when matched then update set oldData.name = $tableName2.name
              |when not matched then insert *
-             |""".stripMargin)(errorMessage)
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "u1", 10.0, 100),
+          Seq(2, "a2", 20.0, 200),
+          Seq(3, "u3", 20.0, 100),
+          Seq(4, "u4", 40.0, 99999)
+        )
 
         //test with multiple pks
         val tableName3 = generateTableName
