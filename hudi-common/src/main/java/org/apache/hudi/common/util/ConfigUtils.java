@@ -328,35 +328,6 @@ public class ConfigUtils {
   }
 
   /**
-   * Gets the String value for a {@link ConfigProperty} config from Hadoop configuration. The key
-   * and alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
-   * config, if exists, is returned if the config is not found in the properties.
-   *
-   * @param conf           Configs in Hadoop {@link Configuration}.
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
-   * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
-   */
-  public static String getStringWithAltKeys(Configuration conf,
-                                            ConfigProperty<String> configProperty) {
-    String value = conf.get(configProperty.key());
-    if (!StringUtils.isNullOrEmpty(value)) {
-      return value;
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      value = conf.get(alternative);
-      if (!StringUtils.isNullOrEmpty(value)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return value;
-      }
-    }
-
-    return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
-  }
-
-  /**
    * Gets the String value for a {@link ConfigProperty} config from a {@link Map}. The key
    * and alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.

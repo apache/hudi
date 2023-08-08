@@ -339,7 +339,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       int precision = DataTypeUtils.precision(fieldType.getLogicalType());
       if (precision == 0) {
         // seconds
-
         conf.setString(TIMESTAMP_TYPE_FIELD.key(),
             TimestampBasedAvroKeyGenerator.TimestampType.UNIX_TIMESTAMP.name());
       } else if (precision == 3) {
