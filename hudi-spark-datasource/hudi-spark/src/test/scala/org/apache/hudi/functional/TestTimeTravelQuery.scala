@@ -152,23 +152,17 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase {
       .take(1)(0)
     assertEquals(Row(1, "a1", 10, 1000), result1)
 
-    // Query as of secondCommitTime
-    assertThrows[HoodieTimeTravelException] {
-      spark.read.format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
-        .load(basePath)
-        .select("id", "name", "value", "version")
-        .take(1)(0)
-    }
-
-    // Query as of thirdCommitTime
-    assertThrows[HoodieTimeTravelException] {
-      spark.read.format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
-        .load(basePath)
-        .select("id", "name", "value", "version")
-        .take(1)(0)
-    }
+    // Query as of other commits
+    List(incompleteCommit, secondCommit, thirdCommit)
+      .foreach(commitTime => {
+        assertThrows[HoodieTimeTravelException] {
+          spark.read.format("hudi")
+            .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, commitTime)
+            .load(basePath)
+            .select("id", "name", "value", "version")
+            .take(1)(0)
+        }
+      })
   }
 
   @ParameterizedTest

@@ -244,7 +244,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return Collections.emptyMap();
     }
 
-    if (specifiedQueryInstant.isPresent()) {
+    if (specifiedQueryInstant.isPresent() && !shouldIncludePendingCommits) {
       validateTimestampAsOf(metaClient, specifiedQueryInstant.get());
     }
 
