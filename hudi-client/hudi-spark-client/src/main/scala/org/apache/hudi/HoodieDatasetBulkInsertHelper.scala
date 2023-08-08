@@ -26,9 +26,10 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.SparkHoodieIndexFactory
-import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
-import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
+import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
+import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
+import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 import org.apache.spark.TaskContext
@@ -52,7 +53,7 @@ object HoodieDatasetBulkInsertHelper
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
    *
    * <ol>
-   *   <li>Invoking configured [[KeyGenerator]] to produce record key, alas partition-path value</li>
+   *   <li>Invoking configured [[org.apache.hudi.keygen.KeyGenerator]] to produce record key, alas partition-path value</li>
    *   <li>Prepends Hudi meta-fields to every row in the dataset</li>
    *   <li>Dedupes rows (if necessary)</li>
    *   <li>Partitions dataset using provided [[partitioner]]</li>
@@ -155,17 +156,34 @@ object HoodieDatasetBulkInsertHelper
       val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
       val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
       val taskEpochId = taskContextSupplier.getAttemptIdSupplier.get
-      val writer = new BulkInsertDataInternalWriterHelper(
-        table,
-        writeConfig,
-        instantTime,
-        taskPartitionId,
-        taskId,
-        taskEpochId,
-        schema,
-        writeConfig.populateMetaFields,
-        arePartitionRecordsSorted,
-        shouldPreserveHoodieMetadata)
+
+      val writer = writeConfig.getIndexType match {
+        case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+          == BucketIndexEngineType.CONSISTENT_HASHING =>
+          new ConsistentBucketBulkInsertDataInternalWriterHelper(
+            table,
+            writeConfig,
+            instantTime,
+            taskPartitionId,
+            taskId,
+            taskEpochId,
+            schema,
+            writeConfig.populateMetaFields,
+            arePartitionRecordsSorted,
+            shouldPreserveHoodieMetadata)
+        case _ =>
+          new BulkInsertDataInternalWriterHelper(
+            table,
+            writeConfig,
+            instantTime,
+            taskPartitionId,
+            taskId,
+            taskEpochId,
+            schema,
+            writeConfig.populateMetaFields,
+            arePartitionRecordsSorted,
+            shouldPreserveHoodieMetadata)
+      }
 
       try {
         iter.foreach(writer.write)
