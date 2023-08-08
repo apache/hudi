@@ -179,7 +179,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
-    String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX).toLowerCase();
+    String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
     String s3Prefix = s3FS + "://";
 
     // Create S3 paths

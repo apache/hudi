@@ -103,7 +103,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
      * datePartitionDepth = 0 is same as basepath and there is no partition. In which case
      * this path selector would be a no-op and lists all paths under the table basepath.
      */
-    dateFormat = getStringWithAltKeys(props, DATE_FORMAT);
+    dateFormat = getStringWithAltKeys(props, DATE_FORMAT, true);
     datePartitionDepth = getIntWithAltKeys(props, DATE_PARTITION_DEPTH);
     numPrevDaysToList = getIntWithAltKeys(props, LOOKBACK_DAYS);
     partitionsListParallelism = getIntWithAltKeys(props, PARTITIONS_LIST_PARALLELISM);

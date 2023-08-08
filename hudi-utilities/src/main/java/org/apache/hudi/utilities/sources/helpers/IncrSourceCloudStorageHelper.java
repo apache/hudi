@@ -63,7 +63,7 @@ public class IncrSourceCloudStorageHelper {
   private static DataFrameReader getDataFrameReader(SparkSession spark, TypedProperties props, String fileFormat) {
     DataFrameReader dataFrameReader = spark.read().format(fileFormat);
 
-    if (isNullOrEmpty(getStringWithAltKeys(props, SPARK_DATASOURCE_OPTIONS))) {
+    if (isNullOrEmpty(getStringWithAltKeys(props, SPARK_DATASOURCE_OPTIONS, true))) {
       return dataFrameReader;
     }
 

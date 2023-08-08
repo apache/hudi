@@ -109,7 +109,7 @@ public class GcsObjectMetadataFetcher implements Serializable {
   }
 
   private Option<String> getPropVal(ConfigProperty<String> configProperty) {
-    String value = getStringWithAltKeys(props, configProperty);
+    String value = getStringWithAltKeys(props, configProperty, true);
     if (!isNullOrEmpty(value)) {
       return Option.of(value);
     }

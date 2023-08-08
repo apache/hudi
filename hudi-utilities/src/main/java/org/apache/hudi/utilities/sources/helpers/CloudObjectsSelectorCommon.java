@@ -155,10 +155,10 @@ public class CloudObjectsSelectorCommon {
       return Option.empty();
     }
     DataFrameReader reader = spark.read().format(fileFormat);
-    String datasourceOpts = getStringWithAltKeys(props, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS);
+    String datasourceOpts = getStringWithAltKeys(props, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
     if (StringUtils.isNullOrEmpty(datasourceOpts)) {
       // fall back to legacy config for BWC. TODO consolidate in HUDI-6020
-      datasourceOpts = getStringWithAltKeys(props, S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS);
+      datasourceOpts = getStringWithAltKeys(props, S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
     }
     if (StringUtils.nonEmpty(datasourceOpts)) {
       final ObjectMapper mapper = new ObjectMapper();

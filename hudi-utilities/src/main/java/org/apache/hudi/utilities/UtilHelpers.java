@@ -529,7 +529,7 @@ public class UtilHelpers {
     }
 
     String schemaPostProcessorClass = getStringWithAltKeys(
-        cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR);
+        cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR, true);
     boolean enableSparkAvroPostProcessor =
         getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
     if (transformerClassNames != null && !transformerClassNames.isEmpty()

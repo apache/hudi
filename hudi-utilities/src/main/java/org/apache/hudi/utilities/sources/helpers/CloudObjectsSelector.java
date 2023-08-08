@@ -87,7 +87,7 @@ public class CloudObjectsSelector {
     this.props = props;
     this.queueUrl = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_URL);
     this.regionName = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_REGION);
-    this.fsName = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_FS);
+    this.fsName = getStringWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_FS, true);
     this.longPollWait = getIntWithAltKeys(props, S3SourceConfig.S3_QUEUE_LONG_POLL_WAIT);
     this.maxMessagePerBatch = getIntWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH);
     this.maxMessagesPerRequest = getIntWithAltKeys(props, S3SourceConfig.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST);

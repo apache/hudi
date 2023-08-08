@@ -216,7 +216,7 @@ public class KafkaOffsetGen {
     kafkaParams = excludeHoodieConfigs(props);
     checkRequiredConfigProperties(props, Collections.singletonList(KafkaSourceConfig.KAFKA_TOPIC_NAME));
     topicName = getStringWithAltKeys(props, KafkaSourceConfig.KAFKA_TOPIC_NAME);
-    kafkaCheckpointType = getStringWithAltKeys(props, KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE);
+    kafkaCheckpointType = getStringWithAltKeys(props, KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE, true);
     String kafkaAutoResetOffsetsStr = props.getString(KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.key(), KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.defaultValue().name().toLowerCase());
     boolean found = false;
     for (KafkaSourceConfig.KafkaResetOffsetStrategies entry : KafkaSourceConfig.KafkaResetOffsetStrategies.values()) {

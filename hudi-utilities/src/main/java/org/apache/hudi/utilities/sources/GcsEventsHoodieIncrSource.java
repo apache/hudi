@@ -193,7 +193,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   private static String getSourceFileFormat(TypedProperties props) {
-    return getStringWithAltKeys(props, SOURCE_FILE_FORMAT);
+    return getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true);
   }
 
 }

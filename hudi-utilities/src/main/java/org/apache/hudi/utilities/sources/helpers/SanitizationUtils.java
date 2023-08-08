@@ -70,7 +70,7 @@ public class SanitizationUtils {
   }
 
   public static String getInvalidCharMask(TypedProperties props) {
-    return getStringWithAltKeys(props, HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK);
+    return getStringWithAltKeys(props, HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, true);
   }
 
   private static DataType sanitizeDataTypeForAvro(DataType dataType, String invalidCharMask) {

@@ -56,7 +56,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   public MaxwellJsonKafkaSourcePostProcessor(TypedProperties props) {
     super(props);
-    databaseRegex = Option.ofNullable(getStringWithAltKeys(props, JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX));
+    databaseRegex = Option.ofNullable(getStringWithAltKeys(props, JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX, true));
     tableRegex = getStringWithAltKeys(props, JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX);
   }
 
@@ -116,7 +116,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
     PreCombineFieldType preCombineFieldType =
         valueOf(getStringWithAltKeys(
-            this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE).toUpperCase(Locale.ROOT));
+            this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE, true).toUpperCase(Locale.ROOT));
 
     // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
     // want to delete this record correctly, we should update its `update_time` to a time closer to where the
@@ -133,7 +133,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
       // convert the `update_time`(delete time) to the proper format.
       if (preCombineFieldType.equals(DATE_STRING)) {
         // DATE_STRING format
-        String timeFormat = getStringWithAltKeys(this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT);
+        String timeFormat = getStringWithAltKeys(this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT, true);
         result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
       } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
         // EPOCHMILLISECONDS format

@@ -49,7 +49,7 @@ public class HiveSchemaProvider extends SchemaProvider {
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     checkRequiredConfigProperties(props, Collections.singletonList(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE));
-    String sourceSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.SOURCE_SCHEMA_DATABASE);
+    String sourceSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.SOURCE_SCHEMA_DATABASE, true);
     String sourceSchemaTableName = getStringWithAltKeys(props, HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE);
     SparkSession spark = SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate();
 
@@ -67,7 +67,7 @@ public class HiveSchemaProvider extends SchemaProvider {
 
     // target schema
     if (containsConfigProperty(props, HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE)) {
-      String targetSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.TARGET_SCHEMA_DATABASE);
+      String targetSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.TARGET_SCHEMA_DATABASE, true);
       String targetSchemaTableName = getStringWithAltKeys(props, HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE);
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));

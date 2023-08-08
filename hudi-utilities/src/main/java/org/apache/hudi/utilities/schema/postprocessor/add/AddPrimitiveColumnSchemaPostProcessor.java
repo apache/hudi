@@ -81,7 +81,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
     String columnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
     String type = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP).toUpperCase(Locale.ROOT);
-    String doc = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP);
+    String doc = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP, true);
     Option<Object> defaultValue = getRawValueWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP);
 
     boolean nullable = getBooleanWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP);

@@ -98,7 +98,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
     String postProcessorClassName = getStringWithAltKeys(
-        this.props, JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS);
+        this.props, JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS, true);
     // no processor, do nothing
     if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
       return jsonStringRDD;

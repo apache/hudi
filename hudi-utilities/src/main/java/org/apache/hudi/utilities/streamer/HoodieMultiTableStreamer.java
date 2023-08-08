@@ -140,7 +140,7 @@ public class HoodieMultiTableStreamer {
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
-      String overriddenTargetBasePath = getStringWithAltKeys(tableProperties, HoodieStreamerConfig.TARGET_BASE_PATH);
+      String overriddenTargetBasePath = getStringWithAltKeys(tableProperties, HoodieStreamerConfig.TARGET_BASE_PATH, true);
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
@@ -157,7 +157,7 @@ public class HoodieMultiTableStreamer {
   }
 
   private void populateTransformerProps(HoodieStreamer.Config cfg, TypedProperties typedProperties) {
-    String transformerClass = getStringWithAltKeys(typedProperties, TRANSFORMER_CLASS);
+    String transformerClass = getStringWithAltKeys(typedProperties, TRANSFORMER_CLASS, true);
     if (transformerClass != null && !transformerClass.trim().isEmpty()) {
       List<String> transformerClassNameOverride = Arrays.asList(transformerClass.split(","));
       cfg.transformerClassNames = transformerClassNameOverride;
@@ -181,10 +181,10 @@ public class HoodieMultiTableStreamer {
   }
 
   private void populateTargetRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistryTargetUrl = getStringWithAltKeys(typedProperties, TARGET_SCHEMA_REGISTRY_URL);
+    String schemaRegistryTargetUrl = getStringWithAltKeys(typedProperties, TARGET_SCHEMA_REGISTRY_URL, true);
     if (StringUtils.isNullOrEmpty(schemaRegistryTargetUrl)) {
       String schemaRegistryBaseUrl = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_BASE_URL);
-      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX);
+      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX, true);
       String targetSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
         targetSchemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_TARGET_URL_SUFFIX);
@@ -199,11 +199,11 @@ public class HoodieMultiTableStreamer {
   }
 
   private void populateSourceRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistrySourceUrl = getStringWithAltKeys(typedProperties, SRC_SCHEMA_REGISTRY_URL);
+    String schemaRegistrySourceUrl = getStringWithAltKeys(typedProperties, SRC_SCHEMA_REGISTRY_URL, true);
     if (StringUtils.isNullOrEmpty(schemaRegistrySourceUrl)) {
       String schemaRegistryBaseUrl =
           getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_BASE_URL);
-      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX);
+      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX, true);
       String sourceSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
         sourceSchemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_SOURCE_URL_SUFFIX);
