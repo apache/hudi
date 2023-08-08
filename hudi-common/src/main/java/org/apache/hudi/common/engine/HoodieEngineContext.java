@@ -105,4 +105,12 @@ public abstract class HoodieEngineContext {
   public abstract void cancelJob(String jobId);
 
   public abstract void cancelAllJobs();
+
+  public <T> Stream<T> stream(List<T> data, Integer parallelism) {
+    return stream(stream(data.stream(), data.size()), parallelism);
+  }
+
+  public <T> Stream<T> stream(Stream<T> data, Integer parallelism) {
+    return parallelism == null || parallelism > Runtime.getRuntime().availableProcessors() ? data : data.parallel();
+  }
 }

@@ -84,12 +84,12 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    return data.stream().parallel().map(throwingMapWrapper(func)).collect(toList());
+    return stream(data, parallelism).map(throwingMapWrapper(func)).collect(toList());
   }
 
   @Override
   public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
+    return stream(data, parallelism).map(throwingMapToPairWrapper(mapToPairFunc))
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
         .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
         .collect(Collectors.toList());
@@ -98,7 +98,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
                                                                                  SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return throwingFlatMapToPairWrapper(flatMapToPairFunc).apply(data.parallel().iterator())
+    return throwingFlatMapToPairWrapper(flatMapToPairFunc).apply(stream(data, parallelism).iterator())
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream()
         .map(entry -> new ImmutablePair<>(entry.getKey(), entry.getValue().stream().map(
             Pair::getValue).reduce(throwingReduceWrapper(reduceFunc)).orElse(null)))
@@ -108,7 +108,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public <I, K, V> List<V> reduceByKey(
       List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return data.stream().parallel()
+    return stream(data, parallelism)
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
         .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
         .filter(Objects::nonNull)
@@ -117,7 +117,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism) {
-    return data.stream().parallel().flatMap(throwingFlatMapWrapper(func)).collect(toList());
+    return stream(data, parallelism).flatMap(throwingFlatMapWrapper(func)).collect(toList());
   }
 
   @Override
