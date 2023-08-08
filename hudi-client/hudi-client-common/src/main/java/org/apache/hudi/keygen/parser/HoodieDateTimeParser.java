@@ -87,7 +87,7 @@ public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       checkRequiredConfigProperties(config,
           Collections.singletonList(TIMESTAMP_INPUT_DATE_FORMAT));
-      this.configInputDateFormatList = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT);
+      this.configInputDateFormatList = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT, true);
       return Option.of(getInputDateFormatter());
     }
 

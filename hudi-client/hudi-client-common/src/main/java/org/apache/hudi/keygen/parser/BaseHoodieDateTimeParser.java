@@ -41,7 +41,7 @@ public abstract class BaseHoodieDateTimeParser implements Serializable {
 
   private String initInputDateFormatDelimiter() {
     String inputDateFormatDelimiter = getStringWithAltKeys(
-        config, TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX).trim();
+        config, TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX, true).trim();
     inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
     return inputDateFormatDelimiter;
   }

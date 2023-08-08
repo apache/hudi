@@ -82,7 +82,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, Option.ofNullable(recordKeyField), partitionPathField);
-    String dateTimeParserClass = getStringWithAltKeys(config, DATE_TIME_PARSER);
+    String dateTimeParserClass = getStringWithAltKeys(config, DATE_TIME_PARSER, true);
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
@@ -132,7 +132,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
       // inputFormatter
       String delimiter = parser.getConfigInputDateFormatDelimiter();
-      String format = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT).split(delimiter)[0];
+      String format = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT, true).split(delimiter)[0];
 
       // if both input and output timeZone are not configured, use GMT.
       if (null != inputDateTimeZone) {
