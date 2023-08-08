@@ -12,6 +12,7 @@ metastore_db/
  
 # Package Files #
 *.jar
+.flattened-pom.xml
 # But not these files...
 !/hoodie-cli/lib/dnl/utils/textutils/0.3.3/textutils-0.3.3.jar
 *.war
