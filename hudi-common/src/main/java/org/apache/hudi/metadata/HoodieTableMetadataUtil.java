@@ -997,7 +997,7 @@ public class HoodieTableMetadataUtil {
         fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
             partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
       } else {
-        return Collections.EMPTY_LIST;
+        return Collections.emptyList();
       }
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);

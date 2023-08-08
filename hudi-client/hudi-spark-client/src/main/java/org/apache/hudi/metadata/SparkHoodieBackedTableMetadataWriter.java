@@ -28,16 +28,11 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
-import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,10 +46,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
+public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
-  private transient BaseHoodieWriteClient writeClient;
 
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
@@ -119,68 +113,20 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    commitInternal(instantTime, partitionRecordsMap, Option.empty());
+    commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
 
+  @Override
+  protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
+    return HoodieJavaRDD.getJavaRDD(records);
+  }
+
+  @Override
   protected void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), Option.of(partitioner));
-  }
-
-  private void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
-                              Option<BulkInsertPartitioner> bulkInsertPartitioner) {
-    ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
-    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
-    JavaRDD<HoodieRecord> preppedRecordRDD = HoodieJavaRDD.getJavaRDD(preppedRecords);
-
-    try (SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient()) {
-      // rollback partially failed writes if any.
-      if (dataWriteConfig.getFailedWritesCleanPolicy().isEager()
-          && writeClient.rollbackFailedWrites()) {
-        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
-      }
-
-      if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
-        // if this is a new commit being applied to metadata for the first time
-        LOG.info("New commit at " + instantTime + " being applied to MDT.");
-      } else {
-        // this code path refers to a re-attempted commit that:
-        //   1. got committed to metadata table, but failed in datatable.
-        //   2. failed while committing to metadata table
-        // for e.g., let's say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-        // are upserts to metadata table and so only a new delta commit will be created.
-        // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
-        // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
-        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
-            .lastInstant();
-        LOG.info(String.format("%s completed commit at %s being applied to MDT.",
-            alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
-
-        // Rollback the previous commit
-        if (!writeClient.rollback(instantTime)) {
-          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime + " from MDT");
-        }
-        metadataMetaClient.reloadActiveTimeline();
-      }
-
-      writeClient.startCommitWithTime(instantTime);
-      if (bulkInsertPartitioner.isPresent()) {
-        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        writeClient.bulkInsertPreppedRecords(preppedRecordRDD, instantTime, bulkInsertPartitioner).collect();
-      } else {
-        engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-        writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
-      }
-
-      // reload timeline
-      metadataMetaClient.reloadActiveTimeline();
-    }
-
-    // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(partitioner));
   }
 
   @Override
@@ -188,19 +134,14 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
 
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
-      String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
-      writeClient.startCommitWithTime(instantTime, actionType);
-      writeClient.deletePartitions(partitionsToDrop, instantTime);
-    }
-    closeInternal();
+    SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
+    String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
+    writeClient.startCommitWithTime(instantTime, actionType);
+    writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 
   @Override
-  public BaseHoodieWriteClient getWriteClient() {
-    if (writeClient == null) {
-      writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
-    }
-    return writeClient;
+  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
   }
 }
