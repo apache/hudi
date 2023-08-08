@@ -102,9 +102,9 @@ public class TimestampKeyGeneratorConfig {
           + "are different.");
 
   public static final ConfigProperty<String> DATE_TIME_PARSER = ConfigProperty
-      .key("hoodie.deltastreamer.keygen.datetime.parser.class")
+      .key("hoodie.keygen.datetime.parser.class")
       .defaultValue("org.apache.hudi.keygen.parser.HoodieDateTimeParser")
-      .withAlternatives("hoodie.keygen.datetime.parser.class")
+      .withAlternatives("hoodie.deltastreamer.keygen.datetime.parser.class")
       .markAdvanced()
       .withDocumentation("Date time parser class name.");
 }
