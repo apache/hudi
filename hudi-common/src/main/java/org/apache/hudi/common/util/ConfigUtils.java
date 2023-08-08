@@ -296,18 +296,44 @@ public class ConfigUtils {
 
   /**
    * Gets the String value for a {@link ConfigProperty} config from properties. The key and
-   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
-   * config, if exists, is returned if the config is not found in the properties.
+   * alternative keys are used to fetch the config. If the config is not found, an
+   * {@link IllegalArgumentException} is thrown.
    *
    * @param props          Configs in {@link TypedProperties}.
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
-   * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   * @return String value if the config exists.
    */
   public static String getStringWithAltKeys(TypedProperties props,
                                             ConfigProperty<String> configProperty) {
-    return getStringWithAltKeys(
-        props, configProperty, configProperty.hasDefaultValue() ? configProperty.defaultValue() : null);
+    return getStringWithAltKeys(props, configProperty, false);
+  }
+
+  /**
+   * Gets the String value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. If using default value, the default value
+   * of {@link ConfigProperty} config, if exists, is returned if the config is not found in
+   * the properties. If not using default value, if the config is not found, an
+   * {@link IllegalArgumentException} is thrown.
+   *
+   * @param props           Configs in {@link TypedProperties}.
+   * @param configProperty  {@link ConfigProperty} config of String type to fetch.
+   * @param useDefaultValue Whether to use default value from {@link ConfigProperty}.
+   * @return String value if the config exists; otherwise, if the config does not exist and
+   * {@code useDefaultValue} is true, returns default String value if there is default value
+   * defined in the {@link ConfigProperty} config and {@code null} otherwise.
+   */
+  public static String getStringWithAltKeys(TypedProperties props,
+                                            ConfigProperty<String> configProperty,
+                                            boolean useDefaultValue) {
+    if (useDefaultValue) {
+      return getStringWithAltKeys(
+          props, configProperty, configProperty.hasDefaultValue() ? configProperty.defaultValue() : null);
+    }
+    Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
+    if (!rawValue.isPresent()) {
+      throw new IllegalArgumentException("Property " + configProperty.key() + " not found");
+    }
+    return rawValue.get().toString();
   }
 
   /**
