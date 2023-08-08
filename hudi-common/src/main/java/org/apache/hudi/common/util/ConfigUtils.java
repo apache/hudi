@@ -95,8 +95,9 @@ public class ConfigUtils {
    * Convert the key-value config to a map.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *
-   * @param keyValueConfig
-   * @return
+   * @param keyValueConfig Key-value configs in properties format, i.e., multiple lines of
+   *                       `key=value`.
+   * @return A {@link Map} of key-value configs.
    */
   public static Map<String, String> toMap(String keyValueConfig) {
     if (StringUtils.isNullOrEmpty(keyValueConfig)) {
@@ -126,8 +127,8 @@ public class ConfigUtils {
    * Convert map config to key-value string.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *
-   * @param config
-   * @return
+   * @param config A {@link Map} of key-value configs.
+   * @return Key-value configs in properties format, i.e., multiple lines of `key=value`.
    */
   public static String configToString(Map<String, String> config) {
     if (config == null) {
@@ -143,6 +144,12 @@ public class ConfigUtils {
     return sb.toString();
   }
 
+  /**
+   * Creates a Hadoop {@link Configuration} instance with the properties.
+   *
+   * @param props {@link Properties} instance.
+   * @return Hadoop {@link Configuration} instance.
+   */
   public static Configuration createHadoopConf(Properties props) {
     Configuration hadoopConf = new Configuration();
     props.stringPropertyNames().forEach(k -> hadoopConf.set(k, props.getProperty(k)));
@@ -169,6 +176,15 @@ public class ConfigUtils {
     return Arrays.stream(enumConstants).map(Enum::name).toArray(String[]::new);
   }
 
+  /**
+   * Strips the prefix from a config key. The prefix is defined by a {@link ConfigProperty}
+   * which can have alternatives.  The method strips any matching prefix.
+   *
+   * @param prop         The config key for stripping
+   * @param prefixConfig The prefix.
+   * @return An {@link Option} of the config key after stripping, if any prefix matches the key;
+   * empty {@link Option} otherwise.
+   */
   public static Option<String> stripPrefix(String prop, ConfigProperty<String> prefixConfig) {
     if (prop.startsWith(prefixConfig.key())) {
       return Option.of(String.join("", prop.split(prefixConfig.key())));
@@ -181,6 +197,14 @@ public class ConfigUtils {
     return Option.empty();
   }
 
+  /**
+   * Whether the properties contain a config. If any of the key or alternative keys of the
+   * {@link ConfigProperty} exists in the properties, this method returns {@code true}.
+   *
+   * @param props          Configs in {@link TypedProperties}
+   * @param configProperty Config to look up.
+   * @return {@code true} if exists; {@code false} otherwise.
+   */
   public static boolean containsConfigProperty(TypedProperties props,
                                                ConfigProperty<?> configProperty) {
     if (!props.containsKey(configProperty.key())) {
@@ -194,6 +218,14 @@ public class ConfigUtils {
     return true;
   }
 
+  /**
+   * Whether the properties contain a config. If any of the key or alternative keys of the
+   * {@link ConfigProperty} exists in the properties, this method returns {@code true}.
+   *
+   * @param props          Configs in {@link Map}
+   * @param configProperty Config to look up.
+   * @return {@code true} if exists; {@code false} otherwise.
+   */
   public static boolean containsConfigProperty(Map<String, Object> props,
                                                ConfigProperty<?> configProperty) {
     if (!props.containsKey(configProperty.key())) {
@@ -207,6 +239,12 @@ public class ConfigUtils {
     return true;
   }
 
+  /**
+   * Validates that config String keys exist in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties} to validate.
+   * @param checkPropNames List of String keys that must exist.
+   */
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
@@ -215,6 +253,14 @@ public class ConfigUtils {
     });
   }
 
+  /**
+   * Validates that all {@link ConfigProperty} configs exist in the properties. For each
+   * {@link ConfigProperty} config, if any of the key or alternative keys of the
+   * {@link ConfigProperty} exists in the properties, the validation of this config passes.
+   *
+   * @param props              Configs in {@link TypedProperties} to validate.
+   * @param configPropertyList List of {@link ConfigProperty} configs that must exist.
+   */
   public static void checkRequiredConfigProperties(TypedProperties props,
                                                    List<ConfigProperty<?>> configPropertyList) {
     configPropertyList.forEach(configProperty -> {
@@ -224,6 +270,14 @@ public class ConfigUtils {
     });
   }
 
+  /**
+   * Gets the raw value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
   public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
@@ -240,12 +294,32 @@ public class ConfigUtils {
     return Option.empty();
   }
 
+  /**
+   * Gets the String value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @return String value if the config exists; default String value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   */
   public static String getStringWithAltKeys(TypedProperties props,
                                             ConfigProperty<String> configProperty) {
     return getStringWithAltKeys(
         props, configProperty, configProperty.hasDefaultValue() ? configProperty.defaultValue() : null);
   }
 
+  /**
+   * Gets the String value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. The default value as the input of the method
+   * is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param defaultValue   Default value.
+   * @return String value if the config exists; default value otherwise.
+   */
   public static String getStringWithAltKeys(TypedProperties props,
                                             ConfigProperty<?> configProperty,
                                             String defaultValue) {
@@ -253,23 +327,45 @@ public class ConfigUtils {
     return rawValue.map(Object::toString).orElse(defaultValue);
   }
 
+  /**
+   * Gets the String value for a {@link ConfigProperty} config from Hadoop configuration. The key
+   * and alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param conf           Configs in Hadoop {@link Configuration}.
+   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @return String value if the config exists; default String value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   */
   public static String getStringWithAltKeys(Configuration conf,
                                             ConfigProperty<String> configProperty) {
     String value = conf.get(configProperty.key());
-    if (StringUtils.isNullOrEmpty(value)) {
-      for (String alternative : configProperty.getAlternatives()) {
-        value = conf.get(alternative);
-        if (!StringUtils.isNullOrEmpty(value)) {
-          LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                  + "and may be removed in the future. Please use the new key '%s' instead.",
-              alternative, configProperty.key()));
-          return value;
-        }
+    if (!StringUtils.isNullOrEmpty(value)) {
+      return value;
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      value = conf.get(alternative);
+      if (!StringUtils.isNullOrEmpty(value)) {
+        LOG.warn(String.format("The configuration key '%s' has been deprecated "
+                + "and may be removed in the future. Please use the new key '%s' instead.",
+            alternative, configProperty.key()));
+        return value;
       }
     }
+
     return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
   }
 
+  /**
+   * Gets the String value for a {@link ConfigProperty} config from a {@link Map}. The key
+   * and alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link Map}.
+   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @return String value if the config exists; default String value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   */
   public static String getStringWithAltKeys(Map<String, Object> props,
                                             ConfigProperty<String> configProperty) {
     Object value = props.get(configProperty.key());
@@ -288,6 +384,15 @@ public class ConfigUtils {
     return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
   }
 
+  /**
+   * Gets String value from properties with alternative keys.
+   *
+   * @param props        Configs in {@link TypedProperties}.
+   * @param key          String key.
+   * @param altKey       Alternative String key.
+   * @param defaultValue Default String value.
+   * @return String value if the config exists; default value otherwise.
+   */
   public static String getStringWithAltKeys(TypedProperties props,
                                             String key, String altKey,
                                             String defaultValue) {
@@ -300,6 +405,16 @@ public class ConfigUtils {
     return defaultValue;
   }
 
+  /**
+   * Gets the boolean value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return boolean value if the config exists; default boolean value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
+   */
   public static boolean getBooleanWithAltKeys(TypedProperties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
@@ -308,6 +423,16 @@ public class ConfigUtils {
     return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(defaultValue);
   }
 
+  /**
+   * Gets the integer value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return integer value if the config exists; default integer value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code 0} otherwise.
+   */
   public static int getIntWithAltKeys(TypedProperties props,
                                       ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
@@ -316,6 +441,16 @@ public class ConfigUtils {
     return rawValue.map(v -> Integer.parseInt(v.toString())).orElse(defaultValue);
   }
 
+  /**
+   * Gets the long value for a {@link ConfigProperty} config from properties. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return long value if the config exists; default long value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code 0} otherwise.
+   */
   public static long getLongWithAltKeys(TypedProperties props,
                                         ConfigProperty<Long> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
@@ -324,6 +459,13 @@ public class ConfigUtils {
     return rawValue.map(v -> Long.parseLong(v.toString())).orElse(defaultValue);
   }
 
+  /**
+   * Removes a {@link ConfigProperty} config from properties. This removes all possible keys
+   * including the alternatives from the properties.
+   *
+   * @param props          Configs in {@link TypedProperties}.
+   * @param configProperty {@link ConfigProperty} config to remove.
+   */
   public static void removeConfigFromProps(TypedProperties props,
                                            ConfigProperty<?> configProperty) {
     props.remove(configProperty.key());
@@ -332,6 +474,13 @@ public class ConfigUtils {
     }
   }
 
+  /**
+   * Returns filtered properties based on the given {@link ConfigProperty} config list to keep.
+   *
+   * @param props              Configs in {@link TypedProperties}.
+   * @param configPropertyList List of {@link ConfigProperty} configs to keep.
+   * @return Filtered configs in {@link Map} with {@link ConfigProperty} configs to keep.
+   */
   public static Map<String, Object> filterProperties(TypedProperties props,
                                                      List<ConfigProperty<String>> configPropertyList) {
     Set<String> persistedKeys = getAllConfigKeys(configPropertyList);
@@ -340,6 +489,10 @@ public class ConfigUtils {
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 
+  /**
+   * @param configPropertyList List of {@link ConfigProperty} configs to keep.
+   * @return all String keys of {@link ConfigProperty} configs.
+   */
   public static Set<String> getAllConfigKeys(List<ConfigProperty<String>> configPropertyList) {
     return configPropertyList.stream().flatMap(configProperty -> {
       List<String> keys = new ArrayList<>();

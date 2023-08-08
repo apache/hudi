@@ -991,9 +991,11 @@ public class HoodieTableMetaClient implements Serializable {
       HoodieConfig hoodieConfig = new HoodieConfig(properties);
 
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
-        String value = hoodieConfig.getString(configProperty);
-        if (value != null) {
-          this.others.put(configProperty.key(), value);
+        if (hoodieConfig.contains(configProperty)) {
+          String value = hoodieConfig.getString(configProperty);
+          if (value != null) {
+            this.others.put(configProperty.key(), value);
+          }
         }
       }
 
