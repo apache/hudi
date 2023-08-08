@@ -4,7 +4,7 @@ keywords: [hudi, streamer, hoodiestreamer]
 ---
 
 ## Hudi Streamer
-:::danger Breaking Change
+:::danger Important
 
 The following classes were renamed and relocated to `org.apache.hudi.utilities.streamer` package.
 - `DeltastreamerMultiWriterCkptUpdateFunc` is renamed to `StreamerMultiWriterCkptUpdateFunc`
