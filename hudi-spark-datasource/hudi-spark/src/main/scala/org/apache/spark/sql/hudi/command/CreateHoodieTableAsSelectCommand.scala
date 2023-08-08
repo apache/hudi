@@ -115,8 +115,11 @@ case class CreateHoodieTableAsSelectCommand(
         clearTablePath(tablePath, hadoopConf)
       }
     } catch {
-      case e: Throwable => // failed to insert data, clear table path
-        clearTablePath(tablePath, hadoopConf)
+      case e: Throwable =>
+        // clear the hoodie table path only if it did not exist previously.
+        if (!hoodieCatalogTable.hoodieTableExists) {
+          clearTablePath(tablePath, hadoopConf)
+        }
         throw e
     }
     Seq.empty[Row]
