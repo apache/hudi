@@ -228,8 +228,8 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     Assertions.assertEquals(numFilesCreated,
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
 
-    // BulkInsert again.
-    writeData(writeRecords, "002", WriteOperationType.BULK_INSERT,true);
+    // Upsert Data
+    writeData(writeRecords, "002", WriteOperationType.UPSERT,true);
     // The total number of file group should be the same, but each file group will have a log file.
     Assertions.assertEquals(numFilesCreated,
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
