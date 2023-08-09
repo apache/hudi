@@ -20,6 +20,7 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
@@ -71,6 +72,15 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     this.createBigQueryConnection();
   }
 
+  @VisibleForTesting
+  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
+    super(config);
+    this.config = config;
+    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
+    this.bigquery = bigquery;
+  }
+
   private void createBigQueryConnection() {
     if (bigquery == null) {
       try {
@@ -84,14 +94,15 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     }
   }
 
-  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix) {
+  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix, Schema schema) {
     try {
-      String withClauses = "";
-      String extraOptions = "";
+      String withClauses = String.format("( %s )", BigQuerySchemaResolver.schemaToSqlString(schema));
+      String extraOptions = "enable_list_inference=true,";
       if (!StringUtils.isNullOrEmpty(sourceUriPrefix)) {
-        withClauses = "WITH PARTITION COLUMNS";
-        extraOptions = String.format("hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
+        withClauses += " WITH PARTITION COLUMNS";
+        extraOptions += String.format(" hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
       }
+
       String query =
           String.format(
               "CREATE EXTERNAL TABLE `%s.%s` %s OPTIONS (%s "
@@ -145,6 +156,18 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     } catch (BigQueryException e) {
       throw new HoodieBigQuerySyncException("Manifest External table was not created ", e);
     }
+  }
+
+  public void updateTableSchema(String tableName, Schema schema) {
+    Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
+    ExternalTableDefinition definition = existingTable.getDefinition();
+    if (definition.getSchema() != null && definition.getSchema().equals(schema)) {
+      return; // No need to update schema.
+    }
+    Table updatedTable = existingTable.toBuilder()
+        .setDefinition(definition.toBuilder().setSchema(schema).setAutodetect(false).build())
+        .build();
+    bigquery.update(updatedTable);
   }
 
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {

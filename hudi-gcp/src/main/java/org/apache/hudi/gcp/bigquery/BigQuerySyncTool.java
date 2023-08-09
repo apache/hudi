@@ -20,24 +20,29 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
+import com.google.cloud.bigquery.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI_PREFIX;
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SYNC_BASE_PATH;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_TABLE_NAME;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 /**
@@ -52,34 +57,53 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
   private static final Logger LOG = LoggerFactory.getLogger(BigQuerySyncTool.class);
 
-  public final BigQuerySyncConfig config;
-  public final String tableName;
-  public final String manifestTableName;
-  public final String versionsTableName;
-  public final String snapshotViewName;
+  private final BigQuerySyncConfig config;
+  private final String tableName;
+  private final String manifestTableName;
+  private final String versionsTableName;
+  private final String snapshotViewName;
+  private final ManifestFileWriter manifestFileWriter;
+  private final HoodieBigQuerySyncClient bqSyncClient;
+  private final HoodieTableMetaClient metaClient;
+  private final BigQuerySchemaResolver bqSchemaResolver;
 
   public BigQuerySyncTool(Properties props) {
-    super(props);
+    // will build file writer, client, etc. from configs
+    this(props, null, null, null, null);
+  }
+
+  @VisibleForTesting // allows us to pass in mocks for the writer and client
+  BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient bqSyncClient, HoodieTableMetaClient metaClient, BigQuerySchemaResolver bqSchemaResolver) {
+    super(properties);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
     this.manifestTableName = tableName + "_manifest";
     this.versionsTableName = tableName + "_versions";
     this.snapshotViewName = tableName;
+    this.bqSyncClient = bqSyncClient == null ? new HoodieBigQuerySyncClient(config) : bqSyncClient;
+    // reuse existing meta client if not provided (only test cases will provide their own meta client)
+    this.metaClient = metaClient == null ? bqSyncClient.getMetaClient() : metaClient;
+    this.manifestFileWriter = manifestFileWriter == null ? buildManifestFileWriterFromConfig(metaClient, config) : manifestFileWriter;
+    this.bqSchemaResolver = bqSchemaResolver == null ? BigQuerySchemaResolver.getInstance() : bqSchemaResolver;
+  }
+
+  private static ManifestFileWriter buildManifestFileWriterFromConfig(HoodieTableMetaClient metaClient, BigQuerySyncConfig config) {
+    return ManifestFileWriter.builder()
+        .setMetaClient(metaClient)
+        .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
+        .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
+        .build();
   }
 
   @Override
   public void syncHoodieTable() {
-    try (HoodieBigQuerySyncClient bqSyncClient = new HoodieBigQuerySyncClient(config)) {
-      switch (bqSyncClient.getTableType()) {
-        case COPY_ON_WRITE:
-        case MERGE_ON_READ:
-          syncTable(bqSyncClient);
-          break;
-        default:
-          throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
-      }
-    } catch (Exception e) {
-      throw new HoodieBigQuerySyncException("Failed to sync BigQuery for table:" + tableName, e);
+    switch (bqSyncClient.getTableType()) {
+      case COPY_ON_WRITE:
+      case MERGE_ON_READ:
+        syncTable(bqSyncClient);
+        break;
+      default:
+        throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
     }
   }
 
@@ -99,22 +123,20 @@ public class BigQuerySyncTool extends HoodieSyncTool {
       throw new HoodieBigQuerySyncException("Dataset not found: " + config.getString(BIGQUERY_SYNC_DATASET_NAME));
     }
 
-    ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
-        .setConf(config.getHadoopConf())
-        .setBasePath(config.getString(BIGQUERY_SYNC_SYNC_BASE_PATH))
-        .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
-        .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
-        .build();
-
+    List<String> partitionFields = !StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX)) ? config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS) : Collections.emptyList();
+    Schema latestSchema = bqSchemaResolver.getTableSchema(metaClient, partitionFields);
     if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {
       manifestFileWriter.writeManifestFile(true);
-
       if (!tableExists(bqSyncClient, tableName)) {
         bqSyncClient.createTableUsingBqManifestFile(
             tableName,
             manifestFileWriter.getManifestSourceUri(true),
-            config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX));
+            config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX),
+            latestSchema);
         LOG.info("Completed table " + tableName + " creation using the manifest file");
+      } else {
+        bqSyncClient.updateTableSchema(tableName, latestSchema);
+        LOG.info("Synced schema for " + tableName);
       }
 
       LOG.info("Sync table complete for " + tableName);
@@ -144,6 +166,12 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     // TODO: Implement automatic schema evolution when you add a new column.
     LOG.info("Sync table complete for " + snapshotViewName);
+  }
+
+  @Override
+  public void close() throws Exception {
+    super.close();
+    bqSyncClient.close();
   }
 
   public static void main(String[] args) {
