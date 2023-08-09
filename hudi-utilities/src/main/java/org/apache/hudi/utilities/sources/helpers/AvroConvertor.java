@@ -176,10 +176,12 @@ public class AvroConvertor implements Serializable {
     for (Schema.Field field :  record.getSchema().getFields()) {
       recordBuilder.set(field, record.get(field.name()));
     }
+    
+    String kafkaKey = String.valueOf(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, consumerRecord.key().toString());
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, kafkaKey);
     return recordBuilder.build();
   }
 
