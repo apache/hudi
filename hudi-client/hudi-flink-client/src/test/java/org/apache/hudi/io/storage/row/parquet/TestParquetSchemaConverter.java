@@ -56,7 +56,7 @@ public class TestParquetSchemaConverter {
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
         + "    repeated group key_value {\n"
-        + "      optional int32 key;\n"
+        + "      required int32 key;\n"
         + "      optional binary value (STRING);\n"
         + "    }\n"
         + "  }\n"
@@ -83,7 +83,7 @@ public class TestParquetSchemaConverter {
     assertThat(messageType.getColumns().size(), is(3));
     final String expected = "message converted {\n"
         + "  optional int64 ts_3 (TIMESTAMP(MILLIS,true));\n"
-        + "  optional int96 ts_6;\n"
+        + "  optional int64 ts_6 (TIMESTAMP(MICROS,true));\n"
         + "  optional int96 ts_9;\n"
         + "}\n";
     assertThat(messageType.toString(), is(expected));

@@ -18,11 +18,11 @@
 
 package org.apache.hudi.aws;
 
-import com.amazonaws.auth.BasicSessionCredentials;
 import org.apache.hudi.config.HoodieAWSConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -34,9 +34,9 @@ public class TestHoodieAWSCredentialsProviderFactory {
     cfg.setValue(HoodieAWSConfig.AWS_ACCESS_KEY, "random-access-key");
     cfg.setValue(HoodieAWSConfig.AWS_SECRET_KEY, "random-secret-key");
     cfg.setValue(HoodieAWSConfig.AWS_SESSION_TOKEN, "random-session-token");
-    BasicSessionCredentials credentials = (BasicSessionCredentials) org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(cfg.getProps()).getCredentials();
-    assertEquals("random-access-key", credentials.getAWSAccessKeyId());
-    assertEquals("random-secret-key", credentials.getAWSSecretKey());
-    assertEquals("random-session-token", credentials.getSessionToken());
+    AwsSessionCredentials credentials = (AwsSessionCredentials) org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(cfg.getProps()).resolveCredentials();
+    assertEquals("random-access-key", credentials.accessKeyId());
+    assertEquals("random-secret-key", credentials.secretAccessKey());
+    assertEquals("random-session-token", credentials.sessionToken());
   }
 }

@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -48,21 +47,21 @@ import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
+import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
@@ -73,13 +72,15 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIEL
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
 /**
  * Performs bootstrap from a non-hudi source.
+ * import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
  */
 public class BootstrapExecutorUtils implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BootstrapExecutorUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapExecutorUtils.class);
 
   /**
    * Config.
@@ -113,12 +114,12 @@ public class BootstrapExecutorUtils implements Serializable {
 
   private final String bootstrapBasePath;
 
-  public static final String CHECKPOINT_KEY = HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY;
+  public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
 
   /**
    * Bootstrap Executor.
    *
-   * @param cfg        DeltaStreamer Config
+   * @param cfg        Hudi Streamer Config
    * @param jssc       Java Spark Context
    * @param fs         File System
    * @param properties Bootstrap Writer Properties
@@ -192,6 +193,7 @@ public class BootstrapExecutorUtils implements Serializable {
     if (cfg.enableHiveSync) {
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
+      metaProps.put(META_SYNC_DATABASE_NAME.key(), cfg.database);
       metaProps.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
       metaProps.put(META_SYNC_BASE_FILE_FORMAT.key(), cfg.baseFileFormat);
       if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
@@ -223,6 +225,7 @@ public class BootstrapExecutorUtils implements Serializable {
     HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(props)
         .setTableType(cfg.tableType)
+        .setDatabaseName(cfg.database)
         .setTableName(cfg.tableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
         .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
@@ -260,10 +263,9 @@ public class BootstrapExecutorUtils implements Serializable {
 
   private Pair<String, String> genKeyGenClassAndPartitionColumns() {
     String keyGenClass;
-    if (StringUtils.nonEmpty(props.getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), null))) {
-      keyGenClass = props.getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key());
-    } else if (StringUtils.nonEmpty(props.getString(HoodieBootstrapConfig.KEYGEN_TYPE.key(), null))) {
-      props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), props.getString(HoodieBootstrapConfig.KEYGEN_TYPE.key()));
+    if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null))) {
+      keyGenClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key());
+    } else if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null))) {
       keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
     } else {
       keyGenClass = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
@@ -283,14 +285,14 @@ public class BootstrapExecutorUtils implements Serializable {
   private Map<String, Object> extractConfigsRelatedToTimestampBasedKeyGenerator(String keyGenerator, TypedProperties params) {
     if (TimestampBasedKeyGenerator.class.getCanonicalName().equals(keyGenerator)
         || TimestampBasedAvroKeyGenerator.class.getCanonicalName().equals(keyGenerator)) {
-      return params.entrySet().stream()
-          .filter(p -> HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(String.valueOf(p.getKey())))
-          .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+      return filterProperties(params, HoodieTableConfig.PERSISTED_CONFIG_LIST);
     }
     return Collections.emptyMap();
   }
 
   public static class Config {
+    private String database;
+
     private String tableName;
     private String tableType;
 
@@ -305,6 +307,10 @@ public class BootstrapExecutorUtils implements Serializable {
     private Boolean bootstrapOverwrite;
 
     public static String checkpoint = null;
+
+    public void setDatabase(String database) {
+      this.database = database;
+    }
 
     public void setTableName(String tableName) {
       this.tableName = tableName;

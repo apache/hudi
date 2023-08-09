@@ -70,13 +70,15 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS)
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Initial amount of time to wait between retries to acquire locks, "
           + " subsequent retries will exponentially backoff.");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
-      .defaultValue(String.valueOf(5000L))
+      .defaultValue(String.valueOf(16000L))
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum amount of time to wait between retries by lock provider client. This bounds"
           + " the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.");
@@ -84,60 +86,70 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(String.valueOf(5000L))
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Amount of time to wait between retries on the lock provider by the lock manager");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES)
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
       .defaultValue(String.valueOf(50))
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS = ConfigProperty
       .key(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
       .defaultValue(60 * 1000)
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.");
 
   public static final ConfigProperty<String> FILESYSTEM_LOCK_PATH = ConfigProperty
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("For DFS based lock providers, path to store the locks under. use Table's meta path as default");
 
   public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
       .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
       .defaultValue(0)
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("For DFS based lock providers, expire time in minutes, must be a non-negative number, default means no expire");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive database to acquire lock against");
 
   public static final ConfigProperty<String> HIVE_TABLE_NAME = ConfigProperty
       .key(HIVE_TABLE_NAME_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive table to acquire lock against");
 
   public static final ConfigProperty<String> HIVE_METASTORE_URI = ConfigProperty
       .key(HIVE_METASTORE_URI_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive metastore URI to acquire locks against.");
 
   public static final ConfigProperty<String> ZK_BASE_PATH = ConfigProperty
       .key(ZK_BASE_PATH_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("The base path on Zookeeper under which to create lock related ZNodes. "
           + "This should be same for all concurrent writers to the same table");
@@ -145,24 +157,28 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key(ZK_SESSION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_SESSION_TIMEOUT_MS)
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait after losing connection to ZooKeeper, before the session is expired");
 
   public static final ConfigProperty<Integer> ZK_CONNECTION_TIMEOUT_MS = ConfigProperty
       .key(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_CONNECTION_TIMEOUT_MS)
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait for establishing connection with Zookeeper.");
 
   public static final ConfigProperty<String> ZK_CONNECT_URL = ConfigProperty
       .key(ZK_CONNECT_URL_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Zookeeper URL to connect to.");
 
   public static final ConfigProperty<String> ZK_PORT = ConfigProperty
       .key(ZK_PORT_PROP_KEY)
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Zookeeper port to connect to.");
 
@@ -170,6 +186,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .key(ZK_LOCK_KEY_PROP_KEY)
       .noDefaultValue()
       .withInferFunction(p -> Option.ofNullable(p.getStringOrDefault(HoodieWriteConfig.TBL_NAME, null)))
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
           + "Final path on zk will look like base_path/lock_key. If this parameter is not set, we would "
@@ -179,6 +196,7 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "provider")
       .defaultValue(ZookeeperBasedLockProvider.class.getName())
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, user can provide their own implementation of LockProvider "
           + "which should be subclass of org.apache.hudi.common.lock.LockProvider");
@@ -194,6 +212,7 @@ public class HoodieLockConfig extends HoodieConfig {
           return Option.of(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName());
         }
       })
+      .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");

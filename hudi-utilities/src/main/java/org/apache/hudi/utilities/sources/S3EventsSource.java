@@ -21,16 +21,19 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.S3SourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.S3EventsMetaSelector;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -46,8 +49,9 @@ import java.util.List;
 public class S3EventsSource extends RowSource implements Closeable {
 
   private final S3EventsMetaSelector pathSelector;
+  private final SchemaProvider schemaProvider;
   private final List<Message> processedMessages = new ArrayList<>();
-  AmazonSQS sqs;
+  SqsClient sqs;
 
   public S3EventsSource(
       TypedProperties props,
@@ -57,6 +61,7 @@ public class S3EventsSource extends RowSource implements Closeable {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = S3EventsMetaSelector.createSourceSelector(props);
     this.sqs = this.pathSelector.createAmazonSqsClient();
+    this.schemaProvider = schemaProvider;
   }
 
   /**
@@ -64,7 +69,7 @@ public class S3EventsSource extends RowSource implements Closeable {
    *
    * @param lastCkptStr The last checkpoint instant string, empty if first run.
    * @param sourceLimit Limit on the size of data to fetch. For {@link S3EventsSource},
-   *                    {@link org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config#S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is used.
+   *                    {@link S3SourceConfig#S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is used.
    * @return A pair of dataset of event records and the next checkpoint instant string
    */
   @Override
@@ -75,16 +80,23 @@ public class S3EventsSource extends RowSource implements Closeable {
       return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());
     } else {
       Dataset<String> eventRecords = sparkSession.createDataset(selectPathsWithLatestSqsMessage.getLeft(), Encoders.STRING());
-      return Pair.of(
-          Option.of(sparkSession.read().json(eventRecords)),
-          selectPathsWithLatestSqsMessage.getRight());
+      StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
+      if (sourceSchema != null) {
+        return Pair.of(
+            Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)),
+            selectPathsWithLatestSqsMessage.getRight());
+      } else {
+        return Pair.of(
+            Option.of(sparkSession.read().json(eventRecords)),
+            selectPathsWithLatestSqsMessage.getRight());
+      }
     }
   }
 
   @Override
   public void close() throws IOException {
     // close resource
-    this.sqs.shutdown();
+    this.sqs.close();
   }
 
   @Override

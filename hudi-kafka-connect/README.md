@@ -352,14 +352,14 @@ Sample `clusteringjob.properties`:
 ```
 hoodie.datasource.write.recordkey.field=volume
 hoodie.datasource.write.partitionpath.field=date
-hoodie.deltastreamer.schemaprovider.registry.url=http://localhost:8081/subjects/hudi-test-topic/versions/latest
+hoodie.streamer.schemaprovider.registry.url=http://localhost:8081/subjects/hudi-test-topic/versions/latest
 
 hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
 hoodie.clustering.plan.strategy.small.file.limit=629145600
 hoodie.clustering.execution.strategy.class=org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy
 hoodie.clustering.plan.strategy.sort.columns=volume
 
-hoodie.write.concurrency.mode=single_writer
+hoodie.write.concurrency.mode=SINGLE_WRITER
 ```
 
 Note that you don't have to provide the instant time through `--instant-time`. In that case, the earliest scheduled

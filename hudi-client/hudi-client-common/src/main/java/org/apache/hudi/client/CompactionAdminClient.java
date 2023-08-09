@@ -41,12 +41,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.table.action.compact.OperationResult;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -64,7 +65,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
  */
 public class CompactionAdminClient extends BaseHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(HoodieEngineContext context, String basePath) {
     super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build());
@@ -244,8 +245,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
         merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
     return logFilesToBeMoved.stream().map(lf -> {
       ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
-      HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
-          FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
+      HoodieLogFile newLogFile = new HoodieLogFile(new CachingPath(lf.getPath().getParent(),
+          FSUtils.makeLogFileName(lf.getFileId(), "." + lf.getFileExtension(),
               compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       return Pair.of(lf, newLogFile);
     }).collect(Collectors.toList());
@@ -450,7 +451,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
         .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;
-      HoodieLogFile newLf = new HoodieLogFile(new Path(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
+      HoodieLogFile newLf = new HoodieLogFile(new CachingPath(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
           logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       result.add(Pair.of(toRepair, newLf));
       maxUsedVersion = version;

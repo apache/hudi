@@ -33,8 +33,8 @@ import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -49,7 +49,7 @@ import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STR
  */
 public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(MarkerBasedRollbackStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
 

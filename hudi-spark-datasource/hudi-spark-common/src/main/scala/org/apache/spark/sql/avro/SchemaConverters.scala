@@ -168,7 +168,7 @@ private[sql] object SchemaConverters {
 
       case FloatType => builder.floatType()
       case DoubleType => builder.doubleType()
-      case StringType => builder.stringType()
+      case StringType | CharType(_) | VarcharType(_) => builder.stringType()
       case NullType => builder.nullType()
       case d: DecimalType =>
         val avroType = LogicalTypes.decimal(d.precision, d.scale)

@@ -27,13 +27,13 @@ import scala.language.higherKinds
 
 class HdfsParquetImportProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "src_path", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "target_path", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "row_key", DataTypes.StringType, None),
-    ProcedureParameter.required(5, "partition_key", DataTypes.StringType, None),
-    ProcedureParameter.required(6, "schema_file_path", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType),
+    ProcedureParameter.required(2, "src_path", DataTypes.StringType),
+    ProcedureParameter.required(3, "target_path", DataTypes.StringType),
+    ProcedureParameter.required(4, "row_key", DataTypes.StringType),
+    ProcedureParameter.required(5, "partition_key", DataTypes.StringType),
+    ProcedureParameter.required(6, "schema_file_path", DataTypes.StringType),
     ProcedureParameter.optional(7, "format", DataTypes.StringType, "parquet"),
     ProcedureParameter.optional(8, "command", DataTypes.StringType, "insert"),
     ProcedureParameter.optional(9, "retry", DataTypes.IntegerType, 0),
@@ -81,5 +81,3 @@ object HdfsParquetImportProcedure {
     override def get() = new HdfsParquetImportProcedure()
   }
 }
-
-

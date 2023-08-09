@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer.multisync;
 
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -56,12 +56,12 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @MethodSource("withOneException")
-  void testeWithException(String syncClassNames) {
+  void testWithException(String syncClassNames) {
     String tableBasePath = basePath + "/test_multiple_metastore_exception";
     MockSyncTool1.syncSuccess = false;
     MockSyncTool2.syncSuccess = false;
     HoodieDeltaStreamer.Config cfg = getConfig(tableBasePath, syncClassNames);
-    Exception e = assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync());
+    Exception e = assertThrows(HoodieMetaSyncException.class, () -> new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync());
     assertTrue(e.getMessage().contains(MockSyncToolException1.class.getName()));
     assertTrue(MockSyncTool1.syncSuccess);
     assertTrue(MockSyncTool2.syncSuccess);
@@ -73,7 +73,7 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
     MockSyncTool1.syncSuccess = false;
     MockSyncTool2.syncSuccess = false;
     HoodieDeltaStreamer.Config cfg = getConfig(tableBasePath, getSyncNames("MockSyncTool1", "MockSyncTool2", "MockSyncToolException1", "MockSyncToolException2"));
-    Exception e = assertThrows(HoodieException.class, () -> new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync());
+    Exception e = assertThrows(HoodieMetaSyncException.class, () -> new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync());
     assertTrue(e.getMessage().contains(MockSyncToolException1.class.getName()));
     assertTrue(e.getMessage().contains(MockSyncToolException2.class.getName()));
     assertTrue(MockSyncTool1.syncSuccess);

@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -28,9 +30,9 @@ import java.util.function.Supplier
 
 class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "path", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "instant_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,24 +48,31 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(2))
-    val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    var instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
     val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
     if (completedInstants.empty) throw new HoodieException("There are no completed savepoint to run delete")
+    if (StringUtils.isNullOrEmpty(instantTime)) {
+      instantTime = completedInstants.lastInstant.get.getTimestamp
+    }
     val savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime)
 
     if (!completedInstants.containsInstant(savePoint)) {
       throw new HoodieException("Commit " + instantTime + " not found in Commits " + completedInstants)
     }
 
-    val client = createHoodieClient(jsc, basePath)
+    val client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
+      tableName.asInstanceOf[Option[String]])
     var result = false
 
     try {
       client.restoreToSavepoint(instantTime)
+      if (tableName.isDefined) {
+        spark.catalog.refreshTable(tableName.get.asInstanceOf[String])
+      }
       logInfo("The commit $instantTime rolled back.")
       result = true
     } catch {
@@ -86,7 +95,3 @@ object RollbackToSavepointProcedure {
     override def get(): RollbackToSavepointProcedure = new RollbackToSavepointProcedure()
   }
 }
-
-
-
-

@@ -46,9 +46,9 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestBase.Function2;
-import org.apache.hudi.testutils.HoodieClientTestBase.Function3;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utils.HoodieWriterClientTestHarness.Function2;
+import org.apache.hudi.utils.HoodieWriterClientTestHarness.Function3;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;

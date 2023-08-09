@@ -77,12 +77,12 @@ public class TestSanitizationUtils {
   @ParameterizedTest
   @MethodSource("provideDataFiles")
   public void testSanitizeDataset(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
-    Dataset<Row> expectedSantitizedDataset = spark.read().schema(sanitizedSchema).format("json").load(sanitizedDataFile);
+    Dataset<Row> expectedSanitizedDataset = spark.read().schema(sanitizedSchema).format("json").load(sanitizedDataFile);
     Dataset<Row> unsanitizedDataset = spark.read().schema(unsanitizedSchema).format("json").load(unsanitizedDataFile);
-    Dataset<Row> sanitizedDataset = SanitizationUtils.sanitizeColumnNamesForAvro(unsanitizedDataset,invalidCharMask);
+    Dataset<Row> sanitizedDataset = SanitizationUtils.sanitizeColumnNamesForAvro(unsanitizedDataset, invalidCharMask);
     assertEquals(unsanitizedDataset.count(), sanitizedDataset.count());
-    assertEquals(expectedSantitizedDataset.schema(), sanitizedDataset.schema());
-    assertEquals(expectedSantitizedDataset.collectAsList(), sanitizedDataset.collectAsList());
+    assertEquals(expectedSanitizedDataset.schema(), sanitizedDataset.schema());
+    assertEquals(expectedSanitizedDataset.collectAsList(), sanitizedDataset.collectAsList());
   }
 
   private void testSanitizeSchema(String unsanitizedSchema, Schema expectedSanitizedSchema) {
@@ -100,25 +100,25 @@ public class TestSanitizationUtils {
 
   @Test
   public void testGoodAvroSchema() {
-    String goodJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_valid.avsc");
+    String goodJson = getJson("src/test/resources/streamer-config/file_schema_provider_valid.avsc");
     testSanitizeSchema(goodJson,generateProperFormattedSchema());
   }
 
   @Test
   public void testBadAvroSchema() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement());
   }
 
   @Test
   public void testBadAvroSchemaAltCharMask() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithConfiguredReplacement(),true, "_");
   }
 
   @Test
   public void testBadAvroSchemaDisabledTest() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     assertThrows(SchemaParseException.class, () -> testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement(), false));
   }
 

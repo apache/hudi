@@ -35,8 +35,6 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
@@ -90,20 +88,20 @@ public abstract class HoodieSparkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  protected <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-      Option<R> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
+      // to reflect the delete mdt partitions.
+      deleteMetadataIndexIfNecessary();
+
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
-          actionMetadata, Option.of(triggeringInstantTimestamp));
-      // even with metadata enabled, some index could have been disabled
-      // delete metadata partitions corresponding to such indexes
-      deleteMetadataIndexIfNecessary();
+          Option.of(triggeringInstantTimestamp));
       try {
         if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {

@@ -18,67 +18,59 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
-public class HoodieClientTestBase extends HoodieClientTestHarness {
+public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
-  protected static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
+  protected static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestBase.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -90,111 +82,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  /**
-   * Get Default HoodieWriteConfig for tests.
-   *
-   * @return Default Hoodie Write Config for tests
-   */
-  public HoodieWriteConfig getConfig() {
-    return getConfigBuilder().build();
-  }
-
-  public HoodieWriteConfig getConfig(IndexType indexType) {
-    return getConfigBuilder(indexType).build();
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder() {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder(HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, IndexType.BLOOM, cleaningPolicy);
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder(IndexType indexType) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
-  }
-
-  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return getConfigBuilder(schemaStr, IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
-  }
-
-  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
-    return getConfigBuilder(schemaStr, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType,
-                                                    HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
-        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
-        .withWriteStatusClass(MetadataMergeWriteStatus.class)
-        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
-        .forTable(RAW_TRIPS_TEST_NAME)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
-  }
-
   public HoodieSparkTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
-  }
-
-  public void assertPartitionMetadataForRecords(String basePath, List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
-    Set<String> partitionPathSet = inputRecords.stream()
-        .map(HoodieRecord::getPartitionPath)
-        .collect(Collectors.toSet());
-    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
-  }
-
-  public void assertPartitionMetadataForKeys(String basePath, List<HoodieKey> inputKeys, FileSystem fs) throws IOException {
-    Set<String> partitionPathSet = inputKeys.stream()
-        .map(HoodieKey::getPartitionPath)
-        .collect(Collectors.toSet());
-    assertPartitionMetadata(basePath, partitionPathSet.stream().toArray(String[]::new), fs);
-  }
-
-  /**
-   * Ensure presence of partition meta-data at known depth.
-   *
-   * @param partitionPaths Partition paths to check
-   * @param fs File System
-   * @throws IOException in case of error
-   */
-  public static void assertPartitionMetadata(String basePath, String[] partitionPaths, FileSystem fs) throws IOException {
-    for (String partitionPath : partitionPaths) {
-      assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, new Path(basePath, partitionPath)));
-      HoodiePartitionMetadata pmeta = new HoodiePartitionMetadata(fs, new Path(basePath, partitionPath));
-      pmeta.readFromFS();
-      assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
-    }
   }
 
   /**
@@ -208,24 +99,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       assertTrue(rec.isCurrentLocationKnown(), "Record " + rec + " found with no location.");
       assertEquals(rec.getCurrentLocation().getInstantTime(), instantTime,
           "All records should have commit time " + instantTime + ", since updates were made");
-    }
-  }
-
-  /**
-   * Assert that there is no duplicate key at the partition level.
-   *
-   * @param records List of Hoodie records
-   */
-  public static void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
-    Map<String, Set<String>> partitionToKeys = new HashMap<>();
-    for (HoodieRecord r : records) {
-      String key = r.getRecordKey();
-      String partitionPath = r.getPartitionPath();
-      if (!partitionToKeys.containsKey(partitionPath)) {
-        partitionToKeys.put(partitionPath, new HashSet<>());
-      }
-      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
-      partitionToKeys.get(partitionPath).add(key);
     }
   }
 
@@ -471,12 +344,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         expTotalCommits, false, filterForCommitTimeWithAssert);
   }
 
-  public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
-                                          String prevCommitTime, String initCommitTime,
-                                          int numRecordsInThisCommit,
-                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
-                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
-    return deleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, deleteFn, isPreppedAPI,
+  public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                          String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI, boolean assertForCommit,
+                                          int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+    return deleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, isPreppedAPI,
         assertForCommit, expRecordsInThisCommit, expTotalRecords, true);
   }
 
@@ -489,7 +360,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @param prevCommitTime         Commit Timestamp used in previous commit
    * @param initCommitTime         Begin Timestamp (usually "000")
    * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param deleteFn               Delete Function to be used for deletes
    * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
    * @param assertForCommit        Enable Assertion of Writes
    * @param expRecordsInThisCommit Expected number of records in this commit
@@ -498,16 +368,38 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @throws Exception in case of error
    */
   public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
-      String prevCommitTime, String initCommitTime,
-      int numRecordsInThisCommit,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
+      String prevCommitTime, String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI,
       boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filterForCommitTimeWithAssert) throws Exception {
-    final Function<Integer, List<HoodieKey>> keyGenFunction =
-        generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
-    return deleteBatch(client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit,
-        keyGenFunction,
-        deleteFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert);
+    if (isPreppedAPI) {
+      final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+          generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeleteRecords);
+
+      // Delete 1 (only deletes)
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
+      JavaRDD<HoodieRecord> deleteRecords = jsc.parallelize(records, 1);
+
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> deleteFn = SparkRDDWriteClient::deletePrepped;
+      JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert, result);
+    } else {
+      final Function<Integer, List<HoodieKey>> keyGenFunction =
+          generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
+
+      // Delete 1 (only deletes)
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
+      JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
+
+      // check the partition metadata is written out
+      assertPartitionMetadataForKeys(basePath, keysToDelete, fs);
+
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn = SparkRDDWriteClient::delete;
+      JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert, result);
+    }
   }
 
   public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
@@ -634,38 +526,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return result;
   }
 
-  /**
-   * Helper to delete batch of hoodie keys and do regular assertions on the state after successful completion.
-   *
-   * @param client                 Hoodie Write Client
-   * @param newCommitTime          New Commit Timestamp to be used
-   * @param prevCommitTime         Commit Timestamp used in previous commit
-   * @param initCommitTime         Begin Timestamp (usually "000")
-   * @param keyGenFunction         Key Generation function
-   * @param deleteFn               Write Function to be used for delete
-   * @param assertForCommit        Enable Assertion of Writes
-   * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords        Expected number of records when scanned
-   * @throws Exception in case of error
-   */
-  public JavaRDD<WriteStatus> deleteBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
-      String initCommitTime, int numRecordsInThisCommit,
-      Function<Integer, List<HoodieKey>> keyGenFunction,
-      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filerForCommitTimeWithAssert) throws Exception {
-
-    // Delete 1 (only deletes)
-    client.startCommitWithTime(newCommitTime);
-
-    List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
-    JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
-
-    JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+  private JavaRDD<WriteStatus> getWriteStatusAndVerifyDeleteOperation(String newCommitTime, String prevCommitTime, String initCommitTime, boolean assertForCommit, int expRecordsInThisCommit,
+                                                                      int expTotalRecords, boolean filerForCommitTimeWithAssert, JavaRDD<WriteStatus> result) {
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
-
-    // check the partition metadata is written out
-    assertPartitionMetadataForKeys(basePath, keysToDelete, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -698,6 +562,37 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       }
     }
     return result;
+  }
+
+  public static Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
+      String instantTime, String partition, String replacedFileId, String newFileId) {
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
+    requestedReplaceMetadata.setVersion(1);
+    HoodieSliceInfo sliceInfo = HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build();
+    List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
+    clusteringGroups.add(HoodieClusteringGroup.newBuilder()
+        .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
+        .setSlices(Collections.singletonList(sliceInfo)).build());
+    requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
+    requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
+        .setVersion(1).setExtraMetadata(Collections.emptyMap())
+        .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
+        .setInputGroups(clusteringGroups).build());
+
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    replaceMetadata.addReplaceFileId(partition, replacedFileId);
+    replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
+    if (!StringUtils.isNullOrEmpty(newFileId)) {
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setPartitionPath(partition);
+      writeStat.setPath(partition + "/" + getBaseFilename(instantTime, newFileId));
+      writeStat.setFileId(newFileId);
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
+      replaceMetadata.addWriteStat(partition, writeStat);
+    }
+    return Pair.of(requestedReplaceMetadata, replaceMetadata);
   }
 
   /**
@@ -735,6 +630,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
+        .withHeartbeatTolerableMisses(0)
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
@@ -770,19 +666,4 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   public HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo, String partitionPath) {
     return hoodieCleanStatsTwo.stream().filter(e -> e.getPartitionPath().equals(partitionPath)).findFirst().orElse(null);
   }
-
-  // Functional Interfaces for passing lambda and Hoodie Write API contexts
-
-  @FunctionalInterface
-  public interface Function2<R, T1, T2> {
-
-    R apply(T1 v1, T2 v2) throws IOException;
-  }
-
-  @FunctionalInterface
-  public interface Function3<R, T1, T2, T3> {
-
-    R apply(T1 v1, T2 v2, T3 v3) throws IOException;
-  }
-
 }

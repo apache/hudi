@@ -42,19 +42,19 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -75,8 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
  * {@link HoodieMetadataFileSystemView} on the timeline server.
  */
-public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestHarness {
-  private static final Logger LOG = LogManager.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
+public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
+  private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -118,8 +118,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
               context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
               () -> new HoodieBackedTestDelayedTableMetadata(
-                  context, config.getMetadataConfig(), basePath,
-                  config.getViewStorageConfig().getSpillableDir(), true)));
+                  context, config.getMetadataConfig(), basePath, true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
       LOG.info("Started timeline server on port: " + timelineServicePort);
@@ -192,7 +191,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
       try {
         return future.get();
       } catch (Exception e) {
-        LOG.error(e);
+        LOG.error("Get result error", e);
         return false;
       }
     }).reduce((a, b) -> a && b).get());

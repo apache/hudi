@@ -32,8 +32,6 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.io.File
 import java.util
@@ -49,8 +47,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   val defaultActions = "clean,commit,deltacommit,rollback,savepoint,restore"
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "local_folder", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "local_folder", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, -1),
     ProcedureParameter.optional(3, "actions", DataTypes.StringType, defaultActions),
     ProcedureParameter.optional(4, "desc", DataTypes.BooleanType, false)
@@ -236,5 +234,3 @@ object ExportInstantsProcedure {
     override def get() = new ExportInstantsProcedure()
   }
 }
-
-

@@ -29,7 +29,8 @@ import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.util.MetaserverTableUtils;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -43,7 +44,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  */
 public class TimelineService implements Serializable {
 
-  private static final Logger LOG = Logger.getLogger(TimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final List<TAction> ALL_ACTIONS = Arrays.asList(TAction.COMMIT, TAction.DELTACOMMIT,
       TAction.CLEAN, TAction.ROLLBACK, TAction.SAVEPOINT, TAction.REPLACECOMMIT, TAction.COMPACTION, TAction.RESTORE);
   private static final List<TState> PENDING_STATES = Arrays.asList(TState.REQUESTED, TState.INFLIGHT);
@@ -138,12 +139,8 @@ public class TimelineService implements Serializable {
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     if (store.instantExists(tableId, instant)) {
-      switch (instant.getState()) {
-        case COMPLETED:
-          store.deleteInstantAllMeta(tableId, instant.getTimestamp());
-          break;
-        default:
-          store.deleteInstant(tableId, instant);
+      if (instant.getState() == TState.COMPLETED) {
+        store.deleteInstantAllMeta(tableId, instant.getTimestamp());
       }
       store.deleteInstant(tableId, instant);
     } else {

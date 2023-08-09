@@ -43,8 +43,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -73,7 +73,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
  */
 public class FileCreateUtils {
 
-  private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileCreateUtils.class);
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -312,17 +312,17 @@ public class FileCreateUtils {
     }
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
+    return createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
+    return createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -330,10 +330,11 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
-    raf.setLength(length);
-    raf.close();
+    try (RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw")) {
+      raf.setLength(length);
+    }
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
+    return baseFilePath.toString();
   }
 
   public static Path getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileId) {
@@ -341,12 +342,12 @@ public class FileCreateUtils {
     return parentPath.resolve(baseFileName(instantTime, fileId));
   }
 
-  public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
+  public static String createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
       throws Exception {
-    createLogFile(basePath, partitionPath, instantTime, fileId, version, 0);
+    return createLogFile(basePath, partitionPath, instantTime, fileId, version, 0);
   }
 
-  public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version, int length)
+  public static String createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version, int length)
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -357,6 +358,7 @@ public class FileCreateUtils {
     RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
     raf.setLength(length);
     raf.close();
+    return logFilePath.toString();
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)

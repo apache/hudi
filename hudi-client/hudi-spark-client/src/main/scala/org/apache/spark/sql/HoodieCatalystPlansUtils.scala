@@ -21,6 +21,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -53,6 +54,40 @@ trait HoodieCatalystPlansUtils {
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
+   * Decomposes [[MatchMergeIntoTable]] into its arguments with accommodation for
+   * case class changes of [[MergeIntoTable]] in Spark 3.4.
+   *
+   * Before Spark 3.4.0 (five arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
+   *
+   * Since Spark 3.4.0 (six arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction],
+   * notMatchedBySourceActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
+   */
+  def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
+
+
+  /**
+   * Spark requires file formats to append the partition path fields to the end of the schema.
+   * For tables where the partition path fields are not at the end of the schema, we don't want
+   * to return the schema in the wrong order when they do a query like "select *". To fix this
+   * behavior, we apply a projection onto FileScan when the file format is NewHudiParquetFileFormat
+   */
+  def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan
+
+  /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
    * changes in Spark 3.3
    */
@@ -72,4 +107,12 @@ trait HoodieCatalystPlansUtils {
    * Get the member of the Repair Table LogicalPlan.
    */
   def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
+
+  /**
+   * Calls fail analysis on
+   *s
+   */
+  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
+
+  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 }

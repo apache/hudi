@@ -23,29 +23,35 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableDeltaStreamer.class);
 
   static class TestHelpers {
 
@@ -74,6 +80,16 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     }
   }
 
+  @Test
+  public void testEmptyTransformerProps() throws IOException {
+    // HUDI-4630: If there is no transformer props passed through, don't populate the transformerClassNames
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", TestDataSource.class.getName(), false, false, null);
+    HoodieDeltaStreamer.Config dsConfig = new HoodieDeltaStreamer.Config();
+    TypedProperties tblProperties = new TypedProperties();
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    assertNull(cfg.transformerClassNames);
+  }
+  
   @Test
   public void testMetaSyncConfig() throws IOException {
     HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", TestDataSource.class.getName(), true, true, null);
@@ -120,13 +136,19 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getTableExecutionContexts().size());
     assertEquals(basePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
-    assertEquals("topic1", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.KAFKA_TOPIC_PROP));
-    assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()));
-    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()));
-    assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP));
-    assertEquals("http://localhost:8081/subjects/random-value/versions/latest", executionContext.getProperties().getString(SchemaRegistryProvider.Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    assertEquals("topic1",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieStreamerConfig.KAFKA_TOPIC));
+    assertEquals("_row_key",
+        getStringWithAltKeys(executionContext.getProperties(), DataSourceWriteOptions.RECORDKEY_FIELD()));
+    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(),
+        getStringWithAltKeys(executionContext.getProperties(), DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME()));
+    assertEquals("uber_hive_dummy_table",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieSyncConfig.META_SYNC_TABLE_NAME));
+    assertEquals("http://localhost:8081/subjects/random-value/versions/latest",
+        getStringWithAltKeys(executionContext.getProperties(), HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
     assertEquals("http://localhost:8081/subjects/topic2-value/versions/latest",
-            streamer.getTableExecutionContexts().get(0).getProperties().getString(SchemaRegistryProvider.Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+        getStringWithAltKeys(streamer.getTableExecutionContexts().get(0).getProperties(),
+            HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
   }
 
   @Test
@@ -242,10 +264,14 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
         case "dummy_table_short_trip":
           String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
           assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          List<String> transformerClass = tableExecutionContext.getConfig().transformerClassNames;
+          assertEquals(1, transformerClass.size());
+          assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestIdentityTransformer", transformerClass.get(0));
           break;
         default:
           String defaultKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
           assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), defaultKeyGeneratorClass);
+          assertNull(tableExecutionContext.getConfig().transformerClassNames);
       }
     });
   }

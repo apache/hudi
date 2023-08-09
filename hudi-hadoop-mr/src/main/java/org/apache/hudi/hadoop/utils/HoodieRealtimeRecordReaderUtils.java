@@ -18,21 +18,24 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.hive.serde2.io.DateWritable;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
-import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -44,11 +47,11 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -63,7 +66,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 public class HoodieRealtimeRecordReaderUtils {
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReaderUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
 
   /**
    * get the max compaction memory in bytes from JobConf.
@@ -147,6 +150,10 @@ public class HoodieRealtimeRecordReaderUtils {
    * Convert the projected read from delta record into an array writable.
    */
   public static Writable avroToArrayWritable(Object value, Schema schema) {
+    return avroToArrayWritable(value, schema, false);
+  }
+
+  public static Writable avroToArrayWritable(Object value, Schema schema, boolean supportTimestamp) {
 
     if (value == null) {
       return null;
@@ -156,23 +163,29 @@ public class HoodieRealtimeRecordReaderUtils {
       case STRING:
         return new Text(value.toString());
       case BYTES:
-        return new BytesWritable(((ByteBuffer)value).array());
+        return new BytesWritable(((ByteBuffer) value).array());
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
-          return new DateWritable((Integer) value);
+          return HoodieHiveUtils.getDateWriteable((Integer) value);
         }
-        return new IntWritable((Integer) value);
+        return new IntWritable(Integer.parseInt(value.toString()));
       case LONG:
-        if (schema.getLogicalType() != null && "timestamp-micros".equals(schema.getLogicalType().getName())) {
-          return new TimestampWritable(new Timestamp((Long) value));
+        LogicalType logicalType = schema.getLogicalType();
+        // If there is a specified timestamp or under normal cases, we will process it
+        if (supportTimestamp) {
+          if (LogicalTypes.timestampMillis().equals(logicalType)) {
+            return HoodieHiveUtils.getTimestampWriteable((Long) value, true);
+          } else if (LogicalTypes.timestampMicros().equals(logicalType)) {
+            return HoodieHiveUtils.getTimestampWriteable((Long) value, false);
+          }
         }
-        return new LongWritable((Long) value);
+        return new LongWritable(Long.parseLong(value.toString()));
       case FLOAT:
-        return new FloatWritable((Float) value);
+        return new FloatWritable(Float.parseFloat(value.toString()));
       case DOUBLE:
-        return new DoubleWritable((Double) value);
+        return new DoubleWritable(Double.parseDouble(value.toString()));
       case BOOLEAN:
-        return new BooleanWritable((Boolean) value);
+        return new BooleanWritable(Boolean.parseBoolean(value.toString()));
       case NULL:
         return null;
       case RECORD:
@@ -187,7 +200,7 @@ public class HoodieRealtimeRecordReaderUtils {
           } catch (AvroRuntimeException e) {
             LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
           }
-          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
+          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema(), supportTimestamp);
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
@@ -197,7 +210,7 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] arrayValues = new Writable[arrayValue.size()];
         int arrayValueIndex = 0;
         for (Object obj : arrayValue) {
-          arrayValues[arrayValueIndex++] = avroToArrayWritable(obj, schema.getElementType());
+          arrayValues[arrayValueIndex++] = avroToArrayWritable(obj, schema.getElementType(), supportTimestamp);
         }
         // Hive 1.x will fail here, it requires values2 to be wrapped into another ArrayWritable
         return new ArrayWritable(Writable.class, arrayValues);
@@ -209,7 +222,7 @@ public class HoodieRealtimeRecordReaderUtils {
           Map.Entry mapEntry = (Map.Entry) entry;
           Writable[] nestedMapValues = new Writable[2];
           nestedMapValues[0] = new Text(mapEntry.getKey().toString());
-          nestedMapValues[1] = avroToArrayWritable(mapEntry.getValue(), schema.getValueType());
+          nestedMapValues[1] = avroToArrayWritable(mapEntry.getValue(), schema.getValueType(), supportTimestamp);
           mapValues[mapValueIndex++] = new ArrayWritable(Writable.class, nestedMapValues);
         }
         // Hive 1.x will fail here, it requires values3 to be wrapped into another ArrayWritable
@@ -222,9 +235,9 @@ public class HoodieRealtimeRecordReaderUtils {
         Schema s1 = types.get(0);
         Schema s2 = types.get(1);
         if (s1.getType() == Schema.Type.NULL) {
-          return avroToArrayWritable(value, s2);
+          return avroToArrayWritable(value, s2, supportTimestamp);
         } else if (s2.getType() == Schema.Type.NULL) {
-          return avroToArrayWritable(value, s1);
+          return avroToArrayWritable(value, s1, supportTimestamp);
         } else {
           throw new IllegalArgumentException("Only support union with null");
         }
@@ -257,10 +270,8 @@ public class HoodieRealtimeRecordReaderUtils {
     String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
-    List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(","))
-        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+    List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(",")).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
-    // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNamesSet.size() != fieldOrders.length) {
       throw new HoodieException(String
           .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
@@ -289,6 +300,10 @@ public class HoodieRealtimeRecordReaderUtils {
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
     return appendNullSchemaFields(schema, fieldsToAdd);
+  }
+
+  public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
+    return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(conf, path);
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

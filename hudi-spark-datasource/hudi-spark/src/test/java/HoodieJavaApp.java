@@ -28,21 +28,19 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -99,7 +97,7 @@ public class HoodieJavaApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
@@ -160,12 +158,10 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
-        // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES().key(), DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES().defaultValue())
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 
@@ -188,9 +184,6 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
@@ -216,9 +209,6 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")

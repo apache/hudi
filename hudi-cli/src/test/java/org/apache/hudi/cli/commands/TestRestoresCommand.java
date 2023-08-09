@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -101,10 +102,10 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
             .build();
 
     HoodieTestTable hoodieTestTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-                    metaClient.getHadoopConf(), config, context))
+                    metaClient.getHadoopConf(), config, context), Option.of(context))
             .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
             .addCommit("100")
-            .withBaseFilesInPartitions(partitionAndFileId)
+            .withBaseFilesInPartitions(partitionAndFileId).getLeft()
             .addCommit("101");
 
     hoodieTestTable.addCommit("102").withBaseFilesInPartitions(partitionAndFileId);

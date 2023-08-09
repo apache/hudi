@@ -43,55 +43,65 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARQUET_BLOCK_SIZE = ConfigProperty
       .key("hoodie.parquet.block.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Parquet RowGroup size in bytes. It's recommended to make this large enough that scan costs can be"
           + " amortized by packing enough column values into a single row group.");
 
   public static final ConfigProperty<String> PARQUET_PAGE_SIZE = ConfigProperty
       .key("hoodie.parquet.page.size")
       .defaultValue(String.valueOf(1 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Parquet page size in bytes. Page is the unit of read within a parquet file. "
           + "Within a block, pages are compressed separately.");
 
   public static final ConfigProperty<String> ORC_FILE_MAX_SIZE = ConfigProperty
       .key("hoodie.orc.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Target file size in bytes for ORC base files.");
 
   public static final ConfigProperty<String> ORC_STRIPE_SIZE = ConfigProperty
       .key("hoodie.orc.stripe.size")
       .defaultValue(String.valueOf(64 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Size of the memory buffer in bytes for writing");
 
   public static final ConfigProperty<String> ORC_BLOCK_SIZE = ConfigProperty
       .key("hoodie.orc.block.size")
       .defaultValue(ORC_FILE_MAX_SIZE.defaultValue())
+      .markAdvanced()
       .withDocumentation("ORC block size, recommended to be aligned with the target file size.");
 
   public static final ConfigProperty<String> HFILE_MAX_FILE_SIZE = ConfigProperty
       .key("hoodie.hfile.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Target file size in bytes for HFile base files.");
 
   public static final ConfigProperty<String> HFILE_BLOCK_SIZE = ConfigProperty
       .key("hoodie.hfile.block.size")
       .defaultValue(String.valueOf(1024 * 1024))
+      .markAdvanced()
       .withDocumentation("Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
 
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
       .defaultValue(String.valueOf(1024 * 1024 * 1024)) // 1 GB
+      .markAdvanced()
       .withDocumentation("LogFile max size in bytes. This is the maximum size allowed for a log file "
           + "before it is rolled over to the next version.");
 
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.data.block.max.size")
       .defaultValue(String.valueOf(256 * 1024 * 1024))
+      .markAdvanced()
       .withDocumentation("LogFile Data block max size in bytes. This is the maximum size allowed for a single data block "
           + "to be appended to a log file. This helps to make sure the data appended to the log file is broken up "
           + "into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.");
@@ -99,6 +109,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARQUET_COMPRESSION_RATIO_FRACTION = ConfigProperty
       .key("hoodie.parquet.compression.ratio")
       .defaultValue(String.valueOf(0.1))
+      .markAdvanced()
       .withDocumentation("Expected compression of parquet data used by Hudi, when it tries to size new parquet files. "
           + "Increase this value, if bulk_insert is producing smaller than expected sized files");
 
@@ -111,11 +122,13 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether to use dictionary encoding");
 
   public static final ConfigProperty<String> PARQUET_WRITE_LEGACY_FORMAT_ENABLED = ConfigProperty
       .key("hoodie.parquet.writelegacyformat.enabled")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. "
           + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
           + "If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.");
@@ -123,6 +136,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARQUET_OUTPUT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.parquet.outputtimestamptype")
       .defaultValue("TIMESTAMP_MICROS")
+      .markAdvanced()
       .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
 
   // SPARK-38094 Spark 3.3 checks if this field is enabled. Hudi has to provide this or there would be NPE thrown
@@ -131,6 +145,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARQUET_FIELD_ID_WRITE_ENABLED = ConfigProperty
       .key("hoodie.parquet.field_id.write.enabled")
       .defaultValue("true")
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. "
           + "If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.");
@@ -138,19 +153,31 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
+      .markAdvanced()
       .withDocumentation("Compression codec to use for hfile base files.");
 
   public static final ConfigProperty<String> ORC_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.orc.compression.codec")
       .defaultValue("ZLIB")
+      .markAdvanced()
       .withDocumentation("Compression codec to use for ORC base files.");
 
   // Default compression ratio for log file to parquet, general 3x
   public static final ConfigProperty<String> LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION = ConfigProperty
       .key("hoodie.logfile.to.parquet.compression.ratio")
       .defaultValue(String.valueOf(0.35))
+      .markAdvanced()
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
           + "table to send inserts into log files & control the size of compacted parquet file.");
+
+  public static final ConfigProperty<String> HOODIE_AVRO_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.avro.write.support.class")
+      .defaultValue("org.apache.hudi.avro.HoodieAvroWriteSupport")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Provided write support class should extend HoodieAvroWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to "
+          + "override the existing write context.");
 
   /**
    * @deprecated Use {@link #PARQUET_MAX_FILE_SIZE} and its methods instead
@@ -312,7 +339,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder logFileDataBlockMaxSize(int dataBlockSize) {
+    public Builder logFileDataBlockFormat(String format) {
+      storageConfig.setValue(LOGFILE_DATA_BLOCK_FORMAT, format);
+      return this;
+    }
+
+    public Builder logFileDataBlockMaxSize(long dataBlockSize) {
       storageConfig.setValue(LOGFILE_DATA_BLOCK_MAX_SIZE, String.valueOf(dataBlockSize));
       return this;
     }
@@ -374,6 +406,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder orcCompressionCodec(String orcCompressionCodec) {
       storageConfig.setValue(ORC_COMPRESSION_CODEC_NAME, orcCompressionCodec);
+      return this;
+    }
+
+    public Builder withAvroWriteSupport(String avroWriteSupportClassName) {
+      storageConfig.setValue(HOODIE_AVRO_WRITE_SUPPORT_CLASS, avroWriteSupportClassName);
       return this;
     }
 

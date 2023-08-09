@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -27,10 +28,9 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 /**
  * Command for insert into Hudi table.
@@ -91,14 +91,14 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     var mode = SaveMode.Append
     var isOverWriteTable = false
     var isOverWritePartition = false
-    if (overwrite && partitionSpec.isEmpty) {
-      // insert overwrite table
-      mode = SaveMode.Overwrite
-      isOverWriteTable = true
-    } else {
-      // for insert into or insert overwrite partition we use append mode.
-      mode = SaveMode.Append
-      isOverWritePartition = overwrite
+
+    if (overwrite) {
+      if (deduceIsOverwriteTable(sparkSession, catalogTable, partitionSpec, extraOptions)) {
+        isOverWriteTable = true
+        mode = SaveMode.Overwrite
+      } else {
+        isOverWritePartition = true
+      }
     }
 
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)

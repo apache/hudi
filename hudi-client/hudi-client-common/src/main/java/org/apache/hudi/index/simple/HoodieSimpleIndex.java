@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
@@ -42,6 +41,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.List;
 
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * A simple index which reads interested fields(record key and partition path) from base files and
@@ -50,7 +50,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 public class HoodieSimpleIndex
     extends HoodieIndex<Object, Object> {
 
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   public HoodieSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config);
@@ -107,17 +107,22 @@ public class HoodieSimpleIndex
           .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
+    int inputParallelism = inputRecords.getNumPartitions();
+    int configuredSimpleIndexParallelism = config.getSimpleIndexParallelism();
+    // NOTE: Target parallelism could be overridden by the config
+    int targetParallelism =
+        configuredSimpleIndexParallelism > 0 ? configuredSimpleIndexParallelism : inputParallelism;
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
-            config.getSimpleIndexParallelism());
+            targetParallelism);
 
     HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
           final HoodieRecord<R> untaggedRecord = entry.getRight().getLeft();
           final Option<HoodieRecordLocation> location = Option.ofNullable(entry.getRight().getRight().orElse(null));
-          return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
+          return tagAsNewRecordIfNeeded(untaggedRecord, location);
         });
 
     if (config.getSimpleIndexUseCaching()) {

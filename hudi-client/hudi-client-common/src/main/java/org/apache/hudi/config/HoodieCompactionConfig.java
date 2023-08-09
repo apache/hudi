@@ -32,9 +32,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Compaction related config.
@@ -55,6 +53,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> SCHEDULE_INLINE_COMPACT = ConfigProperty
       .key("hoodie.compact.schedule.inline")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure "
           + "they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both "
           + "`hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. "
@@ -62,9 +61,17 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
           + "execution inline for compaction");
 
+  public static final ConfigProperty<String> ENABLE_LOG_COMPACTION = ConfigProperty
+      .key("hoodie.log.compaction.enable")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.14")
+      .withDocumentation("By enabling log compaction through this config, log compaction will also get enabled for the metadata table.");
+
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
       .key("hoodie.log.compaction.inline")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
@@ -79,6 +86,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.seconds")
       .defaultValue(String.valueOf(60 * 60))
+      .markAdvanced()
       .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one. "
           + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
           + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
@@ -86,12 +94,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.compact.inline.trigger.strategy")
       .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
-      .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
-          + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+      .markAdvanced()
+      .withDocumentation(CompactionTriggerStrategy.class);
 
   public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
       .key("hoodie.parquet.small.file.limit")
       .defaultValue(String.valueOf(104857600))
+      .markAdvanced()
       .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
           + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
           + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file."
@@ -100,6 +109,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD = ConfigProperty
       .key("hoodie.record.size.estimation.threshold")
       .defaultValue("1.0")
+      .markAdvanced()
       .withDocumentation("We use the previous commits' metadata to calculate the estimated record size and use it "
           + " to bin pack records into partitions. If the previous commit is too small to make an accurate estimation, "
           + " Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten "
@@ -109,18 +119,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> TARGET_IO_PER_COMPACTION_IN_MB = ConfigProperty
       .key("hoodie.compaction.target.io")
       .defaultValue(String.valueOf(500 * 1024))
+      .markAdvanced()
       .withDocumentation("Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. "
           + "This value helps bound ingestion latency while compaction is run inline mode.");
 
   public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
       .key("hoodie.compaction.logfile.size.threshold")
       .defaultValue(0L)
+      .markAdvanced()
       .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
           + " the file group will be compacted.");
 
   public static final ConfigProperty<Long> COMPACTION_LOG_FILE_NUM_THRESHOLD = ConfigProperty
       .key("hoodie.compaction.logfile.num.threshold")
       .defaultValue(0L)
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Only if the log file num is greater than the threshold,"
           + " the file group will be compacted.");
@@ -128,6 +141,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
       .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
+      .markAdvanced()
       .withDocumentation("Compaction strategy decides which file groups are picked up for "
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
@@ -135,6 +149,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
           + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
           + " header) or false for immediate block read (higher memory usage)");
@@ -142,20 +157,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.reverse.log.read")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
           + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
 
   public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
       .key("hoodie.compaction.daybased.target.partitions")
       .defaultValue("10")
+      .markAdvanced()
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
-
-  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
-      .key("hoodie.compaction.preserve.commit.metadata")
-      .defaultValue(true)
-      .sinceVersion("0.11.0")
-      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
    * Configs related to specific table types.
@@ -163,6 +174,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COPY_ON_WRITE_INSERT_SPLIT_SIZE = ConfigProperty
       .key("hoodie.copyonwrite.insert.split.size")
       .defaultValue(String.valueOf(500000))
+      .markAdvanced()
       .withDocumentation("Number of inserts assigned for each partition/bucket for writing. "
           + "We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and "
           + "  over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first "
@@ -171,6 +183,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COPY_ON_WRITE_AUTO_SPLIT_INSERTS = ConfigProperty
       .key("hoodie.copyonwrite.insert.auto.split")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("Config to control whether we control insert split sizes automatically based on average"
           + " record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely"
           + " cumbersome.");
@@ -178,6 +191,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COPY_ON_WRITE_RECORD_SIZE_ESTIMATE = ConfigProperty
       .key("hoodie.copyonwrite.record.size.estimate")
       .defaultValue(String.valueOf(1024))
+      .markAdvanced()
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
@@ -185,6 +199,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
       .key("hoodie.log.compaction.blocks.threshold")
       .defaultValue("5")
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
@@ -192,6 +207,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
@@ -423,13 +439,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
-      compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
+    public Builder withLogCompactionEnabled(boolean enableLogCompaction) {
+      compactionConfig.setValue(ENABLE_LOG_COMPACTION, Boolean.toString(enableLogCompaction));
       return this;
     }
 
-    public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
-      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
+    public Builder withLogCompactionBlocksThreshold(int logCompactionBlocksThreshold) {
+      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, String.valueOf(logCompactionBlocksThreshold));
       return this;
     }
 

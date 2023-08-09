@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.log4j.LogManager
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
@@ -43,22 +42,6 @@ import scala.collection.JavaConversions._
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
-  private val log = LogManager.getLogger(classOf[TestMORDataSourceStorage])
-
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
-    "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
-
-  val verificationCol: String = "driver"
-  val updatedVerificationVal: String = "driver_update"
-
   override def conf: SparkConf = conf(getSparkSqlConf)
 
   @ParameterizedTest
@@ -68,7 +51,20 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,",
     "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String) {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String): Unit = {
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    val verificationCol: String = "driver"
+    val updatedVerificationVal: String = "driver_update"
+
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
     if (!StringUtils.isNullOrEmpty(preCombineField)) {

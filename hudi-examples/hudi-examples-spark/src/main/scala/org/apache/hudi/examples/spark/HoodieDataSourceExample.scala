@@ -19,7 +19,7 @@
 package org.apache.hudi.examples.spark
 
 import org.apache.hudi.DataSourceReadOptions.{BEGIN_INSTANTTIME, END_INSTANTTIME, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL}
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, PARTITIONS_TO_DELETE, OPERATION, DELETE_PARTITION_OPERATION_OPT_VAL, DELETE_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, DELETE_PARTITION_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PARTITIONS_TO_DELETE, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
@@ -131,7 +131,7 @@ object HoodieDataSourceExample {
   }
 
   /**
-   * Deleta data based in data information.
+   * Delete data based in data information.
    */
   def delete(spark: SparkSession, tablePath: String, tableName: String): Unit = {
 

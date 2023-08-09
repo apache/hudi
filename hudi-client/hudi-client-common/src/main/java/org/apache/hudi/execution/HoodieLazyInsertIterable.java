@@ -90,12 +90,16 @@ public abstract class HoodieLazyInsertIterable<T>
     }
   }
 
-  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformer(Schema schema,
+  /**
+   * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
+   * expensive operations of transformation to the reader thread.
+   */
+  public <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformer(Schema schema,
                                                                                                 HoodieWriteConfig writeConfig) {
     return getTransformerInternal(schema, writeConfig);
   }
 
-  private static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(Schema schema,
+  public static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(Schema schema,
                                                                                                                 HoodieWriteConfig writeConfig) {
     // NOTE: Whether record have to be cloned here is determined based on the executor type used
     //       for writing: executors relying on an inner queue, will be keeping references to the records

@@ -54,6 +54,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
 
         checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a1", 10.0, 1000),
           Seq(1, "a2", 20.0, 2000)
         )
 
@@ -283,6 +284,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
 
         checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a1", 10.0, 1000),
           Seq(1, "a2", 20.0, 2000)
         )
 

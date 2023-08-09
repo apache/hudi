@@ -20,12 +20,12 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +36,7 @@ import java.util.List;
  */
 public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
 
-  private static final Logger LOG = LogManager.getLogger(DeleteSupportSchemaPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DeleteSupportSchemaPostProcessor.class);
 
   public DeleteSupportSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);

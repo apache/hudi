@@ -18,9 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -36,7 +33,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
@@ -59,11 +55,16 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -82,7 +83,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRang
  */
 public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
@@ -114,9 +115,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Total number of bytes written during this append phase (an estimation)
   protected long estimatedNumberOfBytesWritten;
   // Number of records that must be written to meet the max block size for a log block
-  private int numberOfRecords = 0;
+  private long numberOfRecords = 0;
   // Max block size to limit to for a log block
-  private final int maxBlockSize = config.getLogFileDataBlockMaxSize();
+  private final long maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
@@ -263,6 +264,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsWritten++;
       } else {
         finalRecordOpt = Option.empty();
+        // Clear the new location as the record was deleted
+        hoodieRecord.unseal();
+        hoodieRecord.clearNewLocation();
+        hoodieRecord.seal();
         recordsDeleted++;
       }
 
@@ -310,7 +315,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
     this.writeStatus.setFileId(fileId);
     this.writeStatus.setPartitionPath(partitionPath);
     this.writeStatus.setStat(stat);
@@ -497,21 +502,26 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header, true);
       recordItr = null;
-      if (writer != null) {
-        writer.close();
-        writer = null;
 
-        // update final size, once for all log files
-        // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-        //      of the appended block)
-        for (WriteStatus status : statuses) {
-          long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
-          status.getStat().setFileSizeInBytes(logFileSize);
-        }
+      writer.close();
+
+      // update final size, once for all log files
+      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
+      //      of the appended block)
+      for (WriteStatus status : statuses) {
+        long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        status.getStat().setFileSizeInBytes(logFileSize);
       }
+
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
@@ -560,7 +570,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     // update the new location of the record, so we know where to find it next
     if (needsUpdateLocation()) {
       record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.setNewLocation(newRecordLocation);
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
@@ -592,7 +602,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     // Append if max number of records reached to achieve block size
-    if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
+    if (numberOfRecords >= (long) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
       LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);

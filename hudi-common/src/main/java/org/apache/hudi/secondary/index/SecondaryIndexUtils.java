@@ -50,7 +50,7 @@ public class SecondaryIndexUtils {
   }
 
   /**
-   * Parse secondary index str to List<HOodieSecondaryIndex>
+   * Parse secondary index str to List<HoodieSecondaryIndex>
    *
    * @param jsonStr Secondary indexes with json format
    * @return List<HoodieSecondaryIndex>

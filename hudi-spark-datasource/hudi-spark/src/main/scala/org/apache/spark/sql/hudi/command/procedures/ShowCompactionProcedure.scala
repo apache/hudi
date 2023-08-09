@@ -37,8 +37,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
    * SHOW COMPACTION  ON path = STRING (LIMIT limit = INTEGER_VALUE)?
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20)
   )
 

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -39,8 +40,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.table.action.compact.CompactHelpers;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -55,7 +58,7 @@ import java.util.stream.Collectors;
 import static java.util.stream.Collectors.toList;
 
 public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(BaseHoodieCompactionPlanGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieCompactionPlanGenerator.class);
 
   protected final HoodieTable<T, I, K, O> hoodieTable;
   protected final HoodieWriteConfig writeConfig;
@@ -71,7 +74,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   public HoodieCompactionPlan generateCompactionPlan() throws IOException {
     // Accumulator to keep track of total log files for a table
     HoodieAccumulator totalLogFiles = engineContext.newAccumulator();
-    // Accumulator to keep track of total log file slices for a table
+    // Accumulator to keep track of total file slices for a table
     HoodieAccumulator totalFileSlices = engineContext.newAccumulator();
 
     // TODO : check if maxMemory is not greater than JVM or executor memory
@@ -81,7 +84,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
-
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
       return null;
@@ -90,6 +92,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + writeConfig.getTableName());
 
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) this.hoodieTable.getSliceView();
+    // Exclude file groups under compaction.
     Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
         .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
         .collect(Collectors.toSet());
@@ -97,6 +100,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // Exclude files in pending clustering from compaction.
     fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
 
+    // Exclude files in pending logcompaction.
     if (filterLogCompactionOperations()) {
       fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getPendingLogCompactionOperations()
           .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
@@ -107,10 +111,12 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().getTimestamp();
+    LOG.info("Last completed instant time " + lastCompletedInstantTime);
+    Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlices(partitionPath)
-        .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering))
+        .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
           List<HoodieLogFile> logFiles =
               s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
@@ -118,7 +124,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
           // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.6
+          // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
@@ -126,7 +132,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of latest files slices " + totalFileSlices.value());
     LOG.info("Total number of log files " + totalLogFiles.value());
     LOG.info("Total number of file slices " + totalFileSlices.value());
 
@@ -157,7 +162,8 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     return partitionPaths;
   }
 
-  protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime, Set<HoodieFileGroupId> pendingFileGroupIds) {
+  protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime,
+                                    Set<HoodieFileGroupId> pendingFileGroupIds, Option<InstantRange> instantRange) {
     return fileSlice.getLogFiles().count() > 0 && !pendingFileGroupIds.contains(fileSlice.getFileGroupId());
   }
 

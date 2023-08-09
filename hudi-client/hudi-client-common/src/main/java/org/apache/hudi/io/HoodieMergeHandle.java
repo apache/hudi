@@ -47,12 +47,13 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -98,7 +99,7 @@ import java.util.Set;
 @NotThreadSafe
 public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
@@ -114,6 +115,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected boolean useWriterSchemaForCompaction;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
+
+  protected Option<String[]> partitionFields = Option.empty();
+  protected Object[] partitionValues = new Object[0];
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -140,7 +144,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchemaForCompaction = true;
-    this.preserveMetadata = config.isPreserveHoodieCommitMetadataForCompaction();
+    // preserveMetadata is disabled by default for MDT but enabled otherwise
+    this.preserveMetadata = !HoodieTableMetadata.isMetadataTable(config.getBasePath());
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -168,7 +173,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     writeStatus.setStat(new HoodieWriteStat());
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
-      writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
+      writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
@@ -263,7 +268,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
     boolean isDelete = false;
     if (combineRecordOpt.isPresent()) {
-      updatedRecordsWritten++;
       if (oldRecord.getData() != combineRecordOpt.get().getData()) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(newRecord.getOperation());
@@ -271,6 +275,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         // the incoming record is dropped
         return false;
       }
+      updatedRecordsWritten++;
     }
     return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
@@ -309,6 +314,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         recordsWritten++;
       } else {
         recordsDeleted++;
+        // Clear the new location as the record was deleted
+        newRecord.unseal();
+        newRecord.clearNewLocation();
+        newRecord.seal();
       }
       writeStatus.markSuccess(newRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
@@ -402,6 +411,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
@@ -411,10 +426,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       keyToNewRecords = null;
       writtenRecordKeys = null;
 
-      if (fileWriter != null) {
-        fileWriter.close();
-        fileWriter = null;
-      }
+      fileWriter.close();
+      fileWriter = null;
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
       HoodieWriteStat stat = writeStatus.getStat();
@@ -447,7 +460,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
 
     long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
+    try (HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.recordMerger.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath)) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);
@@ -458,7 +471,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
               writeStatus.getFileId(), writeStatus.getPartitionPath(),
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
-              FSUtils.getCommitTime(oldFilePath.toString()), oldNumWrites));
+              baseFileToMerge.getCommitTime(), oldNumWrites));
     }
   }
 
@@ -473,5 +486,21 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public HoodieBaseFile baseFileForMerge() {
     return baseFileToMerge;
+  }
+
+  public void setPartitionFields(Option<String[]> partitionFields) {
+    this.partitionFields = partitionFields;
+  }
+
+  public Option<String[]> getPartitionFields() {
+    return this.partitionFields;
+  }
+
+  public void setPartitionValues(Object[] partitionValues) {
+    this.partitionValues = partitionValues;
+  }
+
+  public Object[] getPartitionValues() {
+    return this.partitionValues;
   }
 }

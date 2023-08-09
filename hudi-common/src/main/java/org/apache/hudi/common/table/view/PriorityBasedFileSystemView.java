@@ -34,8 +34,8 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpResponseException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
@@ -48,7 +48,7 @@ import java.util.stream.Stream;
  */
 public class PriorityBasedFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(PriorityBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
 
   private final SyncableFileSystemView preferredView;
   private final SyncableFileSystemView secondaryView;
@@ -168,6 +168,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Void loadAllPartitions() {
+    return execute(preferredView::loadAllPartitions, secondaryView::loadAllPartitions);
+  }
+
+  @Override
   public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
     return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
   }
@@ -188,6 +193,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       boolean includeFileSlicesInPendingCompaction) {
     return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
         preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
+  }
+
+  @Override
+  public Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    return execute(maxCommitTime, preferredView::getAllLatestFileSlicesBeforeOrOn,
+        secondaryView::getAllLatestFileSlicesBeforeOrOn);
   }
 
   @Override
@@ -219,6 +230,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
     return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBefore, secondaryView::getReplacedFileGroupsBefore);
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    return execute(minCommitTime, partitionPath, preferredView::getReplacedFileGroupsAfterOrOn, secondaryView::getReplacedFileGroupsAfterOrOn);
   }
 
   @Override

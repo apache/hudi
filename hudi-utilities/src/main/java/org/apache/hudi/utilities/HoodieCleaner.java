@@ -18,16 +18,17 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ import java.util.List;
 
 public class HoodieCleaner {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCleaner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleaner.class);
 
   /**
    * Config for Cleaner.
@@ -107,12 +108,23 @@ public class HoodieCleaner {
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
+    boolean success = true;
+
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+      success = false;
+      LOG.error("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
       jssc.stop();
     }
+
+    if (!success) {
+      // Return a non-zero exit code to properly notify any resource manager
+      // that cleaning was not successful
+      System.exit(1);
+    }
+
+    LOG.info("Cleaner ran successfully");
   }
 }

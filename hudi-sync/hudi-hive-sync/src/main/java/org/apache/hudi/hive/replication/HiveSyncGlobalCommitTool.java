@@ -23,8 +23,8 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE
 
 public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncGlobalCommitTool.class);
   private final HiveSyncGlobalCommitParams params;
   private final List<ReplicationStateSync> replicationStateSyncList;
 

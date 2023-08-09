@@ -31,9 +31,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
@@ -53,7 +55,7 @@ public class HoodieJavaWriteClient<T> extends
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
@@ -61,7 +63,7 @@ public class HoodieJavaWriteClient<T> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 
   @Override
@@ -87,7 +89,7 @@ public class HoodieJavaWriteClient<T> extends
                         Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
+    return commitStats(instantTime, HoodieListData.eager(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc);
   }
 
@@ -153,14 +155,19 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime) {
-    throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
+    return bulkInsert(records, instantTime, Option.empty());
   }
 
   @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime,
                                       Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
-    throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.BULK_INSERT, Option.ofNullable(instantTime));
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.bulkInsert(context, instantTime, records, userDefinedBulkInsertPartitioner);
+    return postWrite(result, instantTime, table);
   }
 
   public void transitionInflight(String instantTime) {
@@ -193,9 +200,18 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  protected List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
-                                        String instantTime,
-                                        HoodieTable hoodieTable) {
+  public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context,instantTime, preppedRecords);
+    return postWrite(result, instantTime, table);
+  }
+
+  @Override
+  public List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
+                                     String instantTime,
+                                     HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
@@ -215,27 +231,31 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  public void commitCompaction(String compactionInstantTime,
-                               HoodieCommitMetadata metadata,
-                               Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaClient");
+  protected void initMetadataTable(Option<String> instantTime) {
+    // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
+    // if it didn't exist before
+    // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
+    initializeMetadataTable(instantTime);
   }
 
-  @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata,
-                                    HoodieTable table,
-                                    String compactionCommitTime) {
-    throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaClient");
-  }
+  /**
+   * Initialize the metadata table if needed. Creating the metadata table writer
+   * will trigger the initial bootstrapping from the data table.
+   *
+   * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
+   */
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+    if (!config.isMetadataTableEnabled()) {
+      return;
+    }
 
-  @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
-                                      boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaClient");
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
+    try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+        context, inFlightInstantTimestamp)) {
+      if (writer.isInitialized()) {
+        writer.performTableServices(inFlightInstantTimestamp);
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to instantiate Metadata table ", e);
+    }
   }
 }

@@ -30,8 +30,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -47,7 +47,7 @@ import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCal
  */
 public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteCommitKafkaCallback.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitKafkaCallback.class);
 
   private HoodieConfig hoodieConfig;
   private String bootstrapServers;
@@ -137,8 +137,13 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
 
     @Override
     public void onCompletion(RecordMetadata metadata, Exception exception) {
-      LOG.info(String.format("message offset=%s partition=%s timestamp=%s topic=%s",
-          metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic()));
+      if (null != metadata) {
+        LOG.info(String.format("message offset=%s partition=%s timestamp=%s topic=%s",
+                metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic()));
+      }
+      if (null != exception) {
+        LOG.error("Send kafka callback msg failed : ", exception);
+      }
     }
   }
 

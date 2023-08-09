@@ -21,10 +21,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.sync.common.util.ConfigUtils
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 
 /**
  * Physical plan node for dropping a table.

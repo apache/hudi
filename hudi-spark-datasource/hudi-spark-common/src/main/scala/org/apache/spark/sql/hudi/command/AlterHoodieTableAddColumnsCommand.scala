@@ -17,31 +17,30 @@
 
 package org.apache.spark.sql.hudi.command
 
-import java.nio.charset.StandardCharsets
-
 import org.apache.avro.Schema
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.util.SchemaUtils
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
+import java.nio.charset.StandardCharsets
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
 /**
  * Command for add new columns to the hudi table.
  */
-case class AlterHoodieTableAddColumnsCommand(
-   tableId: TableIdentifier,
-   colsToAdd: Seq[StructField])
+case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
+                                             colsToAdd: Seq[StructField])
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
@@ -82,7 +81,7 @@ case class AlterHoodieTableAddColumnsCommand(
     }
     sparkSession.catalog.refreshTable(table.identifier.unquotedString)
 
-    SchemaUtils.checkColumnNameDuplication(
+    AlterHoodieTableAddColumnsCommand.checkColumnNameDuplication(
       newSqlDataSchema.map(_.name),
       "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
@@ -91,23 +90,26 @@ case class AlterHoodieTableAddColumnsCommand(
   }
 }
 
-object AlterHoodieTableAddColumnsCommand {
+object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
   /**
    * Generate an empty commit with new schema to change the table's schema.
-   * @param schema The new schema to commit.
-   * @param hoodieCatalogTable  The hoodie catalog table.
-   * @param sparkSession The spark session.
+   *
+   * @param schema             The new schema to commit.
+   * @param hoodieCatalogTable The hoodie catalog table.
+   * @param sparkSession       The spark session.
    */
   def commitWithSchema(schema: Schema, hoodieCatalogTable: HoodieCatalogTable,
-      sparkSession: SparkSession): Unit = {
+                       sparkSession: SparkSession): Unit = {
 
+    val writeSchema = HoodieAvroUtils.removeMetadataFields(schema);
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
       jsc,
-      schema.toString,
+      writeSchema.toString,
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
-      HoodieWriterUtils.parametersWithWriteDefaults(hoodieCatalogTable.catalogProperties).asJava
+      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs).asJava
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
@@ -124,5 +126,17 @@ object AlterHoodieTableAddColumnsCommand {
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
 
     client.commit(instantTime, jsc.emptyRDD)
+  }
+
+  /**
+   * Checks if input column names have duplicate identifiers. This throws an exception if
+   * the duplication exists.
+   *
+   * @param columnNames           column names to check.
+   * @param colType               column type name, used in an exception message.
+   * @param caseSensitiveAnalysis whether duplication checks should be case sensitive or not.
+   */
+  def checkColumnNameDuplication(columnNames: Seq[String], colType: String, caseSensitiveAnalysis: Boolean): Unit = {
+    sparkAdapter.getSchemaUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
   }
 }

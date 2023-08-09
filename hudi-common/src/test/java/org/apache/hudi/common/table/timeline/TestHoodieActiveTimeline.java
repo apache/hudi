@@ -140,18 +140,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
     oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
-    // Now use latest timeline version
+    // Now use the latest timeline version
     timeline = timeline.reload();
     // Ensure aux file is present
-    assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
+    assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaPath(), instant6.getFileName())));
     // Read 5 bytes
     assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
-
-    // Delete auxiliary file to mimic future release where we stop writing to aux
-    metaClient.getFs().delete(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName()));
-
-    // Ensure requested instant is not present in aux
-    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
 
     // Now read compaction plan again which should not throw exception
     assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
@@ -177,6 +171,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsInRange should return 4 instants");
+    assertStreamEquals(Stream.of("03", "05", "07", "09", "11"),
+        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInClosedRange("03", "11")
+            .getInstantsAsStream().map(HoodieInstant::getTimestamp),
+        "findInstantsInClosedRange should return 5 instants");
     assertStreamEquals(Stream.of("09", "11"),
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
@@ -598,6 +596,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     for (Future f : futures) {
       f.get();
     }
+  }
+
+  @Test
+  public void testParseDateFromInstantTime() throws ParseException {
+    // default second granularity instant ID
+    String secondGranularityInstant = "20210101120101123";
+    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    System.out.println(defaultSecsGranularityDate.getTime());
   }
 
   @Test

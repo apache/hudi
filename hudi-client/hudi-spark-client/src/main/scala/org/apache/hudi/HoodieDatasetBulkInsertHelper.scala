@@ -26,11 +26,13 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.SparkHoodieIndexFactory
-import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
-import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
+import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
+import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
+import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
@@ -51,7 +53,7 @@ object HoodieDatasetBulkInsertHelper
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
    *
    * <ol>
-   *   <li>Invoking configured [[KeyGenerator]] to produce record key, alas partition-path value</li>
+   *   <li>Invoking configured [[org.apache.hudi.keygen.KeyGenerator]] to produce record key, alas partition-path value</li>
    *   <li>Prepends Hudi meta-fields to every row in the dataset</li>
    *   <li>Dedupes rows (if necessary)</li>
    *   <li>Partitions dataset using provided [[partitioner]]</li>
@@ -60,9 +62,11 @@ object HoodieDatasetBulkInsertHelper
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
-                           shouldDropPartitionColumns: Boolean): Dataset[Row] = {
+                           shouldDropPartitionColumns: Boolean,
+                           instantTime: String): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
+    val autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(config.getProps)
 
     val metaFields = Seq(
       StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
@@ -79,11 +83,22 @@ object HoodieDatasetBulkInsertHelper
 
       val prependedRdd: RDD[InternalRow] =
         df.queryExecution.toRdd.mapPartitions { iter =>
-          val keyGenerator =
-            ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
-              .asInstanceOf[SparkKeyGeneratorInterface]
+          val typedProps = new TypedProperties(config.getProps)
+          if (autoGenerateRecordKeys) {
+            typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
+            typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
+          }
+          val sparkKeyGenerator =
+            ReflectionUtils.loadClass(keyGeneratorClassName, typedProps)
+              .asInstanceOf[BuiltinKeyGenerator]
+              val keyGenerator: BuiltinKeyGenerator = if (autoGenerateRecordKeys) {
+                new AutoRecordGenWrapperKeyGenerator(typedProps, sparkKeyGenerator).asInstanceOf[BuiltinKeyGenerator]
+              } else {
+                sparkKeyGenerator
+              }
 
           iter.map { row =>
+            // auto generate record keys if needed
             val recordKey = keyGenerator.getRecordKey(row, schema)
             val partitionPath = keyGenerator.getPartitionPath(row, schema)
             val commitTimestamp = UTF8String.EMPTY_UTF8
@@ -133,28 +148,42 @@ object HoodieDatasetBulkInsertHelper
                  instantTime: String,
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
-                 partitioner: BulkInsertPartitioner[Dataset[Row]],
-                 parallelism: Int,
+                 arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val repartitionedDataset = partitioner.repartitionRecords(dataset, parallelism)
-    val arePartitionRecordsSorted = partitioner.arePartitionRecordsSorted
     val schema = dataset.schema
-    val writeStatuses = repartitionedDataset.queryExecution.toRdd.mapPartitions(iter => {
+    val writeStatuses = dataset.queryExecution.toRdd.mapPartitions(iter => {
       val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
       val taskPartitionId = taskContextSupplier.getPartitionIdSupplier.get
       val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
       val taskEpochId = taskContextSupplier.getAttemptIdSupplier.get
-      val writer = new BulkInsertDataInternalWriterHelper(
-        table,
-        writeConfig,
-        instantTime,
-        taskPartitionId,
-        taskId,
-        taskEpochId,
-        schema,
-        writeConfig.populateMetaFields,
-        arePartitionRecordsSorted,
-        shouldPreserveHoodieMetadata)
+
+      val writer = writeConfig.getIndexType match {
+        case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+          == BucketIndexEngineType.CONSISTENT_HASHING =>
+          new ConsistentBucketBulkInsertDataInternalWriterHelper(
+            table,
+            writeConfig,
+            instantTime,
+            taskPartitionId,
+            taskId,
+            taskEpochId,
+            schema,
+            writeConfig.populateMetaFields,
+            arePartitionRecordsSorted,
+            shouldPreserveHoodieMetadata)
+        case _ =>
+          new BulkInsertDataInternalWriterHelper(
+            table,
+            writeConfig,
+            instantTime,
+            taskPartitionId,
+            taskId,
+            taskEpochId,
+            schema,
+            writeConfig.populateMetaFields,
+            arePartitionRecordsSorted,
+            shouldPreserveHoodieMetadata)
+      }
 
       try {
         iter.foreach(writer.write)
@@ -166,7 +195,7 @@ object HoodieDatasetBulkInsertHelper
         writer.close()
       }
 
-      writer.getWriteStatuses.asScala.map(_.toWriteStatus).iterator
+      writer.getWriteStatuses.asScala.iterator
     }).collect()
     table.getContext.parallelize(writeStatuses.toList.asJava)
   }

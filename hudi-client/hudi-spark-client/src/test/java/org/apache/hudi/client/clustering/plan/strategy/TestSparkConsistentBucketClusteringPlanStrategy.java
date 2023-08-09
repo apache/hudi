@@ -36,7 +36,8 @@ import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -52,7 +53,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_MERGE_THRESHOLD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD;
 
-public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClientTestHarness {
+public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random();
 
@@ -152,7 +153,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     Assertions.assertEquals(fileSlices.get(7).getFileId(), groups.get(0).getSlices().get(1).getFileId());
     Assertions.assertEquals(fileSlices.get(6).getFileId(), groups.get(0).getSlices().get(0).getFileId());
     Assertions.assertEquals(3, groups.get(0).getSlices().size());
-    List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(groups.get(0).getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+    List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(groups.get(0).getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
     Assertions.assertEquals(3, nodes.size());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(1).getTag());
@@ -163,7 +164,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     Assertions.assertEquals(fileSlices.get(2).getFileId(), groups.get(1).getSlices().get(0).getFileId());
     Assertions.assertEquals(fileSlices.get(3).getFileId(), groups.get(1).getSlices().get(1).getFileId());
     Assertions.assertEquals(2, groups.get(1).getSlices().size());
-    nodes = ConsistentHashingNode.fromJsonString(groups.get(1).getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+    nodes = ConsistentHashingNode.fromJsonString(groups.get(1).getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
     Assertions.assertEquals(2, nodes.size());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.REPLACE, nodes.get(1).getTag());
@@ -192,5 +193,4 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
 
     return fs;
   }
-
 }

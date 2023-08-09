@@ -26,7 +26,8 @@ package org.apache.hudi.common.config;
  */
 public class ConfigGroups {
   /**
-   * Config group names.
+   * Config group names. Please add the description of each group in
+   * {@link ConfigGroups#getDescription}.
    */
   public enum Names {
     ENVIRONMENT_CONFIG("Environment Config"),
@@ -38,7 +39,7 @@ public class ConfigGroups {
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    DELTA_STREAMER("DeltaStreamer Configs");
+    HUDI_STREAMER("Hudi Streamer Configs");
 
     public final String name;
 
@@ -52,6 +53,11 @@ public class ConfigGroups {
         "Index Configs",
         "Configurations that control indexing behavior, "
             + "which tags incoming records as either inserts or updates to older records."),
+    KEY_GENERATOR(
+        "Key Generator Configs",
+        "Hudi maintains keys (record key + partition path) for uniquely identifying a "
+            + "particular record. These configs allow developers to setup the Key generator class "
+            + "that extracts these out of incoming records."),
     LOCK(
         "Lock Configs",
         "Configurations that control locking mechanisms required for concurrency control "
@@ -61,6 +67,12 @@ public class ConfigGroups {
         "Commit Callback Configs",
         "Configurations controlling callback behavior into HTTP endpoints, to push "
             + "notifications on commits on hudi tables."),
+    SCHEMA_PROVIDER(
+        "Hudi Streamer Schema Provider Configs",
+        "Configurations that control the schema provider for Hudi Streamer."),
+    DELTA_STREAMER_SOURCE(
+        "Hudi Streamer Source Configs",
+        "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
         "No subgroup. This description should be hidden.");
@@ -128,7 +140,7 @@ public class ConfigGroups {
             + "on both datasource and WriteClient levels.";
         break;
       case METRICS:
-        description = "These set of configs are used to enable monitoring and reporting of key"
+        description = "These set of configs are used to enable monitoring and reporting of key "
             + "Hudi stats and metrics.";
         break;
       case KAFKA_CONNECT:
@@ -136,6 +148,10 @@ public class ConfigGroups {
         break;
       case AWS:
         description = "Configurations specific to Amazon Web Services.";
+        break;
+      case HUDI_STREAMER:
+        description = "These set of configs are used for Hudi Streamer utility which provides "
+            + "the way to ingest from different sources such as DFS or Kafka.";
         break;
       default:
         description = "Please fill in the description for Config Group Name: " + names.name;

@@ -20,35 +20,36 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+
 /**
  * Used internally to add Kafka offsets. You should probably not set
- * hoodie.deltastreamer.schemaprovider.schema_post_processor to this class
- * */
+ * hoodie.streamer.schemaprovider.schema_post_processor to this class
+ */
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
-    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
-        .key("hoodie.deltastreamer.source.kafka.append.offsets")
-        .defaultValue("false")
-        .withDocumentation("When enabled, appends kafka offset info like source offset(_hoodie_kafka_source_offset), "
-            + "partition (_hoodie_kafka_source_partition) and timestamp (_hoodie_kafka_source_timestamp) to the records. "
-            + "By default its disabled and no kafka offsets are added");
+    @Deprecated
+    public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS =
+        HoodieStreamerConfig.KAFKA_APPEND_OFFSETS;
 
     public static boolean shouldAddOffsets(TypedProperties props) {
-      return  props.getBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(KafkaOffsetPostProcessor.Config.KAFKA_APPEND_OFFSETS.defaultValue()));
+      return getBooleanWithAltKeys(props, HoodieStreamerConfig.KAFKA_APPEND_OFFSETS);
     }
   }
 
-  private static final Logger LOG = LogManager.getLogger(KafkaOffsetPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetPostProcessor.class);
 
   public static final String KAFKA_SOURCE_OFFSET_COLUMN = "_hoodie_kafka_source_offset";
   public static final String KAFKA_SOURCE_PARTITION_COLUMN = "_hoodie_kafka_source_partition";
@@ -61,13 +62,18 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
   @Override
   public Schema processSchema(Schema schema) {
     // this method adds kafka offset fields namely source offset, partition and timestamp to the schema of the batch.
-    List<Schema.Field> fieldList = schema.getFields();
-    List<Schema.Field> newFieldList = fieldList.stream()
-        .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal())).collect(Collectors.toList());
-    newFieldList.add(new Schema.Field(KAFKA_SOURCE_OFFSET_COLUMN, Schema.create(Schema.Type.LONG), "offset column", 0));
-    newFieldList.add(new Schema.Field(KAFKA_SOURCE_PARTITION_COLUMN, Schema.create(Schema.Type.INT), "partition column", 0));
-    newFieldList.add(new Schema.Field(KAFKA_SOURCE_TIMESTAMP_COLUMN, Schema.create(Schema.Type.LONG), "timestamp column", 0));
-    Schema newSchema = Schema.createRecord(schema.getName() + "_processed", schema.getDoc(), schema.getNamespace(), false, newFieldList);
-    return newSchema;
+    try {
+      List<Schema.Field> fieldList = schema.getFields();
+      List<Schema.Field> newFieldList = fieldList.stream()
+          .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal())).collect(Collectors.toList());
+      newFieldList.add(new Schema.Field(KAFKA_SOURCE_OFFSET_COLUMN, Schema.create(Schema.Type.LONG), "offset column", 0));
+      newFieldList.add(new Schema.Field(KAFKA_SOURCE_PARTITION_COLUMN, Schema.create(Schema.Type.INT), "partition column", 0));
+      newFieldList.add(new Schema.Field(KAFKA_SOURCE_TIMESTAMP_COLUMN, Schema.create(Schema.Type.LONG), "timestamp column", 0));
+      Schema newSchema = Schema.createRecord(schema.getName() + "_processed", schema.getDoc(), schema.getNamespace(), false, newFieldList);
+      return newSchema;
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Kafka offset post processor failed with schema: " + schema, e);
+    }
+
   }
 }

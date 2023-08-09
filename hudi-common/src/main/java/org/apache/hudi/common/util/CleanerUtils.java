@@ -24,8 +24,11 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.CleanFileInfo;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -34,10 +37,13 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1Mig
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +56,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
  */
 public class CleanerUtils {
 
-  private static final Logger LOG = LogManager.getLogger(CleanerUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
 
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
@@ -105,8 +111,54 @@ public class CleanerUtils {
   }
 
   /**
+   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
+   * @return Latest version of Clean metadata corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, byte[] details)
+      throws IOException {
+    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
+    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details);
+    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+  }
+
+  public static Option<HoodieInstant> getEarliestCommitToRetain(
+      HoodieTimeline commitsTimeline, HoodieCleaningPolicy cleaningPolicy, int commitsRetained,
+      Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone) {
+    HoodieTimeline completedCommitsTimeline = commitsTimeline.filterCompletedInstants();
+    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+
+    if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
+        && completedCommitsTimeline.countInstants() > commitsRetained) {
+      Option<HoodieInstant> earliestPendingCommits =
+          commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
+      if (earliestPendingCommits.isPresent()) {
+        // Earliest commit to retain must not be later than the earliest pending commit
+        earliestCommitToRetain =
+            completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants() - commitsRetained).map(nthInstant -> {
+              if (nthInstant.compareTo(earliestPendingCommits.get()) <= 0) {
+                return Option.of(nthInstant);
+              } else {
+                return completedCommitsTimeline.findInstantsBefore(earliestPendingCommits.get().getTimestamp()).lastInstant();
+              }
+            }).orElse(Option.empty());
+      } else {
+        earliestCommitToRetain = completedCommitsTimeline.nthInstant(completedCommitsTimeline.countInstants()
+            - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
+      }
+    } else if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
+      ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
+      String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
+      earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+          HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+    }
+    return earliestCommitToRetain;
+  }
+
+  /**
    * Get Latest version of cleaner plan corresponding to a clean instant.
-   * @param metaClient  Hoodie Table Meta Client
+   *
+   * @param metaClient   Hoodie Table Meta Client
    * @param cleanInstant Instant referring to clean action
    * @return Cleaner plan corresponding to clean instant
    * @throws IOException
@@ -116,6 +168,20 @@ public class CleanerUtils {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
     HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(), HoodieCleanerPlan.class);
+    return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
+  }
+
+  /**
+   * Get Latest version of cleaner plan corresponding to a clean instant.
+   *
+   * @param metaClient   Hoodie Table Meta Client
+   * @return Cleaner plan corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, byte[] details)
+      throws IOException {
+    CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
+    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(details, HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

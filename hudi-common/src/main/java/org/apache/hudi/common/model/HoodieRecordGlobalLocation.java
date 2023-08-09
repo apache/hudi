@@ -32,7 +32,8 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
 
   private String partitionPath;
 
-  public HoodieRecordGlobalLocation() {}
+  public HoodieRecordGlobalLocation() {
+  }
 
   public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId) {
     super(instantTime, fileId);
@@ -98,7 +99,7 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
   }
 
   @Override
-  public final void write(Kryo kryo, Output output) {
+  public void write(Kryo kryo, Output output) {
     super.write(kryo, output);
 
     kryo.writeObjectOrNull(output, partitionPath, String.class);

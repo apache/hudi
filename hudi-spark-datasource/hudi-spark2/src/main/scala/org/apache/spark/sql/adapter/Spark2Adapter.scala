@@ -22,30 +22,33 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.time.ZoneId
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.convert.Wrappers.JConcurrentMapWrapper
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -64,6 +67,9 @@ class Spark2Adapter extends SparkAdapter {
     //       we simply produce an empty [[Metadata]] instance
     new MetadataBuilder().build()
 
+  private val cache = JConcurrentMapWrapper(
+    new ConcurrentHashMap[ZoneId, DateFormatter](1))
+
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
   }
@@ -71,6 +77,10 @@ class Spark2Adapter extends SparkAdapter {
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
+
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark2SchemaUtils
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark2PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)
@@ -89,6 +99,10 @@ class Spark2Adapter extends SparkAdapter {
     new HoodieSpark2ExtendedSqlParser(spark, delegate)
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark2ParsePartitionUtil
+
+  override def getDateFormatter(tz: TimeZone): DateFormatter = {
+    cache.getOrElseUpdate(tz.toZoneId, DateFormatter())
+  }
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
@@ -130,8 +144,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
@@ -173,5 +187,24 @@ class Spark2Adapter extends SparkAdapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  /**
+   * Spark2 doesn't support nestedPredicatePushdown,
+   * so fail it if [[supportNestedPredicatePushdown]] is true here.
+   */
+  override def translateFilter(predicate: Expression,
+                               supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
+    if (supportNestedPredicatePushdown) {
+      throw new UnsupportedOperationException("Nested predicate push down is not supported")
+    }
+
+    DataSourceStrategy.translateFilter(predicate)
+  }
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    val batch = new ColumnarBatch(vectors)
+    batch.setNumRows(numRows)
+    batch
   }
 }

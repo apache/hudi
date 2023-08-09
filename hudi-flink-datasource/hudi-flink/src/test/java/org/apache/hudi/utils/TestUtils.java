@@ -18,9 +18,14 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -31,6 +36,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 
 import javax.annotation.Nullable;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -106,5 +113,26 @@ public class TestUtils {
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
     return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
+  }
+
+  public static int getCompletedInstantCount(String basePath, String action) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    return metaClient.getActiveTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> action.equals(instant.getAction()))
+        .countInstants();
+  }
+
+  public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
+    ValidationUtils.checkArgument(instant.isCompleted());
+    HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
+    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant);
+    return metadata;
+  }
+
+  public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
+    metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
+        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 }

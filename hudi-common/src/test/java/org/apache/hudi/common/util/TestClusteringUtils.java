@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -48,7 +49,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link ClusteringUtils}.
@@ -104,7 +105,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     validateClusteringInstant(fileIds3, partitionPath1, clusterTime, fileGroupToInstantMap);
   }
 
-  // replacecommit.inflight doesnt have clustering plan. 
+  // replacecommit.inflight doesn't have clustering plan.
   // Verify that getClusteringPlan fetches content from corresponding requested file.
   @Test
   public void testClusteringPlanInflight() throws Exception {
@@ -128,7 +129,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     String clusterTime1 = "1";
     HoodieInstant requestedInstant1 = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
     HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant1, Option.empty());
-    HoodieInstant completedInstant1 = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant1, Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant1, Option.empty());
     List<String> fileIds2 = new ArrayList<>();
     fileIds2.add(UUID.randomUUID().toString());
     fileIds2.add(UUID.randomUUID().toString());
@@ -146,29 +147,12 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieInstant completedInstant3 = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
     Option<HoodieInstant> actual = ClusteringUtils.getOldestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
-    assertFalse(actual.isPresent());
-    // test first uncompleted clean instant is requested.
+    assertTrue(actual.isPresent());
+    assertEquals(clusterTime1, actual.get().getTimestamp(), "no clean in timeline, retain first replace commit");
+
     String cleanTime1 = "4";
     HoodieInstant requestedInstant4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime1);
     HoodieCleanerPlan cleanerPlan1 = HoodieCleanerPlan.newBuilder()
-        .setEarliestInstantToRetainBuilder(HoodieActionInstant.newBuilder()
-            .setAction(completedInstant1.getAction())
-            .setTimestamp(completedInstant1.getTimestamp())
-            .setState(completedInstant1.getState().name()))
-        .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-        .setFilesToBeDeletedPerPartition(new HashMap<>())
-        .setVersion(CleanPlanV2MigrationHandler.VERSION)
-        .build();
-    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
-    metaClient.reloadActiveTimeline();
-    actual = ClusteringUtils.getOldestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
-    assertEquals(clusterTime1, actual.get().getTimestamp());
-    HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4, Option.empty());
-    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant4, Option.empty());
-    // test first uncompleted clean instant is inflight.
-    String cleanTime2 = "5";
-    HoodieInstant requestedInstant5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime2);
-    HoodieCleanerPlan cleanerPlan2 = HoodieCleanerPlan.newBuilder()
         .setEarliestInstantToRetainBuilder(HoodieActionInstant.newBuilder()
             .setAction(completedInstant3.getAction())
             .setTimestamp(completedInstant3.getTimestamp())
@@ -177,11 +161,54 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         .setFilesToBeDeletedPerPartition(new HashMap<>())
         .setVersion(CleanPlanV2MigrationHandler.VERSION)
         .build();
-    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant5, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan2));
-    metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant5, Option.empty());
+    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
+    HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4, Option.empty());
+    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
+        completedInstant3.getTimestamp(), "", Collections.emptyMap(), 0, Collections.emptyMap());
+    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant4,
+        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
     metaClient.reloadActiveTimeline();
     actual = ClusteringUtils.getOldestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
-    assertEquals(clusterTime3, actual.get().getTimestamp());
+    assertEquals(clusterTime3, actual.get().getTimestamp(),
+        "retain the first replace commit after the earliestInstantToRetain ");
+  }
+
+  /** test getOldestInstantToRetainForClustering with KEEP_LATEST_FILE_VERSIONS as clean policy */
+  @Test
+  public void testGetOldestInstantToRetainForClusteringKeepFileVersion() throws IOException {
+    String partitionPath1 = "partition1";
+    List<String> fileIds1 = new ArrayList<>();
+    fileIds1.add(UUID.randomUUID().toString());
+    String clusterTime1 = "1";
+    HoodieInstant requestedInstant1 = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
+    HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant1, Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant1, Option.empty());
+
+    String cleanTime1 = "2";
+    HoodieInstant requestedInstant2 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime1);
+    HoodieCleanerPlan cleanerPlan1 = new HoodieCleanerPlan(null, clusterTime1,
+        HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name(), Collections.emptyMap(),
+        CleanPlanV2MigrationHandler.VERSION, Collections.emptyMap(), Collections.emptyList());
+    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant2, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
+    HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant2, Option.empty());
+    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
+        "", "", Collections.emptyMap(), 0, Collections.emptyMap());
+    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant2,
+        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+    metaClient.reloadActiveTimeline();
+
+    List<String> fileIds2 = new ArrayList<>();
+    fileIds2.add(UUID.randomUUID().toString());
+    fileIds2.add(UUID.randomUUID().toString());
+    String clusterTime2 = "3";
+    HoodieInstant requestedInstant3 = createRequestedReplaceInstant(partitionPath1, clusterTime2, fileIds2);
+    HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant3, Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant3, Option.empty());
+    metaClient.reloadActiveTimeline();
+
+    Option<HoodieInstant> actual = ClusteringUtils.getOldestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
+    assertEquals(clusterTime2, actual.get().getTimestamp(),
+        "retain the first replace commit after the last complete clean ");
   }
 
   private void validateClusteringInstant(List<String> fileIds, String partitionPath,

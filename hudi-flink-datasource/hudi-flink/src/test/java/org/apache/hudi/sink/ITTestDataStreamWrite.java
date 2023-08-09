@@ -314,7 +314,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .setParallelism(4);
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
+    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);

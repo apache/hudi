@@ -34,7 +34,7 @@ import scala.collection.JavaConverters.{asJavaIterableConverter, asJavaIteratorC
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
     ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
@@ -55,13 +55,13 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   ))
 
   private val PARAMETERS_LATEST: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
     ProcedureParameter.optional(3, "include_inflight", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(6, "partition_path", DataTypes.StringType, None),
+    ProcedureParameter.required(6, "partition_path", DataTypes.StringType),
     ProcedureParameter.optional(7, "merge", DataTypes.BooleanType, true)
 
   )
