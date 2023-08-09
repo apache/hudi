@@ -20,17 +20,16 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.FileSlice
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{DataType, Decimal}
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
 class PartitionFileSliceMapping(internalRow: InternalRow,
-                                broadcast: Broadcast[Map[String, FileSlice]]) extends InternalRow {
+                                slices: Map[String, FileSlice]) extends InternalRow {
 
   def getSlice(fileId: String): Option[FileSlice] = {
-    broadcast.value.get(fileId)
+    slices.get(fileId)
   }
 
   def getInternalRow: InternalRow = internalRow
@@ -41,7 +40,7 @@ class PartitionFileSliceMapping(internalRow: InternalRow,
 
   override def update(i: Int, value: Any): Unit = internalRow.update(i, value)
 
-  override def copy(): InternalRow = new PartitionFileSliceMapping(internalRow.copy(), broadcast)
+  override def copy(): InternalRow = new PartitionFileSliceMapping(internalRow.copy(), slices)
 
   override def isNullAt(ordinal: Int): Boolean = internalRow.isNullAt(ordinal)
 
