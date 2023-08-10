@@ -20,89 +20,7 @@ package org.apache.spark.sql.hudi
 class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
 
   test("Add partition for non-partitioned table") {
-    val tableName = generateTableName
-    // create table
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id bigint,
-         |  name string,
-         |  ts string,
-         |  dt string
-         | )
-         | using hudi
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  preCombineField = 'ts'
-         | )
-         |""".stripMargin)
-
-    checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01')")(
-      s"$tableName is a non-partitioned table that is not allowed to add partition")
-
-    // show partitions
-    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
-  }
-
-  test("Add partition with location") {
-    val tableName = generateTableName
-    // create table
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id bigint,
-         |  name string,
-         |  ts string,
-         |  dt string
-         | )
-         | using hudi
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  preCombineField = 'ts'
-         | )
-         | partitioned by (dt)
-         |""".stripMargin)
-
-    checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01') location '/tmp/path'")(
-      "Hoodie table does not support specify partition location explicitly")
-
-    // show partitions
-    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
-  }
-
-  test("Add partition if not exists") {
-    val tableName = generateTableName
-    // create table
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id bigint,
-         |  name string,
-         |  ts string,
-         |  dt string
-         | )
-         | using hudi
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  preCombineField = 'ts'
-         | )
-         | partitioned by (dt)
-         |""".stripMargin)
-
-    spark.sql(s"alter table $tableName add partition (dt='2023-08-01')")
-    // show partitions
-    checkAnswer(s"show partitions $tableName")(Seq("dt=2023-08-01"))
-
-    // no exception
-    spark.sql(s"alter table $tableName add if not exists partition (dt='2023-08-01')")
-
-    checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01')")(
-      "Partition metadata already exists for path")
-  }
-
-  Seq(false, true).foreach { hiveStyle =>
-    test(s"Add partition for single-partition table, isHiveStylePartitioning: $hiveStyle") {
-      val tableName = generateTableName
+    withTable(generateTableName){ tableName =>
       // create table
       spark.sql(
         s"""
@@ -115,107 +33,196 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
            | using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
+           |  preCombineField = 'ts'
+           | )
+           |""".stripMargin)
+
+      checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01')")(
+        s"`$tableName` is a non-partitioned table that is not allowed to add partition")
+
+      // show partitions
+      checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
+    }
+  }
+
+  test("Add partition with location") {
+    withTable(generateTableName){ tableName =>
+      // create table
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by (dt)
+           |""".stripMargin)
+
+      checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01') location '/tmp/path'")(
+        "Hoodie table does not support specify partition location explicitly")
+
+      // show partitions
+      checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
+    }
+  }
+
+  test("Add partition if not exists") {
+    withTable(generateTableName){ tableName =>
+      // create table
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
            | )
            | partitioned by (dt)
            |""".stripMargin)
 
       spark.sql(s"alter table $tableName add partition (dt='2023-08-01')")
-
       // show partitions
-      checkAnswer(s"show partitions $tableName")(
-        if (hiveStyle) Seq("dt=2023-08-01") else Seq("2023-08-01")
-      )
+      checkAnswer(s"show partitions $tableName")(Seq("dt=2023-08-01"))
+
+      // no exception
+      spark.sql(s"alter table $tableName add if not exists partition (dt='2023-08-01')")
+
+      checkExceptionContain(s"alter table $tableName add partition (dt='2023-08-01')")(
+        "Partition metadata already exists for path")
+    }
+  }
+
+  Seq(false, true).foreach { hiveStyle =>
+    test(s"Add partition for single-partition table, isHiveStylePartitioning: $hiveStyle") {
+      withTable(generateTableName){ tableName =>
+        // create table
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  ts string,
+             |  dt string
+             | )
+             | using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
+             | )
+             | partitioned by (dt)
+             |""".stripMargin)
+
+        spark.sql(s"alter table $tableName add partition (dt='2023-08-01')")
+
+        // show partitions
+        checkAnswer(s"show partitions $tableName")(
+          if (hiveStyle) Seq("dt=2023-08-01") else Seq("2023-08-01")
+        )
+      }
     }
 
     test(s"Add partition for multi-level partitioned table, isHiveStylePartitioning: $hiveStyle") {
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id bigint,
-           |  name string,
-           |  ts string,
-           |  year string,
-           |  month string,
-           |  day string
-           | )
-           | using hudi
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
-           | )
-           | partitioned by (year, month, day)
-           |""".stripMargin)
+      withTable(generateTableName){ tableName =>
+        // create table
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  ts string,
+             |  year string,
+             |  month string,
+             |  day string
+             | )
+             | using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
+             | )
+             | partitioned by (year, month, day)
+             |""".stripMargin)
 
-      spark.sql(s"alter table $tableName add partition (year='2023', month='08', day='01')")
+        spark.sql(s"alter table $tableName add partition (year='2023', month='08', day='01')")
 
-      // show partitions
-      checkAnswer(s"show partitions $tableName")(
-        if (hiveStyle) Seq("year=2023/month=08/day=01") else Seq("2023/08/01")
-      )
+        // show partitions
+        checkAnswer(s"show partitions $tableName")(
+          if (hiveStyle) Seq("year=2023/month=08/day=01") else Seq("2023/08/01")
+        )
+      }
     }
   }
 
   Seq(false, true).foreach { urlEncode =>
     test(s"Add partition for single-partition table, urlEncode: $urlEncode") {
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id bigint,
-           |  name string,
-           |  ts string,
-           |  p_a string
-           | )
-           | using hudi
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
-           | )
-           | partitioned by (p_a)
-           |""".stripMargin)
+      withTable(generateTableName){ tableName =>
+        // create table
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  ts string,
+             |  p_a string
+             | )
+             | using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
+             | )
+             | partitioned by (p_a)
+             |""".stripMargin)
 
-      spark.sql(s"alter table $tableName add partition (p_a='url%a')")
+        spark.sql(s"alter table $tableName add partition (p_a='url%a')")
 
-      // show partitions
-      checkAnswer(s"show partitions $tableName")(
-        if (urlEncode) Seq("p_a=url%25a") else Seq("p_a=url%a")
-      )
+        // show partitions
+        checkAnswer(s"show partitions $tableName")(
+          if (urlEncode) Seq("p_a=url%25a") else Seq("p_a=url%a")
+        )
+      }
     }
 
     test(s"Add partition for multi-level partitioned table, urlEncode: $urlEncode") {
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id bigint,
-           |  name string,
-           |  ts string,
-           |  p_a string,
-           |  p_b string
-           | )
-           | using hudi
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
-           | )
-           | partitioned by (p_a, p_b)
-           |""".stripMargin)
+      withTable(generateTableName){ tableName =>
+        // create table
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  ts string,
+             |  p_a string,
+             |  p_b string
+             | )
+             | using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
+             | )
+             | partitioned by (p_a, p_b)
+             |""".stripMargin)
 
-      spark.sql(s"alter table $tableName add partition (p_a='url%a', p_b='key=val')")
+        spark.sql(s"alter table $tableName add partition (p_a='url%a', p_b='key=val')")
 
-      // show partitions
-      checkAnswer(s"show partitions $tableName")(
-        if (urlEncode) Seq("p_a=url%25a/p_b=key%3Dval") else Seq("p_a=url%a/p_b=key=val")
-      )
+        // show partitions
+        checkAnswer(s"show partitions $tableName")(
+          if (urlEncode) Seq("p_a=url%25a/p_b=key%3Dval") else Seq("p_a=url%a/p_b=key=val")
+        )
+      }
     }
   }
 }

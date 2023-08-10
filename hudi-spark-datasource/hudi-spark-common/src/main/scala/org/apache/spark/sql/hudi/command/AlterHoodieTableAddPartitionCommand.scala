@@ -35,13 +35,12 @@ case class AlterHoodieTableAddPartitionCommand(
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
-    logInfo(s"start execute alter table add partition command for $fullTableName")
+    logInfo(s"start execute alter table add partition command for $tableIdentifier")
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
     if (!hoodieCatalogTable.isPartitionedTable) {
-      throw new AnalysisException(s"$fullTableName is a non-partitioned table that is not allowed to add partition")
+      throw new AnalysisException(s"$tableIdentifier is a non-partitioned table that is not allowed to add partition")
     }
 
     val catalog = sparkSession.sessionState.catalog
@@ -81,7 +80,7 @@ case class AlterHoodieTableAddPartitionCommand(
     parts.toIterator.grouped(batchSize).foreach { batch =>
       catalog.createPartitions(tableIdentifier, batch, ignoreIfExists = true)
     }
-    catalog.refreshTable(tableIdentifier)
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
 
     Seq.empty[Row]
   }
