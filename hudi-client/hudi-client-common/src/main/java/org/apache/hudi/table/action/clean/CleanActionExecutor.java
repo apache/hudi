@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.clean;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -147,7 +148,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
     partitionsToBeDeleted.forEach(entry -> {
       try {
-        deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+        if (StringUtils.isNotBlank(entry)) {
+          deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+        }
       } catch (IOException e) {
         LOG.warn("Partition deletion failed " + entry);
       }
