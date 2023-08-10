@@ -145,7 +145,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata record index payload field ids
    */
-  public static final String RECORD_INDEX_FIELD_PARTITION = "partitionName";
+  public static final String RECORD_INDEX_FIELD_PARTITION = "partition";
   public static final String RECORD_INDEX_FIELD_FILEID_HIGH_BITS = "fileIdHighBits";
   public static final String RECORD_INDEX_FIELD_FILEID_LOW_BITS = "fileIdLowBits";
   public static final String RECORD_INDEX_FIELD_FILE_INDEX = "fileIndex";
@@ -256,9 +256,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
-            recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
-            Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()));
+            Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
+            recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString());
       }
     } else {
       this.isDeletedRecord = true;
@@ -729,9 +729,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               uuid.getMostSignificantBits(),
               uuid.getLeastSignificantBits(),
               fileIndex,
-              "",
               instantTimeMillis,
-              0));
+              0,
+              ""));
       return new HoodieAvroRecord<>(key, payload);
     } else {
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
@@ -740,9 +740,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               -1L,
               -1L,
               -1,
-              fileId,
               instantTimeMillis,
-              1));
+              1,
+              fileId));
       return new HoodieAvroRecord<>(key, payload);
     }
   }
@@ -761,7 +761,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * If this is a record-level index entry, returns the file to which this is mapped.
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
-    final String partition = recordIndexMetadata.getPartitionName();
+    final String partition = recordIndexMetadata.getPartition();
     String fileId = null;
     if (recordIndexMetadata.getFileIdEncoding() == 0) {
       // encoding 0 refers to UUID based fileID
