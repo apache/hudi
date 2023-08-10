@@ -102,8 +102,7 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams +
-      (DATA_QUERIES_ONLY.key() -> sqlContext.getConf(DATA_QUERIES_ONLY.key(), optParams.getOrElse(DATA_QUERIES_ONLY.key(), DATA_QUERIES_ONLY.defaultValue()))))
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(sqlContext.getAllConfs.filter(k => k._1.startsWith("hoodie.")) ++ optParams)
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
