@@ -369,7 +369,7 @@
                    "name": "HoodieRecordIndexInfo",
                     "fields": [
                         {
-                            "name": "partitionName",
+                            "name": "partition",
                             "type": [
                                 "null",
                                 "string"
@@ -405,15 +405,6 @@
                             "doc": "Index representing file index which is used to re-construct UUID based fileID. Applicable when the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
                         },
                         {
-                           "name": "fileId",
-                           "type": [
-                               "null",
-                               "string"
-                            ],
-                            "default" : null,
-                            "doc": "Represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format."
-                           },
-                        {
                             "name": "instantTime",
                             "type": [
                                 "null",
@@ -428,6 +419,15 @@
                             "type": "int",
                             "default" : 0,
                             "doc": "Represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. \nWhen the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdLowBits and fileIndex."
+                       },
+                       {
+                            "name": "fileId",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default" : null,
+                            "doc": "Represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format."
                        }
                     ]
                 }
