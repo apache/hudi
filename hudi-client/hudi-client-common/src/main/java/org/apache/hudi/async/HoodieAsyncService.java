@@ -196,7 +196,7 @@ public abstract class HoodieAsyncService implements Serializable {
   }
 
   /**
-   * Enqueues new pending compaction/clustering instant.
+   * Enqueues new pending table service instant.
    * @param instant {@link HoodieInstant} to enqueue.
    */
   public void enqueuePendingAsyncServiceInstant(HoodieInstant instant) {
