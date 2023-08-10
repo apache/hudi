@@ -37,13 +37,19 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.spark.sql.SaveMode.Append;
+import static org.apache.spark.sql.SaveMode.Overwrite;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestMORColstats extends HoodieSparkClientTestBase {
 
@@ -69,20 +75,38 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> insertsBatch1 = inserts.where("begin_lat < 0.9");
     Dataset<Row> insertsBatch2 = inserts.where("begin_lat >= 0.9");
-    insertsBatch1.write().format("hudi").options(options).save(basePath.toString());
+    insertsBatch1.write().format("hudi").options(options).mode(Overwrite).save(basePath.toString());
     Properties props = new Properties();
     props.putAll(options);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ, props);
     String firstTimestamp = metaClient.getActiveTimeline().lastInstant().get().getTimestamp();
-    insertsBatch2.write().format("hudi").options(options).save(basePath.toString());
+    insertsBatch2.write().format("hudi").options(options).mode(Append).save(basePath.toString());
+    corruptFilesNotTimestamp(firstTimestamp);
+    assertEquals(0, sparkSession.read().format("hudi").options(options)
+        .load(basePath.toString()).where("begin_lat < 0.9")
+        .drop("city_to_state", "_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name")
+        .except(insertsBatch1.drop("city_to_state")).count());
+  }
+
+  protected void corruptFilesNotTimestamp(String timestamp) throws IOException {
+    try (Stream<Path> stream = Files.list(basePath)) {
+      stream
+          .filter(file -> !Files.isDirectory(file))
+          .filter(file -> file.toString().contains(".parquet"))
+          .filter(file -> !file.toString().contains(timestamp))
+          .forEach(file -> corruptFile(file));
+    }
   }
 
 
-
-  protected void corruptFile(String path) throws IOException {
-    File fileToCorrupt = new File(path);
+  protected static void corruptFile(Path path) {
+    File fileToCorrupt = path.toFile();
     fileToCorrupt.delete();
-    fileToCorrupt.createNewFile();
+    try {
+      fileToCorrupt.createNewFile();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
 
