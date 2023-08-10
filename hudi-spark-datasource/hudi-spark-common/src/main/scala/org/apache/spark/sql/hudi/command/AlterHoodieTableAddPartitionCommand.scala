@@ -27,7 +27,6 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, HoodieCatalogTable}
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{makePartitionPath, normalizePartitionSpec}
-import org.apache.spark.sql.internal.SQLConf
 
 case class AlterHoodieTableAddPartitionCommand(
    tableIdentifier: TableIdentifier,
@@ -77,8 +76,8 @@ case class AlterHoodieTableAddPartitionCommand(
     }.unzip
     partitionMetadata.flatten.foreach(_.trySave(0))
 
-    // Sync new partitions in catalog, enable ignoreIfExists to avoid sync failure.
-    val batchSize = conf.getConf(SQLConf.ADD_PARTITION_BATCH_SIZE)
+    // Sync new partitions in batch, enable ignoreIfExists to avoid sync failure.
+    val batchSize = sparkSession.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)
     parts.toIterator.grouped(batchSize).foreach { batch =>
       catalog.createPartitions(tableIdentifier, batch, ignoreIfExists = true)
     }
