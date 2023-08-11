@@ -120,22 +120,22 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
       file.partitionValues match {
-        case broadcast: PartitionFileSliceMapping =>
+        case fileSliceMapping: PartitionFileSliceMapping =>
           val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
           if (FSUtils.isLogFile(filePath)) {
             //no base file
-            val fileSlice = broadcast.getSlice(FSUtils.getFileId(filePath.getName).substring(1)).get
+            val fileSlice = fileSliceMapping.getSlice(FSUtils.getFileId(filePath.getName).substring(1)).get
             val logFiles = getLogFilesFromSlice(fileSlice)
             val outputAvroSchema = HoodieBaseRelation.convertToAvroSchema(outputSchema, tableName)
             new LogFileIterator(logFiles, filePath.getParent, tableSchema.value, outputSchema, outputAvroSchema,
               tableState.value, broadcastedHadoopConf.value.value)
           } else {
             //We do not broadcast the slice if it has no log files or bootstrap base
-            broadcast.getSlice(FSUtils.getFileId(filePath.getName)) match {
+            fileSliceMapping.getSlice(FSUtils.getFileId(filePath.getName)) match {
               case Some(fileSlice) =>
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
-                val partitionValues = broadcast.getInternalRow
+                val partitionValues = fileSliceMapping.getInternalRow
                 val logFiles = getLogFilesFromSlice(fileSlice)
                 if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
