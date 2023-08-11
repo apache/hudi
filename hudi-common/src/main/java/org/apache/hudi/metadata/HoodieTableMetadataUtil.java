@@ -88,7 +88,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -790,17 +789,8 @@ public class HoodieTableMetadataUtil {
                                                                           Map<String, Map<String, Long>> partitionToAppendedFiles,
                                                                           MetadataRecordsGenerationParams recordsGenerationParams,
                                                                           String instantTime) {
-    // Total number of files which are added or deleted
-    final int totalFiles = partitionToDeletedFiles.values().stream().mapToInt(List::size).sum()
-        + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
-    partitionToDeletedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> new Tuple3<>(entry.getKey(), deletedFile, true)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
-    partitionToAppendedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> new Tuple3<>(entry.getKey(), addedFile, false)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
 
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getBloomIndexParallelism()), 1);
@@ -853,29 +843,15 @@ public class HoodieTableMetadataUtil {
 
     LOG.info(String.format("Indexing %d columns for column stats index", columnsToIndex.size()));
 
-    // Total number of files which are added or deleted
-    final int totalFiles = partitionToDeletedFiles.values().stream().mapToInt(List::size).sum()
-        + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
-
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
-    partitionToDeletedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> new Tuple3<>(entry.getKey(), deletedFile, true)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
-    partitionToAppendedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> new Tuple3<>(entry.getKey(), addedFile, false)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
 
     // Create records MDT
-    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getBloomIndexParallelism()), 1);
+    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
       final String partitionName = partitionFileFlagTuple._1();
       final String filename = partitionFileFlagTuple._2();
       final boolean isDeleted = partitionFileFlagTuple._3();
-      if (!FSUtils.isBaseFile(new Path(filename))) {
-        LOG.warn(String.format("Ignoring file %s as it is not a base file", filename));
-        return Stream.<HoodieRecord>empty().iterator();
-      }
       if (!FSUtils.isBaseFile(new Path(filename)) || !filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         LOG.warn(String.format("Ignoring file %s as it is not a PARQUET file", filename));
         return Stream.<HoodieRecord>empty().iterator();
@@ -895,6 +871,21 @@ public class HoodieTableMetadataUtil {
       }
       return ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
     }
+  }
+
+  private static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(Map<String, List<String>> partitionToDeletedFiles,
+                                                                                      Map<String, Map<String, Long>> partitionToAppendedFiles) {
+    // Total number of files which are added or deleted
+    final int totalFiles = partitionToDeletedFiles.values().stream().mapToInt(List::size).sum()
+        + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
+    partitionToDeletedFiles.entrySet().stream()
+        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> new Tuple3<>(entry.getKey(), deletedFile, true)))
+        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
+    partitionToAppendedFiles.entrySet().stream()
+        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> new Tuple3<>(entry.getKey(), addedFile, false)))
+        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
+    return partitionFileFlagTupleList;
   }
 
   /**
