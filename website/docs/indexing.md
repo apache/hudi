@@ -1,7 +1,11 @@
 ---
 title: Indexing
 toc: true
+toc_min_heading_level: 2
+toc_max_heading_level: 4
 ---
+
+## Indexing
 
 Hudi provides efficient upserts, by mapping a given hoodie key (record key + partition path) consistently to a file id, via an indexing mechanism.
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
@@ -20,34 +24,93 @@ _Figure: Comparison of merge cost for updates (yellow blocks) against base files
 
 ## Index Types in Hudi
 
-Currently, Hudi supports the following indexing options.
+Currently, Hudi supports the following index types. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java 
+engines.
 
-- **Bloom Index (default):** Employs bloom filters built out of the record keys, optionally also pruning candidate files using record key ranges.
-- **Simple Index:** Performs a lean join of the incoming update/delete records against keys extracted from the table on storage.
-- **HBase Index:** Manages the index mapping in an external Apache HBase table.
+- **BLOOM:** Employs bloom filters built out of the record keys, optionally also pruning candidate files using 
+  record key ranges.Key uniqueness is enforced inside partitions.
+- **GLOBAL_BLOOM:** Employs bloom filters built out of the record keys, optionally also pruning candidate files using 
+  record key ranges. Key uniqueness is enforced across all partitions in the table.
+- **SIMPLE (default for Spark engines):** Default index type for spark engine. Performs a lean join of the incoming records against keys extracted from the table on 
+  storage. Key uniqueness is enforced inside partitions. 
+- **GLOBAL_SIMPLE:** Performs a lean join of the incoming records against keys extracted from the table on
+  storage. Key uniqueness is enforced across all partitions in the table.
+- **HBASE:** Manages the index mapping in an external Apache HBase table.
+- **INMEMORY (default for Flink and Java):** Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.
+- **BUCKET:** Employs bucket hashing to locates the file group containing the records. Particularly beneficial in 
+  large scale. Use `hoodie.index.bucket.engine` to choose bucket engine type, i.e., how buckets are generated;
+  - `SIMPLE(default)`: Uses a fixed number of buckets for file groups per partition which cannot shrink or expand. This works for both COW and 
+     MOR tables. Since the num of buckets cannot be changed and design of one-on-one mapping between buckets and file groups, 
+     this index might not suit well for highly skewed partitions. 
+  - `CONSISTENT_HASHING`: Supports dynamic number of buckets with bucket resizing to properly size each bucket. This 
+     solves potential data skew problem where partitions with high volume of data can be dynamically resized to have 
+     multiple buckets that are reasonably sized in contrast to the fixed number of buckets per partition in SIMPLE 
+     bucket engine type. This only works with MOR tables.
+- **RECORD_INDEX:** Index which saves the record key to location mappings in the HUDI Metadata Table. Record index is a 
+  global index, enforcing key uniqueness across all partitions in the table. Supports sharding to achieve very high scale.
 - **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java) 
 to implement custom indexing.
 
 Writers can pick one of these options using `hoodie.index.type` config option. Additionally, a custom index implementation can also be employed
 using `hoodie.index.class` and supplying a subclass of `SparkHoodieIndex` (for Apache Spark writers)
 
+### Global and Non-Global Indexes
+
 Another key aspect worth understanding is the difference between global and non-global indexes. Both bloom and simple index have
-global options - `hoodie.index.type=GLOBAL_BLOOM` and `hoodie.index.type=GLOBAL_SIMPLE` - respectively. HBase index is by nature a global index.
+global options - `hoodie.index.type=GLOBAL_BLOOM` and `hoodie.index.type=GLOBAL_SIMPLE` - respectively. Record index and 
+HBase index are by nature a global index.
 
 - **Global index:**  Global indexes enforce uniqueness of keys across all partitions of a table i.e guarantees that exactly
-  one record exists in the table for a given record key. Global indexes offer stronger guarantees, but the update/delete cost grows
-  with size of the table `O(size of table)`, which might still be acceptable for smaller tables.
-
+  one record exists in the table for a given record key. Global indexes offer stronger guarantees, but the update/delete 
+  cost can still grow with size of the table `O(size of table)`, since the record could belong to any partition in storage. 
+  In case of non-global index, lookup involves file groups only for the matching partitions from the incoming records and 
+  so its not impacted by the total size of the table. These global indexes(GLOBAL_SIMPLE or GLOBAL_BLOOM), might be 
+  acceptable for decent sized tables, but for large tables, a newly added index (0.14.0) called Record Level Index (RLI),
+  can offer pretty good index lookup performance compared to other global indices(GLOBAL_SIMPLE or GLOBAL_BLOOM) or 
+  Hbase and also avoids the operational overhead of maintaining external systems.
 - **Non Global index:** On the other hand, the default index implementations enforce this constraint only within a specific partition.
   As one might imagine, non global indexes depends on the writer to provide the same consistent partition path for a given record key during update/delete,
   but can deliver much better performance since the index lookup operation becomes `O(number of records updated/deleted)` and
   scales well with write volume.
 
-Since data comes in at different volumes, velocity and has different access patterns, different indices could be used for different workload types.
-Let’s walk through some typical workload types and see how to leverage the right Hudi index for such use-cases. 
-This is based on our experience and you should diligently decide if the same strategies are best for your workloads.
+### Configs
+
+#### Spark based configs
+
+For Spark DataSource, Spark SQL, DeltaStreamer and Structured Streaming following are the key configs that control 
+indexing behavior. Please refer to [Advanced Configs](https://hudi.apache.org/docs/next/configurations#Common-Index-Configs-advanced-configs)
+for more details. All these, support the index types mentioned [above](#index-types-in-hudi).
+
+| Config Name                                                                          | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.index.type| N/A **(Required)** | org.apache.hudi.index.HoodieIndex$IndexType: Determines how input records are indexed, i.e., looked up based on the key for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java engines. Possible Values: <br /> <ul><li>BLOOM</li><li>GLOBAL_BLOOM</li><li>SIMPLE</li><li>GLOBAL_SIMPLE</li><li>HBASE</li><li>INMEMORY</li><li>FLINK_STATE</li><li>BUCKET</li><li>RECORD_INDEX</li></ul><br />`Config Param: INDEX_TYPE`                                                                                                                                            |
+| hoodie.index.bucket.engine            | SIMPLE (Optional)              | org.apache.hudi.index.HoodieIndex$BucketIndexEngineType: Determines the type of bucketing or hashing to use when `hoodie.index.type` is set to `BUCKET`.    Possible Values: <br /> <ul><li>SIMPLE</li><li>CONSISTENT_HASHING</li></ul> <br />`Config Param: BUCKET_INDEX_ENGINE_TYPE`<br />`Since Version: 0.11.0`                                                                                                                                                                                                                                                                                                    |
+| hoodie.index.class                    |  (Optional)                    | Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the hoodie.index.type configuration if specified<br /><br />`Config Param: INDEX_CLASS_NAME`                                                                                                                                                                                                                                                                                                                                                                                                           |
+| hoodie.bloom.index.update.partition.path       | true (Optional)                | Only applies if index type is GLOBAL_BLOOM. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition, ignoring the new incoming partition if there is a mis-match between partition value for an incoming record with whats in storage.<br /><br />`Config Param: BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE`                                                                |
+| hoodie.record.index.update.partition.path      | false (Optional)               | Similar to Key: 'hoodie.bloom.index.update.partition.path' , Only applies if index type is RECORD_INDEX. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition, ignoring the new incoming partition if there is a mis-match between partition value for an incoming record with whats in storage. <br /><br />`Config Param: RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE` |
+| hoodie.simple.index.update.partition.path      | true (Optional)                | Similar to Key: 'hoodie.bloom.index.update.partition.path' , Only applies if index type is GLOBAL_SIMPLE. When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition, ignoring the new incoming partition if there is a mis-match between partition value for an incoming record with whats in storage. <br /><br />`Config Param: SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE`                                                                                                                                 |
+| hoodie.hbase.index.update.partition.path       | false (Optional)                                                        | Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old partition and will insert it as new record in new partition.<br /><br />`Config Param: UPDATE_PARTITION_PATH_ENABLE`                                                                                                                                                                                                                                                                                                             |
+
+#### Flink based configs
+
+For Flink DataStream and Flink SQL only support Bucket Index and internal Flink state store backed in memory index. 
+Following are the basic configs that control the indexing behavior. Please refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options-advanced-configs)
+for advanced configs.
+
+| Config Name                                                                       | Default                                                                                         | Description                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------| ----------------------------------------------------------------------------------------------- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| index.type                                                                        | FLINK_STATE (Optional)                  | Index type of Flink write job, default is using state backed index. Possible values:<br /> <ul><li>FLINK_STATE</li><li>BUCKET</li></ul><br />  `Config Param: INDEX_TYPE`                                                                                                              |
+| hoodie.index.bucket.engine                                                        | SIMPLE (Optional)                                                                               | org.apache.hudi.index.HoodieIndex$BucketIndexEngineType: Determines the type of bucketing or hashing to use when `hoodie.index.type` is set to `BUCKET`.    Possible Values: <br /> <ul><li>SIMPLE</li><li>CONSISTENT_HASHING</li></ul>|
+
+
+
 
 ## Indexing Strategies
+
+Since data comes in at different volumes, velocity and has different access patterns, different indices could be used for different workload types.
+Let’s walk through some typical workload types and see how to leverage the right Hudi index for such use-cases.
+This is based on our experience and you should diligently decide if the same strategies are best for your workloads.
+
 ### Workload 1: Late arriving updates to fact tables
 Many companies store large volumes of transactional data in NoSQL data stores. For eg, trip tables in case of ride-sharing, buying and selling of shares,
 orders in an e-commerce site. These tables are usually ever growing with random updates on most recent data with long tail updates going to older data, either
