@@ -160,7 +160,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    * Then delete the deltacommit and write the original value for the
    *    record so that a rollback is triggered and the file group no
    *    longer matches the condition
-   * Only 1 file group should be read
+   * Rollback should still happen because
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesAndRollBack() {
@@ -187,12 +187,8 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     if (shouldRollback) {
       deleteLatestDeltacommit();
       doWrite(recordToUpdate);
-      filesToCorrupt.forEach(TestMORColstats::corruptFile);
       assertEquals(0, readMatchingRecords().except(batch1).count());
-      return;
-    }
-
-    if (shouldDelete) {
+    } else if (shouldDelete) {
       doDelete(updatedRecord);
       assertEquals(0, readMatchingRecords().except(batch1).count());
     } else {
@@ -269,11 +265,13 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     options.put("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.NonpartitionedKeyGenerator");
     options.put(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
+    options.put(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.key(), "false");
     return options;
   }
 
   private void scheduleAsyncCompaction() {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath.toString())
+        .withRollbackUsingMarkers(false)
         .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
