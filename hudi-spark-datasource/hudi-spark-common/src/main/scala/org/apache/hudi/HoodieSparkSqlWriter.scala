@@ -965,8 +965,9 @@ object HoodieSparkSqlWriter {
     // we must invalidate this table in the cache so writes are reflected in later queries
     if (metaSyncEnabled) {
       getHiveTableNames(hoodieConfig).foreach(name => {
-        val qualifiedTableName = String.join(".", hoodieConfig.getStringOrDefault(HIVE_DATABASE), name)
-        if (spark.catalog.tableExists(qualifiedTableName)) {
+        val syncDb = hoodieConfig.getStringOrDefault(HIVE_DATABASE)
+        val qualifiedTableName = String.join(".", syncDb, name)
+        if (spark.catalog.databaseExists(syncDb) && spark.catalog.tableExists(qualifiedTableName)) {
           spark.catalog.refreshTable(qualifiedTableName)
         }
       })
