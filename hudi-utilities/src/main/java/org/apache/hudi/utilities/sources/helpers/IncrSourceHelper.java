@@ -217,7 +217,7 @@ public class IncrSourceHelper {
       row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
           col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc()).first();
     }
-    LOG.info("Processed batch size: " + row.getLong(2) + " bytes");
+    LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
     sourceData.unpersist();
     return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), collectedRows);
   }
