@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.format.cow;
 
-import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,6 +76,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final boolean hiveStylePartitioning;
   private final boolean utcTimestamp;
   private final SerializableConfiguration conf;
+  private final List<Predicate> predicates;
   private final long limit;
 
   private transient ClosableIterator<RowData> itr;
@@ -95,11 +97,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       String partDefaultName,
       String partPathField,
       boolean hiveStylePartitioning,
+      List<Predicate> predicates,
       long limit,
       Configuration conf,
       boolean utcTimestamp,
       InternalSchemaManager internalSchemaManager) {
     super.setFilePaths(paths);
+    this.predicates = predicates;
     this.limit = limit;
     this.partDefaultName = partDefaultName;
     this.partPathField = partPathField;
@@ -135,7 +139,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         2048,
         fileSplit.getPath(),
         fileSplit.getStart(),
-        fileSplit.getLength());
+        fileSplit.getLength(),
+        predicates);
     this.currentReadCount = 0L;
   }
 

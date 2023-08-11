@@ -38,6 +38,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -123,6 +124,9 @@ public class MergeOnReadInputFormat
    */
   private final int[] requiredPos;
 
+  // for predicate push down
+  private final List<Predicate> predicates;
+
   // for limit push down
   /**
    * Limit for the reader, -1 when the reading is not limited.
@@ -152,6 +156,7 @@ public class MergeOnReadInputFormat
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
+      List<Predicate> predicates,
       long limit,
       boolean emitDelete,
       InternalSchemaManager internalSchemaManager) {
@@ -163,6 +168,7 @@ public class MergeOnReadInputFormat
     // Needs improvement: this requiredPos is only suitable for parquet reader,
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
+    this.predicates = predicates;
     this.limit = limit;
     this.emitDelete = emitDelete;
     this.internalSchemaManager = internalSchemaManager;
@@ -336,7 +342,8 @@ public class MergeOnReadInputFormat
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
-        Long.MAX_VALUE); // read the whole file
+        Long.MAX_VALUE, // read the whole file
+        predicates);
   }
 
   private ClosableIterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
@@ -845,6 +852,7 @@ public class MergeOnReadInputFormat
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
     protected String defaultPartName;
+    protected List<Predicate> predicates;
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
@@ -869,6 +877,11 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    public Builder predicates(List<Predicate> predicates) {
+      this.predicates = predicates;
+      return this;
+    }
+
     public Builder limit(long limit) {
       this.limit = limit;
       return this;
@@ -886,7 +899,7 @@ public class MergeOnReadInputFormat
 
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete, internalSchemaManager);
+          defaultPartName, predicates, limit, emitDelete, internalSchemaManager);
     }
   }
 
