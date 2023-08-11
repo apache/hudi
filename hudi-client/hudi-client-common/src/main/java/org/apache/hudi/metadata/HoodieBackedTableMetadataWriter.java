@@ -448,7 +448,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // initialize the metadata reader again so the MDT partition can be read after initialization
       initMetadataReader();
       long totalInitTime = partitionInitTimer.endTimer();
-      LOG.info(String.format("Initializing %s index in metadata table took " + totalInitTime + " in ms"));
+      LOG.info(String.format("Initializing %s index in metadata table took " + totalInitTime + " in ms", partitionType.name()));
     }
 
     return true;
