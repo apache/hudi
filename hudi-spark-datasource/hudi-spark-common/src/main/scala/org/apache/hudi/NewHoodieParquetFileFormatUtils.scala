@@ -198,7 +198,7 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
     } else {
       Seq.empty
     }
-    fileIndex.shouldBroadcast = true
+    fileIndex.shouldEmbedFileSlices = true
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
