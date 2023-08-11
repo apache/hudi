@@ -128,7 +128,7 @@ function DocPageContent({
   );
 }
 
-const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`, `${matchPath}/timeline`, `${matchPath}/table_types`, `${matchPath}/migration_guide`, `${matchPath}/compaction`];
+const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`, `${matchPath}/timeline`, `${matchPath}/table_types`, `${matchPath}/migration_guide`, `${matchPath}/compaction`, `${matchPath}/clustering`];
 const showCustomStylesForDocs = (matchPath, pathname) => arrayOfPages(matchPath).includes(pathname);
 function DocPage(props) {
   const {
