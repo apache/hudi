@@ -285,3 +285,15 @@ last_modified_at: 2022-12-21T15:59:57-04:00
 121. [How Data Scientist &Data Engineer Can Query Hudi Tables with Athena Spark Notebook for AdhocAnalysis](https://www.youtube.com/watch?v=ybnH6E20GmY)- By Soumil Shah, June 7th 2023
 
 122. [Develop Incremental ETL Pipeline From Hudi Tables to Redshift Using AWS Glue and Spark](https://www.youtube.com/watch?v=n-rE1WyoD-o)- By Soumil Shah, July 9th 2023
+
+123. [learn How to use AWS Glue Crawler with Hudi Tables to Catlog the Data](https://www.youtube.com/watch?v=30wFNLlsx5U)- By Soumil Shah, July 22nd 2023
+
+124. [Removing Duplicates in Hudi Partitions with Insert_Overwrite API and Spark SQL](https://www.youtube.com/watch?v=ue5M0_euwis)- By Soumil Shah, July 28th 2023
+
+125. [Building and Automating Hudi Medallion Architecture with AWS Glue Workflow Hands on Labs StepbyStep](https://www.youtube.com/watch?v=MEsAoo9ryIg)- By Soumil Shah, August 1st 2023
+
+126. [Powering Event-Driven Workloads with Hudi Read Stream & AWS Glue Streaming JOBS!](https://www.youtube.com/watch?v=wk1RAVwo7gc)- By Soumil Shah, August 3rd 2023
+
+127. [Easy Step by Step Guide for Beginner Setup AWS Transfer Family - SFTP with S3](https://www.youtube.com/watch?v=kjcvZGROdfU)- By Soumil Shah, August 6th 2023
+
+128. [Easy Step by Step Guide for Beginner Ingest CSV Files into Hudi with AWS GLue | Hands on Labs](https://www.youtube.com/watch?v=ggVcEpV8Fr8)- By Soumil Shah, August 9th 2023
