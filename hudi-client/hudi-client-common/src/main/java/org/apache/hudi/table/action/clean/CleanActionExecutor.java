@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -54,6 +53,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
@@ -145,10 +146,12 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
+    List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
+        ? cleanerPlan.getPartitionsToBeDeleted()
+        : new ArrayList<>();
     partitionsToBeDeleted.forEach(entry -> {
       try {
-        if (!StringUtils.isNullOrEmpty(entry)) {
+        if (!isNullOrEmpty(entry)) {
           deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {
