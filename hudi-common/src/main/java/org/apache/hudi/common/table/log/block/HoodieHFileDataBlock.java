@@ -193,7 +193,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    final HoodieAvroHFileReader reader =
+    HoodieAvroHFileReader reader =
              new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),
              Option.of(getSchemaFromHeader()));
 

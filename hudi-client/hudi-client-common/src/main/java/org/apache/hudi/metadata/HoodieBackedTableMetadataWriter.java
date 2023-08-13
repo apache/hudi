@@ -544,6 +544,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         @Override
         public void close() {
           recordKeyIterator.close();
+          reader.close();
         }
 
         @Override

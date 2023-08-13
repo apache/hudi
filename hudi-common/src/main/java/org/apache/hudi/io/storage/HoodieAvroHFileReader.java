@@ -126,7 +126,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, sortedKeys, getSchema(), schema);
+    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(this, scanner, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
@@ -204,7 +204,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     } catch (IOException e) {
       throw new HoodieIOException("Instantiation HfileScanner failed for " + reader.getHFileInfo().toString());
     }
-    return new RecordIterator(scanner, getSchema(), readerSchema);
+    return new RecordIterator(this, scanner, getSchema(), readerSchema);
   }
 
   @VisibleForTesting
@@ -213,7 +213,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
+    return new RecordByKeyIterator(this, scanner, keys, getSchema(), readerSchema);
   }
 
   @VisibleForTesting
@@ -222,7 +222,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyPrefixIterator(scanner, sortedKeyPrefixes, getSchema(), readerSchema);
+    return new RecordByKeyPrefixIterator(this, scanner, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
   @Override
@@ -235,6 +235,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   public void close() {
     try {
       synchronized (this) {
+        sharedScanner.close();
         reader.close();
       }
     } catch (IOException e) {
@@ -459,6 +460,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     private final Iterator<String> sortedKeyPrefixesIterator;
     private Iterator<IndexedRecord> recordsIterator;
 
+    private final HoodieAvroHFileReader reader;
     private final HFileScanner scanner;
 
     private final Schema writerSchema;
@@ -466,9 +468,9 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyPrefixIterator(HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
+    RecordByKeyPrefixIterator(HoodieAvroHFileReader reader, HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
       this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
-
+      this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
 
@@ -509,12 +511,19 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     @Override
     public void close() {
       scanner.close();
+      try {
+        if (reader != null) {
+          reader.close();
+        }
+      } catch (Exception ignore) {
+        LOG.warn("OH NO " + ignore);
+      }
     }
   }
 
   private static class RecordByKeyIterator implements ClosableIterator<IndexedRecord> {
     private final Iterator<String> sortedKeyIterator;
-
+    private final HoodieAvroHFileReader reader;
     private final HFileScanner scanner;
 
     private final Schema readerSchema;
@@ -522,9 +531,9 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
+    RecordByKeyIterator(HoodieAvroHFileReader reader, HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
-
+      this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
 
@@ -563,6 +572,13 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     @Override
     public void close() {
       scanner.close();
+      try {
+        if (reader != null) {
+          reader.close();
+        }
+      } catch (Exception ignore) {
+        LOG.warn("OH NO " + ignore);
+      }
     }
   }
 
@@ -595,13 +611,15 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileScanner scanner;
+    private final HoodieAvroHFileReader reader;
 
     private final Schema writerSchema;
     private final Schema readerSchema;
 
     private IndexedRecord next = null;
 
-    RecordIterator(HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+    RecordIterator(HoodieAvroHFileReader reader, HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+      this.reader = reader;
       this.scanner = scanner;
       this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
@@ -643,6 +661,13 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     @Override
     public void close() {
       scanner.close();
+      try {
+        if (reader != null) {
+          reader.close();
+        }
+      } catch (Exception ignore) {
+        LOG.warn("OH NO " + ignore);
+      }
     }
   }
 
