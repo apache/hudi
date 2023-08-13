@@ -149,7 +149,6 @@ public class HoodieInputFormatUtils {
   public static String getOutputFormatClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
-        return MapredParquetOutputFormat.class.getName();
       case HFILE:
         return MapredParquetOutputFormat.class.getName();
       case ORC:
@@ -162,7 +161,6 @@ public class HoodieInputFormatUtils {
   public static String getSerDeClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
-        return ParquetHiveSerDe.class.getName();
       case HFILE:
         return ParquetHiveSerDe.class.getName();
       case ORC:
