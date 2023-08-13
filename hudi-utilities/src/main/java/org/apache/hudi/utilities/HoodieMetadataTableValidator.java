@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -71,6 +72,7 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -819,6 +821,69 @@ public class HoodieMetadataTableValidator implements Serializable {
             .toJavaRDD()
             .map(row -> Pair.of(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
                 Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
+                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
+            .cache();
+
+    JavaRDD<Pair<String, Pair<String, String>>> keyToLocationFromRecordIndexRdd =
+        sparkEngineContext.getSqlContext().read().format("hudi")
+            .load(getMetadataTableBasePath(basePath))
+            .filter("type = 5")
+            .select(functions.col("key"),
+                functions.col("recordIndexMetadata.partitionName").as("partitionName"),
+                functions.col("recordIndexMetadata.fileIdHighBits").as("fileIdHighBits"),
+                functions.col("recordIndexMetadata.fileIdLowBits").as("fileIdLowBits"),
+                functions.col("recordIndexMetadata.fileIndex").as("fileIndex"),
+                functions.col("recordIndexMetadata.fileId").as("fileId"),
+                functions.col("recordIndexMetadata.instantTime").as("instantTime"),
+                functions.col("recordIndexMetadata.fileIdEncoding").as("fileIdEncoding"))
+            .distinct()
+            .toJavaRDD()
+            .map(row -> {
+              HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
+                  HoodieRecordIndexInfo.newBuilder()
+                      .setPartitionName(row.getString(row.fieldIndex("partitionName")))
+                      .setFileIdHighBits(row.getLong(row.fieldIndex("fileIdHighBits")))
+                      .setFileIdLowBits(row.getLong(row.fieldIndex("fileIdLowBits")))
+                      .setFileIndex(row.getInt(row.fieldIndex("fileIndex")))
+                      .setFileId(row.getString(row.fieldIndex("fileId")))
+                      .setInstantTime(row.getLong(row.fieldIndex("instantTime")))
+                      .setFileIdEncoding(row.getInt(row.fieldIndex("fileIdEncoding")))
+                      .build());
+              return Pair.of(row.getString(row.fieldIndex("key")),
+                  Pair.of(location.getPartitionPath(), location.getFileId()));
+            });
+
+    JavaRDD<Pair<String, Pair<String, String>>> diffRdd = keyToLocationOnFsRdd.subtract(keyToLocationFromRecordIndexRdd);
+    long diffCount = diffRdd.count();
+    long countKey = keyToLocationOnFsRdd.count();
+
+    if (diffCount > 0) {
+      String message = String.format("Validation of record index content failed: "
+              + "%s keys (total %s) from the data table have wrong location in record index "
+              + "metadata. Sample difference: %s.",
+          diffCount, countKey, diffRdd.take(2));
+      keyToLocationOnFsRdd.unpersist();
+      LOG.error(message);
+      throw new HoodieValidationException(message);
+    } else {
+      keyToLocationOnFsRdd.unpersist();
+      LOG.info(String.format(
+          "Validation of record index content succeeded: %s entries.", countKey));
+    }
+  }
+
+  /*
+  private void validateRecordIndexContent(HoodieSparkEngineContext sparkEngineContext,
+                                          HoodieTableMetaClient metaClient,
+                                          HoodieTableMetadata tableMetadata) {
+    String basePath = metaClient.getBasePathV2().toString();
+    JavaRDD<Pair<String, Pair<String, String>>> keyToLocationOnFsRdd =
+        sparkEngineContext.getSqlContext().read().format("hudi").load(basePath)
+            .select(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD)
+            .distinct()
+            .toJavaRDD()
+            .map(row -> Pair.of(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
+                Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
                     FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD)))))).cache();
     long countKeyFromTable = keyToLocationOnFsRdd.count();
     long countKeyFromRecordIndex = countRecordIndexEntries(sparkEngineContext, basePath);
@@ -890,6 +955,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       throw new HoodieValidationException(errorMessage);
     }
   }
+   */
 
   private long countRecordIndexEntries(HoodieSparkEngineContext sparkEngineContext,
                                        String dataTableBasePath) {
