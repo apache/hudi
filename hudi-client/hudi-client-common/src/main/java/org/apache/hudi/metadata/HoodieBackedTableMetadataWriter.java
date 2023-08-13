@@ -553,6 +553,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         @Override
         public void close() {
           recordKeyIterator.close();
+          reader.close();
         }
 
         @Override
