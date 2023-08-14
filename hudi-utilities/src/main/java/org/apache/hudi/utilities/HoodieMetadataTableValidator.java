@@ -817,12 +817,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     JavaRDD<Pair<String, Pair<String, String>>> keyToLocationOnFsRdd =
         sparkEngineContext.getSqlContext().read().format("hudi").load(basePath)
             .select(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD)
-            .distinct()
             .toJavaRDD()
             .map(row -> Pair.of(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
                 Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
-                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
-            .cache();
+                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))));
 
     JavaRDD<Pair<String, Pair<String, String>>> keyToLocationFromRecordIndexRdd =
         sparkEngineContext.getSqlContext().read().format("hudi")
@@ -836,7 +834,6 @@ public class HoodieMetadataTableValidator implements Serializable {
                 functions.col("recordIndexMetadata.fileId").as("fileId"),
                 functions.col("recordIndexMetadata.instantTime").as("instantTime"),
                 functions.col("recordIndexMetadata.fileIdEncoding").as("fileIdEncoding"))
-            .distinct()
             .toJavaRDD()
             .map(row -> {
               HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
@@ -860,8 +857,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (diffCount > 0) {
       String message = String.format("Validation of record index content failed: "
               + "%s keys (total %s) from the data table have wrong location in record index "
-              + "metadata. Sample difference: %s.",
-          diffCount, countKey, diffRdd.take(2));
+              + "metadata.",
+          diffCount, countKey);
       keyToLocationOnFsRdd.unpersist();
       LOG.error(message);
       throw new HoodieValidationException(message);
