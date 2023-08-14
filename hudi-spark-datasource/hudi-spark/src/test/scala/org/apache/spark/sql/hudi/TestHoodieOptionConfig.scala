@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.scalatest.Matchers.intercept
 
-import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.collection.JavaConversions._
 
 class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness with ScalaAssertionSupport{
 
