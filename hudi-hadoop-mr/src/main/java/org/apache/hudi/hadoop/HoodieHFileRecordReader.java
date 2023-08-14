@@ -95,6 +95,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     }
     if (recordIterator != null) {
       recordIterator.close();
+      recordIterator = null;
     }
   }
 
