@@ -384,6 +384,68 @@ create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/
 partitioned by (datestr) as select * from parquet_mngd;
 ```
 
+**CREATE TABLE LIKE**
+
+The "CREATE TABLE LIKE" statement allows you to create a new Hudi table with the same schema and properties from an existing Hudi/hive table.
+
+:::note
+This feature is available in Apache Hudi for Spark 3 and later versions.
+:::
+
+Examples Create a HUDI table from an existing HUDI table
+
+```sql
+# create a source hudi table
+create table source_hudi (
+  id int,
+  name string,
+  price double,
+  ts long
+) using hudi
+tblproperties (
+  primaryKey = 'id,name',
+  type = 'cow'
+ );
+
+# create a new hudi table based on the source table
+create table target_hudi1
+like source_hudi
+using hudi;
+
+# create a new hudi table based on the source table with override options
+create table target_hudi2
+like source_hudi
+using hudi
+tblproperties (primaryKey = 'id');
+
+# create a new external hudi table based on the source table with location
+create table target_hudi3
+like source_hudi
+using hudi
+location 'file:/tmp/hudi/target_hudi3/';
+```
+
+Examples Create a HUDI table from an existing parquet table
+
+```sql
+# create a source parquet table
+create table source_parquet (
+  id int,
+  name string,
+  price double,
+  ts long
+) using parquet;
+
+# create a new hudi table based on the source table
+create table target_hudi1
+like source_parquet
+using hudi
+tblproperties (
+ primaryKey = 'id,name',
+ type = 'cow'
+);
+```
+
 **Create Table Properties**
 
 Users can set table properties while creating a hudi table. Critical options are listed here.
