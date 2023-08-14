@@ -60,6 +60,11 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | partitioned by(ts)
              | location '$basePath'
        """.stripMargin)
+        // disable automatic inline compaction so that HoodieDataSourceHelpers.allCompletedCommitsCompactions
+        // does not count compaction instants
+        spark.sql("set hoodie.compact.inline=false")
+        spark.sql("set hoodie.compact.schedule.inline=false")
+
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
