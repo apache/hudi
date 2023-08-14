@@ -235,6 +235,10 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        // disable automatic inline compaction
+        spark.sql("set hoodie.compact.inline=false")
+        spark.sql("set hoodie.compact.schedule.inline=false")
+
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")

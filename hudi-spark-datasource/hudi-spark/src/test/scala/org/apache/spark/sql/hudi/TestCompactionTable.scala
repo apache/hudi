@@ -38,6 +38,10 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
       spark.sql("set hoodie.parquet.max.file.size = 10000")
+      // disable automatic inline compaction
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
@@ -89,6 +93,10 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
       spark.sql("set hoodie.parquet.max.file.size = 10000")
+      // disable automatic inline compaction
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
