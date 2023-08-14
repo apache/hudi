@@ -103,3 +103,5 @@ Data Summit Connect, May, 2021
 44. ["Build on Open Source Episode 7 - aws on Twitch"](https://www.twitch.tv/videos/1656012018) - By Vinoth Chandar. Nov 18th, 2022
 
 45. ["Apache Hudi on Amazon EMR"](https://pages.awscloud.com/rs/112-TZM-766/images/EV_analytics-sprint-week-apache-hundi-amazon-emr_Sep-2020.pdf) - By the AWS team. September 2020
+
+46. ["Building Lakehouse using Hudi | Apache Hudi | Data Lakehouse | Hudi | Apache"](https://www.youtube.com/watch?v=3N4XVil05sM) - By the DataCouch Team. July 2023
