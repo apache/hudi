@@ -173,8 +173,16 @@ public class DataSourceUtils {
   public static HoodieWriteConfig createHoodieConfig(String schemaStr, String basePath,
                                                      String tblName, Map<String, String> parameters) {
     boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key()));
-    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
-        .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    boolean inlineCompact = false;
+    if (parameters.containsKey(HoodieCompactionConfig.INLINE_COMPACT.key())) {
+      // if inline is set, fetch the value from it.
+      inlineCompact = Boolean.parseBoolean(parameters.get(HoodieCompactionConfig.INLINE_COMPACT.key()));
+    }
+    // if inline is false, derive the value from asyncCompact and table type
+    if (!inlineCompact) {
+      inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
+          .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    }
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()

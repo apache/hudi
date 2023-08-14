@@ -607,13 +607,13 @@ class TestHoodieSparkSqlWriter {
         mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
       HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
 
       // Verify that HoodieWriteClient is closed correctly
       verify(client, times(1)).close()
 
       val ignoreResult = HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Ignore, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
       assertFalse(ignoreResult)
       verify(client, times(2)).close()
 

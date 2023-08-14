@@ -1225,6 +1225,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     thirdDf.write.format("hudi")
       .options(writeOpts)
+      // need to disable inline compaction for this test to avoid the compaction instant being completed
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key, "false")
       .mode(SaveMode.Append).save(tablePath)
 
     // Read-optimized query on MOR
