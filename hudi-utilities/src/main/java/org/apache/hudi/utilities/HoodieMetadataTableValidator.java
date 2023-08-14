@@ -20,7 +20,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -70,8 +69,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +92,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
@@ -257,7 +259,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     public int parallelism = 200;
 
     @Parameter(names = {"--record-index-parallelism", "-rpl"}, description = "Parallelism for validating record index", required = false)
-    public int recordIndexParallelism = 10;
+    public int recordIndexParallelism = 100;
 
     @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
     public boolean ignoreFailed = false;
@@ -469,21 +471,22 @@ public class HoodieMetadataTableValidator implements Serializable {
          HoodieMetadataValidationContext fsBasedContext =
              new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-      List<Pair<Boolean, String>> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
-        try {
-          validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
-          LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
-          return Pair.of(true, "");
-        } catch (HoodieValidationException e) {
-          LOG.error(
-              String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
-                  partitionPath, taskLabels), e);
-          if (!cfg.ignoreFailed) {
-            throw e;
-          }
-          return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
-        }
-      }).collectAsList();
+      List<Pair<Boolean, String>> result = new ArrayList<>(
+          engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+            try {
+              validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
+              LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
+              return Pair.of(true, "");
+            } catch (HoodieValidationException e) {
+              LOG.error(
+                  String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
+                      partitionPath, taskLabels), e);
+              if (!cfg.ignoreFailed) {
+                throw e;
+              }
+              return Pair.of(false, e.getMessage() + " for partition: " + partitionPath);
+            }
+          }).collectAsList());
 
       try {
         validateRecordIndex(engineContext, metaClient, metadataTableBasedContext.getTableMetadata());
@@ -814,15 +817,16 @@ public class HoodieMetadataTableValidator implements Serializable {
                                           HoodieTableMetaClient metaClient,
                                           HoodieTableMetadata tableMetadata) {
     String basePath = metaClient.getBasePathV2().toString();
-    JavaRDD<Pair<String, Pair<String, String>>> keyToLocationOnFsRdd =
+    JavaPairRDD<String, Pair<String, String>> keyToLocationOnFsRdd =
         sparkEngineContext.getSqlContext().read().format("hudi").load(basePath)
             .select(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD)
             .toJavaRDD()
-            .map(row -> Pair.of(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
+            .mapToPair(row -> new Tuple2<>(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
                 Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
-                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))));
+                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
+            .cache();
 
-    JavaRDD<Pair<String, Pair<String, String>>> keyToLocationFromRecordIndexRdd =
+    JavaPairRDD<String, Pair<String, String>> keyToLocationFromRecordIndexRdd =
         sparkEngineContext.getSqlContext().read().format("hudi")
             .load(getMetadataTableBasePath(basePath))
             .filter("type = 5")
@@ -835,124 +839,52 @@ public class HoodieMetadataTableValidator implements Serializable {
                 functions.col("recordIndexMetadata.instantTime").as("instantTime"),
                 functions.col("recordIndexMetadata.fileIdEncoding").as("fileIdEncoding"))
             .toJavaRDD()
-            .map(row -> {
+            .mapToPair(row -> {
               HoodieRecordGlobalLocation location = HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(
-                  HoodieRecordIndexInfo.newBuilder()
-                      .setPartitionName(row.getString(row.fieldIndex("partitionName")))
-                      .setFileIdHighBits(row.getLong(row.fieldIndex("fileIdHighBits")))
-                      .setFileIdLowBits(row.getLong(row.fieldIndex("fileIdLowBits")))
-                      .setFileIndex(row.getInt(row.fieldIndex("fileIndex")))
-                      .setFileId(row.getString(row.fieldIndex("fileId")))
-                      .setInstantTime(row.getLong(row.fieldIndex("instantTime")))
-                      .setFileIdEncoding(row.getInt(row.fieldIndex("fileIdEncoding")))
-                      .build());
-              return Pair.of(row.getString(row.fieldIndex("key")),
+                  row.getString(row.fieldIndex("partitionName")),
+                  row.getInt(row.fieldIndex("fileIdEncoding")),
+                  row.getLong(row.fieldIndex("fileIdHighBits")),
+                  row.getLong(row.fieldIndex("fileIdLowBits")),
+                  row.getInt(row.fieldIndex("fileIndex")),
+                  row.getString(row.fieldIndex("fileId")),
+                  row.getLong(row.fieldIndex("instantTime")));
+              return new Tuple2<>(row.getString(row.fieldIndex("key")),
                   Pair.of(location.getPartitionPath(), location.getFileId()));
             });
 
-    JavaRDD<Pair<String, Pair<String, String>>> diffRdd = keyToLocationOnFsRdd.subtract(keyToLocationFromRecordIndexRdd);
-    long diffCount = diffRdd.count();
+    long diffCount = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
+        .map(e -> {
+          Optional<Pair<String, String>> locationOnFs = e._2._1;
+          Optional<Pair<String, String>> locationFromRecordIndex = e._2._2;
+          if (locationOnFs.isPresent() && locationFromRecordIndex.isPresent()) {
+            if (locationOnFs.get().getLeft().equals(locationFromRecordIndex.get().getLeft())
+                && locationOnFs.get().getRight().equals(locationFromRecordIndex.get().getRight())) {
+              return 0L;
+            }
+            return 1L;
+          }
+          if (!locationOnFs.isPresent() && !locationFromRecordIndex.isPresent()) {
+            return 0L;
+          }
+          return 1L;
+        })
+        .reduce(Long::sum);
+
     long countKey = keyToLocationOnFsRdd.count();
+    keyToLocationOnFsRdd.unpersist();
 
     if (diffCount > 0) {
       String message = String.format("Validation of record index content failed: "
               + "%s keys (total %s) from the data table have wrong location in record index "
               + "metadata.",
           diffCount, countKey);
-      keyToLocationOnFsRdd.unpersist();
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      keyToLocationOnFsRdd.unpersist();
       LOG.info(String.format(
           "Validation of record index content succeeded: %s entries.", countKey));
     }
   }
-
-  /*
-  private void validateRecordIndexContent(HoodieSparkEngineContext sparkEngineContext,
-                                          HoodieTableMetaClient metaClient,
-                                          HoodieTableMetadata tableMetadata) {
-    String basePath = metaClient.getBasePathV2().toString();
-    JavaRDD<Pair<String, Pair<String, String>>> keyToLocationOnFsRdd =
-        sparkEngineContext.getSqlContext().read().format("hudi").load(basePath)
-            .select(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD)
-            .distinct()
-            .toJavaRDD()
-            .map(row -> Pair.of(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
-                Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
-                    FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD)))))).cache();
-    long countKeyFromTable = keyToLocationOnFsRdd.count();
-    long countKeyFromRecordIndex = countRecordIndexEntries(sparkEngineContext, basePath);
-
-    if (countKeyFromTable != countKeyFromRecordIndex) {
-      keyToLocationOnFsRdd.unpersist();
-      String message = String.format("Validation of record index count failed: "
-              + "%s entries from record index metadata, %s keys from the data table.",
-          countKeyFromRecordIndex, countKeyFromTable);
-      LOG.error(message);
-      throw new HoodieValidationException(message);
-    } else {
-      LOG.info(String.format(
-          "Validation of record index count succeeded: %s entries.", countKeyFromRecordIndex));
-    }
-    List<Pair<Boolean, String>> allResultList = keyToLocationOnFsRdd.coalesce(cfg.recordIndexParallelism)
-        .mapPartitions(iterator -> {
-          List<Pair<Boolean, String>> result = new ArrayList<>();
-          Map<String, Pair<String, String>> keyToLocationOnFsMap = new HashMap<>();
-          while (iterator.hasNext()) {
-            Pair<String, Pair<String, String>> keyInfo = iterator.next();
-            keyToLocationOnFsMap.put(keyInfo.getKey(), keyInfo.getValue());
-          }
-          Map<String, HoodieRecordGlobalLocation> recordIndexLocationMap =
-              tableMetadata.readRecordIndex(new ArrayList<>(keyToLocationOnFsMap.keySet()));
-          if (recordIndexLocationMap.size() != keyToLocationOnFsMap.size()) {
-            result.add(Pair.of(false, String.format("Validation of record index content failed: "
-                    + "%s entries returned after looking up %s keys from record index metadata.",
-                recordIndexLocationMap.size(), keyToLocationOnFsMap.size())));
-          } else {
-            for (String key : keyToLocationOnFsMap.keySet()) {
-              Pair<String, String> locationOnFs = keyToLocationOnFsMap.get(key);
-              HoodieRecordGlobalLocation recordIndexLocation = recordIndexLocationMap.get(key);
-              if (locationOnFs.getLeft().equals(recordIndexLocation.getPartitionPath())) {
-                result.add(Pair.of(false, String.format("Validation of record index content failed: "
-                        + "partition path does not match: %s from index, %s from the data table.",
-                    recordIndexLocation.getPartitionPath(), locationOnFs.getLeft())));
-                break;
-              }
-              if (locationOnFs.getRight().equals(recordIndexLocation.getFileId())) {
-                result.add(Pair.of(false, String.format("Validation of record index content failed: "
-                        + "file ID does not match: %s from index, %s from the data table.",
-                    recordIndexLocation.getFileId(), locationOnFs.getRight())));
-                break;
-              }
-            }
-            if (result.isEmpty()) {
-              result.add(Pair.of(true, String.format(
-                  "Validation of record index content succeeded for %s entries.", recordIndexLocationMap.size())));
-            }
-          }
-          return result.iterator();
-        })
-        .collect();
-    keyToLocationOnFsRdd.unpersist();
-    boolean success = true;
-    StringBuilder errorMessageBuilder = new StringBuilder();
-    for (Pair<Boolean, String> res : allResultList) {
-      success &= res.getKey();
-      if (res.getKey().equals(false)) {
-        errorMessageBuilder.append("\n");
-        errorMessageBuilder.append("Validation of record index content failed for table: "
-            + cfg.basePath + " with error: " + res.getValue());
-      }
-    }
-    if (!success) {
-      String errorMessage = errorMessageBuilder.toString();
-      LOG.error(errorMessage);
-      throw new HoodieValidationException(errorMessage);
-    }
-  }
-   */
 
   private long countRecordIndexEntries(HoodieSparkEngineContext sparkEngineContext,
                                        String dataTableBasePath) {

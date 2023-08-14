@@ -1650,21 +1650,30 @@ public class HoodieTableMetadataUtil {
    * @return
    */
   public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(HoodieRecordIndexInfo recordIndexInfo) {
-    final String partition = recordIndexInfo.getPartitionName();
+    return getLocationFromRecordIndexInfo(
+        recordIndexInfo.getPartitionName(), recordIndexInfo.getFileIdEncoding(),
+        recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits(),
+        recordIndexInfo.getFileIndex(), recordIndexInfo.getFileId(),
+        recordIndexInfo.getInstantTime());
+  }
+
+  public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(
+      String partition, int fileIdEncoding, long fileIdHighBits, long fileIdLowBits,
+      int fileIndex, String originalFileId, Long instantTime) {
     String fileId = null;
-    if (recordIndexInfo.getFileIdEncoding() == 0) {
+    if (fileIdEncoding == 0) {
       // encoding 0 refers to UUID based fileID
-      final UUID uuid = new UUID(recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits());
+      final UUID uuid = new UUID(fileIdHighBits, fileIdLowBits);
       fileId = uuid.toString();
-      if (recordIndexInfo.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
-        fileId += "-" + recordIndexInfo.getFileIndex();
+      if (fileIndex != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
+        fileId += "-" + fileIndex;
       }
     } else {
       // encoding 1 refers to no encoding. fileID as is.
-      fileId = recordIndexInfo.getFileId();
+      fileId = originalFileId;
     }
 
-    final java.util.Date instantDate = new java.util.Date(recordIndexInfo.getInstantTime());
+    final java.util.Date instantDate = new java.util.Date(instantTime);
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
   }
 }
