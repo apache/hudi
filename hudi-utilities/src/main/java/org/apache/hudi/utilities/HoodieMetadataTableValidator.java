@@ -107,12 +107,16 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBaseP
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
  * between metadata table and filesystem.
  * <p>
- * There are five validation tasks, that can be enabled independently through the following CLI options:
+ * There are seven validation tasks, that can be enabled independently through the following CLI options:
  * - `--validate-latest-file-slices`: validate the latest file slices for all partitions.
  * - `--validate-latest-base-files`: validate the latest base files for all partitions.
  * - `--validate-all-file-groups`: validate all file groups, and all file slices within file groups.
  * - `--validate-all-column-stats`: validate column stats for all columns in the schema
  * - `--validate-bloom-filters`: validate bloom filters of base files
+ * - `--validate-record-index-count`: validate the number of entries in the record index, which
+ * should be equal to the number of record keys in the latest snapshot of the table.
+ * - `--validate-record-index-content`: validate the content of the record index so that each
+ * record key should have the correct location, and there is no additional or missing entry.
  * <p>
  * If the Hudi table is on the local file system, the base path passed to `--base-path` must have
  * "file:" prefix to avoid validation failure.
@@ -245,10 +249,16 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files", required = false)
     public boolean validateBloomFilters = false;
 
-    @Parameter(names = {"--validate-record-index-count"}, description = "Validate count of record index", required = false)
+    @Parameter(names = {"--validate-record-index-count"},
+        description = "Validate the number of entries in the record index, which should be equal "
+            + "to the number of record keys in the latest snapshot of the table",
+        required = false)
     public boolean validateRecordIndexCount = false;
 
-    @Parameter(names = {"--validate-record-index-content"}, description = "Validate record index content, i.e., record location", required = false)
+    @Parameter(names = {"--validate-record-index-content"},
+        description = "Validate the content of the record index so that each record key should "
+            + "have the correct location, and there is no additional or missing entry",
+        required = false)
     public boolean validateRecordIndexContent = false;
 
     @Parameter(names = {"--min-validate-interval-seconds"},
