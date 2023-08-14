@@ -799,7 +799,12 @@ public class HoodieMetadataTableValidator implements Serializable {
         .select(RECORD_KEY_METADATA_FIELD)
         .distinct()
         .count();
-    long countKeyFromRecordIndex = countRecordIndexEntries(sparkEngineContext, basePath);
+    long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
+        .load(getMetadataTableBasePath(basePath))
+        .select("key")
+        .filter("type = 5")
+        .distinct()
+        .count();
 
     if (countKeyFromTable != countKeyFromRecordIndex) {
       String message = String.format("Validation of record index count failed: "
@@ -884,16 +889,6 @@ public class HoodieMetadataTableValidator implements Serializable {
       LOG.info(String.format(
           "Validation of record index content succeeded: %s entries.", countKey));
     }
-  }
-
-  private long countRecordIndexEntries(HoodieSparkEngineContext sparkEngineContext,
-                                       String dataTableBasePath) {
-    return sparkEngineContext.getSqlContext().read().format("hudi")
-        .load(getMetadataTableBasePath(dataTableBasePath))
-        .select("key")
-        .filter("type = 5")
-        .distinct()
-        .count();
   }
 
   private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {

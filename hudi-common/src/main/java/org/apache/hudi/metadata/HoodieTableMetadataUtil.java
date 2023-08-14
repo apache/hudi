@@ -1646,8 +1646,10 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * @param recordIndexInfo
-   * @return
+   * Gets the location from record index content.
+   *
+   * @param recordIndexInfo {@link HoodieRecordIndexInfo} instance.
+   * @return {@link HoodieRecordGlobalLocation} containing the location.
    */
   public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(HoodieRecordIndexInfo recordIndexInfo) {
     return getLocationFromRecordIndexInfo(
@@ -1657,6 +1659,23 @@ public class HoodieTableMetadataUtil {
         recordIndexInfo.getInstantTime());
   }
 
+  /**
+   * Gets the location from record index content.
+   * Note that, a UUID based fileId is stored as 3 pieces in record index (fileIdHighBits,
+   * fileIdLowBits and fileIndex). FileID format is {UUID}-{fileIndex}.
+   * The arguments are consistent with what {@link HoodieRecordIndexInfo} contains.
+   *
+   * @param partition      The partition name the record belongs to.
+   * @param fileIdEncoding FileId encoding. Possible values are 0 and 1. O represents UUID based
+   *                       fileID, and 1 represents raw string format of the fileId.
+   * @param fileIdHighBits High 64 bits if the fileId is based on UUID format.
+   * @param fileIdLowBits  Low 64 bits if the fileId is based on UUID format.
+   * @param fileIndex      Index representing file index which is used to re-construct UUID based fileID.
+   * @param originalFileId FileId of the location where record belongs to.
+   *                       When the encoding is 1, fileID is stored in raw string format.
+   * @param instantTime    Epoch time in millisecond representing the commit time at which record was added.
+   * @return {@link HoodieRecordGlobalLocation} containing the location.
+   */
   public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(
       String partition, int fileIdEncoding, long fileIdHighBits, long fileIdLowBits,
       int fileIndex, String originalFileId, Long instantTime) {
