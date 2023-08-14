@@ -5,6 +5,72 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi",
+            "content_html": "<div url=\"https://roysandip.medium.com/lakehouse-trifecta-delta-lake-apache-iceberg-apache-hudi-747e99c467b\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi",
+            "title": "Hoodie Timeline: Foundational pillar for ACID transactions",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-08-09T00:00:00.000Z",
+            "author": {
+                "name": "Sandip Roy"
+            }
+        },
+        {
+            "id": "/2023/08/03/Apache-Hudi-on-AWS-Glue-A-Step-by-Step-Guide",
+            "content_html": "<div url=\"https://medium.com/@devjain1299/apache-hudi-on-aws-glue-a-step-by-step-guide-503c34a9aa95\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/08/03/Apache-Hudi-on-AWS-Glue-A-Step-by-Step-Guide",
+            "title": "Apache Hudi on AWS Glue: A Step-by-Step Guide",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-08-03T00:00:00.000Z",
+            "author": {
+                "name": "Dev Jain"
+            }
+        },
+        {
+            "id": "/2023/08/03/Data-lake-Table-formats-Apache-Iceberg-vs-Apache-Hudi-vs-Delta-lake",
+            "content_html": "<div url=\"https://medium.com/@devjain1299/apache-hudi-on-aws-glue-a-step-by-step-guide-503c34a9aa95\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/08/03/Data-lake-Table-formats-Apache-Iceberg-vs-Apache-Hudi-vs-Delta-lake",
+            "title": "Data lake Table formats : Apache Iceberg vs Apache Hudi vs Delta lake",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-08-03T00:00:00.000Z",
+            "author": {
+                "name": "Shashwat Pandey"
+            }
+        },
+        {
+            "id": "/2023/07/27/Apache-Hudi-Revolutionizing-Big-Data-Management-for-Real-Time-Analytics",
+            "content_html": "<div url=\"https://medium.com/@devjain1299/apache-hudi-revolutionizing-big-data-management-for-real-time-analytics-5130808e067a\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/07/27/Apache-Hudi-Revolutionizing-Big-Data-Management-for-Real-Time-Analytics",
+            "title": "Apache Hudi: Revolutionizing Big Data Management for Real-Time Analytics",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-07-27T00:00:00.000Z",
+            "author": {
+                "name": "Dev Jain"
+            }
+        },
+        {
+            "id": "/2023/07/21/AWS-Glue-Crawlers-now-supports-Apache-Hudi-Tables",
+            "content_html": "<div url=\"https://aws.amazon.com/about-aws/whats-new/2023/07/aws-glue-crawlers-apache-hudi-tables/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/07/21/AWS-Glue-Crawlers-now-supports-Apache-Hudi-Tables",
+            "title": "AWS Glue Crawlers now supports Apache Hudi Tables",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-07-21T00:00:00.000Z",
+            "author": {
+                "name": "AWS Team"
+            }
+        },
+        {
+            "id": "/2023/07/20/Backfilling-Apache-Hudi-Tables-in-Production-Techniques-and-Approaches-Using-AWS-Glue-by-Job-Target-LLC",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/backfilling-apache-hudi-tables-production-techniques-approaches-shah\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/07/20/Backfilling-Apache-Hudi-Tables-in-Production-Techniques-and-Approaches-Using-AWS-Glue-by-Job-Target-LLC",
+            "title": "Backfilling Apache Hudi Tables in Production: Techniques & Approaches Using AWS Glue by Job Target LLC",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-07-20T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
             "id": "/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions",
             "content_html": "<div url=\"https://medium.com/@simpsons/hoodie-timeline-foundational-pillar-for-acid-transactions-be871399cbae\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions",
@@ -35,6 +101,17 @@
             "date_modified": "2023-07-07T00:00:00.000Z",
             "author": {
                 "name": "Nadine Farah"
+            }
+        },
+        {
+            "id": "/2023/07/02/Hudi-Best-Practices-Handling-Failed-Inserts-Upserts-with-Error-Tables",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/hudi-best-practices-handling-failed-insertsupserts-error-soumil-shah/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2023/07/02/Hudi-Best-Practices-Handling-Failed-Inserts-Upserts-with-Error-Tables",
+            "title": "Hudi Best Practices: Handling Failed Inserts/Upserts with Error Tables",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2023-07-02T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
             }
         },
         {

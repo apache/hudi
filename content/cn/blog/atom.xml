@@ -2,11 +2,77 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-07-09T00:00:00.000Z</updated>
+    <updated>2023-08-09T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Hoodie Timeline: Foundational pillar for ACID transactions]]></title>
+        <id>/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi"/>
+        <updated>2023-08-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://roysandip.medium.com/lakehouse-trifecta-delta-lake-apache-iceberg-apache-hudi-747e99c467b">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sandip Roy</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi on AWS Glue: A Step-by-Step Guide]]></title>
+        <id>/2023/08/03/Apache-Hudi-on-AWS-Glue-A-Step-by-Step-Guide</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/08/03/Apache-Hudi-on-AWS-Glue-A-Step-by-Step-Guide"/>
+        <updated>2023-08-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@devjain1299/apache-hudi-on-aws-glue-a-step-by-step-guide-503c34a9aa95">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dev Jain</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data lake Table formats : Apache Iceberg vs Apache Hudi vs Delta lake]]></title>
+        <id>/2023/08/03/Data-lake-Table-formats-Apache-Iceberg-vs-Apache-Hudi-vs-Delta-lake</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/08/03/Data-lake-Table-formats-Apache-Iceberg-vs-Apache-Hudi-vs-Delta-lake"/>
+        <updated>2023-08-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@devjain1299/apache-hudi-on-aws-glue-a-step-by-step-guide-503c34a9aa95">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shashwat Pandey</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: Revolutionizing Big Data Management for Real-Time Analytics]]></title>
+        <id>/2023/07/27/Apache-Hudi-Revolutionizing-Big-Data-Management-for-Real-Time-Analytics</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/27/Apache-Hudi-Revolutionizing-Big-Data-Management-for-Real-Time-Analytics"/>
+        <updated>2023-07-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@devjain1299/apache-hudi-revolutionizing-big-data-management-for-real-time-analytics-5130808e067a">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dev Jain</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[AWS Glue Crawlers now supports Apache Hudi Tables]]></title>
+        <id>/2023/07/21/AWS-Glue-Crawlers-now-supports-Apache-Hudi-Tables</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/21/AWS-Glue-Crawlers-now-supports-Apache-Hudi-Tables"/>
+        <updated>2023-07-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/about-aws/whats-new/2023/07/aws-glue-crawlers-apache-hudi-tables/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>AWS Team</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Backfilling Apache Hudi Tables in Production: Techniques & Approaches Using AWS Glue by Job Target LLC]]></title>
+        <id>/2023/07/20/Backfilling-Apache-Hudi-Tables-in-Production-Techniques-and-Approaches-Using-AWS-Glue-by-Job-Target-LLC</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/20/Backfilling-Apache-Hudi-Tables-in-Production-Techniques-and-Approaches-Using-AWS-Glue-by-Job-Target-LLC"/>
+        <updated>2023-07-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/backfilling-apache-hudi-tables-production-techniques-approaches-shah">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Hoodie Timeline: Foundational pillar for ACID transactions]]></title>
         <id>/2023/07/09/Hoodie-Timeline-Foundational-pillar-for-ACID-transactions</id>
@@ -44,6 +110,17 @@
         </author>
         <author>
             <name>Cole Bowden</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi Best Practices: Handling Failed Inserts/Upserts with Error Tables]]></title>
+        <id>/2023/07/02/Hudi-Best-Practices-Handling-Failed-Inserts-Upserts-with-Error-Tables</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/07/02/Hudi-Best-Practices-Handling-Failed-Inserts-Upserts-with-Error-Tables"/>
+        <updated>2023-07-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/hudi-best-practices-handling-failed-insertsupserts-error-soumil-shah/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
         </author>
     </entry>
     <entry>
