@@ -179,9 +179,11 @@ object HoodieWriterUtils {
       if (null != tableConfig) {
         val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
         val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
-        if ((null != datasourceRecordKey && null != tableConfigRecordKey
-          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && datasourceRecordKey.nonEmpty
-          && tableConfigRecordKey == null)) {
+        val dsnull = datasourceRecordKey == null
+        val tcnull = tableConfigRecordKey == null
+        if ((!dsnull && !tcnull && datasourceRecordKey != tableConfigRecordKey)
+          || (!dsnull && datasourceRecordKey.nonEmpty
+          && tcnull) || ((dsnull || datasourceRecordKey.isEmpty) && !tcnull)) {
           // if both are non null, they should match.
           // if incoming record key is non empty, table config should also be non empty.
           diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
