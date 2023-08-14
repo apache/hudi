@@ -375,7 +375,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         ? reader.getRecordsByKeysIterator(sortedKeys)
         : reader.getRecordsByKeyPrefixIterator(sortedKeys);
 
-    return toStream(records)
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result = toStream(records)
         .map(record -> {
           GenericRecord data = (GenericRecord) record.getData();
           return Pair.of(
@@ -383,6 +383,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               composeRecord(data, partitionName));
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    records.close();
+    return result;
   }
 
   private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
