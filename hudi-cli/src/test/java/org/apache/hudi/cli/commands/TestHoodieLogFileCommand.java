@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -69,6 +70,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -86,6 +88,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
   private String partitionPath;
   private HoodieAvroDataBlock dataBlock;
+  private HoodieCommandBlock commandBlock;
   private String tablePath;
   private FileSystem fs;
 
@@ -98,7 +101,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     // Create table and connect
     String tableName = tableName();
     tablePath = tablePath(tableName);
-    partitionPath = Paths.get(tablePath, HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
+    partitionPath = Paths.get(tablePath, DEFAULT_FIRST_PARTITION_PATH).toString();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -109,7 +112,8 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs).build()) {
+        .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs)
+        .withSizeThreshold(1).build()) {
 
       // write data to file
       List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
@@ -118,6 +122,14 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
       dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
+
+      Map<HoodieLogBlock.HeaderMetadataType, String> rollbackHeader = new HashMap<>();
+      rollbackHeader.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
+      rollbackHeader.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "102");
+      rollbackHeader.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+          String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
+      commandBlock = new HoodieCommandBlock(rollbackHeader);
+      writer.appendBlock(commandBlock);
     }
   }
 
@@ -134,7 +146,9 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "show logfile metadata --logFilePathPattern " + partitionPath + "/*");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
+    TableHeader header = new TableHeader()
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_PATH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_RECORD_COUNT)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_BLOCK_TYPE)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_HEADER_METADATA)
@@ -143,10 +157,15 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     // construct expect result, there is only 1 line.
     List<Comparable[]> rows = new ArrayList<>();
     ObjectMapper objectMapper = new ObjectMapper();
-    String headerStr = objectMapper.writeValueAsString(dataBlock.getLogBlockHeader());
-    String footerStr = objectMapper.writeValueAsString(dataBlock.getLogBlockFooter());
-    Comparable[] output = new Comparable[] {INSTANT_TIME, 100, dataBlock.getBlockType(), headerStr, footerStr};
-    rows.add(output);
+    String logFileNamePrefix = DEFAULT_FIRST_PARTITION_PATH + "/test-log-fileid1_" + INSTANT_TIME + ".log";
+    rows.add(new Comparable[] {
+        logFileNamePrefix + ".1_1-0-1", INSTANT_TIME, 100, dataBlock.getBlockType(),
+        objectMapper.writeValueAsString(dataBlock.getLogBlockHeader()),
+        objectMapper.writeValueAsString(dataBlock.getLogBlockFooter())});
+    rows.add(new Comparable[] {
+        logFileNamePrefix + ".2_1-0-1", "103", 0, commandBlock.getBlockType(),
+        objectMapper.writeValueAsString(commandBlock.getLogBlockHeader()),
+        objectMapper.writeValueAsString(commandBlock.getLogBlockFooter())});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
