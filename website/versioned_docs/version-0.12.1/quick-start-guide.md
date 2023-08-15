@@ -1443,11 +1443,11 @@ spark.
 
 ```python
 # pyspark
-self.spark.read.format("hudi"). \
+spark.read.format("hudi"). \
     load(basePath). \
     select(["uuid", "partitionpath"]). \
     sort(["partitionpath", "uuid"]). \
-    show(n=100, truncate=False) \
+    show(n=100, truncate=False)
     
 inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10)) 
 df = spark.read.json(spark.sparkContext.parallelize(inserts, 2)). \
