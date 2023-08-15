@@ -384,7 +384,7 @@ public class HoodieTableSource implements
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-                rowDataType, inputSplits, false);
+                rowDataType, inputSplits, true);
           case COPY_ON_WRITE:
             return baseFileOnlyInputFormat();
           default:
@@ -410,7 +410,7 @@ public class HoodieTableSource implements
           return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, result.getInputSplits());
         } else {
           return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-              rowDataType, result.getInputSplits(), false);
+              rowDataType, result.getInputSplits(), true);
         }
       default:
         String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s', '%s'] are supported now", queryType,
