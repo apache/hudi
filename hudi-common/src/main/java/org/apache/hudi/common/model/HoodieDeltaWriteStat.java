@@ -29,6 +29,9 @@ import java.util.Map;
 
 /**
  * Statistics about a single Hoodie delta log operation.
+ *
+ * NOTE: This class defines setters to be used by Jackson deserializer (in lieu of using reflection
+ *       to set these fields
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @SuppressWarnings("rawtypes")
@@ -38,7 +41,7 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
   private long logOffset;
   private String baseFile;
   private List<String> logFiles = new ArrayList<>();
-  private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
+  private Map<String, HoodieColumnRangeMetadata<Comparable>> recordsStats = null;
 
   public void setLogVersion(int logVersion) {
     this.logVersion = logVersion;
@@ -76,22 +79,20 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
     return logFiles;
   }
 
-  public void putRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
-    if (!recordsStats.isPresent()) {
-      recordsStats = Option.of(stats);
-    } else {
-      // in case there are multiple log blocks for one write process.
-      recordsStats = Option.of(mergeRecordsStats(recordsStats.get(), stats));
-    }
-  }
-
-  // keep for serialization efficiency
   public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
-    recordsStats = Option.of(stats);
+    recordsStats = stats;
   }
 
-  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
-    return recordsStats;
+  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getRecordsStats() {
+    return Option.ofNullable(recordsStats);
+  }
+
+  public void mergeRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    if (recordsStats == null) {
+      this.recordsStats = stats;
+    } else {
+      this.recordsStats = mergeRecordsStats(recordsStats, stats);
+    }
   }
 
   private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(
