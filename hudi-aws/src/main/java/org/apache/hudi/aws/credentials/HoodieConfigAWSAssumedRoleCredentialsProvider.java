@@ -31,7 +31,7 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 import java.util.Properties;
 
 /**
- * Credentials provider which fetches AWS access key from Hoodie config.
+ * Credentials provider which assumes AWS role from Hoodie config and fetches its credentials.
  */
 public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredentialsProvider {
 
