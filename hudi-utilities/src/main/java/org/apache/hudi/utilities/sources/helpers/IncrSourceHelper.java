@@ -170,12 +170,11 @@ public class IncrSourceHelper {
    * @param queryInfo   Query Info
    * @return end instants along with filtered rows.
    */
-  public static Pair<CloudObjectIncrCheckpoint, Dataset<Row>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
-                                                                                                            long sourceLimit, QueryInfo queryInfo,
-                                                                                                            CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
+  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
+                                                                                                                    long sourceLimit, QueryInfo queryInfo,
+                                                                                                                    CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
-      LOG.info("Empty source, returning endpoint:" + queryInfo.getEndInstant());
-      return Pair.of(cloudObjectIncrCheckpoint, sourceData);
+      return Pair.of(cloudObjectIncrCheckpoint, Option.empty());
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
@@ -195,7 +194,7 @@ public class IncrSourceHelper {
       if (orderedDf.isEmpty()) {
         LOG.info("Empty ordered source, returning endpoint:" + queryInfo.getEndInstant());
         sourceData.unpersist();
-        return Pair.of(new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), lastCheckpointKey.get()), orderedDf);
+        return Pair.of(new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), lastCheckpointKey.get()), Option.empty());
       }
     }
 
@@ -219,7 +218,7 @@ public class IncrSourceHelper {
     }
     LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
     sourceData.unpersist();
-    return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), collectedRows);
+    return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
   }
 
   /**
