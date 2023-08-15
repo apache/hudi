@@ -386,7 +386,7 @@ partitioned by (datestr) as select * from parquet_mngd;
 
 **CREATE TABLE LIKE**
 
-The "CREATE TABLE LIKE" statement allows you to create a new Hudi table with the same schema and properties from an existing Hudi/hive table.
+The `CREATE TABLE LIKE` statement allows you to create a new Hudi table with the same schema and properties from an existing Hudi/hive table.
 
 :::note
 This feature is available in Apache Hudi for Spark 3 and later versions.
