@@ -580,7 +580,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
     // compare partitions
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
-    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+    HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
 
     // ignore partitions created by uncommitted ingestion.
     allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
