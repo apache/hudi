@@ -261,6 +261,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         required = false)
     public boolean validateRecordIndexContent = false;
 
+    @Parameter(names = {"--num-record-index-error-samples"},
+        description = "Number of error samples to show for record index validation",
+        required = false)
+    public int numRecordIndexErrorSamples = 100;
+
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
@@ -307,6 +312,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
+          + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
           + "   --continuous " + continuous + ", \n"
           + "   --skip-data-files-for-cleaning " + skipDataFilesForCleaning + ", \n"
           + "   --ignore-failed " + ignoreFailed + ", \n"
@@ -340,6 +346,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
+          && Objects.equals(numRecordIndexErrorSamples, config.numRecordIndexErrorSamples)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
           && Objects.equals(recordIndexParallelism, config.recordIndexParallelism)
@@ -355,9 +362,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     public int hashCode() {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validateBloomFilters,
-          validateRecordIndexCount, validateRecordIndexContent, minValidateIntervalSeconds, parallelism,
-          recordIndexParallelism, ignoreFailed, sparkMaster, sparkMemory, assumeDatePartitioning,
-          propsFilePath, configs, help);
+          validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
+          sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
 
@@ -807,13 +814,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
         .load(basePath)
         .select(RECORD_KEY_METADATA_FIELD)
-        .distinct()
         .count();
     long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
         .load(getMetadataTableBasePath(basePath))
         .select("key")
         .filter("type = 5")
-        .distinct()
         .count();
 
     if (countKeyFromTable != countKeyFromRecordIndex) {
@@ -867,38 +872,98 @@ public class HoodieMetadataTableValidator implements Serializable {
                   Pair.of(location.getPartitionPath(), location.getFileId()));
             });
 
-    long diffCount = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
+    int numErrorSamples = cfg.numRecordIndexErrorSamples;
+    Pair<Long, List<String>> result = keyToLocationOnFsRdd.fullOuterJoin(keyToLocationFromRecordIndexRdd, cfg.recordIndexParallelism)
         .map(e -> {
           Optional<Pair<String, String>> locationOnFs = e._2._1;
           Optional<Pair<String, String>> locationFromRecordIndex = e._2._2;
+          StringBuilder sb = new StringBuilder();
+          List<String> errorSampleList = new ArrayList<>();
           if (locationOnFs.isPresent() && locationFromRecordIndex.isPresent()) {
             if (locationOnFs.get().getLeft().equals(locationFromRecordIndex.get().getLeft())
                 && locationOnFs.get().getRight().equals(locationFromRecordIndex.get().getRight())) {
-              return 0L;
+              return Pair.of(0L, errorSampleList);
             }
-            return 1L;
+            errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+            return Pair.of(1L, errorSampleList);
           }
           if (!locationOnFs.isPresent() && !locationFromRecordIndex.isPresent()) {
-            return 0L;
+            return Pair.of(0L, errorSampleList);
           }
-          return 1L;
+          errorSampleList.add(constructLocationInfoString(locationOnFs, locationFromRecordIndex));
+          return Pair.of(1L, errorSampleList);
         })
-        .reduce(Long::sum);
+        .reduce((pair1, pair2) -> {
+          long errorCount = pair1.getLeft() + pair2.getLeft();
+          List<String> list1 = pair1.getRight();
+          List<String> list2 = pair2.getRight();
+          if (!list1.isEmpty() && !list2.isEmpty()) {
+            if (list1.size() >= numErrorSamples) {
+              return Pair.of(errorCount, list1);
+            }
+            if (list2.size() >= numErrorSamples) {
+              return Pair.of(errorCount, list2);
+            }
+
+            List<String> resultList = new ArrayList<>();
+            if (list1.size() > list2.size()) {
+              resultList.addAll(list1);
+              for (String item : list2) {
+                resultList.add(item);
+                if (resultList.size() >= numErrorSamples) {
+                  break;
+                }
+              }
+            } else {
+              resultList.addAll(list2);
+              for (String item : list1) {
+                resultList.add(item);
+                if (resultList.size() >= numErrorSamples) {
+                  break;
+                }
+              }
+            }
+            return Pair.of(errorCount, resultList);
+          } else if (!list1.isEmpty()) {
+            return Pair.of(errorCount, list1);
+          } else {
+            return Pair.of(errorCount, list2);
+          }
+        });
 
     long countKey = keyToLocationOnFsRdd.count();
     keyToLocationOnFsRdd.unpersist();
 
+    long diffCount = result.getLeft();
     if (diffCount > 0) {
       String message = String.format("Validation of record index content failed: "
               + "%s keys (total %s) from the data table have wrong location in record index "
-              + "metadata.",
-          diffCount, countKey);
+              + "metadata. Sample mismatches: %s",
+          diffCount, countKey, String.join(";", result.getRight()));
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
       LOG.info(String.format(
           "Validation of record index content succeeded: %s entries.", countKey));
     }
+  }
+
+  private String constructLocationInfoString(Optional<Pair<String, String>> locationOnFs,
+                                             Optional<Pair<String, String>> locationFromRecordIndex) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("FS: ");
+    if (locationOnFs.isPresent()) {
+      sb.append(locationOnFs.get());
+    } else {
+      sb.append("<empty>");
+    }
+    sb.append(", Record Index: ");
+    if (locationFromRecordIndex.isPresent()) {
+      sb.append(locationFromRecordIndex.get());
+    } else {
+      sb.append("<empty>");
+    }
+    return sb.toString();
   }
 
   private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
