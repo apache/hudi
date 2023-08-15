@@ -158,7 +158,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * FileIndex value saved in record index record when the fileId has no index (old format of base filename)
    */
-  private static final int RECORD_INDEX_MISSING_FILEINDEX_FALLBACK = -1;
+  public static final int RECORD_INDEX_MISSING_FILEINDEX_FALLBACK = -1;
 
   /**
    * NOTE: PLEASE READ CAREFULLY
@@ -761,22 +761,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * If this is a record-level index entry, returns the file to which this is mapped.
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
-    final String partition = recordIndexMetadata.getPartitionName();
-    String fileId = null;
-    if (recordIndexMetadata.getFileIdEncoding() == 0) {
-      // encoding 0 refers to UUID based fileID
-      final UUID uuid = new UUID(recordIndexMetadata.getFileIdHighBits(), recordIndexMetadata.getFileIdLowBits());
-      fileId = uuid.toString();
-      if (recordIndexMetadata.getFileIndex() != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
-        fileId += "-" + recordIndexMetadata.getFileIndex();
-      }
-    } else {
-      // encoding 1 refers to no encoding. fileID as is.
-      fileId = recordIndexMetadata.getFileId();
-    }
-
-    final java.util.Date instantDate = new java.util.Date(recordIndexMetadata.getInstantTime());
-    return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
+    return HoodieTableMetadataUtil.getLocationFromRecordIndexInfo(recordIndexMetadata);
   }
 
   public boolean isDeleted() {
