@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -70,6 +71,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,8 +99,6 @@ import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.Tuple3;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
@@ -799,9 +799,9 @@ public class HoodieTableMetadataUtil {
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getBloomIndexParallelism()), 1);
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple._1();
-      final String filename = partitionFileFlagTuple._2();
-      final boolean isDeleted = partitionFileFlagTuple._3();
+      final String partitionName = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
       if (!FSUtils.isBaseFile(new Path(filename))) {
         LOG.warn(String.format("Ignoring file %s as it is not a base file", filename));
         return Stream.<HoodieRecord>empty().iterator();
@@ -823,7 +823,7 @@ public class HoodieTableMetadataUtil {
 
       final String partition = getPartitionIdentifier(partitionName);
       return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              partition, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple._3()))
+              partition, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple.f2))
           .iterator();
     });
   }
@@ -853,9 +853,9 @@ public class HoodieTableMetadataUtil {
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple._1();
-      final String filename = partitionFileFlagTuple._2();
-      final boolean isDeleted = partitionFileFlagTuple._3();
+      final String partitionName = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
       if (!FSUtils.isBaseFile(new Path(filename)) || !filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         LOG.warn(String.format("Ignoring file %s as it is not a PARQUET file", filename));
         return Stream.<HoodieRecord>empty().iterator();
@@ -884,10 +884,10 @@ public class HoodieTableMetadataUtil {
         + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
     final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
     partitionToDeletedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> new Tuple3<>(entry.getKey(), deletedFile, true)))
+        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> Tuple3.of(entry.getKey(), deletedFile, true)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     partitionToAppendedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> new Tuple3<>(entry.getKey(), addedFile, false)))
+        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     return partitionFileFlagTupleList;
   }
