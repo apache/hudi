@@ -20,8 +20,9 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -29,7 +30,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateTableLike, MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -348,6 +349,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       sparkAdapter.resolveHoodieTable(plan)
   }
 
+  private[sql] object MatchCreateTableLike {
+    def unapply(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyCreateTableLikeCommand(plan)
+  }
+
   private[sql] def failAnalysis(msg: String): Nothing = {
     throw new AnalysisException(msg)
   }
@@ -504,6 +510,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if sparkAdapter.isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      case MatchCreateTableLike(targetTable, sourceTable, fileFormat, provider, properties, ifNotExists)
+        if sparkAdapter.isHoodieTable(provider.orNull) =>
+        CreateHoodieTableLikeCommand(targetTable, sourceTable, fileFormat, properties, ifNotExists)
       // Rewrite the DropTableCommand to DropHoodieTableCommand
       case DropTableCommand(tableName, ifExists, false, purge)
         if sparkSession.sessionState.catalog.tableExists(tableName)
