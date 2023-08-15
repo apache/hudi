@@ -50,7 +50,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.PATH_BASED_PARTITION_FIELDS;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
 
@@ -153,10 +155,10 @@ public class CloudObjectsSelectorCommon {
       return Option.empty();
     }
     DataFrameReader reader = spark.read().format(fileFormat);
-    String datasourceOpts = props.getString(CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), null);
+    String datasourceOpts = getStringWithAltKeys(props, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
     if (StringUtils.isNullOrEmpty(datasourceOpts)) {
       // fall back to legacy config for BWC. TODO consolidate in HUDI-6020
-      datasourceOpts = props.getString(S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), null);
+      datasourceOpts = getStringWithAltKeys(props, S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
     }
     if (StringUtils.nonEmpty(datasourceOpts)) {
       final ObjectMapper mapper = new ObjectMapper();
@@ -182,8 +184,8 @@ public class CloudObjectsSelectorCommon {
     Dataset<Row> dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()])).coalesce(numPartitions);
 
     // add partition column from source path if configured
-    if (props.containsKey(PATH_BASED_PARTITION_FIELDS)) {
-      String[] partitionKeysToAdd = props.getString(PATH_BASED_PARTITION_FIELDS).split(",");
+    if (containsConfigProperty(props, PATH_BASED_PARTITION_FIELDS)) {
+      String[] partitionKeysToAdd = getStringWithAltKeys(props, PATH_BASED_PARTITION_FIELDS).split(",");
       // Add partition column for all path-based partition keys. If key is not present in path, the value will be null.
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);

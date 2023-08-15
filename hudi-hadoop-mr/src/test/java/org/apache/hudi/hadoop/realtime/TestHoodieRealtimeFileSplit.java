@@ -70,7 +70,8 @@ public class TestHoodieRealtimeFileSplit {
   @BeforeEach
   public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
     basePath = tempDir.toAbsolutePath().toString();
-    deltaLogFiles = Collections.singletonList(new HoodieLogFile(new Path(basePath + "/1.log"), 0L));
+    Path logPath = new Path(basePath + "/1.log");
+    deltaLogFiles = Collections.singletonList(new HoodieLogFile(logPath, 0L));
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});

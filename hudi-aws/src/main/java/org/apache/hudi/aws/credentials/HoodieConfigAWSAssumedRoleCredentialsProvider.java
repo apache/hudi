@@ -18,24 +18,26 @@
 
 package org.apache.hudi.aws.credentials;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieAWSConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
 import java.util.Properties;
 
 /**
  * Credentials provider which fetches AWS access key from Hoodie config.
  */
-public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AWSCredentialsProvider {
+public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredentialsProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfigAWSAssumedRoleCredentialsProvider.class);
 
-  private final STSAssumeRoleSessionCredentialsProvider credentialsProvider;
+  private final StsAssumeRoleCredentialsProvider credentialsProvider;
 
   public HoodieConfigAWSAssumedRoleCredentialsProvider(Properties props) {
     if (!validConf(props)) {
@@ -43,7 +45,16 @@ public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AWSCredent
       throw new IllegalArgumentException("AWS role ARN not found in the Hudi configuration.");
     } else {
       String roleArn = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN.key());
-      this.credentialsProvider = new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, "glue-access").build();
+      AssumeRoleRequest req = AssumeRoleRequest.builder()
+              .roleArn(roleArn)
+              .roleSessionName("hoodie")
+              .build();
+      StsClient stsClient = StsClient.builder().build();
+
+      this.credentialsProvider = StsAssumeRoleCredentialsProvider.builder()
+              .stsClient(stsClient)
+              .refreshRequest(req)
+              .build();
     }
   }
 
@@ -53,12 +64,7 @@ public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AWSCredent
   }
 
   @Override
-  public AWSCredentials getCredentials() {
-    return this.credentialsProvider.getCredentials();
-  }
-
-  @Override
-  public void refresh() {
-    this.credentialsProvider.refresh();
+  public AwsCredentials resolveCredentials() {
+    return credentialsProvider.resolveCredentials();
   }
 }

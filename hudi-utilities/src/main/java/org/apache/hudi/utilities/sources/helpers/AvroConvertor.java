@@ -41,6 +41,7 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -175,9 +176,11 @@ public class AvroConvertor implements Serializable {
     for (Schema.Field field :  record.getSchema().getFields()) {
       recordBuilder.set(field, record.get(field.name()));
     }
+    
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, String.valueOf(consumerRecord.key()));
     return recordBuilder.build();
   }
 

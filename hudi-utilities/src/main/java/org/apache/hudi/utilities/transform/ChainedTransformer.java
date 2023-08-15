@@ -171,8 +171,8 @@ public class ChainedTransformer implements Transformer {
       TypedProperties transformerProps = properties;
       if (idOpt.isPresent()) {
         // Transformer specific property keys end with the id associated with the transformer.
-        // Ex. For id tr1, key `hoodie.deltastreamer.transformer.sql.tr1` would be converted to
-        // `hoodie.deltastreamer.transformer.sql` and then passed to the transformer.
+        // Ex. For id tr1, key `hoodie.streamer.transformer.sql.tr1` would be converted to
+        // `hoodie.streamer.transformer.sql` and then passed to the transformer.
         String id = idOpt.get();
         transformerProps = new TypedProperties(properties);
         Map<String, Object> overrideKeysMap = new HashMap<>();

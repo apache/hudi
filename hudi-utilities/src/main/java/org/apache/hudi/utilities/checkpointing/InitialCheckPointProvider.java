@@ -31,6 +31,8 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * Provide the initial checkpoint for Hudi Streamer.
  */
@@ -47,7 +49,8 @@ public abstract class InitialCheckPointProvider {
    */
   public InitialCheckPointProvider(TypedProperties props) {
     this.props = props;
-    this.path = new Path(props.getString(HoodieStreamerConfig.CHECKPOINT_PROVIDER_PATH.key()));
+    this.path = new Path(
+        getStringWithAltKeys(props, HoodieStreamerConfig.CHECKPOINT_PROVIDER_PATH));
   }
 
   /**

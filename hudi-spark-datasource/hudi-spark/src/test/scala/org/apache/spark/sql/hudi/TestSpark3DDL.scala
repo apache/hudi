@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_NAME}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_NAME}
 import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
@@ -74,7 +74,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql("set hoodie.schema.on.read.enable=true")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
@@ -135,7 +135,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
           spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
           spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
-          spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+          spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
         }
       }
     })
@@ -235,9 +235,13 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        // disable automatic inline compaction
+        spark.sql("set hoodie.compact.inline=false")
+        spark.sql("set hoodie.compact.schedule.inline=false")
+
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
           spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
@@ -330,7 +334,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -341,7 +345,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -382,7 +386,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -522,7 +526,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.on.read.enable=true")
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -601,7 +605,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
         }
       }
-      spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 

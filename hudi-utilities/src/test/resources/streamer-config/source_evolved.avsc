@@ -32,6 +32,10 @@
       "type": "string"
     },
     {
+      "name": "trip_type",
+      "type": "string"
+    },
+    {
       "name": "rider",
       "type": "string"
     },

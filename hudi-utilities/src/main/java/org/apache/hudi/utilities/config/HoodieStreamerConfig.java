@@ -26,6 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 
 /**
@@ -37,74 +39,93 @@ import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD
     areCommonConfigs = true,
     description = "")
 public class HoodieStreamerConfig extends HoodieConfig {
-
-  public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
-  public static final String INGESTION_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "ingestion.";
+  public static final String INGESTION_PREFIX = STREAMER_CONFIG_PREFIX + "ingestion.";
+  @Deprecated
+  public static final String OLD_INGESTION_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "ingestion.";
 
   public static final ConfigProperty<String> CHECKPOINT_PROVIDER_PATH = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "checkpoint.provider.path")
+      .key(STREAMER_CONFIG_PREFIX + "checkpoint.provider.path")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "checkpoint.provider.path")
       .markAdvanced()
       .withDocumentation("The path for providing the checkpoints.");
 
+  // TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
+  public static final ConfigProperty<Boolean> CHECKPOINT_FORCE_SKIP = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "checkpoint.force.skip")
+      .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "checkpoint.force.skip")
+      .markAdvanced()
+      .withDocumentation("Config to force to skip saving checkpoint in the commit metadata."
+          + "It is typically used in one-time backfill scenarios, where checkpoints are not "
+          + "to be persisted.");
+
   public static final ConfigProperty<String> KAFKA_TOPIC = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.topic")
+      .key(STREAMER_CONFIG_PREFIX + "source.kafka.topic")
       .noDefaultValue()
-      .withDocumentation("Kafka topic name. The config is specific to HoodieMultiTableDeltaStreamer");
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.topic")
+      .withDocumentation("Kafka topic name. The config is specific to HoodieMultiTableStreamer");
 
   public static final ConfigProperty<String> KAFKA_APPEND_OFFSETS = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.append.offsets")
+      .key(STREAMER_CONFIG_PREFIX + "source.kafka.append.offsets")
       .defaultValue("false")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.append.offsets")
       .markAdvanced()
       .withDocumentation("When enabled, appends kafka offset info like source offset(_hoodie_kafka_source_offset), "
           + "partition (_hoodie_kafka_source_partition) and timestamp (_hoodie_kafka_source_timestamp) to the records. "
           + "By default its disabled and no kafka offsets are added");
 
   public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.schema.field.names")
+      .key(STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.schema.field.names")
       .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.schema.field.names")
       .markAdvanced()
       .withDocumentation("Sanitizes names of invalid schema fields both in the data read from source and also in the schema "
-          + "Replaces invalid characters with hoodie.deltastreamer.source.sanitize.invalid.char.mask. Invalid characters are by "
+          + "Replaces invalid characters with hoodie.streamer.source.sanitize.invalid.char.mask. Invalid characters are by "
           + "goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names).");
 
   public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.char.mask")
+      .key(STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.char.mask")
       .defaultValue("__")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.sanitize.invalid.char.mask")
       .markAdvanced()
       .withDocumentation("Defines the character sequence that replaces invalid characters in schema field names if "
-          + "hoodie.deltastreamer.source.sanitize.invalid.schema.field.names is enabled.");
-
-  public static final ConfigProperty<String> MUTLI_WRITER_SOURCE_CHECKPOINT_ID = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "multiwriter.source.checkpoint.id")
-      .noDefaultValue()
-      .markAdvanced()
-      .withDocumentation("Unique Id to be used for multi-writer deltastreamer scenario. This is the "
-          + "scenario when multiple deltastreamers are used to write to the same target table. If you are just using "
-          + "a single deltastreamer for a table then you do not need to set this config.");
+          + "hoodie.streamer.source.sanitize.invalid.schema.field.names is enabled.");
 
   public static final ConfigProperty<String> TABLES_TO_BE_INGESTED = ConfigProperty
       .key(INGESTION_PREFIX + "tablesToBeIngested")
       .noDefaultValue()
+      .withAlternatives(OLD_INGESTION_PREFIX + "tablesToBeIngested")
       .markAdvanced()
       .withDocumentation("Comma separated names of tables to be ingested in the format <database>.<table>, for example db1.table1,db1.table2");
 
   public static final ConfigProperty<String> TARGET_BASE_PATH = ConfigProperty
       .key(INGESTION_PREFIX + "targetBasePath")
-      .noDefaultValue()
+      .defaultValue("")
+      .withAlternatives(OLD_INGESTION_PREFIX + "targetBasePath")
       .markAdvanced()
       .withDocumentation("The path to which a particular table is ingested. The config is specific to HoodieMultiTableStreamer"
           + " and overrides path determined using option `--base-path-prefix` for a table. This config is ignored for a single"
-          + " table deltastreamer");
+          + " table streamer");
+
+  public static final ConfigProperty<String> TRANSFORMER_CLASS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "transformer.class")
+      .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "transformer.class")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Names of transformer classes to apply. The config is specific to HoodieMultiTableStreamer.");
   public static final ConfigProperty<Boolean> SAMPLE_WRITES_ENABLED = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
+      .key(STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
       .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
       .withDocumentation("Set this to true to sample from the first batch of records and write to the auxiliary path, before writing to the table."
           + "The sampled records are used to calculate the average record size. The relevant write client will have `" + COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key()
           + "` being overwritten by the calculated result.");
   public static final ConfigProperty<Integer> SAMPLE_WRITES_SIZE = ConfigProperty
-      .key(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.size")
+      .key(STREAMER_CONFIG_PREFIX + "sample.writes.size")
       .defaultValue(5000)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.size")
       .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
           + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
 }

@@ -37,7 +37,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -53,7 +53,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_MERGE_THRESHOLD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD;
 
-public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClientTestHarness {
+public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random();
 

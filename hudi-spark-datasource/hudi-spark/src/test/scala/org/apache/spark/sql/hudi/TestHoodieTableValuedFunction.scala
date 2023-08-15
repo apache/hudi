@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.functions.{col, from_json}
 
@@ -27,7 +28,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
-          spark.sql("set hoodie.sql.write.operation=upsert")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
             s"""
                |create table $tableName (
@@ -81,7 +82,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         }
       }
     }
-    spark.sessionState.conf.unsetConf("hoodie.sql.write.operation")
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   test(s"Test hudi_table_changes latest_state") {

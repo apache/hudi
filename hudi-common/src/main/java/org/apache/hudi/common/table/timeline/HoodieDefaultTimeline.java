@@ -28,6 +28,7 @@ import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -204,6 +205,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsInClosedRange(String startTs, String endTs) {
+    return new HoodieDefaultTimeline(
+        instants.stream().filter(instant -> HoodieTimeline.isInClosedRange(instant.getTimestamp(), startTs, endTs)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
         getInstantsAsStream().filter(s -> HoodieTimeline.isInRange(s.getStateTransitionTime(), startTs, endTs)),
@@ -242,6 +249,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return new HoodieDefaultTimeline(getInstantsAsStream()
             .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
             details);
+  }
+
+  @Override
+  public Option<HoodieInstant> findInstantBefore(String instantTime) {
+    return Option.fromJavaOptional(instants.stream()
+        .filter(instant -> compareTimestamps(instant.getTimestamp(), LESSER_THAN, instantTime))
+        .max(Comparator.comparing(HoodieInstant::getTimestamp)));
   }
 
   @Override

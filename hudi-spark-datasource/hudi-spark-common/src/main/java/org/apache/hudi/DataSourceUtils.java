@@ -23,7 +23,6 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -40,7 +39,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -172,19 +170,19 @@ public class DataSourceUtils {
     }
   }
 
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop -> {
-      if (!props.containsKey(prop)) {
-        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
-      }
-    });
-  }
-
   public static HoodieWriteConfig createHoodieConfig(String schemaStr, String basePath,
-      String tblName, Map<String, String> parameters) {
+                                                     String tblName, Map<String, String> parameters) {
     boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key()));
-    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
-        .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    boolean inlineCompact = false;
+    if (parameters.containsKey(HoodieCompactionConfig.INLINE_COMPACT.key())) {
+      // if inline is set, fetch the value from it.
+      inlineCompact = Boolean.parseBoolean(parameters.get(HoodieCompactionConfig.INLINE_COMPACT.key()));
+    }
+    // if inline is false, derive the value from asyncCompact and table type
+    if (!inlineCompact) {
+      inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
+          .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    }
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()

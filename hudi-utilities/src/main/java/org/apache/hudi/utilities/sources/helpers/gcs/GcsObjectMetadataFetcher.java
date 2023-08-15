@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
@@ -95,20 +97,21 @@ public class GcsObjectMetadataFetcher implements Serializable {
   private String createFilter() {
     StringBuilder filter = new StringBuilder("size > 0");
 
-    getPropVal(SELECT_RELATIVE_PATH_PREFIX.key()).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_PREFIX.key()).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
-    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR.key()).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
+    getPropVal(SELECT_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name like '" + val + "%'"));
+    getPropVal(IGNORE_RELATIVE_PATH_PREFIX).ifPresent(val -> filter.append(" and name not like '" + val + "%'"));
+    getPropVal(IGNORE_RELATIVE_PATH_SUBSTR).ifPresent(val -> filter.append(" and name not like '%" + val + "%'"));
 
     // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(CLOUD_DATAFILE_EXTENSION.key()).or(() -> Option.of(fileFormat))
+    getPropVal(CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
         .map(val -> filter.append(" and name like '%" + val + "'"));
 
     return filter.toString();
   }
 
-  private Option<String> getPropVal(String propName) {
-    if (!isNullOrEmpty(props.getString(propName, null))) {
-      return Option.of(props.getString(propName));
+  private Option<String> getPropVal(ConfigProperty<String> configProperty) {
+    String value = getStringWithAltKeys(props, configProperty, true);
+    if (!isNullOrEmpty(value)) {
+      return Option.of(value);
     }
 
     return Option.empty();

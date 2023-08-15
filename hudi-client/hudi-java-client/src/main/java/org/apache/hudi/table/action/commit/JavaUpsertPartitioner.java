@@ -253,9 +253,8 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -336,5 +335,10 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
   }
 }

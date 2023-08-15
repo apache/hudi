@@ -36,7 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.expression.Expression;
 import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
@@ -59,6 +61,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.CollectionUtils.combine;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
@@ -241,6 +244,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return Collections.emptyMap();
     }
 
+    if (specifiedQueryInstant.isPresent() && !shouldIncludePendingCommits) {
+      validateTimestampAsOf(metaClient, specifiedQueryInstant.get());
+    }
+
     FileStatus[] allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
@@ -268,6 +275,26 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                     .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
                     .collect(Collectors.toList())
         ));
+  }
+
+  protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths,
+                                                   Types.RecordType partitionFields,
+                                                   Expression partitionColumnPredicates) {
+    List<String> matchedPartitionPaths;
+    try {
+      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
+          partitionFields, partitionColumnPredicates);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error fetching partition paths", e);
+    }
+
+    // Convert partition's path into partition descriptor
+    return matchedPartitionPaths.stream()
+        .map(partitionPath -> {
+          Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
+          return new PartitionPath(partitionPath, partitionColumnValues);
+        })
+        .collect(Collectors.toList());
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {

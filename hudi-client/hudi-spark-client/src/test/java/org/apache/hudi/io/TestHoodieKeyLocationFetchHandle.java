@@ -40,7 +40,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -64,13 +64,12 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
-import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link HoodieKeyLocationFetchHandle}.
  */
-public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
+public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
 
@@ -165,7 +164,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
         .map(pf -> new Tuple2<>(pf.getKey(), pf.getValue())).collect(toList());
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

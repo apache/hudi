@@ -43,9 +43,11 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 
 /**
  * Read json kafka data.
@@ -79,11 +81,13 @@ public class JsonKafkaSource extends KafkaSource<String> {
         ObjectMapper om = new ObjectMapper();
         partitionIterator.forEachRemaining(consumerRecord -> {
           String record = consumerRecord.value().toString();
+          String recordKey = (String) consumerRecord.key();
           try {
             ObjectNode jsonNode = (ObjectNode) om.readTree(record);
             jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
             jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
             jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+            jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
             stringList.add(om.writeValueAsString(jsonNode));
           } catch (Throwable e) {
             stringList.add(record);
@@ -96,7 +100,8 @@ public class JsonKafkaSource extends KafkaSource<String> {
   }
 
   private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
-    String postProcessorClassName = this.props.getString(JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS.key(), null);
+    String postProcessorClassName = getStringWithAltKeys(
+        this.props, JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS, true);
     // no processor, do nothing
     if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
       return jsonStringRDD;

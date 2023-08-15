@@ -34,6 +34,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
+import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -91,11 +92,12 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
     boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
 
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
+
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
     boolean shouldDropPartitionColumns = writeConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS());
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, shouldDropPartitionColumns, instantTime);
 
-    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     preExecute();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));
     afterExecute(result);
@@ -112,8 +114,12 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
     if (populateMetaFields) {
       if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
-        return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
-            writeConfig.getBucketIndexNumBuckets());
+        if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
+          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
+              writeConfig.getBucketIndexNumBuckets());
+        } else {
+          return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, true);
+        }
       } else {
         return DataSourceUtils
             .createUserDefinedBulkInsertPartitionerWithRows(writeConfig)

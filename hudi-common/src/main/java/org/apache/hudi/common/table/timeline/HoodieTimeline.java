@@ -241,6 +241,11 @@ public interface HoodieTimeline extends Serializable {
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
 
+  /**
+   * Create a new Timeline with instants after or equals startTs and before or on endTs.
+   */
+  HoodieTimeline findInstantsInClosedRange(String startTs, String endTs);
+
   /**`
    * Create a new Timeline with instants after startTs and before or on endTs
    * by state transition timestamp of actions.
@@ -250,7 +255,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Create new timeline with all instants that were modified after specified time.
    */
-  HoodieDefaultTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime);
+  HoodieTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -266,6 +271,11 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with all instants before specified time.
    */
   HoodieTimeline findInstantsBefore(String instantTime);
+
+  /**
+   * Finds the instant before specified time.
+   */
+  Option<HoodieInstant> findInstantBefore(String instantTime);
 
   /**
    * Create new timeline with all instants before or equals specified time.
@@ -411,6 +421,14 @@ public interface HoodieTimeline extends Serializable {
   static boolean isInRange(String timestamp, String startTs, String endTs) {
     return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN, startTs)
             && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
+  }
+
+  /**
+   * Return true if specified timestamp is in range [startTs, endTs].
+   */
+  static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
+        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
   }
 
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {

@@ -175,18 +175,20 @@ public class TestRowDataKeyGen {
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
-    assertThat(keyGen1.getRecordKey(rowData1), is("__empty__"));
+    final int taskId = 3;
+    final String instantTime = "000001";
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(keyGen1.getRecordKey(rowData1), is(instantTime + "_" + taskId + "_0"));
 
     // null record key and partition path
     final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE, null, StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), null);
-    assertThat(keyGen1.getRecordKey(rowData2), is("__empty__"));
+    assertThat(keyGen1.getRecordKey(rowData2), is(instantTime + "_" + taskId + "_1"));
 
     // empty record key and partition path
     final RowData rowData3 = insertRow(StringData.fromString(""), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString(""));
-    assertThat(keyGen1.getRecordKey(rowData3), is("__empty__"));
+    assertThat(keyGen1.getRecordKey(rowData3), is(instantTime + "_" + taskId + "_2"));
   }
 
   @Test

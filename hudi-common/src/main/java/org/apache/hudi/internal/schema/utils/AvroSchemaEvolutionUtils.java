@@ -23,9 +23,11 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
@@ -116,9 +118,10 @@ public class AvroSchemaEvolutionUtils {
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
+   * @param opts config options
    * @return schema (based off {@code source} one) that has nullability constraints reconciled
    */
-  public static Schema reconcileNullability(Schema sourceSchema, Schema targetSchema) {
+  public static Schema reconcileNullability(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
     if (sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -129,9 +132,10 @@ public class AvroSchemaEvolutionUtils {
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
     List<String> candidateUpdateCols = colNamesSourceSchema.stream()
-        .filter(f -> colNamesTargetSchema.contains(f)
-            && sourceInternalSchema.findField(f).isOptional() != targetInternalSchema.findField(f).isOptional())
-        .collect(Collectors.toList());
+        .filter(f -> (("true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key())) && !colNamesTargetSchema.contains(f))
+                || colNamesTargetSchema.contains(f) && sourceInternalSchema.findField(f).isOptional() != targetInternalSchema.findField(f).isOptional()
+            )
+        ).collect(Collectors.toList());
 
     if (candidateUpdateCols.isEmpty()) {
       return sourceSchema;
