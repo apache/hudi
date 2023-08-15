@@ -80,17 +80,17 @@ public class JsonKafkaSource extends KafkaSource<String> {
         List<String> stringList = new LinkedList<>();
         ObjectMapper om = new ObjectMapper();
         partitionIterator.forEachRemaining(consumerRecord -> {
-          String record = consumerRecord.value().toString();
-          String recordKey = (String) consumerRecord.key();
+          String recordValue = consumerRecord.value().toString();
+          String recordKey = consumerRecord.key().toString();
           try {
-            ObjectNode jsonNode = (ObjectNode) om.readTree(record);
+            ObjectNode jsonNode = (ObjectNode) om.readTree(recordValue);
             jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
             jsonNode.put(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
             jsonNode.put(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
             jsonNode.put(KAFKA_SOURCE_KEY_COLUMN, recordKey);
             stringList.add(om.writeValueAsString(jsonNode));
           } catch (Throwable e) {
-            stringList.add(record);
+            stringList.add(recordValue);
           }
         });
         return stringList.iterator();
