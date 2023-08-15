@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
@@ -92,6 +93,12 @@ trait HoodieCatalystPlansUtils {
    * changes in Spark 3.3
    */
   def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+
+  /**
+   * Decomposes [[CreateTableLikeCommand]] into its arguments allowing to accommodate for API
+   * changes in Spark 3
+   */
+  def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)]
 
   /**
    * Rebases instance of {@code InsertIntoStatement} onto provided instance of {@code targetTable} and {@code query}
