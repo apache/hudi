@@ -208,6 +208,12 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (cfg.validateBloomFilters) {
       labelList.add("validate-bloom-filters");
     }
+    if (cfg.validateRecordIndexCount) {
+      labelList.add("validate-record-index-count");
+    }
+    if (cfg.validateRecordIndexContent) {
+      labelList.add("validate-record-index-content");
+    }
     return String.join(",", labelList);
   }
 
