@@ -159,7 +159,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     GenericRecord withKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
     assertEquals(4,withKafkaOffsets.getSchema().getFields().size() - withoutKafkaOffsets.getSchema().getFields().size());
 
-    // null kafka key
+    // scenario with null kafka key
     ConsumerRecord<Object, Object> recordConsumerRecordNullKafkaKey = new ConsumerRecord<Object,Object>("test", 0, 1L,
             null, dataGen.generateGenericRecord());
     JavaRDD<ConsumerRecord<Object, Object>> rddNullKafkaKey = jsc().parallelize(Arrays.asList(recordConsumerRecordNullKafkaKey));
@@ -211,7 +211,6 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     SourceFormatAdapter kafkaSourceWithNullKafkaKey = new SourceFormatAdapter(avroKafkaSourceWithNullKafkaKey);
     Dataset<Row> nullKafkaKeyDataset = kafkaSourceWithNullKafkaKey.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
             .getBatch().get();
-    nullKafkaKeyDataset.toDF().show();
     assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key='null'").count());
 
   }

@@ -345,7 +345,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN, KAFKA_SOURCE_KEY_COLUMN);
     assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 4, withKafkaOffsetColumns.size()));
 
-    // test null kafka key
+    // scenario with null kafka key
     sendNullKafkaKeyMessagesToKafka(topic, numMessages, numPartitions);
     jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(jsonSource);
