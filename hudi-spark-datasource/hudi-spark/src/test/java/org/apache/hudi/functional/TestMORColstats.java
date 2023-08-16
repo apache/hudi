@@ -116,7 +116,9 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     assertEquals(1, filesToCorrupt.size());
     filesToCorrupt.forEach(TestMORColstats::corruptFile);
     assertEquals(0, readMatchingRecords().except(batch1).count());
-    //No options so data skipping is false
+    //Read without data skipping to show that it will fail
+    //Reading with data skipping succeeded so that means that data skipping is working and the corrupted
+    //file was not read
     assertThrows(SparkException.class, () -> readMatchingRecords(false).count());
   }
 
@@ -166,7 +168,12 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
   public void testBaseFileAndLogFileUpdateMatchesAndRollBack() {
     testBaseFileAndLogFileUpdateMatchesHelper(false, false, true);
   }
-  
+
+  /**
+   * Test where one filegroup doesn't match the condition, then update so both filegroups match,
+   * finally, add another update so that the file group doesn't match again
+   * In all three cases, dataskipping should not exclude the filegroup
+   */
   private void testBaseFileAndLogFileUpdateMatchesHelper(Boolean shouldAsyncCompact,
                                                          Boolean shouldDelete,
                                                          Boolean shouldRollback) {
@@ -197,6 +204,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
 
     //Corrupt to prove that colstats does not exclude filegroup
     filesToCorrupt.forEach(TestMORColstats::corruptFile);
+    assertEquals(1, filesToCorrupt.size());
     assertThrows(SparkException.class, () -> readMatchingRecords().count());
   }
 
@@ -227,6 +235,11 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     testBaseFileAndLogFileUpdateUnmatchesHelper(true);
   }
 
+  /**
+   * Test where one filegroup all records match the condition and the other has only a single record that matches
+   * an update is added that makes the second filegroup no longer match
+   * Dataskipping should not exclude the second filegroup
+   */
   private void testBaseFileAndLogFileUpdateUnmatchesHelper(Boolean shouldAsyncCompact) {
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> batch1 = inserts.where(matchCond);
@@ -245,10 +258,11 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
 
     //update batch2 so no matching records in the filegroup
     doWrite(recordToMod);
-    List<Path> filesToCorrupt = getFilesToCorrupt();
     assertEquals(0, readMatchingRecords().except(batch1).count());
 
     //Corrupt to prove that colstats does not exclude filegroup
+    List<Path> filesToCorrupt = getFilesToCorrupt();
+    assertEquals(1, filesToCorrupt.size());
     filesToCorrupt.forEach(TestMORColstats::corruptFile);
     assertThrows(SparkException.class, () -> readMatchingRecords().count());
   }
