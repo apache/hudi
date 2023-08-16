@@ -1,7 +1,7 @@
 ---
 title: "Flink Guide"
 toc: true
-last_modified_at: 2020-08-12T15:19:57+08:00
+last_modified_at: 2023-08-16T12:53:57+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -16,6 +16,7 @@ This guide helps you quickly start using Flink on Hudi, and learn different mode
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_configuration#memory-optimization) and [Write Rate Limit](/docs/flink_configuration#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).
+- **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/querying_data/#hudi-catalog).
 
 ## Quick Start
 
