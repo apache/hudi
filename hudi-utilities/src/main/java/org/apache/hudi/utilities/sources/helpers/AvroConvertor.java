@@ -180,7 +180,7 @@ public class AvroConvertor implements Serializable {
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, String.valueOf(consumerRecord.key()));
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, consumerRecord.key().toString());
     return recordBuilder.build();
   }
 
