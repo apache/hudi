@@ -80,14 +80,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @BeforeEach
   public void before() throws Exception {
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = new StreamWriteOperatorCoordinator(
-        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
-
-    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
-    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    prepareCoordinator();
   }
 
   @AfterEach
@@ -186,6 +179,25 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  public void testRecommitWithOptimisticConcurrencyControl() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    prepareCoordinator(conf);
+    assertTrue(coordinator.getWriteClient().getConfig().getWriteConcurrencyMode().supportsOptimisticConcurrencyControl());
+    final CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    String instant = coordinator.getInstant();
+    WriteMetadataEvent event1 = createOperatorEvent(0, instant, "par1", false, 0.2);
+    event1.setBootstrap(true);
+    WriteMetadataEvent event2 = WriteMetadataEvent.emptyBootstrap(1);
+    coordinator.handleEventFromOperator(0, event1);
+    coordinator.handleEventFromOperator(1, event2);
+    assertThat("Recommits the instant with pending inflight and requested instants of transaction manager",
+        coordinator.getWriteClient().getPendingInflightAndRequestedInstants().size(), is(1));
+    assertThat("Recommits the instant with optimistic concurrency control", TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()), is(instant));
+  }
+
+  @Test
   public void testRecommitWithLazyFailedWritesCleanPolicy() {
     coordinator.getWriteClient().getConfig().setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.LAZY.name());
     assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
@@ -207,10 +219,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, true);
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    initCoordinator(conf);
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -231,10 +240,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 5);
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    initCoordinator(conf);
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -303,10 +309,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
     conf.setString("hoodie.metadata.log.compaction.enable", "true");
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    initCoordinator(conf);
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -347,10 +350,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    initCoordinator(conf);
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -430,10 +430,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    initCoordinator(conf);
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -496,6 +493,27 @@ public class TestStreamWriteOperatorCoordinator {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private void prepareCoordinator() throws Exception {
+    prepareCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
+  }
+
+  private void prepareCoordinator(Configuration configuration) throws Exception {
+    initCoordinator(configuration, 2);
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+  }
+
+  private void initCoordinator(Configuration configuration) throws Exception {
+    initCoordinator(configuration, 1);
+  }
+
+  private void initCoordinator(Configuration configuration, int numSubtasks) throws Exception {
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), numSubtasks);
+    coordinator = new StreamWriteOperatorCoordinator(configuration, context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+  }
 
   private String mockWriteWithMetadata() {
     final String instant = coordinator.getInstant();

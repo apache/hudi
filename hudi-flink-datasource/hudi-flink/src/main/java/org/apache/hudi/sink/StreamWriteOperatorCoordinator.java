@@ -416,6 +416,8 @@ public class StreamWriteOperatorCoordinator
         if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
           writeClient.getHeartbeatClient().start(instant);
         }
+        // Recommit should refresh the last txn metadata firstly to prepare resolution of write conflict.
+        this.writeClient.preTxn(this.metaClient);
         commitInstant(instant);
       }
       // starts a new instant
