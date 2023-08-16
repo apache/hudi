@@ -311,11 +311,6 @@ public class HoodieFlinkWriteClient<T> extends
     }
   }
 
-  @Override
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata, writeStatuses);
-  }
-
   /**
    * Initialized the metadata table on start up, should only be called once on driver.
    */
