@@ -447,6 +447,15 @@ public class UtilitiesTestBase {
       return data;
     }
 
+    public static Tuple2<String, String>[] jsonifyRecordsByPartitionsWithNullKafkaKey(List<HoodieRecord> records, int partitions) {
+      Tuple2<String, String>[] data = new Tuple2[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        String value = Helpers.toJsonString(records.get(i));
+        data[i] = new Tuple2<>(null, value);
+      }
+      return data;
+    }
+
     private static void addAvroRecord(
             VectorizedRowBatch batch,
             GenericRecord record,

@@ -113,6 +113,17 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  void sendMessagesToKafkaWithNullKafkaKey(String topic, int count, int numPartitions) {
+    List<GenericRecord> genericRecords = dataGen.generateGenericRecords(count);
+    Properties config = getProducerProperties();
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(config)) {
+      for (int i = 0; i < genericRecords.size(); i++) {
+        // null kafka key
+        producer.send(new ProducerRecord<>(topic, i % numPartitions, null, HoodieAvroUtils.avroToBytes(genericRecords.get(i))));
+      }
+    }
+  }
+
   private Properties getProducerProperties() {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
@@ -147,6 +158,14 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
     GenericRecord withKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
     assertEquals(4,withKafkaOffsets.getSchema().getFields().size() - withoutKafkaOffsets.getSchema().getFields().size());
+
+    // null kafka key
+    ConsumerRecord<Object, Object> recordConsumerRecordNullKafkaKey = new ConsumerRecord<Object,Object>("test", 0, 1L,
+            null, dataGen.generateGenericRecord());
+    JavaRDD<ConsumerRecord<Object, Object>> rddNullKafkaKey = jsc().parallelize(Arrays.asList(recordConsumerRecordNullKafkaKey));
+    avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
+    GenericRecord withKafkaOffsetsAndNullKafkaKey = avroKafkaSource.maybeAppendKafkaOffsets(rddNullKafkaKey).collect().get(0);
+    assertEquals("null",String.valueOf(withKafkaOffsetsAndNullKafkaKey.get("_hoodie_kafka_source_key")));
   }
 
   @Test
@@ -185,5 +204,15 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     assertEquals(4, withKafkaOffsetColumns.size() - columns.size());
     List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN, KAFKA_SOURCE_KEY_COLUMN);
     assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 4, withKafkaOffsetColumns.size()));
+
+    // scenario with null kafka key
+    sendMessagesToKafkaWithNullKafkaKey(topic, numMessages, numPartitions);
+    AvroKafkaSource avroKafkaSourceWithNullKafkaKey = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSourceWithNullKafkaKey = new SourceFormatAdapter(avroKafkaSourceWithNullKafkaKey);
+    Dataset<Row> nullKafkaKeyDataset = kafkaSourceWithNullKafkaKey.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
+            .getBatch().get();
+    nullKafkaKeyDataset.toDF().show();
+    assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key='null'").count());
+
   }
 }
