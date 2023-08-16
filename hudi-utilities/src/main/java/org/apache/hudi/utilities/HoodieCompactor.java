@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -263,8 +262,7 @@ public class HoodieCompactor {
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
         Option<HoodieInstant> firstCompactionInstant =
-            metaClient.getActiveTimeline().firstInstant(
-                HoodieTimeline.COMPACTION_ACTION, HoodieInstant.State.REQUESTED);
+            metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
