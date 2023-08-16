@@ -208,6 +208,31 @@ And for these use cases you should test the stability first.
 | `hoodie.metadata.index.column.stats.enable` | `false` | false | Whether to enable column statistics (max/min) |
 | `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
 
+### Hudi Catalog
+A Hudi catalog can manage the tables created by Flink, table metadata is persisted to avoid redundant table creation.
+The catalog in `hms` mode will supplement the Hive syncing parameters automatically.
+
+A SQL demo for Catalog SQL in hms mode:
+
+```sql
+CREATE CATALOG hoodie_catalog
+WITH (
+  'type'='hudi',
+  'catalog.path' = '${catalog root path}', -- only valid if the table options has no explicit declaration of table path
+  'hive.conf.dir' = '${dir path where hive-site.xml is located}',
+  'mode'='hms' -- also support 'dfs' mode so that all the table metadata are stored with the filesystem
+);
+```
+
+#### Options
+| Option Name        | Required | Default   | Remarks                                                                                                                |
+|--------------------|----------|-----------|------------------------------------------------------------------------------------------------------------------------|
+| `catalog.path`     | `true`   | --        | Default catalog root path, it is used to infer a full table path in format: `${catalog.path}/${db_name}/${table_name}` |
+| `default-database` | `false`  | `default` | Default database name                                                                                                  |
+| `hive.conf.dir`    | `false`  | --        | Directory where hive-site.xml is located, only valid in `hms` mode                                                     |
+| `mode`             | `false`  | `dfs`     | Specify as `hms` to keep the table metadata with Hive metastore                                                        |
+| `table.external`   | `false`  | `false`   | Whether to create external tables, only valid under `hms` mode                                                         |
+
 ## Hive
 
 In order for Hive to recognize Hudi tables and query correctly,
