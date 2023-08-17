@@ -73,7 +73,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withAutoCommit(autoCommit)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()

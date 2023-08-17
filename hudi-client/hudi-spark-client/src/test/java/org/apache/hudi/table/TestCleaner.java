@@ -551,7 +551,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).build())
             .build();
@@ -607,8 +607,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testCleanWithReplaceCommits() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withAssumeDatePartitioning(true).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(2).build())
@@ -929,7 +928,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   @Test
   public void testCleaningWithZeroPartitionPaths() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -954,7 +953,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   @ValueSource(booleans = {true, false})
   public void testKeepLatestCommitsWithPendingCompactions(boolean isAsync) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).withAsyncClean(isAsync).retainCommits(2).build())
         .build();
@@ -979,7 +978,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
@@ -1004,7 +1003,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
@@ -1032,8 +1031,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testRerunFailedClean(boolean simulateMetadataFailure) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withAssumeDatePartitioning(true).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();

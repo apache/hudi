@@ -402,8 +402,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
-        false, false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath), false);
 
     List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
 

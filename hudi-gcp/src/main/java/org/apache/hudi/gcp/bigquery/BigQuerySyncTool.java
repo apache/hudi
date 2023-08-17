@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI;
@@ -99,7 +98,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     return ManifestFileWriter.builder()
         .setMetaClient(metaClient)
         .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
-        .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
         .build();
   }
 
@@ -132,6 +130,9 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     List<String> partitionFields = !StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX)) ? config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS) : Collections.emptyList();
     Schema latestSchema = bqSchemaResolver.getTableSchema(metaClient, partitionFields);
+    ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
+        .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
+        .build();
     if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {
       manifestFileWriter.writeManifestFile(true);
       if (!tableExists(bqSyncClient, tableName)) {

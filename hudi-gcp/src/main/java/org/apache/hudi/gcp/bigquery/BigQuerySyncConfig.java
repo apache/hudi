@@ -122,14 +122,6 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .markAdvanced()
       .withDocumentation("Fetch file listing from Hudi's metadata");
 
-  public static final ConfigProperty<String> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty
-      .key("hoodie.gcp.bigquery.sync.assume_date_partitioning")
-      .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
-      .markAdvanced()
-      .withDocumentation("Assume standard yyyy/mm/dd partitioning, this"
-          + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter");
-
   public BigQuerySyncConfig(Properties props) {
     super(props);
     setDefaults(BigQuerySyncConfig.class.getName());
@@ -172,7 +164,6 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), hoodieSyncConfigParams.useFileListingFromMetadata);
-      props.setPropertyIfNonNull(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), hoodieSyncConfigParams.assumeDatePartitioning);
       return props;
     }
   }

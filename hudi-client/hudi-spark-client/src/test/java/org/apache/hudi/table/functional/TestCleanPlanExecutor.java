@@ -77,14 +77,14 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   @Test
   public void testInvalidCleaningTriggerStrategy() {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withIncrementalCleaningMode(true)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanBootstrapBaseFileEnabled(true)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2)
             .withCleaningTriggerStrategy("invalid_strategy").build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build()).build();
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     Exception e = assertThrows(IllegalArgumentException.class, () -> runCleaner(config, true), "should fail when invalid trigger strategy is provided!");
     assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.table.action.clean.CleaningTriggerStrategy.invalid_strategy"));
   }
@@ -108,7 +108,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       boolean simulateFailureRetry, boolean simulateMetadataFailure,
       boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
@@ -257,7 +257,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestFileVersions() throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
@@ -336,7 +336,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestFileVersionsWithBootstrapFileClean() throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanBootstrapBaseFileEnabled(true)
                 .withCleanerParallelism(1)
@@ -438,7 +438,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestFileVersionsMOR() throws Exception {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             // Column Stats Index is disabled, since these tests construct tables which are
             // not valid (empty commit metadata, invalid parquet files)
             .withMetadataIndexColumnStats(false)
@@ -483,7 +483,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestCommitsMOR() throws Exception {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             // Column Stats Index is disabled, since these tests construct tables which are
             // not valid (empty commit metadata, invalid parquet files)
             .withMetadataIndexColumnStats(false).build())
@@ -619,7 +619,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       boolean simulateFailureRetry, boolean simulateMetadataFailure,
       boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
