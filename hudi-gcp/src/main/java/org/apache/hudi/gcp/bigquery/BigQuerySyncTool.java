@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
@@ -103,7 +102,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
         .setConf(config.getHadoopConf())
         .setBasePath(config.getString(BIGQUERY_SYNC_SYNC_BASE_PATH))
         .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
-        .setAssumeDatePartitioning(config.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING))
         .build();
 
     if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {

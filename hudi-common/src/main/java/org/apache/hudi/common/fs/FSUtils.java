@@ -211,6 +211,7 @@ public class FSUtils {
 
   /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
+   * TODO: (Lin) Delete this function after we remove the assume.date.partitioning config completely.
    */
   public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
     List<String> datePartitions = new ArrayList<>();
@@ -280,11 +281,9 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
-                                                  boolean useFileListingFromMetadata,
-                                                  boolean assumeDatePartitioning) {
+                                                  boolean useFileListingFromMetadata) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
-        .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();

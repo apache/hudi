@@ -1261,10 +1261,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(AUTO_COMMIT_ENABLE);
   }
 
-  public Boolean shouldAssumeDatePartitioning() {
-    return metadataConfig.shouldAssumeDatePartitioning();
-  }
-
   public boolean shouldUseExternalSchemaTransformation() {
     return getBoolean(AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE);
   }

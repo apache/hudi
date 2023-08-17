@@ -336,10 +336,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
 
-  public Boolean shouldAssumeDatePartitioning() {
-    return getBoolean(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING);
-  }
-
   public boolean enabled() {
     return getBoolean(ENABLE);
   }

@@ -335,7 +335,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).withMaxNumDeltaCommitsBeforeCompaction(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanerPolicy(HoodieCleaningPolicy.valueOf(cleaningPolicy))

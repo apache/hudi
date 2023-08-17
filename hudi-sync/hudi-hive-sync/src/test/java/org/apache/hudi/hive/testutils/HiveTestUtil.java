@@ -100,7 +100,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -148,7 +147,6 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
     hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), TABLE_NAME);
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    hiveSyncProps.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());

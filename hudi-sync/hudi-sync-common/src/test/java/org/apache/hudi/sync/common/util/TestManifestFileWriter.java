@@ -50,7 +50,7 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(metaClient, 10);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false, false).count());
+    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false).count());
   }
 
   @Test
