@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, listCommitsSince}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
@@ -185,8 +185,8 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
     try {
-      spark.sql("set hoodie.datasource.query.type=\"snapshot\"")
-      spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnRead)}")
+      spark.sql(s"set hoodie.datasource.query.type=$QUERY_TYPE_SNAPSHOT_OPT_VAL")
+      spark.sql(s"set hoodie.metadata.enable=$isMetadataEnabledOnRead")
       spark.sql(s"select * from $tableName")
     } finally {
       spark.conf.unset("hoodie.datasource.query.type")
