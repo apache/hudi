@@ -213,9 +213,12 @@ for getting filesystem.
 
 ![](wrapper_fs.png)
 
-When conducting a read operation, Hudi would first access filesystem view, `HoodieMetadataFileSystemView` specifically,
-and filesystem view would scan metadata table to compose `HoodieMetadataPayload`, which subsequently calls `getFileStatuses`
-on it. After that, `HoodieMetadataPayload` would employ `HoodieWrapperFileSystem` to retrieve `FileStatus` with physical location. 
+When conducting a read operation, Hudi would: 
+1. Access filesystem view, `HoodieMetadataFileSystemView` specifically
+2. Scan metadata table via filesystem view to compose `HoodieMetadataPayload`
+3. Call `HoodieMetadataPayload#getFileStatuses` and employ `HoodieWrapperFileSystem` to get 
+file statuses with physical locations
+
 This flow can be concluded in the chart below.
 
 ![](read_flow.png)
