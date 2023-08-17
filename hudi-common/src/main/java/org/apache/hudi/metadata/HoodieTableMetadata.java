@@ -126,14 +126,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       }
     }
 
-    return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
+    return createFSBackedTableMetadata(engineContext, datasetBasePath);
   }
 
   static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieMetadataConfig metadataConfig,
                                                                    String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-        datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+    return new FileSystemBackedTableMetadata(
+        engineContext, new SerializableConfiguration(engineContext.getHadoopConf()), datasetBasePath);
   }
 
   static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,

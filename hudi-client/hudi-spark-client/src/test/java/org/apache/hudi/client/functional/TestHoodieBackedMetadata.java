@@ -730,7 +730,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false, false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false);
       // partition should be physically deleted
       assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
       assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
@@ -3321,7 +3321,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath(), config.shouldAssumeDatePartitioning());
+        new SerializableConfiguration(hadoopConf), config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -3431,8 +3431,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath),
-        false, false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath), false);
     assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
