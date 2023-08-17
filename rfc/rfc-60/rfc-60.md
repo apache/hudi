@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-60: Federated Storage Layer
+# RFC-60: Federated Storage Layout
 
 ## Proposers
 - @umehrot2
@@ -97,22 +97,21 @@ public interface HoodieStorageStrategy extends Serializable {
 }
 ```
 
-### Generating file paths for object store optimized layout
+### Generating File Paths for Object Store Optimized Layout
 
 We want to distribute files evenly across multiple random prefixes, instead of following the traditional Hive storage
 layout of keeping them under a common table path/prefix. In addition to the `Table Path`, for this new layout user will
 configure another `Table Storage Path` under which the actual data files will be distributed. The original `Table Path` will
 be used to maintain the table/partitions Hudi metadata.
 
-For the purpose of this documentation lets assume:
+For the purpose of this documentation let's assume:
 ```
 Table Path => s3://<table_bucket>/<hudi_table_name>/
 
 Table Storage Path => s3://<table_storage_bucket>/
 ```
-Note: `Table Storage Path` can be a path in the same Amazon S3 bucket or a different bucket. For best results,
-`Table Storage Path` should be a top-level bucket instead of a prefix under the bucket to avoid multiple 
-tables sharing the prefix.
+`Table Storage Path` should be a top-level bucket instead of a prefix under the bucket for the best results.
+So that we can avoid multiple tables sharing the prefix causing throttling.
 
 We will use a Hashing function on the `Partition Path/File ID` to map them to a prefix generated under `Table Storage Path`:
 ```
@@ -148,7 +147,7 @@ s3://<table_storage_bucket>/0bfb3d6e/<hudi_table_name>/.075f3295-def8-4a42-a927-
 ...
 ```
 
-Note: Storage strategy would only return a storage location instead of a full path. In the above example,
+Storage strategy would only return a storage location instead of a full path. In the above example,
 the storage location is `s3://<table_storage_bucket>/0bfb3d6e/`, and the lower-level folder structure would be appended
 later automatically to get the actual file path. In another word, 
 users would only be able to customize upper-level folder structure (storage location). 
@@ -176,7 +175,7 @@ The hashing function should be made user configurable for use cases like bucketi
 sub-partitioning/re-hash to reduce the number of hash prefixes. Having too many unique hash prefixes
 would make files too dispersed, and affect performance on other operations such as listing.
 
-### Maintain mapping to files
+### Maintaining Mapping to Files with Metadata Table
 
 In [RFC-15](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331), we introduced an internal
 Metadata Table with a `files` partition that maintains mapping from partitions to list of files in the partition stored
@@ -196,13 +195,74 @@ for metadata table to be populated.
 
 4. If there is an error reading from Metadata table, we will not fall back listing from file system.
 
-5. In case of metadata table getting corrupted or lost, we need to have a solution here to reconstruct metadata table
-from the files which distributed using federated storage. We will likely have to implement a file system listing
-logic, that can get all the partition to files mapping by listing all the prefixes under the `Table Storage Path`.
-Following the folder structure of adding table name/partitions under the prefix will help in getting the listing and
-identifying the table/partition they belong to.
+### Integration
+This section mainly describes how storage strategy is integrated with other components and how read/write
+would look like from Hudi side with object storage layout.
 
-### Query Side Integration
+Where to plug in storage strategy is a crucial problem. We think it would be best to put storage strategy 
+at filesystem level, in `HoodieWrapperFileSystem` specifically, so only when files are being 
+read/written would the path be converted on the fly. 
+By doing that, we can limit the usage of storage strategy to only filesystem level so other upper-level 
+components don't need to be aware of physical paths.
+
+This would also mean `HoodieWrapperFileSystem` has to be THE filesystem to use for all upper-level Hudi components.
+Getting filesystem from `Path` or such won't be allowed anymore as using raw filesystem may not reach 
+to physical locations without storage strategy. Hudi components can 
+simply call `HoodieMetaClient#getFs` to get `HoodieWrapperFileSystem`, 
+and this needs to be the only allowed way for any filesystem-related operation. The only exception is 
+when we need to interact with metadata that's still stored under the original table path, and we
+should call `HoodieMetaClient#getRawFs` in this case so `HoodieMetaClient` can still be the single entry
+for getting filesystem.
+
+![](wrapper_fs.png)
+
+When Hudi handles a read operation, it would first go to filesystem view, `HoodieMetadataFileSystemView` specifically,
+and filesystem view would scan metadata table to compose `HoodieMetadataPayload` and then call `getFileStatuses`
+on it. After that, `HoodieMetadataPayload` would use `HoodieWrapperFileSystem` to get `FileStatus` so a
+`FileStatus` with physical location can be returned eventually. This flow can be concluded in the chart
+below.
+
+![](read_flow.png)
+
+#### Considerations
+- Since table path and data path will most likely have different top-level folders/authorities,
+`HoodieWrapperFileSystem` should maintain at least two `FileSystem` objects: one to access table path and another
+to access storage path. `HoodieWrapperFileSystem` should be intelligent enough to tell if it needs
+to convert the path by checking the path on the fly.
+- When using Hudi file reader/writer implementation, we will need to pass `HoodieWrapperFileSystem` down
+to parent reader. For instance, when using `HoodieAvroHFileReader`, we will need to pass `HoodieWrapperFileSystem`
+to `HFile.Reader` so it can have access to storage strategy. If reader/writer doesn't take filesystem
+directly (e.g. `ParquetFileReader` only takes `Configuration` and `Path` for reading), then we will
+need to register `HoodieWrapperFileSystem` to `Configuration` so it can be initialized/used later.
+
+### Repair Tool
+In case of metadata table getting corrupted or lost, we need to have a solution here to reconstruct metadata table
+from the files that are distributed using federated storage. We will need a repair tool 
+to get all the partition to files mapping by listing all the prefixes under the `Table Storage Path` 
+and then reconstruct metadata table.
+
+In Hudi we already have `HoodieBackedTableMetadataWriter` to list existing data files to initialize/construct
+metadata table. We can extract the logic of listing files and get partition info to a new method `getPartitionInfo`, 
+and then extend `HoodieBackedTableMetadataWriter` and override `getPartitionInfo` so
+for repair tool it can list data files stored under storage path instead of table path.
+
+```java
+ public class StorageRepairMetadataWriter extends SparkHoodieBackedTableMetadataWriter {
+    <T extends SpecificRecordBase> StorageRepairMetadataWriter(Configuration hadoopConf,
+                                                               HoodieWriteConfig writeConfig,
+                                                               HoodieEngineContext engineContext,
+                                                               Option<String> inflightInstantTimestamp) {
+      super(hadoopConf, writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, engineContext, inflightInstantTimestamp);
+    }
+
+    @Override
+    protected Map<String, Map<String, Long>> getPartitionToFilesMap() {
+      return listFilesUnderStoragePath();
+    }
+  }
+```
+
+### Query Engine Side Integration
 
 Spark, Hive, [Presto](https://github.com/prestodb/presto/commit/ef1fd25c582631513ccdd097e0a654cda44ec3dc), 
 and [Trino](https://github.com/trinodb/trino/pull/10228) are already integrated to use metadata based listing.
@@ -225,3 +285,6 @@ should not be user's responsibility to enable metadata listing from query engine
 - Partition-level storage strategy: Each partition can have its own storage strategy for users to have
 finer grasp on how data is stored. It would also make new storage strategies more accessible for
 existing Hudi tables as they would only need to re-construct the metadata table.
+- For the first cut, we would only have 2 `FileSystem` objects in `HoodieWrapperFileSystem`, and this
+prevents users from distributing their data across multiple different buckets. We'll need to support
+this in the future.
