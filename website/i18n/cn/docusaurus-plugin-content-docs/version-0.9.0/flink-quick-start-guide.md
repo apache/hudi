@@ -307,7 +307,7 @@ select * from t1;
 :::note
 1. 索引加载是阻塞式，所以在索引加载过程中 Checkpoint 无法完成
 2. 索引加载由数据流触发，需要确保每个 partition 都至少有1条数据，即上游 source 有数据进来
-3. 索引加载为并发加载，根据数据量大小加载时间不同，可以在log中搜索 `finish loading the index under partition` 和 `Load record form file` 日志内容来观察索引加载的进
+3. 索引加载为并发加载，根据数据量大小加载时间不同，可以在log中搜索 `finish loading the index under partition` 和 `Load record form file` 日志内容来观察索引加载的进度
 4. 第一次 Checkpoint 成功就表示索引已经加载完成，后续从 Checkpoint 恢复时无需再次加载索引
 :::
 
