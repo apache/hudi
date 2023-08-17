@@ -223,6 +223,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       );
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
+        table.getMetaClient().reloadActiveTimeline();
+        if (table.getCleanTimeline().filterCompletedInstants().containsInstant(inflightInstant.getTimestamp())) {
+          return null;
+        }
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
@@ -260,7 +264,12 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         } else {
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
           try {
-            cleanMetadataList.add(runPendingClean(table, hoodieInstant));
+            HoodieCleanMetadata finishedCleanMetadata = runPendingClean(table, hoodieInstant);
+            if (finishedCleanMetadata != null) {
+              cleanMetadataList.add(finishedCleanMetadata);
+            } else {
+              LOG.warn("Clean completed by ");
+            }
           } catch (Exception e) {
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
             throw e;
