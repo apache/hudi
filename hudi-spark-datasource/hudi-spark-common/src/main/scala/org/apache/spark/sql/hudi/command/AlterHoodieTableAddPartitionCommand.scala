@@ -28,6 +28,8 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, HoodieCatal
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{makePartitionPath, normalizePartitionSpec}
 
+import scala.util.control.NonFatal
+
 case class AlterHoodieTableAddPartitionCommand(
    tableIdentifier: TableIdentifier,
    partitionSpecsAndLocs: Seq[(TablePartitionSpec, Option[String])],
@@ -75,10 +77,15 @@ case class AlterHoodieTableAddPartitionCommand(
     }.unzip
     partitionMetadata.flatten.foreach(_.trySave(0))
 
-    // Sync new partitions in batch, enable ignoreIfExists to avoid sync failure.
+    // Sync new partitions in batch, enable ignoreIfExists to be silent for existing partitions.
     val batchSize = sparkSession.sparkContext.conf.getInt("spark.sql.addPartitionInBatch.size", 100)
-    parts.toIterator.grouped(batchSize).foreach { batch =>
-      catalog.createPartitions(tableIdentifier, batch, ignoreIfExists = true)
+    try {
+      parts.toIterator.grouped(batchSize).foreach { batch =>
+        catalog.createPartitions(tableIdentifier, batch, ignoreIfExists = true)
+      }
+    } catch {
+      case NonFatal(e) =>
+        logWarning("Failed to add partitions in external catalog", e)
     }
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
 
