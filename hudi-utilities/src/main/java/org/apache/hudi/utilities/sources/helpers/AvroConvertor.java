@@ -42,6 +42,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.getKafkaKey;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -171,16 +172,16 @@ public class AvroConvertor implements Serializable {
    */
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
-    GenericRecord record = (GenericRecord) consumerRecord.value();
+    GenericRecord recordValue = (GenericRecord) consumerRecord.value();
     GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
-    for (Schema.Field field :  record.getSchema().getFields()) {
-      recordBuilder.set(field, record.get(field.name()));
+    for (Schema.Field field :  recordValue.getSchema().getFields()) {
+      recordBuilder.set(field, recordValue.get(field.name()));
     }
-    
+    String recordKey = getKafkaKey(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, String.valueOf(consumerRecord.key()));
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, recordKey);
     return recordBuilder.build();
   }
 

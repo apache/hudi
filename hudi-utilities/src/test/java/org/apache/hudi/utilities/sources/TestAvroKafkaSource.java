@@ -62,6 +62,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
@@ -165,7 +166,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     JavaRDD<ConsumerRecord<Object, Object>> rddNullKafkaKey = jsc().parallelize(Arrays.asList(recordConsumerRecordNullKafkaKey));
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
     GenericRecord withKafkaOffsetsAndNullKafkaKey = avroKafkaSource.maybeAppendKafkaOffsets(rddNullKafkaKey).collect().get(0);
-    assertEquals("null",String.valueOf(withKafkaOffsetsAndNullKafkaKey.get("_hoodie_kafka_source_key")));
+    assertNull(withKafkaOffsetsAndNullKafkaKey.get("_hoodie_kafka_source_key"));
   }
 
   @Test
@@ -211,7 +212,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     SourceFormatAdapter kafkaSourceWithNullKafkaKey = new SourceFormatAdapter(avroKafkaSourceWithNullKafkaKey);
     Dataset<Row> nullKafkaKeyDataset = kafkaSourceWithNullKafkaKey.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
             .getBatch().get();
-    assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key='null'").count());
+    assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key is null").count());
 
   }
 }

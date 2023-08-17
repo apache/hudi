@@ -479,4 +479,19 @@ public class KafkaOffsetGen {
     }
     return fromOffsets;
   }
+
+  /**
+   * get null safe kafka key from kafka key object
+   * @param kafkaKeyObject kafka key object
+   * @return kafka key
+   */
+  public static String getKafkaKey(Object kafkaKeyObject) {
+    String recordKey = null;
+    try {
+      recordKey = kafkaKeyObject.toString();
+    } catch (NullPointerException npe) {
+      LOG.debug("null kafka key from message");
+    }
+    return recordKey;
+  }
 }
