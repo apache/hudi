@@ -199,35 +199,33 @@ for metadata table to be populated.
 This section mainly describes how storage strategy is integrated with other components and how read/write
 would look like from Hudi side with object storage layout.
 
-Where to plug in storage strategy is a crucial problem. We think it would be best to put storage strategy 
-at filesystem level, in `HoodieWrapperFileSystem` specifically, so only when files are being 
-read/written would the path be converted on the fly. 
-By doing that, we can limit the usage of storage strategy to only filesystem level so other upper-level 
-components don't need to be aware of physical paths.
+We propose integrating the storage strategy at the filesystem level, specifically within `HoodieWrapperFileSystem`. 
+This way, only file read/write operations undergo path conversion and we can limit the usage of 
+storage strategy to only filesystem level so other upper-level components don't need to be aware of physical paths.
 
-This would also mean `HoodieWrapperFileSystem` has to be THE filesystem to use for all upper-level Hudi components.
+This also mandates that `HoodieWrapperFileSystem` is the filesystem of choice for all upper-level Hudi components.
 Getting filesystem from `Path` or such won't be allowed anymore as using raw filesystem may not reach 
-to physical locations without storage strategy. Hudi components can 
-simply call `HoodieMetaClient#getFs` to get `HoodieWrapperFileSystem`, 
-and this needs to be the only allowed way for any filesystem-related operation. The only exception is 
-when we need to interact with metadata that's still stored under the original table path, and we
-should call `HoodieMetaClient#getRawFs` in this case so `HoodieMetaClient` can still be the single entry
+to physical locations without storage strategy. Hudi components can simply call `HoodieMetaClient#getFs` 
+to get `HoodieWrapperFileSystem`, and this needs to be the only allowed way for any filesystem-related operation. 
+The only exception is when we need to interact with metadata that's still stored under the original table path, 
+and we should call `HoodieMetaClient#getRawFs` in this case so `HoodieMetaClient` can still be the single entry
 for getting filesystem.
 
 ![](wrapper_fs.png)
 
-When Hudi handles a read operation, it would first go to filesystem view, `HoodieMetadataFileSystemView` specifically,
-and filesystem view would scan metadata table to compose `HoodieMetadataPayload` and then call `getFileStatuses`
-on it. After that, `HoodieMetadataPayload` would use `HoodieWrapperFileSystem` to get `FileStatus` so a
-`FileStatus` with physical location can be returned eventually. This flow can be concluded in the chart
-below.
+When conducting a read operation, Hudi would first access filesystem view, `HoodieMetadataFileSystemView` specifically,
+and filesystem view would scan metadata table to compose `HoodieMetadataPayload`, which subsequently calls `getFileStatuses`
+on it. After that, `HoodieMetadataPayload` would employ `HoodieWrapperFileSystem` to retrieve `FileStatus` with physical location. 
+This flow can be concluded in the chart below.
 
 ![](read_flow.png)
 
 #### Considerations
+- Path conversion happens on the fly when reading/writing files. This saves Hudi from storing physical locations
+but it also means extra performance burden, even though it may be negligible.
 - Since table path and data path will most likely have different top-level folders/authorities,
 `HoodieWrapperFileSystem` should maintain at least two `FileSystem` objects: one to access table path and another
-to access storage path. `HoodieWrapperFileSystem` should be intelligent enough to tell if it needs
+to access storage path. `HoodieWrapperFileSystem` should intelligently tell if it needs
 to convert the path by checking the path on the fly.
 - When using Hudi file reader/writer implementation, we will need to pass `HoodieWrapperFileSystem` down
 to parent reader. For instance, when using `HoodieAvroHFileReader`, we will need to pass `HoodieWrapperFileSystem`
