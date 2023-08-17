@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
@@ -77,7 +78,9 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
 
   @Override
   public void shutdownNow() {
-    // no-op
+    if (itr instanceof ClosableIterator) {
+      ((ClosableIterator<I>) itr).close();
+    }
   }
 
   @Override
