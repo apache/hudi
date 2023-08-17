@@ -157,6 +157,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         baseFileReader.close();
         mergeHandle.close();
       }
+
+      if (baseFileReader != null) {
+        baseFileReader.close();
+      }
     }
   }
 
