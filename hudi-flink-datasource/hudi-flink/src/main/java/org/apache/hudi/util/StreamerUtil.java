@@ -312,7 +312,7 @@ public class StreamerUtil {
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
-      if (fs.exists(metaPath)) {
+      if (fs.exists(new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
         return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
       }
     } catch (IOException e) {
