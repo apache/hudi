@@ -24,12 +24,16 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.spark.SparkException;
@@ -58,7 +62,9 @@ import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString
 import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test mor with colstats enabled in scenarios to ensure that files
@@ -129,7 +135,19 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatches() {
-    testBaseFileAndLogFileUpdateMatchesHelper(false, false, false);
+    testBaseFileAndLogFileUpdateMatchesHelper(false, false,false, false);
+  }
+
+  /**
+   * Create two base files, One base file doesn't match the condition
+   * Then add a log file so that both file groups match
+   * Then do a compaction
+   * Now you have two base files that match
+   * both file groups must be read
+   */
+  @Test
+  public void testBaseFileAndLogFileUpdateMatchesDoCompaction() {
+    testBaseFileAndLogFileUpdateMatchesHelper(false, true,false, false);
   }
 
   /**
@@ -142,7 +160,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesAsyncCompact() {
-    testBaseFileAndLogFileUpdateMatchesHelper(true, false, false);
+    testBaseFileAndLogFileUpdateMatchesHelper(true, false,false, false);
   }
 
   /**
@@ -153,7 +171,19 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesDeleteBlock() {
-    testBaseFileAndLogFileUpdateMatchesHelper(false, true, false);
+    testBaseFileAndLogFileUpdateMatchesHelper(false, false,true, false);
+  }
+
+  /**
+   * Create two base files, One base file doesn't match the condition
+   * Then add a log file so that both file groups match the condition
+   * Then add a delete for that record so that the file group no longer matches the condition
+   * Then compact
+   * Only the first file group needs to be read
+   */
+  @Test
+  public void testBaseFileAndLogFileUpdateMatchesDeleteBlockCompact() {
+    testBaseFileAndLogFileUpdateMatchesHelper(false, true,true, false);
   }
 
   /**
@@ -162,19 +192,33 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    * Then delete the deltacommit and write the original value for the
    *    record so that a rollback is triggered and the file group no
    *    longer matches the condition
-   * Rollback should still happen because
+   * both filegroups should be read
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesAndRollBack() {
-    testBaseFileAndLogFileUpdateMatchesHelper(false, false, true);
+    testBaseFileAndLogFileUpdateMatchesHelper(false, false,false, true);
+  }
+
+
+  /**
+   * Create two base files, One base file doesn't match the condition
+   * Then add a log file so that both file groups match the condition
+   * Then delete the deltacommit and write the original value for the
+   *    record so that a rollback is triggered and the file group no
+   *    longer matches the condition
+   * Do Compaction
+   * Only 1 filegroup should be read
+   */
+  @Test
+  public void testBaseFileAndLogFileUpdateMatchesAndRollBackCompact() {
+    testBaseFileAndLogFileUpdateMatchesHelper(false, true,false, true);
   }
 
   /**
-   * Test where one filegroup doesn't match the condition, then update so both filegroups match,
-   * finally, add another update so that the file group doesn't match again
-   * In all three cases, dataskipping should not exclude the filegroup
+   * Test where one filegroup doesn't match the condition, then update so both filegroups match
    */
   private void testBaseFileAndLogFileUpdateMatchesHelper(Boolean shouldAsyncCompact,
+                                                         Boolean shouldExecuteCompaction,
                                                          Boolean shouldDelete,
                                                          Boolean shouldRollback) {
     Dataset<Row> inserts = makeInsertDf("000", 100);
@@ -202,10 +246,23 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
       assertEquals(0, readMatchingRecords().except(batch1.union(updatedRecord)).count());
     }
 
-    //Corrupt to prove that colstats does not exclude filegroup
-    filesToCorrupt.forEach(TestMORColstats::corruptFile);
-    assertEquals(1, filesToCorrupt.size());
-    assertThrows(SparkException.class, () -> readMatchingRecords().count());
+    if (shouldExecuteCompaction) {
+      doCompaction();
+      filesToCorrupt = getFilesToCorrupt();
+      filesToCorrupt.forEach(TestMORColstats::corruptFile);
+      if (shouldDelete || shouldRollback) {
+        //we corrupt both files in the fg
+        assertEquals(2, filesToCorrupt.size());
+        assertEquals(0, readMatchingRecords().except(batch1).count());
+      } else {
+        assertEquals(0, filesToCorrupt.size());
+      }
+    } else {
+      //Corrupt to prove that colstats does not exclude filegroup
+      filesToCorrupt.forEach(TestMORColstats::corruptFile);
+      assertEquals(1, filesToCorrupt.size());
+      assertThrows(SparkException.class, () -> readMatchingRecords().count());
+    }
   }
 
   /**
@@ -283,10 +340,10 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     return options;
   }
 
-  private void scheduleAsyncCompaction() {
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath.toString())
+  private HoodieWriteConfig getConfig(Boolean withAutoCommit) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath.toString())
         .withRollbackUsingMarkers(false)
-        .withAutoCommit(false)
+        .withAutoCommit(withAutoCommit)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
@@ -296,8 +353,22 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
         .forTable("testTable")
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.scheduleCompactionAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
+  }
+
+  private String scheduleAsyncCompaction() {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(getConfig(false))) {
+      String instant = HoodieActiveTimeline.createNewInstantTime();
+      client.scheduleCompactionAtInstant(instant, Option.empty());
+      return instant;
+    }
+  }
+  private void doCompaction() {
+    executeCompaction(scheduleAsyncCompaction());
+  }
+
+  private void executeCompaction(String compactionInstantTime) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(getConfig(true))) {
+      client.compact(compactionInstantTime);
     }
   }
 
@@ -316,7 +387,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
   private List<Path> getFilesToCorrupt() {
     Set<String> fileNames = new HashSet<>();
     sparkSession.read().format("hudi").load(basePath.toString())
-            .where(nonMatchCond)
+            .where(matchCond)
             .select("_hoodie_file_name").distinct()
         .collectAsList().forEach(row -> {
           String fileName = row.getString(0);
@@ -331,7 +402,8 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
       return stream
           .filter(file -> !Files.isDirectory(file))
           .filter(file -> file.toString().contains(".parquet"))
-          .filter(file -> fileNames.contains(FSUtils.getFileId(file.getFileName().toString())))
+          .filter(file -> !file.toString().contains(".crc"))
+          .filter(file -> !fileNames.contains(FSUtils.getFileId(file.getFileName().toString())))
           .collect(Collectors.toList());
     } catch (IOException e) {
       throw new RuntimeException(e);
