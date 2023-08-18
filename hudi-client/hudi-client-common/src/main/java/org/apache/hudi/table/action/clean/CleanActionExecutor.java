@@ -223,10 +223,6 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       );
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
-        table.getMetaClient().reloadActiveTimeline();
-        if (table.getCleanTimeline().filterCompletedInstants().containsInstant(inflightInstant.getTimestamp())) {
-          return null;
-        }
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
@@ -264,15 +260,15 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         } else {
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
           try {
-            HoodieCleanMetadata finishedCleanMetadata = runPendingClean(table, hoodieInstant);
-            if (finishedCleanMetadata != null) {
-              cleanMetadataList.add(finishedCleanMetadata);
-            } else {
-              LOG.warn("Clean completed by ");
-            }
+            cleanMetadataList.add(runPendingClean(table, hoodieInstant));
           } catch (Exception e) {
-            LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
-            throw e;
+            table.getMetaClient().reloadActiveTimeline();
+            if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.getTimestamp())) {
+              LOG.warn("Clean operation was completed by another writer for instant: " + hoodieInstant);
+            } else {
+              LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+              throw e;
+            }
           }
         }
         table.getMetaClient().reloadActiveTimeline();
