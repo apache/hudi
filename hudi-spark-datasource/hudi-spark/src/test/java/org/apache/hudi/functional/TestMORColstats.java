@@ -345,7 +345,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
-            .withColumnStatsIndexForColumns("trip_types").build())
+            .withColumnStatsIndexForColumns("trip_type").build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .forTable("testTable")
