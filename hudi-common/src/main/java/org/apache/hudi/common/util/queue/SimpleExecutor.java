@@ -81,6 +81,7 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
     if (itr instanceof ClosableIterator) {
       ((ClosableIterator<I>) itr).close();
     }
+    consumer.finish();
   }
 
   @Override

@@ -175,26 +175,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf()));
     // Read the content
     HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(getSchemaFromHeader()));
-
-    ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator = reader.getRecordIterator(readerSchema);
-    ClosableIterator<HoodieRecord<IndexedRecord>> iterator = new ClosableIterator<HoodieRecord<IndexedRecord>>() {
-      @Override
-      public void close() {
-        recordIterator.close();
-        reader.close();
-      }
-
-      @Override
-      public boolean hasNext() {
-        return recordIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord<IndexedRecord> next() {
-        return recordIterator.next();
-      }
-    };
-    return unsafeCast(iterator);
+    return unsafeCast(reader.getRecordIterator(readerSchema));
   }
 
   // TODO abstract this w/in HoodieDataBlock
@@ -212,7 +193,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    HoodieAvroHFileReader reader =
+    final HoodieAvroHFileReader reader =
              new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),
              Option.of(getSchemaFromHeader()));
 
@@ -220,25 +201,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
         fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
 
-    ClosableIterator<HoodieRecord<IndexedRecord>> iterator = new ClosableIterator<HoodieRecord<IndexedRecord>>() {
-      @Override
-      public void close() {
-        recordIterator.close();
-        reader.close();
-      }
-
-      @Override
-      public boolean hasNext() {
-        return recordIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord<IndexedRecord> next() {
-        return recordIterator.next();
-      }
-    };
-
-    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) data);
+    return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
   }
 
   private byte[] serializeRecord(HoodieRecord<?> record, Schema schema) throws IOException {

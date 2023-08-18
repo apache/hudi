@@ -47,4 +47,24 @@ public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
       }
     };
   }
+
+  static <E> ClosableIterator<E> wrap(ClosableIterator<E> iterator, Runnable postIteratorClose) {
+    return new ClosableIterator<E>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public E next() {
+        return iterator.next();
+      }
+
+      @Override
+      public void close() {
+        iterator.close();
+        postIteratorClose.run();
+      }
+    };
+  }
 }

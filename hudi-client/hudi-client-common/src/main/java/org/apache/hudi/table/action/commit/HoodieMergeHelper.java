@@ -118,12 +118,13 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
+        recordIterator = ClosableIterator.wrap((ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema),
+            bootstrapFileReader::close);
       } else {
         // In case writer's schema is simply a projection of the reader's one we can read
         // the records in the projected schema directly
         recordSchema = isPureProjection ? writerSchema : readerSchema;
-        recordIterator = baseFileReader.getRecordIterator(recordSchema);
+        recordIterator = ClosableIterator.wrap((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema), baseFileReader::close);
       }
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
@@ -155,11 +156,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         executor.awaitTermination();
       } else {
         baseFileReader.close();
+        if (bootstrapFileReader != null) {
+          bootstrapFileReader.close();
+        }
         mergeHandle.close();
-      }
-
-      if (baseFileReader != null) {
-        baseFileReader.close();
       }
     }
   }
