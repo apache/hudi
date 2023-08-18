@@ -24,16 +24,12 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.spark.SparkException;
@@ -59,12 +55,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test mor with colstats enabled in scenarios to ensure that files
@@ -217,8 +212,8 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
   /**
    * Test where one filegroup doesn't match the condition, then update so both filegroups match
    */
-  private void testBaseFileAndLogFileUpdateMatchesHelper(Boolean shouldAsyncCompact,
-                                                         Boolean shouldExecuteCompaction,
+  private void testBaseFileAndLogFileUpdateMatchesHelper(Boolean shouldScheduleCompaction,
+                                                         Boolean shouldInlineCompact,
                                                          Boolean shouldDelete,
                                                          Boolean shouldRollback) {
     Dataset<Row> inserts = makeInsertDf("000", 100);
@@ -226,9 +221,9 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     Dataset<Row> batch2 = inserts.where(nonMatchCond);
     doWrite(batch1);
     doWrite(batch2);
-    if (shouldAsyncCompact) {
+    if (shouldScheduleCompaction) {
       doWrite(inserts);
-      scheduleAsyncCompaction();
+      scheduleCompaction();
     }
     List<Path> filesToCorrupt = getFilesToCorrupt();
     assertEquals(1, filesToCorrupt.size());
@@ -237,24 +232,27 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     doWrite(updatedRecord);
     if (shouldRollback) {
       deleteLatestDeltacommit();
+      enableInlineCompaction(shouldInlineCompact);
       doWrite(recordToUpdate);
       assertEquals(0, readMatchingRecords().except(batch1).count());
     } else if (shouldDelete) {
+      enableInlineCompaction(shouldInlineCompact);
       doDelete(updatedRecord);
       assertEquals(0, readMatchingRecords().except(batch1).count());
     } else {
       assertEquals(0, readMatchingRecords().except(batch1.union(updatedRecord)).count());
     }
 
-    if (shouldExecuteCompaction) {
-      doCompaction();
+    if (shouldInlineCompact) {
       filesToCorrupt = getFilesToCorrupt();
       filesToCorrupt.forEach(TestMORColstats::corruptFile);
       if (shouldDelete || shouldRollback) {
-        //we corrupt both files in the fg
+        //filesToCorrupt includes all base files in the filegroup
         assertEquals(2, filesToCorrupt.size());
         assertEquals(0, readMatchingRecords().except(batch1).count());
       } else {
+        enableInlineCompaction(true);
+        doWrite(updatedRecord);
         assertEquals(0, filesToCorrupt.size());
       }
     } else {
@@ -281,14 +279,14 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    * Create two base files, One base file all records match the condition.
    * The other base file has one record that matches the condition.
    * Then add a log file for each filegroup that contains exactly the same records as the base file
-   * Then schedule an async compaction
+   * Then schedule a compaction
    * Then add a log file that makes that one matching record not match anymore.
    * The new log file is a member of a newer file slice
    * both file groups must be read even though no records from the second file slice
    * will pass the condition after mor merging
    */
   @Test
-  public void testBaseFileAndLogFileUpdateUnmatchesAsyncCompact() {
+  public void testBaseFileAndLogFileUpdateUnmatchesScheduleCompaction() {
     testBaseFileAndLogFileUpdateUnmatchesHelper(true);
   }
 
@@ -297,7 +295,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    * an update is added that makes the second filegroup no longer match
    * Dataskipping should not exclude the second filegroup
    */
-  private void testBaseFileAndLogFileUpdateUnmatchesHelper(Boolean shouldAsyncCompact) {
+  private void testBaseFileAndLogFileUpdateUnmatchesHelper(Boolean shouldScheduleCompaction) {
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> batch1 = inserts.where(matchCond);
     doWrite(batch1);
@@ -308,9 +306,9 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     Dataset<Row> initialRecordToMod = makeRecordMatch(recordToMod);
     Dataset<Row> modBatch2 = removeRecord(batch2, recordToMod).union(initialRecordToMod);
     doWrite(modBatch2);
-    if (shouldAsyncCompact) {
+    if (shouldScheduleCompaction) {
       doWrite(batch1.union(modBatch2));
-      scheduleAsyncCompaction();
+      scheduleCompaction();
     }
 
     //update batch2 so no matching records in the filegroup
@@ -340,10 +338,10 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     return options;
   }
 
-  private HoodieWriteConfig getConfig(Boolean withAutoCommit) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath.toString())
+  private void scheduleCompaction() {
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath.toString())
         .withRollbackUsingMarkers(false)
-        .withAutoCommit(withAutoCommit)
+        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
@@ -353,22 +351,8 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
         .forTable("testTable")
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
-  }
-
-  private String scheduleAsyncCompaction() {
-    try (SparkRDDWriteClient client = getHoodieWriteClient(getConfig(false))) {
-      String instant = HoodieActiveTimeline.createNewInstantTime();
-      client.scheduleCompactionAtInstant(instant, Option.empty());
-      return instant;
-    }
-  }
-  private void doCompaction() {
-    executeCompaction(scheduleAsyncCompaction());
-  }
-
-  private void executeCompaction(String compactionInstantTime) {
-    try (SparkRDDWriteClient client = getHoodieWriteClient(getConfig(true))) {
-      client.compact(compactionInstantTime);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      client.scheduleCompactionAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
     }
   }
 
@@ -486,5 +470,12 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
     File deltacommit = new File(metaClient.getBasePathV2() + "/.hoodie/" + filename);
     deltacommit.delete();
+  }
+
+  public void enableInlineCompaction(Boolean shouldEnable) {
+    if (shouldEnable) {
+      this.options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+      this.options.put(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
+    }
   }
 }
