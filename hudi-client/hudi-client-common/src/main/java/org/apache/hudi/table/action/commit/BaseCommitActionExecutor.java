@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -47,12 +48,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.cluster.ReplaceCommitValidateUtil;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
@@ -117,10 +120,20 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
-  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
+  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    saveWorkloadProfileMetadataToInflightWithMetadata(profile, instantTime, metadata);
+  }
+
+  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime, String extraDataKey, String extraDataValue) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(extraDataKey, extraDataValue);
+    saveWorkloadProfileMetadataToInflightWithMetadata(profile, instantTime, metadata);
+  }
+
+  void saveWorkloadProfileMetadataToInflightWithMetadata(WorkloadProfile profile, String instantTime, HoodieCommitMetadata metadata)
       throws HoodieCommitException {
     try {
-      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getOutputPartitionPaths().forEach(path -> {
         WorkloadStat partitionStat = profile.getOutputWorkloadStat(path);
         HoodieWriteStat insertStat = new HoodieWriteStat();
@@ -238,10 +251,23 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
-    // Mark instant as clustering inflight
-    table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
-    table.getMetaClient().reloadActiveTimeline();
+    try {
+      String[] fileIdArray = clusteringPlan.getInputGroups().stream()
+          .flatMap(group -> group.getSlices().stream())
+          .map(org.apache.hudi.avro.model.HoodieSliceInfo::getFileId)
+          .distinct()
+          .toArray(String[]::new);
 
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      metadata.addMetadata(ReplaceCommitValidateUtil.REPLACE_COMMIT_FILE_IDS, JsonUtils.getObjectMapper().writeValueAsString(fileIdArray));
+
+      // Mark instant as clustering inflight
+      table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+      ReplaceCommitValidateUtil.validateReplaceCommit(table.getMetaClient());
+    } catch (IOException e) {
+      throw new HoodieException("Getting the file id error during clustering");
+    }
     // Disable auto commit. Strategy is only expected to write data in new files.
     config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
 

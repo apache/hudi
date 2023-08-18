@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -35,6 +36,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.cluster.ReplaceCommitValidateUtil;
 
 import org.apache.hadoop.fs.Path;
 
@@ -73,6 +75,11 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
       result.setWriteStatuses(context.emptyHoodieData());
 
+      String[] fileIdArray = partitionToReplaceFileIds.values()
+          .stream()
+          .flatMap(List::stream)
+          .toArray(String[]::new);
+
       // created requested
       HoodieInstant dropPartitionsInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
       if (!table.getMetaClient().getFs().exists(new Path(table.getMetaClient().getMetaPath(),
@@ -86,7 +93,10 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       }
 
       this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
-          instantTime);
+          instantTime, ReplaceCommitValidateUtil.REPLACE_COMMIT_FILE_IDS, JsonUtils.getObjectMapper().writeValueAsString(fileIdArray));
+
+      ReplaceCommitValidateUtil.validateReplaceCommit(table.getMetaClient());
+
       this.commitOnAutoCommit(result);
       return result;
     } catch (Exception e) {

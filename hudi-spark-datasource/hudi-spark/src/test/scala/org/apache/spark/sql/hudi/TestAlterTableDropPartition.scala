@@ -24,12 +24,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
+
+import scala.jdk.CollectionConverters.seqAsJavaListConverter
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
@@ -618,6 +621,49 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+    }
+  }
+
+  test("Prevent clustering job conflicts that occur after deleting partitions but before committing the deletion.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}t/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(ts)
+           | location '$basePath'
+           | """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+      spark.sql("set hoodie.auto.commit=false")
+      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+
+      val deletePartitionInstant = HoodieActiveTimeline.createNewInstantTime
+      val partitions: List[String] = List("ts=1002")
+
+      // Schedule delete partition without committing.
+      client.deletePartitions(partitions.asJava, deletePartitionInstant)
+
+      val clusteringInstant = HoodieActiveTimeline.createNewInstantTime
+      client.scheduleClusteringAtInstant(clusteringInstant, HOption.empty())
+
+      // Prevent during the execution of the clustering plan.
+      val exception = intercept[HoodieException] {
+        client.cluster(clusteringInstant, true)
+      }
+      assertTrue(exception.getMessage.contains("REPLACECOMMIT involves duplicate file ID"))
     }
   }
 }
