@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
@@ -42,7 +43,6 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
-import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.getKafkaKey;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -177,7 +177,7 @@ public class AvroConvertor implements Serializable {
     for (Schema.Field field :  recordValue.getSchema().getFields()) {
       recordBuilder.set(field, recordValue.get(field.name()));
     }
-    String recordKey = getKafkaKey(consumerRecord.key());
+    String recordKey = StringUtils.objToString(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
