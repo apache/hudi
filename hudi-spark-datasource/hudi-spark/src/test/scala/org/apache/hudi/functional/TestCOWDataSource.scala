@@ -256,6 +256,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       HoodieMetadataConfig.ENABLE.key -> "false"
     ) ++ writeOpts
     // this write should succeed even w/o setting any param for record key, partition path since table config will be re-used.
@@ -293,6 +294,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       HoodieMetadataConfig.ENABLE.key -> "false"
     )
     // this write should succeed even w/o though we don't set key gen explicitly.
@@ -329,6 +331,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       HoodieMetadataConfig.ENABLE.key -> "false"
     )
     // this write should succeed even w/o though we set key gen explicitly, its the default
