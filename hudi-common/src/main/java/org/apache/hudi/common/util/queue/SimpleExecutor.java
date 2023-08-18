@@ -78,10 +78,10 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
 
   @Override
   public void shutdownNow() {
+    // Consumer is already closed when the execution completes
     if (itr instanceof ClosableIterator) {
       ((ClosableIterator<I>) itr).close();
     }
-    consumer.finish();
   }
 
   @Override
