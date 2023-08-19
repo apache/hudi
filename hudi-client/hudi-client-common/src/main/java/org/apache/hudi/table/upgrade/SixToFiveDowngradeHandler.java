@@ -19,7 +19,6 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -55,7 +54,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
  * Since version 6 includes a new schema field for metadata table(MDT),
  * the MDT needs to be deleted during downgrade to avoid column drop error.
  * Also log block version was upgraded in version 6, therefore full compaction needs
- * to be completed during downgrade to avoid write failures.
+ * to be completed during downgrade to avoid both read and future compaction failures.
  */
 public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
@@ -65,6 +64,7 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
     // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
     HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    // The log block version has been upgraded in version six so compaction is required for downgrade.
     runCompaction(table, context, config, upgradeDowngradeHelper);
 
     syncCompactionRequestedFileToAuxiliaryFolder(table);
@@ -85,7 +85,6 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
                              SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     try {
       if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-        // The log block version has been upgraded in version six so compaction is required for downgrade.
         // set required configs for scheduling compaction.
         HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
         HoodieWriteConfig compactionConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
@@ -94,7 +93,6 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
         compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
         compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
         compactionConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
-        EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, config);
         BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context);
         Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
         if (compactionInstantOpt.isPresent()) {
