@@ -22,25 +22,30 @@ import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
 
-  Seq(true, false).foreach {readFromPath =>
-    test(s"Get partition values from path: $readFromPath") {
-      withSQLConf("hoodie.datasource.read.extract.partition.values.from.path" -> readFromPath.toString) {
-        withTable(generateTableName) { tableName =>
-          spark.sql(
-            s"""
-               |create table $tableName (
-               | id int,
-               | name string,
-               | region string,
-               | dt date
-               |) using hudi
-               |tblproperties (primaryKey = 'id', type='mor')
-               |partitioned by (region, dt)""".stripMargin)
-          spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-08-01') select 1, 'name1'")
+  Seq(true, false).foreach { hiveStylePartitioning =>
+    Seq(true, false).foreach {readFromPath =>
+      test(s"Get partition values from path: $readFromPath, isHivePartitioning: $hiveStylePartitioning") {
+        withSQLConf("hoodie.datasource.read.extract.partition.values.from.path" -> readFromPath.toString) {
+          withTable(generateTableName) { tableName =>
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 | id int,
+                 | name string,
+                 | region string,
+                 | dt date
+                 |) using hudi
+                 |tblproperties (
+                 | primaryKey = 'id',
+                 | type='mor',
+                 | hoodie.datasource.write.hive_style_partitioning='$hiveStylePartitioning')
+                 |partitioned by (region, dt)""".stripMargin)
+            spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-08-01') select 1, 'name1'")
 
-          checkAnswer(s"select id, name, region, cast(dt as string) from $tableName")(
-            Seq(1, "name1", "reg1", "2023-08-01")
-          )
+            checkAnswer(s"select id, name, region, cast(dt as string) from $tableName")(
+              Seq(1, "name1", "reg1", "2023-08-01")
+            )
+          }
         }
       }
     }
