@@ -1051,16 +1051,22 @@ public class HoodieWrapperFileSystem extends FileSystem {
         throw new HoodieIOException(errorMsg, e);
       }
 
+      boolean renameSuccess = false;
       try {
         if (null != tmpPath) {
-          boolean renameSuccess = fileSystem.rename(tmpPath, fullPath);
-          if (!renameSuccess) {
-            fileSystem.delete(tmpPath, false);
-            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath + ", target file exists: " + fileSystem.exists(fullPath));
-          }
+          renameSuccess = fileSystem.rename(tmpPath, fullPath);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
+      } finally {
+        if (!renameSuccess && null != tmpPath) {
+          try {
+            fileSystem.delete(tmpPath, false);
+            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath + ", target file exists: " + fileSystem.exists(fullPath));
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
+          }
+        }
       }
     }
   }
