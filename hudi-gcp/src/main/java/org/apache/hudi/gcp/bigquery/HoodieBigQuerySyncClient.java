@@ -50,6 +50,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
@@ -163,15 +164,23 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
    * @param tableName name of the table in BigQuery
    * @param schema latest schema for the table
    */
-  public void updateTableSchema(String tableName, Schema schema) {
+  public void updateTableSchema(String tableName, Schema schema, List<String> partitionFields) {
     Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
     ExternalTableDefinition definition = existingTable.getDefinition();
-    if (definition.getSchema() != null && definition.getSchema().equals(schema)) {
+    Schema remoteTableSchema = definition.getSchema();
+    // Add the partition fields into the schema to avoid conflicts while updating
+    List<Field> updatedTableFields = remoteTableSchema.getFields().stream()
+        .filter(field -> partitionFields.contains(field.getName()))
+        .collect(Collectors.toList());
+    updatedTableFields.addAll(schema.getFields());
+    Schema finalSchema = Schema.of(updatedTableFields);
+    if (definition.getSchema() != null && definition.getSchema().equals(finalSchema)) {
       return; // No need to update schema.
     }
     Table updatedTable = existingTable.toBuilder()
-        .setDefinition(definition.toBuilder().setSchema(schema).setAutodetect(false).build())
+        .setDefinition(definition.toBuilder().setSchema(finalSchema).setAutodetect(false).build())
         .build();
+
     bigquery.update(updatedTable);
   }
 

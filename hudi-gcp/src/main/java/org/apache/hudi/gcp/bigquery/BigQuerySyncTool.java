@@ -73,18 +73,19 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   }
 
   @VisibleForTesting // allows us to pass in mocks for the writer and client
-  BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient bqSyncClient, HoodieTableMetaClient metaClient, BigQuerySchemaResolver bqSchemaResolver) {
+  BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient providedBqSyncClient, HoodieTableMetaClient providedMetaClient,
+                   BigQuerySchemaResolver providedBqSchemaResolver) {
     super(properties);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
     this.manifestTableName = tableName + "_manifest";
     this.versionsTableName = tableName + "_versions";
     this.snapshotViewName = tableName;
-    this.bqSyncClient = bqSyncClient == null ? new HoodieBigQuerySyncClient(config) : bqSyncClient;
+    this.bqSyncClient = providedBqSyncClient == null ? new HoodieBigQuerySyncClient(config) : providedBqSyncClient;
     // reuse existing meta client if not provided (only test cases will provide their own meta client)
-    this.metaClient = metaClient == null ? bqSyncClient.getMetaClient() : metaClient;
+    this.metaClient = providedMetaClient == null ? bqSyncClient.getMetaClient() : providedMetaClient;
     this.manifestFileWriter = manifestFileWriter == null ? buildManifestFileWriterFromConfig(metaClient, config) : manifestFileWriter;
-    this.bqSchemaResolver = bqSchemaResolver == null ? BigQuerySchemaResolver.getInstance() : bqSchemaResolver;
+    this.bqSchemaResolver = providedBqSchemaResolver == null ? BigQuerySchemaResolver.getInstance() : providedBqSchemaResolver;
   }
 
   private static ManifestFileWriter buildManifestFileWriterFromConfig(HoodieTableMetaClient metaClient, BigQuerySyncConfig config) {
@@ -135,7 +136,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
             latestSchema);
         LOG.info("Completed table " + tableName + " creation using the manifest file");
       } else {
-        bqSyncClient.updateTableSchema(tableName, latestSchema);
+        bqSyncClient.updateTableSchema(tableName, latestSchema, partitionFields);
         LOG.info("Synced schema for " + tableName);
       }
 

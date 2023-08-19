@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -111,10 +112,11 @@ public class TestBigQuerySyncTool {
     when(mockBqSyncClient.tableExists(TEST_TABLE)).thenReturn(true);
     Path manifestPath = new Path("file:///local/path");
     when(mockManifestFileWriter.getManifestSourceUri(true)).thenReturn(manifestPath.toUri().getPath());
-    when(mockBqSchemaResolver.getTableSchema(any(), eq(Arrays.asList("datestr", "type")))).thenReturn(schema);
+    List<String> partitionFields = Arrays.asList("datestr", "type");
+    when(mockBqSchemaResolver.getTableSchema(any(), eq(partitionFields))).thenReturn(schema);
     BigQuerySyncTool tool = new BigQuerySyncTool(properties, mockManifestFileWriter, mockBqSyncClient, mockMetaClient, mockBqSchemaResolver);
     tool.syncHoodieTable();
-    verify(mockBqSyncClient).updateTableSchema(TEST_TABLE, schema);
+    verify(mockBqSyncClient).updateTableSchema(TEST_TABLE, schema, partitionFields);
     verify(mockManifestFileWriter).writeManifestFile(true);
   }
 
@@ -129,7 +131,7 @@ public class TestBigQuerySyncTool {
     when(mockBqSchemaResolver.getTableSchema(any(), eq(Collections.emptyList()))).thenReturn(schema);
     BigQuerySyncTool tool = new BigQuerySyncTool(properties, mockManifestFileWriter, mockBqSyncClient, mockMetaClient, mockBqSchemaResolver);
     tool.syncHoodieTable();
-    verify(mockBqSyncClient).updateTableSchema(TEST_TABLE, schema);
+    verify(mockBqSyncClient).updateTableSchema(TEST_TABLE, schema, Collections.emptyList());
     verify(mockManifestFileWriter).writeManifestFile(true);
   }
 }
