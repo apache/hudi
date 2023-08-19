@@ -158,6 +158,11 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     }
   }
 
+  /**
+   * Updates the schema for the given table if the schema has changed.
+   * @param tableName name of the table in BigQuery
+   * @param schema latest schema for the table
+   */
   public void updateTableSchema(String tableName, Schema schema) {
     Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
     ExternalTableDefinition definition = existingTable.getDefinition();

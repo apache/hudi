@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Extracts the BigQuery schema from a Hudi table.
+ */
 class BigQuerySchemaResolver {
   private static final BigQuerySchemaResolver INSTANCE = new BigQuerySchemaResolver(TableSchemaResolver::new);
 
@@ -30,6 +33,13 @@ class BigQuerySchemaResolver {
     return INSTANCE;
   }
 
+  /**
+   * Get the BigQuery schema for the table. If the BigQuery table is configured with partitioning, the caller must pass in the partition fields so that they are not returned in the schema.
+   * If the partition fields are in the schema, it will cause an error when querying the table since BigQuery will treat it as a duplicate column.
+   * @param metaClient Meta client for the Hudi table
+   * @param partitionFields The fields that are used for partitioning in BigQuery
+   * @return The BigQuery schema for the table
+   */
   Schema getTableSchema(HoodieTableMetaClient metaClient, List<String> partitionFields) {
     try {
       Schema schema = convertSchema(tableSchemaResolverSupplier.apply(metaClient).getTableAvroSchema());
@@ -43,6 +53,11 @@ class BigQuerySchemaResolver {
     }
   }
 
+  /**
+   * Converts a BigQuery schema to the string representation used in the BigQuery SQL command to create the manifest based table.
+   * @param schema The BigQuery schema
+   * @return The string representation of the schema
+   */
   public static String schemaToSqlString(Schema schema) {
     return fieldsToSqlString(schema.getFields());
   }
@@ -65,6 +80,7 @@ class BigQuerySchemaResolver {
     }).collect(Collectors.joining(", "));
   }
 
+  @VisibleForTesting
   Schema convertSchema(org.apache.avro.Schema schema) {
     return Schema.of(getFields(schema));
   }

@@ -47,6 +47,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieBigQuerySyncClient {
+  private static final String PROJECT_ID = "test_project";
   private static final String MANIFEST_FILE_URI = "file:/manifest_file";
   private static final String SOURCE_PREFIX = "file:/manifest_file/date=*";
   private static final String TEST_TABLE = "test_table";
@@ -71,6 +72,7 @@ public class TestHoodieBigQuerySyncClient {
   @BeforeEach
   void setup() {
     Properties properties = new Properties();
+    properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID.key(), PROJECT_ID);
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME.key(), TEST_DATASET);
     properties.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), tempDir.toString());
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
