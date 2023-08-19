@@ -30,7 +30,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isHoodieConfigKey
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{extractHoodieConfig, isHoodieConfigKey}
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
@@ -56,7 +56,7 @@ object HoodieCLIUtils {
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
       catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
-        sparkSession.sqlContext.getAllConfs.filterKeys(isHoodieConfigKey) ++
+        extractHoodieConfig(sparkSession.sqlContext.getAllConfs) ++
         conf
     )
 

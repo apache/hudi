@@ -224,6 +224,17 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
 
   /**
+   * Extract hoodie config from conf using prefix "spark.hoodie." and "hoodie.".
+   */
+  def extractHoodieConfig(conf: Map[String, String]): Map[String, String] = {
+    conf.collect {
+      case (key, value) if key.startsWith("spark.") =>
+        (key.stripPrefix("spark."), value)
+      case other => other
+    }.filter(kv => isHoodieConfigKey(kv._1))
+  }
+
+  /**
    * Checks whether Spark is using Hive as Session's Catalog
    */
   def isUsingHiveCatalog(sparkSession: SparkSession): Boolean =
