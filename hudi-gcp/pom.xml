@@ -84,6 +84,12 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+    </dependency>
+
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
