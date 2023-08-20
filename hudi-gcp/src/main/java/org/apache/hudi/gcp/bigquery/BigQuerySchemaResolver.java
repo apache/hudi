@@ -119,7 +119,8 @@ class BigQuerySchemaResolver {
           standardSQLTypeName = StandardSQLTypeName.TIME;
         } else if (logicalType.equals(LogicalTypes.timestampMillis()) || logicalType.equals(LogicalTypes.timestampMicros())) {
           standardSQLTypeName = StandardSQLTypeName.TIMESTAMP;
-        } else if (logicalType.equals(LogicalTypes.localTimestampMillis()) || logicalType.equals(LogicalTypes.localTimestampMicros())) {
+          // Due to older avro support, we need to use strings for local timestamp logical types
+        } else if (logicalType.getName().equals("local-timestamp-millis") || logicalType.getName().equals("local-timestamp-micros")) {
           standardSQLTypeName = StandardSQLTypeName.INT64;
         } else {
           throw new IllegalArgumentException("Unexpected logical type in schema: " + logicalType);
