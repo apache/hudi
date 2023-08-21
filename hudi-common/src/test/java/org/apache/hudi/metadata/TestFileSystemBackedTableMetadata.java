@@ -83,7 +83,7 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
    * @throws Exception
    */
   @Test
-  public void testDatePartitionedTableWithAssumeDateIsFalse() throws Exception {
+  public void testDatePartitionedTable() throws Exception {
     String instant = "100";
     hoodieTestTable = hoodieTestTable.addCommit(instant);
     // Generate 10 files under each partition
