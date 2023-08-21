@@ -42,7 +42,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
@@ -75,7 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
  * {@link HoodieMetadataFileSystemView} on the timeline server.
  */
-public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestHarness {
+public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
   @BeforeEach

@@ -20,6 +20,7 @@ package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -42,7 +43,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -269,5 +272,25 @@ public class ConsistentBucketIndexUtils {
       }
     }
     return false;
+  }
+
+  /**
+   * Initialize fileIdPfx for each data partition. Specifically, the following fields is constructed:
+   * - fileIdPfxList: the Nth element corresponds to the Nth data partition, indicating its fileIdPfx
+   * - partitionToFileIdPfxIdxMap (return value): (table partition) -> (fileIdPfx -> idx) mapping
+   *
+   * @param partitionToIdentifier Mapping from table partition to bucket identifier
+   */
+  public static Map<String, Map<String, Integer>> generatePartitionToFileIdPfxIdxMap(Map<String, ConsistentBucketIdentifier> partitionToIdentifier) {
+    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = new HashMap(partitionToIdentifier.size() * 2);
+    int count = 0;
+    for (ConsistentBucketIdentifier identifier : partitionToIdentifier.values()) {
+      Map<String, Integer> fileIdPfxToIdx = new HashMap();
+      for (ConsistentHashingNode node : identifier.getNodes()) {
+        fileIdPfxToIdx.put(node.getFileIdPrefix(), count++);
+      }
+      partitionToFileIdPfxIdxMap.put(identifier.getMetadata().getPartitionPath(), fileIdPfxToIdx);
+    }
+    return partitionToFileIdPfxIdxMap;
   }
 }

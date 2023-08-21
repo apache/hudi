@@ -23,7 +23,7 @@ import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters.mapAsJavaMapConverter
 
 class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
-  override val handlingMode: HollowCommitHandling = USE_STATE_TRANSITION_TIME
+  override val handlingMode: HollowCommitHandling = USE_TRANSITION_TIME
 
   private val dataGen = new HoodieTestDataGenerator(System.currentTimeMillis())
 

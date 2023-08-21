@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.functional;
+package org.apache.hudi.functional;
 
 import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.WriteStatus;
@@ -50,23 +50,26 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -79,14 +82,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
-import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 
 @Tag("functional")
-public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness {
+public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
@@ -100,7 +103,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     initSparkContexts();
     initTestDataGenerator();
     initFileSystem();
-    Properties props = getPropertiesForKeyGen();
+    Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
@@ -130,18 +133,20 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
    * @throws IOException
    */
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testResizing(boolean isSplit) throws IOException {
+  @MethodSource("configParams")
+  public void testResizing(boolean isSplit, boolean rowWriterEnable) throws IOException {
     final int maxFileSize = isSplit ? 5120 : 128 * 1024 * 1024;
     final int targetBucketNum = isSplit ? 14 : 4;
     setup(maxFileSize);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    config.setValue("hoodie.metadata.enable", "false");
     writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTime, true);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-    Assertions.assertEquals(2000, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(2000, readRecords().size());
 
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
       HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, p).get();
@@ -160,14 +165,15 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
    * @throws IOException
    */
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testLoadMetadata(boolean isCommitFilePresent) throws IOException {
+  @MethodSource("configParams")
+  public void testLoadMetadata(boolean isCommitFilePresent, boolean rowWriterEnable) throws IOException {
     final int maxFileSize = 5120;
     final int targetBucketNum = 14;
     setup(maxFileSize);
     writeClient.getConfig().setValue(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
     writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4");
     writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    writeClient.getConfig().setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTime, true);
@@ -205,7 +211,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     });
     writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
     writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    Assertions.assertEquals(2080, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(2080, readRecords().size());
   }
 
   /**
@@ -287,9 +293,11 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
    * 1. If there is any ongoing writing, cannot schedule clustering
    * 2. If the clustering is scheduled, it cannot block incoming new writers
    */
-  @Test
-  public void testConcurrentWrite() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConcurrentWrite(boolean rowWriterEnable) throws IOException {
     setup(5120);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     String writeTime = HoodieActiveTimeline.createNewInstantTime();
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
@@ -303,16 +311,19 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     // Concurrent is not blocked by the clustering
     writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
     // The records are immediately visible when the writer completes
-    Assertions.assertEquals(4000, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(4000, readRecords().size());
     // Clustering finished, check the number of records (there will be file group switch in the background)
     writeClient.cluster(clusteringTime, true);
-    Assertions.assertEquals(4000, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(4000, readRecords().size());
   }
 
-  private List<GenericRecord> readRecords(String[] partitions) {
-    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
-        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath, new JobConf(hadoopConf), true, false);
+  private List<Row> readRecords() {
+    Dataset<Row> roViewDF = sparkSession
+        .read()
+        .format("hudi")
+        .load(basePath + "/*/*/*/*");
+    roViewDF.createOrReplaceTempView("hudi_ro_table");
+    return sparkSession.sqlContext().sql("select * from hudi_ro_table").collectAsList();
   }
 
   /**
@@ -337,7 +348,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     return writeStatues;
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
@@ -347,5 +358,14 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
         .forTable("test-trip-table")
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+  }
+
+  private static Stream<Arguments> configParams() {
+    return Stream.of(
+        Arguments.of(true, false),
+        Arguments.of(false, false),
+        Arguments.of(true, true),
+        Arguments.of(false, true)
+    );
   }
 }

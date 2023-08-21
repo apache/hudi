@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
-class CopyToTempView extends BaseProcedure with ProcedureBuilder with Logging {
+class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
@@ -102,13 +102,13 @@ class CopyToTempView extends BaseProcedure with ProcedureBuilder with Logging {
     Seq(Row(0))
   }
 
-  override def build = new CopyToTempView()
+  override def build = new CopyToTempViewProcedure()
 }
 
-object CopyToTempView {
+object CopyToTempViewProcedure {
   val NAME = "copy_to_temp_view"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new CopyToTempView()
+    override def get() = new CopyToTempViewProcedure()
   }
 }

@@ -23,6 +23,7 @@ import org.apache.hudi.SparkJdbcUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -107,6 +109,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
+
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Bunch of helper methods.
@@ -523,9 +528,10 @@ public class UtilHelpers {
       return provider;
     }
 
-    String schemaPostProcessorClass = cfg.getString(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key(), null);
-    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key(), "true"));
-
+    String schemaPostProcessorClass = getStringWithAltKeys(
+        cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR, true);
+    boolean enableSparkAvroPostProcessor =
+        getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
         && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
@@ -576,6 +582,12 @@ public class UtilHelpers {
         .setBasePath(basePath)
         .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
         .build();
+  }
+
+  public static void addLockOptions(String basePath, TypedProperties props) {
+    if (!props.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
+      props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
+    }
   }
 
   @FunctionalInterface

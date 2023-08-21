@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
@@ -51,6 +51,9 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -93,8 +96,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public Schema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
     try {
-      SchemaConverter converter = config.containsKey(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key())
-          ? ReflectionUtils.loadClass(config.getString(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key()))
+      String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER);
+      SchemaConverter converter = !StringUtils.isNullOrEmpty(schemaConverter)
+          ? ReflectionUtils.loadClass(schemaConverter)
           : s -> s;
       return new Schema.Parser().parse(converter.convert(schema));
     } catch (Exception e) {
@@ -155,7 +159,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
     if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
         || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
       setUpSSLStores();
@@ -187,7 +191,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
+    String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
       return parseSchemaFromRegistry(registryUrl);
     } catch (Exception e) {
@@ -197,8 +201,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
-    String targetRegistryUrl = config.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), registryUrl);
+    String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
+    String targetRegistryUrl =
+        getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (Exception e) {

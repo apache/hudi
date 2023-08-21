@@ -451,6 +451,48 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Create Table As Select For existing table path") {
+    val tableName1 = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName1 (
+         |  id int,
+         |  name string,
+         |  ts long
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         |)
+         |""".stripMargin)
+    val tableLocation = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName1)).location
+    spark.sql(s"drop table $tableName1")
+
+    val tableName2 = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName2 (
+         |  id int,
+         |  name string,
+         |  ts long
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         |)
+         |location '$tableLocation'
+     """.stripMargin)
+
+    checkExceptionContain(
+      s"""
+         |create table $tableName1
+         |using hudi
+         |as select * from $tableName2
+         |""".stripMargin
+    )("Can not create the managed table")
+    assertResult(true)(existsPath(tableLocation.toString))
+  }
+
   test("Test Create ro/rt Table In The Right Way") {
     withTempDir { tmp =>
       val parentPath = tmp.getCanonicalPath

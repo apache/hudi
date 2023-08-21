@@ -33,13 +33,14 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -143,8 +144,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
@@ -199,5 +200,11 @@ class Spark2Adapter extends SparkAdapter {
     }
 
     DataSourceStrategy.translateFilter(predicate)
+  }
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    val batch = new ColumnarBatch(vectors)
+    batch.setNumRows(numRows)
+    batch
   }
 }

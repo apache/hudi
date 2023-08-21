@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,7 +34,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -46,7 +46,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -73,13 +73,12 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY;
-import static org.apache.hudi.testutils.HoodieClientTestUtils.getPropertiesForKeyGen;
 
 /**
  * Test consistent hashing index
  */
 @Tag("functional")
-public class TestConsistentBucketIndex extends HoodieClientTestHarness {
+public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random(1);
   private HoodieIndex index;
@@ -229,8 +228,8 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     Assertions.assertEquals(numFilesCreated,
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
 
-    // BulkInsert again.
-    writeData(writeRecords, "002", WriteOperationType.BULK_INSERT,true);
+    // Upsert Data
+    writeData(writeRecords, "002", WriteOperationType.UPSERT,true);
     // The total number of file group should be the same, but each file group will have a log file.
     Assertions.assertEquals(numFilesCreated,
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
@@ -302,7 +301,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     }
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

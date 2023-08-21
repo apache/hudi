@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.api.java.function.MapPartitionsFunction;
@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests {@link BulkInsertPartitioner}s with Rows.
  */
-public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHarness {
+public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientTestHarness {
 
   private static final Comparator<Row> DEFAULT_KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + o.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)));

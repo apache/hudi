@@ -265,6 +265,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             ut.copy(table = relation)
+
+          case logicalPlan: LogicalPlan if logicalPlan.resolved =>
+            sparkAdapter.getCatalystPlanUtils.applyNewHoodieParquetFileFormatProjection(logicalPlan)
         }
       }
 

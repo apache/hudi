@@ -89,22 +89,21 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
           Seq(2, "a2", 20.0, 200)
         )
 
-        val errorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
-          "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
-            "columns are allowed on tables with primary key. (illegal column(s) used: `price`"
-        } else {
-          "Only simple conditions of the form `t.id = s.id` using primary key or partition path " +
-            "columns are allowed on tables with primary key. (illegal column(s) used: `price`;"
-        }
-
-        checkException(
+        spark.sql(
           s"""
              |merge into $tableName as oldData
              |using $tableName2
              |on oldData.id = $tableName2.id and oldData.price = $tableName2.price
              |when matched then update set oldData.name = $tableName2.name
              |when not matched then insert *
-             |""".stripMargin)(errorMessage)
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "u1", 10.0, 100),
+          Seq(2, "a2", 20.0, 200),
+          Seq(3, "u3", 20.0, 100),
+          Seq(4, "u4", 40.0, 99999)
+        )
 
         //test with multiple pks
         val tableName3 = generateTableName
@@ -123,20 +122,52 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              | )
        """.stripMargin)
 
-        val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_1) {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
-        } else {
-          "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
-        }
-
-        checkException(
+        spark.sql(
           s"""
-             |merge into $tableName3 as oldData
-             |using $tableName2
-             |on oldData.id = $tableName2.id
-             |when matched then update set oldData.name = $tableName2.name
-             |when not matched then insert *
-             |""".stripMargin)(errorMessage2)
+             |insert into $tableName3 values
+             |    (1, 'a1', 10, 100),
+             |    (2, 'a2', 20, 200),
+             |    (3, 'u3', 20, 100)
+             |""".stripMargin)
+
+        if (sparkSqlOptimizedWrites) {
+          val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_1) {
+            "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
+          } else {
+            "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
+          }
+          checkException(
+            s"""
+               | merge into $tableName3 as t0
+               | using (
+               |  select * from $tableName2
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set id = t0.id, name = t0.name,
+               |  price = t0.price, ts = s0.ts
+               | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
+           """.stripMargin)(errorMessage2)
+        } else {
+          spark.sql(
+            s"""
+               | merge into $tableName3 as t0
+               | using (
+               |  select * from $tableName2
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set id = t0.id, name = t0.name,
+               |  price = t0.price, ts = s0.ts
+               | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
+           """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts from $tableName3")(
+            Seq(1, "a1", 10.0, 100),
+            Seq(1, "u1", 10.0, 999),
+            Seq(2, "a2", 20.0, 200),
+            Seq(3, "u3", 20.0, 9999),
+            Seq(4, "u4", 40.0, 99999)
+          )
+        }
       }
     }
   }

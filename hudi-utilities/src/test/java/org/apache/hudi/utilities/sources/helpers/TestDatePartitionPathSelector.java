@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.CURRENT_DATE;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
@@ -46,7 +47,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.D
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
+public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness {
 
   private transient HoodieSparkEngineContext context = null;
   static List<LocalDate> totalDates;
@@ -202,7 +203,7 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
     TypedProperties props = getProps(basePath + "/" + tableName, dateFormat, datePartitionDepth, numPrevDaysToList, currentDate);
     DatePartitionPathSelector pathSelector = new DatePartitionPathSelector(props, jsc.hadoopConfiguration());
 
-    Path root = new Path(props.getString(ROOT_INPUT_PATH.key()));
+    Path root = new Path(getStringWithAltKeys(props, ROOT_INPUT_PATH));
     int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH.key()) - 1;
 
     // Create parent dir

@@ -50,7 +50,6 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -74,7 +73,6 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Utilities for Flink stream read and write.
@@ -184,11 +182,6 @@ public class StreamerUtil {
       }
     }
     return new TypedProperties(properties);
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop ->
-        Preconditions.checkState(props.containsKey(prop), "Required property " + prop + " is missing"));
   }
 
   /**
@@ -471,12 +464,5 @@ public class StreamerUtil {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
         : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
-  }
-
-  /**
-   * Returns the auxiliary path.
-   */
-  public static String getAuxiliaryPath(Configuration conf) {
-    return conf.getString(FlinkOptions.PATH) + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

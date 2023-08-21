@@ -616,7 +616,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertEquals(records.size() - numDeletes, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

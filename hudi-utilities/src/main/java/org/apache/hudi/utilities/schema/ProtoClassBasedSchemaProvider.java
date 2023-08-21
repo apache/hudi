@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -31,6 +30,15 @@ import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.Collections;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS;
 
 /**
  * A schema provider that takes in a class name for a generated protobuf class that is on the classpath.
@@ -65,14 +73,11 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
 
   public ProtoClassBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
-        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key()));
-    String className = config.getString(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
-    boolean wrappedPrimitivesAsRecords = props.getBoolean(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(),
-        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.defaultValue());
-    int maxRecursionDepth = props.getInteger(
-        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.defaultValue());
-    boolean timestampsAsRecords = props.getBoolean(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), false);
+    checkRequiredConfigProperties(props, Collections.singletonList(PROTO_SCHEMA_CLASS_NAME));
+    String className = getStringWithAltKeys(config, PROTO_SCHEMA_CLASS_NAME);
+    boolean wrappedPrimitivesAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS);
+    int maxRecursionDepth = getIntWithAltKeys(props, PROTO_SCHEMA_MAX_RECURSION_DEPTH);
+    boolean timestampsAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS);
     ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
     try {
       schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();

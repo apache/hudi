@@ -36,7 +36,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -63,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
-public class TestHoodieMergeHandle extends HoodieClientTestHarness {
+public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -350,7 +350,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     return dataSet;
   }
 
-  HoodieWriteConfig.Builder getConfigBuilder() {
+  protected HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)

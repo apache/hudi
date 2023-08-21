@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -242,6 +243,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the operation is INSERT OVERWRITE dynamic partition.
+   */
+  public static boolean overwriteDynamicPartition(Configuration conf) {
+    return conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE.value())
+        || conf.getString(FlinkOptions.WRITE_PARTITION_OVERWRITE_MODE).equalsIgnoreCase(PartitionOverwriteMode.DYNAMIC.name());
+  }
+
+  /**
    * Returns whether the read start commit is specific commit timestamp.
    */
   public static boolean isSpecificStartCommit(Configuration conf) {
@@ -311,7 +320,7 @@ public class OptionsResolver {
   public static boolean isReadByTxnCompletionTime(Configuration conf) {
     HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
         .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
-    return handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME;
+    return handlingMode == HollowCommitHandling.USE_TRANSITION_TIME;
   }
 
   /**

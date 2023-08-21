@@ -336,4 +336,9 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     }
     return avgSize;
   }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
+  }
 }

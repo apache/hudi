@@ -56,12 +56,12 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
+import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
@@ -76,6 +76,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 
 /**
  * Performs bootstrap from a non-hudi source.
+ * import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
  */
 public class BootstrapExecutorUtils implements Serializable {
 
@@ -284,9 +285,7 @@ public class BootstrapExecutorUtils implements Serializable {
   private Map<String, Object> extractConfigsRelatedToTimestampBasedKeyGenerator(String keyGenerator, TypedProperties params) {
     if (TimestampBasedKeyGenerator.class.getCanonicalName().equals(keyGenerator)
         || TimestampBasedAvroKeyGenerator.class.getCanonicalName().equals(keyGenerator)) {
-      return params.entrySet().stream()
-          .filter(p -> HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(String.valueOf(p.getKey())))
-          .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+      return filterProperties(params, HoodieTableConfig.PERSISTED_CONFIG_LIST);
     }
     return Collections.emptyMap();
   }

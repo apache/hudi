@@ -26,7 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 
 /**
  * File-based Schema Provider Configs.
@@ -40,10 +41,12 @@ public class FilebasedSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<String> SOURCE_SCHEMA_FILE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.file")
       .noDefaultValue()
+      .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.file")
       .withDocumentation("The schema of the source you are reading from");
 
   public static final ConfigProperty<String> TARGET_SCHEMA_FILE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.file")
       .noDefaultValue()
+      .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.file")
       .withDocumentation("The schema of the target you are writing to");
 }

@@ -61,6 +61,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.CollectionUtils.combine;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
@@ -241,6 +242,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private Map<PartitionPath, List<FileSlice>> loadFileSlicesForPartitions(List<PartitionPath> partitions) {
     if (partitions.isEmpty()) {
       return Collections.emptyMap();
+    }
+
+    if (specifiedQueryInstant.isPresent() && !shouldIncludePendingCommits) {
+      validateTimestampAsOf(metaClient, specifiedQueryInstant.get());
     }
 
     FileStatus[] allFiles = listPartitionPathFiles(partitions);

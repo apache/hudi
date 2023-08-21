@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieTimeTravelException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,9 +48,11 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * TimelineUtils provides a common way to query incremental meta-data changes for a hoodie table.
@@ -244,8 +247,8 @@ public class TimelineUtils {
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
       HoodieDefaultTimeline hollowInstantsTimeline = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
-          .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
-          .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
+          .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
+          .filter(s -> compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
       if (!hollowInstantsTimeline.empty()) {
         return timelineSinceLastSync.mergeTimeline(hollowInstantsTimeline);
       }
@@ -316,12 +319,35 @@ public class TimelineUtils {
   }
 
   /**
+   * Validate user-specified timestamp of time travel query against incomplete commit's timestamp.
+   *
+   * @throws HoodieException when time travel query's timestamp >= incomplete commit's timestamp
+   */
+  public static void validateTimestampAsOf(HoodieTableMetaClient metaClient, String timestampAsOf) {
+    Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
+        .filterInflightsAndRequested()
+        .filter(instant ->
+            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
+                || !ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
+        .firstInstant();
+
+    if (firstIncompleteCommit.isPresent()) {
+      String incompleteCommitTime = firstIncompleteCommit.get().getTimestamp();
+      if (compareTimestamps(timestampAsOf, GREATER_THAN_OR_EQUALS, incompleteCommitTime)) {
+        throw new HoodieTimeTravelException(String.format(
+            "Time travel's timestamp '%s' must be earlier than the first incomplete commit timestamp '%s'.",
+            timestampAsOf, incompleteCommitTime));
+      }
+    }
+  }
+
+  /**
    * Handles hollow commit as per {@link HoodieCommonConfig#INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT}
    * and return filtered or non-filtered timeline for incremental query to run against.
    */
   public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
       HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
-    if (handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
+    if (handlingMode == HollowCommitHandling.USE_TRANSITION_TIME) {
       return completedCommitTimeline;
     }
 
@@ -341,7 +367,7 @@ public class TimelineUtils {
 
     String hollowCommitTimestamp = firstIncompleteCommit.get().getTimestamp();
     switch (handlingMode) {
-      case EXCEPTION:
+      case FAIL:
         throw new HoodieException(String.format(
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
@@ -356,6 +382,6 @@ public class TimelineUtils {
   }
 
   public enum HollowCommitHandling {
-    EXCEPTION, BLOCK, USE_STATE_TRANSITION_TIME;
+    FAIL, BLOCK, USE_TRANSITION_TIME;
   }
 }

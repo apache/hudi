@@ -114,16 +114,6 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
-  /**
-   * Config prop to force to skip saving checkpoint in the commit metadata.
-   * <p>
-   * Typically used in one-time backfill scenarios, where checkpoints are not to be persisted.
-   * <p>
-   * TODO: consolidate all checkpointing configs into HoodieCheckpointStrategy (HUDI-5906)
-   */
-  public static final String CHECKPOINT_FORCE_SKIP_PROP = "hoodie.deltastreamer.checkpoint.force.skip";
-  public static final Boolean DEFAULT_CHECKPOINT_FORCE_SKIP_PROP = false;
-
   protected final transient Config cfg;
 
   /**
@@ -282,9 +272,9 @@ public class HoodieStreamer implements Serializable {
             + "Pass a comma-separated list of subclass names to chain the transformations. If there are two or more "
             + "transformers using the same config keys and expect different values for those keys, then transformer can include "
             + "an identifier. E:g - tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer. Here the identifier tr1 "
-            + "can be used along with property key like `hoodie.deltastreamer.transformer.sql.tr1` to identify properties related "
-            + "to the transformer. So effective value for `hoodie.deltastreamer.transformer.sql` is determined by key "
-            + "`hoodie.deltastreamer.transformer.sql.tr1` for this transformer. If identifier is used, it should "
+            + "can be used along with property key like `hoodie.streamer.transformer.sql.tr1` to identify properties related "
+            + "to the transformer. So effective value for `hoodie.streamer.transformer.sql` is determined by key "
+            + "`hoodie.streamer.transformer.sql.tr1` for this transformer. If identifier is used, it should "
             + "be specified for all the transformers. Further the order in which transformer is applied is determined by the occurrence "
             + "of transformer irrespective of the identifier used for the transformer. For example: In the configured value below "
             + "tr2:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer,tr1:org.apache.hudi.utilities.transform.SqlQueryBasedTransformer "

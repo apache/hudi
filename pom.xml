@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.14.0-SNAPSHOT</version>
+  <version>0.15.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -126,6 +126,7 @@
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
+    <roaringbitmap.version>0.9.47</roaringbitmap.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
@@ -937,6 +938,13 @@
         <artifactId>orc-core</artifactId>
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
+      </dependency>
+
+      <!-- RoaringBitmap -->
+      <dependency>
+        <groupId>org.roaringbitmap</groupId>
+        <artifactId>RoaringBitmap</artifactId>
+        <version>${roaringbitmap.version}</version>
       </dependency>
 
       <!-- Spark -->

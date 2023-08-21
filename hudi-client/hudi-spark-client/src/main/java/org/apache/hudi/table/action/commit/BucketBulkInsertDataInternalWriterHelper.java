@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Helper class for native row writer for bulk_insert with bucket index.
@@ -46,13 +47,19 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   private Pair<UTF8String, Integer> lastFileId; // for efficient code path
   // p -> (fileId -> handle)
   private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
-  private final String indexKeyFields;
-  private final int bucketNum;
+  protected final String indexKeyFields;
+  protected final int bucketNum;
 
   public BucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                                   String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
                                                   boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted);
+    this(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, false);
+  }
+
+  public BucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
+                                                  String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
+                                                  boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
+    super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, shouldPreserveHoodieMetadata);
     this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
@@ -63,9 +70,10 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
       int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, bucketNum);
-      Pair<UTF8String, Integer> fileId = Pair.of(partitionPath, bucketId);
-      if (lastFileId == null || !lastFileId.equals(fileId)) {
-        LOG.info("Creating new file for partition path " + partitionPath);
+      if (lastFileId == null || !Objects.equals(lastFileId.getKey(), partitionPath) || !Objects.equals(lastFileId.getValue(), bucketId)) {
+        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
+        //       a mutable underlying buffer
+        Pair<UTF8String, Integer> fileId = Pair.of(partitionPath.clone(), bucketId);
         handle = getBucketRowCreateHandle(fileId, bucketId);
         lastFileId = fileId;
       }
@@ -76,7 +84,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     }
   }
 
-  private UTF8String extractRecordKey(InternalRow row) {
+  protected UTF8String extractRecordKey(InternalRow row) {
     if (populateMetaFields) {
       // In case meta-fields are materialized w/in the table itself, we can just simply extract
       // partition path from there
@@ -97,7 +105,9 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
         // if records are sorted, we can close all existing handles
         close();
       }
-      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, String.valueOf(fileId.getLeft()), getNextBucketFileId(bucketId),
+      String partitionPath = String.valueOf(fileId.getLeft());
+      LOG.info("Creating new file for partition path " + partitionPath);
+      HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }

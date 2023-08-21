@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -27,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -123,6 +125,19 @@ public abstract class HoodieLogBlock {
   }
 
   /**
+   * @return A {@link Roaring64NavigableMap} bitmap containing the record positions in long type
+   * if the {@link HeaderMetadataType#RECORD_POSITIONS} block header exists; otherwise, an empty
+   * {@link Roaring64NavigableMap} bitmap.
+   * @throws IOException upon I/O error.
+   */
+  public Roaring64NavigableMap getRecordPositions() throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return new Roaring64NavigableMap();
+    }
+    return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
@@ -153,7 +168,7 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES, RECORD_POSITIONS
   }
 
   /**

@@ -224,15 +224,15 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
-  public static final List<String> PERSISTED_CONFIG_LIST = Arrays.asList(
-      INPUT_TIME_UNIT.key(),
-      TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(),
-      TIMESTAMP_INPUT_DATE_FORMAT.key(),
-      TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(),
-      TIMESTAMP_OUTPUT_DATE_FORMAT.key(),
-      TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(),
-      TIMESTAMP_TIMEZONE_FORMAT.key(),
-      DATE_TIME_PARSER.key()
+  public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
+      INPUT_TIME_UNIT,
+      TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX,
+      TIMESTAMP_INPUT_DATE_FORMAT,
+      TIMESTAMP_INPUT_TIMEZONE_FORMAT,
+      TIMESTAMP_OUTPUT_DATE_FORMAT,
+      TIMESTAMP_OUTPUT_TIMEZONE_FORMAT,
+      TIMESTAMP_TIMEZONE_FORMAT,
+      DATE_TIME_PARSER
   );
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();

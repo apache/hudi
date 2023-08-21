@@ -43,6 +43,7 @@ public class HoodieRecordUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
 
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
+
   static {
     INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
   }
@@ -58,7 +59,7 @@ public class HoodieRecordUtils {
           recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
           if (null == recordMerger) {
             recordMerger = (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass,
-                new Object[]{});
+                new Object[] {});
             INSTANCE_CACHE.put(mergerClass, recordMerger);
           }
         }
@@ -73,19 +74,12 @@ public class HoodieRecordUtils {
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-      List<String> mergerClassList, String recordMergerStrategy) {
+                                                      List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
       return mergerClassList.stream()
-          .map(clazz -> {
-            try {
-              return loadRecordMerger(clazz);
-            } catch (HoodieException e) {
-              LOG.warn(String.format("Unable to init %s", clazz), e);
-              return null;
-            }
-          })
+          .map(clazz -> loadRecordMerger(clazz))
           .filter(Objects::nonNull)
           .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
@@ -98,8 +92,8 @@ public class HoodieRecordUtils {
    * Instantiate a given class with an avro record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-      Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
+                                                              Object[] payloadArgs,
+                                                              Class<?>... constructorArgTypes) {
     try {
       return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes)
           .newInstance(payloadArgs);

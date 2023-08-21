@@ -32,7 +32,8 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Seri
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, validateTimestampAsOf, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -56,7 +57,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{LegacyHoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
@@ -241,8 +242,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case HoodieFileFormat.PARQUET =>
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
-        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
-        (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
+        val parquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+        (parquetFileFormat, LegacyHoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
   /**
@@ -254,7 +255,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
-      FileStatusCache.getOrCreate(sparkSession))
+      FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
   lazy val tableState: HoodieTableState = {
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
@@ -343,7 +344,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   override final def needConversion: Boolean = false
 
-  override def inputFiles: Array[String] = fileIndex.allFiles.map(_.getPath.toUri.toString).toArray
+  override def inputFiles: Array[String] = fileIndex.allBaseFiles.map(_.getPath.toUri.toString).toArray
 
   /**
    * NOTE: DO NOT OVERRIDE THIS METHOD
@@ -413,6 +414,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     queryTimestamp match {
       case Some(ts) =>
+        specifiedQueryTimestamp.foreach(t => validateTimestampAsOf(metaClient, t))
+
         val partitionDirs = if (globPaths.isEmpty) {
           fileIndex.listFiles(partitionFilters, dataFilters)
         } else {
@@ -643,6 +646,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                              defaultValueOption: Option[String]=Option.empty): String = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
+  }
+
+  /**
+   * Determines if fileIndex should consider log files when filtering file slices. Defaults to false.
+   * The subclass can have their own implementation based on the table or relation type.
+   */
+  protected def shouldIncludeLogFiles(): Boolean = {
+    false
   }
 }
 

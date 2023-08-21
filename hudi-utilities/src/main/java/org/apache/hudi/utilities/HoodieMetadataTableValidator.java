@@ -491,10 +491,10 @@ public class HoodieMetadataTableValidator implements Serializable {
           .setConf(jsc.hadoopConfiguration()).setBasePath(new Path(cfg.basePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
           .setLoadActiveTimelineOnLoad(true)
           .build();
-      int finishedInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
+      int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
-        if (metaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0) {
-          LOG.info("There is no completed instant both in metadata table and corresponding data table.");
+        if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+          LOG.info("There is no completed commit in both metadata table and corresponding data table.");
           return false;
         } else {
           throw new HoodieValidationException("There is no completed instant for metadata table.");

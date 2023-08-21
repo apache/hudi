@@ -32,7 +32,6 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
@@ -54,6 +53,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL;
+import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_CLASS;
 
 /**
  * Wrapper over HoodieStreamer.java class.
@@ -118,9 +126,11 @@ public class HoodieMultiTableStreamer {
       String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
       String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
       String configProp = HoodieStreamerConfig.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
-      String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
+      String oldConfigProp = HoodieStreamerConfig.OLD_INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
+      String configFilePath = getStringWithAltKeys(properties, configProp, oldConfigProp,
+          Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
-      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<String>()).getProps();
+      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<>()).getProps();
       properties.forEach((k, v) -> {
         if (tableProperties.get(k) == null) {
           tableProperties.setProperty(k.toString(), v.toString());
@@ -130,7 +140,7 @@ public class HoodieMultiTableStreamer {
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
-      String overriddenTargetBasePath = tableProperties.getString(HoodieStreamerConfig.TARGET_BASE_PATH.key(), "");
+      String overriddenTargetBasePath = getStringWithAltKeys(tableProperties, HoodieStreamerConfig.TARGET_BASE_PATH, true);
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
@@ -147,7 +157,7 @@ public class HoodieMultiTableStreamer {
   }
 
   private void populateTransformerProps(HoodieStreamer.Config cfg, TypedProperties typedProperties) {
-    String transformerClass = typedProperties.getString(Constants.TRANSFORMER_CLASS, null);
+    String transformerClass = getStringWithAltKeys(typedProperties, TRANSFORMER_CLASS, true);
     if (transformerClass != null && !transformerClass.trim().isEmpty()) {
       List<String> transformerClassNameOverride = Arrays.asList(transformerClass.split(","));
       cfg.transformerClassNames = transformerClassNameOverride;
@@ -155,7 +165,7 @@ public class HoodieMultiTableStreamer {
   }
 
   private List<String> getTablesToBeIngested(TypedProperties properties) {
-    String combinedTablesString = properties.getString(HoodieStreamerConfig.TABLES_TO_BE_INGESTED.key());
+    String combinedTablesString = getStringWithAltKeys(properties, HoodieStreamerConfig.TABLES_TO_BE_INGESTED);
     if (combinedTablesString == null) {
       return new ArrayList<>();
     }
@@ -171,34 +181,39 @@ public class HoodieMultiTableStreamer {
   }
 
   private void populateTargetRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistryTargetUrl = typedProperties.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), null);
+    String schemaRegistryTargetUrl = getStringWithAltKeys(typedProperties, TARGET_SCHEMA_REGISTRY_URL, true);
     if (StringUtils.isNullOrEmpty(schemaRegistryTargetUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
+      String schemaRegistryBaseUrl = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_BASE_URL);
+      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX, true);
       String targetSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
-        targetSchemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX.key());
+        targetSchemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_TARGET_URL_SUFFIX);
       } else {
         targetSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(),
-          schemaRegistryBaseUrl + typedProperties.getString(HoodieStreamerConfig.KAFKA_TOPIC.key()) + targetSchemaRegistrySuffix);
+      typedProperties.setProperty(TARGET_SCHEMA_REGISTRY_URL.key(),
+          schemaRegistryBaseUrl
+              + getStringWithAltKeys(typedProperties, HoodieStreamerConfig.KAFKA_TOPIC)
+              + targetSchemaRegistrySuffix);
     }
   }
 
   private void populateSourceRegistryProp(TypedProperties typedProperties) {
-    String schemaRegistrySourceUrl = typedProperties.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key(), null);
+    String schemaRegistrySourceUrl = getStringWithAltKeys(typedProperties, SRC_SCHEMA_REGISTRY_URL, true);
     if (StringUtils.isNullOrEmpty(schemaRegistrySourceUrl)) {
-      String schemaRegistryBaseUrl = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL.key());
-      String schemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_URL_SUFFIX.key(), null);
+      String schemaRegistryBaseUrl =
+          getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_BASE_URL);
+      String schemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_URL_SUFFIX, true);
       String sourceSchemaRegistrySuffix;
       if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
-        sourceSchemaRegistrySuffix = typedProperties.getString(HoodieSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX.key());
+        sourceSchemaRegistrySuffix = getStringWithAltKeys(typedProperties, SCHEMA_REGISTRY_SOURCE_URL_SUFFIX);
       } else {
         sourceSchemaRegistrySuffix = schemaRegistrySuffix;
       }
-      typedProperties.setProperty(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key(),
-          schemaRegistryBaseUrl + typedProperties.getString(HoodieStreamerConfig.KAFKA_TOPIC.key()) + sourceSchemaRegistrySuffix);
+      typedProperties.setProperty(SRC_SCHEMA_REGISTRY_URL.key(),
+          schemaRegistryBaseUrl
+              + getStringWithAltKeys(typedProperties, HoodieStreamerConfig.KAFKA_TOPIC)
+              + sourceSchemaRegistrySuffix);
     }
   }
 
@@ -272,7 +287,7 @@ public class HoodieMultiTableStreamer {
   public static class Config implements Serializable {
 
     @Parameter(names = {"--base-path-prefix"},
-        description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
+        description = "base path prefix for multi table support via HoodieMultiTableStreamer class")
     public String basePathPrefix;
 
     @Deprecated
@@ -463,7 +478,6 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
-    private static final String TRANSFORMER_CLASS = "hoodie.deltastreamer.transformer.class";
   }
 
   public Set<String> getSuccessTables() {

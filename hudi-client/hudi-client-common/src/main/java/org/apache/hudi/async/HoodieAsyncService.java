@@ -196,11 +196,11 @@ public abstract class HoodieAsyncService implements Serializable {
   }
 
   /**
-   * Enqueues new pending clustering instant.
+   * Enqueues new pending table service instant.
    * @param instant {@link HoodieInstant} to enqueue.
    */
   public void enqueuePendingAsyncServiceInstant(HoodieInstant instant) {
-    LOG.info("Enqueuing new pending clustering instant: " + instant.getTimestamp());
+    LOG.info("Enqueuing new pending table service instant: " + instant.getTimestamp());
     pendingInstants.add(instant);
   }
 

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
+import org.apache.hudi.hadoop.CachingPath;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hadoop.fs.Path;
@@ -49,7 +51,7 @@ public class FilePathDTO {
     }
 
     try {
-      return new Path(new URI(dto.uri));
+      return new CachingPath(new URI(dto.uri));
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }

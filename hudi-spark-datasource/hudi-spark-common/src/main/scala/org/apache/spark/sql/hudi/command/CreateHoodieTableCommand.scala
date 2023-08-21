@@ -18,18 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
-import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
-import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -84,11 +82,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Failed to create catalog table in metastore: ${e}")
-        val sw = new StringWriter
-        val pw = new PrintWriter(sw)
-        e.printStackTrace(pw)
-        logWarning(sw.toString)
+        logWarning("Failed to create catalog table in metastore", e)
     }
     Seq.empty[Row]
   }

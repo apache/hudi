@@ -36,6 +36,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -94,6 +95,7 @@ import java.util.stream.Stream;
 
 import scala.Tuple3;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NO_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -349,6 +351,55 @@ public class TestCleaner extends HoodieCleanerTestBase {
       instantTime = HoodieActiveTimeline.createNewInstantTime();
       cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
+    }
+  }
+
+  /**
+   * Test clean non-partitioned table.
+   * This test is to ensure that the clean action does not clean the whole table data.
+   */
+  @Test
+  public void testCleanNonPartitionedTable() throws IOException {
+    HoodieWriteConfig writeConfig = getConfigBuilder().withPath(basePath)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(1)
+            .build())
+        .withEmbeddedTimelineServerEnabled(false).build();
+    // datagen for non-partitioned table
+    initTestDataGenerator(new String[] {NO_PARTITION_PATH});
+    // init non-partitioned table
+    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET,
+        true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", true);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+      String instantTime;
+      for (int idx = 0; idx < 3; ++idx) {
+        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        List<HoodieRecord> records = dataGen.generateInserts(instantTime, 1);
+        client.startCommitWithTime(instantTime);
+        client.insert(jsc.parallelize(records, 1), instantTime).collect();
+      }
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      assertEquals(cleanPlan.get().getPartitionsToBeDeleted().size(), 0);
+      assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(NO_PARTITION_PATH).size(), 1);
+      table.getMetaClient().reloadActiveTimeline();
+      String filePathToClean = cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(NO_PARTITION_PATH).get(0).getFilePath();
+      // clean
+      HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
+      // check the cleaned file
+      assertEquals(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
+      assertTrue(filePathToClean.contains(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
+      // ensure table is not fully cleaned and has a file group
+      assertTrue(FSUtils.isTableExists(basePath, fs));
+      assertTrue(table.getFileSystemView().getAllFileGroups(NO_PARTITION_PATH).findAny().isPresent());
     }
   }
 

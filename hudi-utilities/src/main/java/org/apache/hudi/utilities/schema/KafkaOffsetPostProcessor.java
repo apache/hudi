@@ -31,10 +31,12 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+
 /**
  * Used internally to add Kafka offsets. You should probably not set
- * hoodie.deltastreamer.schemaprovider.schema_post_processor to this class
- * */
+ * hoodie.streamer.schemaprovider.schema_post_processor to this class
+ */
 public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
 
   public static class Config {
@@ -43,7 +45,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
         HoodieStreamerConfig.KAFKA_APPEND_OFFSETS;
 
     public static boolean shouldAddOffsets(TypedProperties props) {
-      return props.getBoolean(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), Boolean.parseBoolean(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.defaultValue()));
+      return getBooleanWithAltKeys(props, HoodieStreamerConfig.KAFKA_APPEND_OFFSETS);
     }
   }
 
