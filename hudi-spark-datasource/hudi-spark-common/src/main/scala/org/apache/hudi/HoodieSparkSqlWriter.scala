@@ -434,7 +434,7 @@ object HoodieSparkSqlWriter {
       operation
     } else {
       // if no record key, and no meta fields, we should treat it as append only workload and make bulk_insert as operation type.
-      if (!paramsWithoutDefaults.containsKey(DataSourceWriteOptions.RECORDKEY_FIELD.key())
+      if (!hoodieConfig.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key())
         && !paramsWithoutDefaults.containsKey(OPERATION.key()) && !df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
         log.warn(s"Choosing BULK_INSERT as the operation type since auto record key generation is applicable")
         operation = WriteOperationType.BULK_INSERT

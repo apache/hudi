@@ -18,22 +18,22 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 import org.slf4j.LoggerFactory
 
+import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
@@ -179,7 +179,11 @@ object HoodieWriterUtils {
       if (null != tableConfig) {
         val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
         val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
-        if (!validateRecordKeyField(datasourceRecordKey, tableConfigRecordKey)) {
+        if ((null != datasourceRecordKey && null != tableConfigRecordKey
+          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && datasourceRecordKey.nonEmpty
+          && tableConfigRecordKey == null)) {
+          // if both are non null, they should match.
+          // if incoming record key is non empty, table config should also be non empty.
           diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
         }
 
@@ -216,18 +220,6 @@ object HoodieWriterUtils {
       && params.getOrElse(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
       throw new HoodieException(String
         .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key()))
-    }
-  }
-
-  /**
-   * return true if values match, or both are null or empty
-   * otherwise false
-   */
-  private def validateRecordKeyField(incoming: String, existing: String): Boolean = {
-    (isNullOrEmpty(incoming), isNullOrEmpty(existing)) match {
-      case (true, true) => true
-      case (false, false) => incoming == existing
-      case (_, _) => false
     }
   }
 

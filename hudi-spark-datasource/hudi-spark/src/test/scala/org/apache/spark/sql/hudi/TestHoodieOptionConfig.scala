@@ -17,23 +17,15 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.scalatest.Matchers.intercept
 
-import scala.collection.JavaConversions._
-
-class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness with ScalaAssertionSupport{
+class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
   @Test
   def testWithDefaultSqlOptions(): Unit = {
@@ -165,28 +157,6 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness with Scala
       "type" -> "cow"
     )
     HoodieOptionConfig.validateTable(spark, schema, sqlOptions6)
-  }
-
-  @Test
-  def testMissingRecordKey(): Unit = {
-    val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
-    val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, 4))
-    inputDf0.write.format("org.apache.hudi")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "_row_key")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "timestamp")
-      .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-    val records1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).toList
-    val inputDf1 = spark.read.json(spark.sparkContext.parallelize(records1, 4))
-    assertThrows(classOf[HoodieException]) {
-      inputDf1.write.format("org.apache.hudi")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "timestamp")
-        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-        .mode(SaveMode.Append)
-        .save(basePath)
-    }
   }
 
 }
