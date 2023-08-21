@@ -620,4 +620,40 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
     }
   }
+
+  test("Test drop partition with wildcards") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  partition_date_col string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | ) partitioned by (partition_date_col)
+         """.stripMargin)
+        spark.sql(s"insert into $tableName values " +
+          s"(1, 'a1', 10, 1000, '2023-08-01'), (2, 'a2', 10, 1000, '2023-08-02'), (3, 'a3', 10, 1000, '2023-09-01')")
+        checkAnswer(s"show partitions $tableName")(
+          Seq("partition_date_col=2023-08-01"),
+          Seq("partition_date_col=2023-08-02"),
+          Seq("partition_date_col=2023-09-01")
+        )
+        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-*')")
+        // show partitions will still return all partitions for tests, use select distinct as a stop-gap
+        checkAnswer(s"select distinct partition_date_col from $tableName")(
+          Seq("2023-09-01")
+        )
+      }
+    })
+  }
 }
