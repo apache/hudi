@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
@@ -72,9 +73,15 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     try (HoodieBigQuerySyncClient bqSyncClient = new HoodieBigQuerySyncClient(config)) {
       switch (bqSyncClient.getTableType()) {
         case COPY_ON_WRITE:
-          syncCoWTable(bqSyncClient);
+          syncTable(bqSyncClient);
           break;
         case MERGE_ON_READ:
+          if (config.getBoolean(BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC)) {
+            syncTable(bqSyncClient);
+          } else {
+            throw new UnsupportedOperationException("Set " + BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC.key() + " to true to sync a Read-Optimized version of the table.");
+          }
+          break;
         default:
           throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
       }
@@ -91,7 +98,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     return false;
   }
 
-  private void syncCoWTable(HoodieBigQuerySyncClient bqSyncClient) {
+  private void syncTable(HoodieBigQuerySyncClient bqSyncClient) {
     ValidationUtils.checkState(bqSyncClient.getTableType() == HoodieTableType.COPY_ON_WRITE);
     LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + bqSyncClient.getBasePath());
 

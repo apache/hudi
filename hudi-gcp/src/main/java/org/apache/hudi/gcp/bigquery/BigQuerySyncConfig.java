@@ -128,6 +128,12 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .withDocumentation("Assume standard yyyy/mm/dd partitioning, this"
           + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter");
 
+  public static final ConfigProperty<Boolean> BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC = ConfigProperty
+      .key("hoodie.gcp.bigquery.sync.allow_read_optimized_sync")
+      .defaultValue(false)
+      .withDocumentation("If true, allows read-optimized queries on Merge-on-Read tables. It is important to note that BigQuery cannot currently read the log "
+        + "files of an MoR table so the completeness and accuracy of the data queried will be dependent on when and how the table was last compacted.");
+
   public BigQuerySyncConfig(Properties props) {
     super(props);
     setDefaults(BigQuerySyncConfig.class.getName());
@@ -154,6 +160,10 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     @Parameter(names = {"--source-uri-prefix"}, description = "Name of the source uri gcs path prefix of the table", required = false)
     public String sourceUriPrefix;
 
+    @Parameter(names = {"--allow-read-optimized-sync"}, description = "If true, allows read-optimized queries on Merge-on-Read tables. It is important to note that BigQuery cannot currently read the "
+        + "log files of an MoR table so the completeness and accuracy of the data queried will be dependent on when and how the table was last compacted.")
+    public boolean allowReadOptimizedSync;
+
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
     }
@@ -171,6 +181,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       props.setPropertyIfNonNull(BIGQUERY_SYNC_PARTITION_FIELDS.key(), String.join(",", hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), hoodieSyncConfigParams.useFileListingFromMetadata);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), hoodieSyncConfigParams.assumeDatePartitioning);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC.key(), allowReadOptimizedSync);
       return props;
     }
   }
