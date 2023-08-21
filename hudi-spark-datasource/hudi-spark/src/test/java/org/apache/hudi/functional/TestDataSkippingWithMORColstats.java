@@ -45,6 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -232,8 +233,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
       filesToCorrupt = getFilesToCorrupt();
       filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
       if (shouldDelete || shouldRollback) {
-        //filesToCorrupt includes all base files in the filegroup
-        assertEquals(2, filesToCorrupt.size());
+        assertEquals(1, filesToCorrupt.size());
         assertEquals(0, readMatchingRecords().except(batch1).count());
       } else {
         enableInlineCompaction(true);
@@ -350,7 +350,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
   }
 
   /**
-   * Returns a list of all the base parquet files for filegroups where
+   * Returns a list of the base parquet files for the latest fileslice in it's filegroup where
    * no records match the condition
    */
   private List<Path> getFilesToCorrupt() {
@@ -368,12 +368,21 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
         });
 
     try (Stream<Path> stream = Files.list(basePath)) {
-      return stream
+      Map<String,Path> latestBaseFiles = new HashMap<>();
+      List<Path> files = stream
           .filter(file -> !Files.isDirectory(file))
           .filter(file -> file.toString().contains(".parquet"))
           .filter(file -> !file.toString().contains(".crc"))
           .filter(file -> !fileNames.contains(FSUtils.getFileId(file.getFileName().toString())))
           .collect(Collectors.toList());
+      files.forEach(f -> {
+        String fileID = FSUtils.getFileId(f.getFileName().toString());
+        if (!latestBaseFiles.containsKey(fileID) || FSUtils.getCommitTime(f.getFileName().toString())
+            .compareTo(FSUtils.getCommitTime(latestBaseFiles.get(fileID).getFileName().toString())) > 0) {
+          latestBaseFiles.put(fileID, f);
+        }
+      });
+      return new ArrayList<>(latestBaseFiles.values());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -457,6 +466,13 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     deltacommit.delete();
   }
 
+  /**
+   * Need to enable inline compaction before final write. We need to do this
+   * before the final write instead of setting a num delta commits number
+   * because in the case of rollback, we do 3 updates and then rollback
+   * and do an update, but we only want to compact the second time
+   * we have 3
+   */
   public void enableInlineCompaction(Boolean shouldEnable) {
     if (shouldEnable) {
       this.options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
