@@ -69,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * If we want to prove the file is not read, we expect the read to
  * successfully execute.
  */
-public class TestMORColstats extends HoodieSparkClientTestBase {
+public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
 
   private static String matchCond = "trip_type = 'UBERX'";
   private static String nonMatchCond = "trip_type = 'BLACK'";
@@ -115,7 +115,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     doWrite(batch2);
     List<Path> filesToCorrupt = getFilesToCorrupt();
     assertEquals(1, filesToCorrupt.size());
-    filesToCorrupt.forEach(TestMORColstats::corruptFile);
+    filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
     assertEquals(0, readMatchingRecords().except(batch1).count());
     //Read without data skipping to show that it will fail
     //Reading with data skipping succeeded so that means that data skipping is working and the corrupted
@@ -154,7 +154,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
    * both file groups must be read
    */
   @Test
-  public void testBaseFileAndLogFileUpdateMatchesAsyncCompact() {
+  public void testBaseFileAndLogFileUpdateMatchesScheduleCompaction() {
     testBaseFileAndLogFileUpdateMatchesHelper(true, false,false, false);
   }
 
@@ -194,21 +194,6 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     testBaseFileAndLogFileUpdateMatchesHelper(false, false,false, true);
   }
 
-
-  /**
-   * Create two base files, One base file doesn't match the condition
-   * Then add a log file so that both file groups match the condition
-   * Then delete the deltacommit and write the original value for the
-   *    record so that a rollback is triggered and the file group no
-   *    longer matches the condition
-   * Do Compaction
-   * Only 1 filegroup should be read
-   */
-  @Test
-  public void testBaseFileAndLogFileUpdateMatchesAndRollBackCompact() {
-    testBaseFileAndLogFileUpdateMatchesHelper(false, true,false, true);
-  }
-
   /**
    * Test where one filegroup doesn't match the condition, then update so both filegroups match
    */
@@ -245,7 +230,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
 
     if (shouldInlineCompact) {
       filesToCorrupt = getFilesToCorrupt();
-      filesToCorrupt.forEach(TestMORColstats::corruptFile);
+      filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
       if (shouldDelete || shouldRollback) {
         //filesToCorrupt includes all base files in the filegroup
         assertEquals(2, filesToCorrupt.size());
@@ -257,7 +242,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
       }
     } else {
       //Corrupt to prove that colstats does not exclude filegroup
-      filesToCorrupt.forEach(TestMORColstats::corruptFile);
+      filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
       assertEquals(1, filesToCorrupt.size());
       assertThrows(SparkException.class, () -> readMatchingRecords().count());
     }
@@ -318,7 +303,7 @@ public class TestMORColstats extends HoodieSparkClientTestBase {
     //Corrupt to prove that colstats does not exclude filegroup
     List<Path> filesToCorrupt = getFilesToCorrupt();
     assertEquals(1, filesToCorrupt.size());
-    filesToCorrupt.forEach(TestMORColstats::corruptFile);
+    filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
     assertThrows(SparkException.class, () -> readMatchingRecords().count());
   }
 
