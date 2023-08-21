@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
@@ -73,14 +72,8 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     try (HoodieBigQuerySyncClient bqSyncClient = new HoodieBigQuerySyncClient(config)) {
       switch (bqSyncClient.getTableType()) {
         case COPY_ON_WRITE:
-          syncTable(bqSyncClient);
-          break;
         case MERGE_ON_READ:
-          if (config.getBoolean(BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC)) {
-            syncTable(bqSyncClient);
-          } else {
-            throw new UnsupportedOperationException("Set " + BIGQUERY_SYNC_ALLOW_READ_OPTIMIZED_SYNC.key() + " to true to sync a Read-Optimized version of the table.");
-          }
+          syncTable(bqSyncClient);
           break;
         default:
           throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
