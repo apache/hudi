@@ -69,8 +69,9 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
     syncCompactionRequestedFileToAuxiliaryFolder(table);
 
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
     Map<ConfigProperty, String> updatedTableProps = new HashMap<>();
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS))
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS, v));
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))

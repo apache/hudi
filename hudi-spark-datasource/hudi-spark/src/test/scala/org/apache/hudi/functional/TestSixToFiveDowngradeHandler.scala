@@ -23,11 +23,11 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
-import org.apache.hudi.table.upgrade.{SixToFiveDowngradeHandler, SparkUpgradeDowngradeHelper}
+import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -60,11 +60,12 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
       assertTrue(getLogFilesCount(hudiOpts) > 0)
     }
 
-    val downgradeHandler = new SixToFiveDowngradeHandler()
-    downgradeHandler.downgrade(getWriteConfig(hudiOpts), context, null, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     // Ensure file slices have been compacted and the MDT table has been deleted
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
+    assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       assertEquals(0, getLogFilesCount(hudiOpts))
     }
@@ -82,10 +83,11 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, getLogFilesCount(hudiOpts))
 
-    val downgradeHandler = new SixToFiveDowngradeHandler()
-    downgradeHandler.downgrade(getWriteConfig(hudiOpts), context, null, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, getLogFilesCount(hudiOpts))
+    assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
   }
 
   @ParameterizedTest
@@ -101,10 +103,11 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
 
-    val downgradeHandler = new SixToFiveDowngradeHandler()
-    downgradeHandler.downgrade(getWriteConfig(hudiOpts), context, null, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
+    assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
   }
 
   private def getLogFilesCount(opts: Map[String, String]) = {
