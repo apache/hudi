@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
@@ -171,16 +172,16 @@ public class AvroConvertor implements Serializable {
    */
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
-    GenericRecord record = (GenericRecord) consumerRecord.value();
+    GenericRecord recordValue = (GenericRecord) consumerRecord.value();
     GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
-    for (Schema.Field field :  record.getSchema().getFields()) {
-      recordBuilder.set(field, record.get(field.name()));
+    for (Schema.Field field :  recordValue.getSchema().getFields()) {
+      recordBuilder.set(field, recordValue.get(field.name()));
     }
-    
+    String recordKey = StringUtils.objToString(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
-    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, consumerRecord.key().toString());
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, recordKey);
     return recordBuilder.build();
   }
 

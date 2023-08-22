@@ -81,7 +81,7 @@ public class JsonKafkaSource extends KafkaSource<String> {
         ObjectMapper om = new ObjectMapper();
         partitionIterator.forEachRemaining(consumerRecord -> {
           String recordValue = consumerRecord.value().toString();
-          String recordKey = consumerRecord.key().toString();
+          String recordKey = StringUtils.objToString(consumerRecord.key());
           try {
             ObjectNode jsonNode = (ObjectNode) om.readTree(recordValue);
             jsonNode.put(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
