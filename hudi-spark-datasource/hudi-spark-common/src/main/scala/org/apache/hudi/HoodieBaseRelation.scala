@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
@@ -496,6 +497,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           timeZoneId,
           sparkAdapter.getSparkParsePartitionUtil,
           conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
+        if(rowValues.length != partitionColumns.length) {
+          throw new HoodieException("Failed to get partition column values from the partition-path:"
+              + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")
+        }
         InternalRow.fromSeq(rowValues)
       } else {
         InternalRow.empty
