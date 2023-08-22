@@ -72,9 +72,9 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     try (HoodieBigQuerySyncClient bqSyncClient = new HoodieBigQuerySyncClient(config)) {
       switch (bqSyncClient.getTableType()) {
         case COPY_ON_WRITE:
-          syncCoWTable(bqSyncClient);
-          break;
         case MERGE_ON_READ:
+          syncTable(bqSyncClient);
+          break;
         default:
           throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
       }
@@ -91,7 +91,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     return false;
   }
 
-  private void syncCoWTable(HoodieBigQuerySyncClient bqSyncClient) {
+  private void syncTable(HoodieBigQuerySyncClient bqSyncClient) {
     ValidationUtils.checkState(bqSyncClient.getTableType() == HoodieTableType.COPY_ON_WRITE);
     LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + bqSyncClient.getBasePath());
 
