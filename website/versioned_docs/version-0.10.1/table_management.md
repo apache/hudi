@@ -156,7 +156,7 @@ create table if not exists h3(
 options (
   primaryKey = 'id',
   type = 'mor',
-  ${hoodie.config.key1} = '${hoodie.config.value2}',
+  ${hoodie.config.key1} = '${hoodie.config.value1}',
   ${hoodie.config.key2} = '${hoodie.config.value2}',
   ....
 );
