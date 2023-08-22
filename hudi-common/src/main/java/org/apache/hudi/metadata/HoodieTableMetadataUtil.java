@@ -28,12 +28,14 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -55,6 +57,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
@@ -171,12 +174,11 @@ public class HoodieTableMetadataUtil {
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
    * as if provided records have been persisted w/in given {@code filePath}
    *
-   * @param records target records to compute column range metadata for
+   * @param records      target records to compute column range metadata for
    * @param targetFields columns (fields) to be collected
-   * @param filePath file path value required for {@link HoodieColumnRangeMetadata}
-   *
+   * @param filePath     file path value required for {@link HoodieColumnRangeMetadata}
    * @return map of {@link HoodieColumnRangeMetadata} for each of the provided target fields for
-   *         the collection of provided records
+   * the collection of provided records
    */
   public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
       List<HoodieRecord> records, List<Schema.Field> targetFields, String filePath, Schema recordSchema) {
@@ -673,7 +675,7 @@ public class HoodieTableMetadataUtil {
         // invalid once rollback is complete.
         if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
           Map<String, Long> logFiles = new HashMap<>();
-          rollbackRequest.getLogBlocksToBeDeleted().forEach((k,v) -> {
+          rollbackRequest.getLogBlocksToBeDeleted().forEach((k, v) -> {
             String fileName = k.substring(k.lastIndexOf("/") + 1);
             // rollback plan may not have size for log files to be rolled back. but while merging w/ original commits, the size will get adjusted.
             logFiles.put(fileName, 1L);
@@ -1181,9 +1183,9 @@ public class HoodieTableMetadataUtil {
   /**
    * Given a schema, coerces provided value to instance of {@link Comparable<?>} such that
    * it could subsequently used in column stats
-   *
+   * <p>
    * NOTE: This method has to stay compatible with the semantic of
-   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   * {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
@@ -1697,5 +1699,53 @@ public class HoodieTableMetadataUtil {
 
     final java.util.Date instantDate = new java.util.Date(instantTime);
     return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
+  }
+
+  /**
+   * Reads the record keys from the base files and returns a {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table.
+   */
+  public static HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
+                                                                     List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
+                                                                     boolean forDelete,
+                                                                     int recordIndexMaxParallelism,
+                                                                     String basePath,
+                                                                     SerializableConfiguration configuration,
+                                                                     String activeModule) {
+    if (partitionBaseFilePairs.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionBaseFilePairs.size() + " base files");
+    final int parallelism = Math.min(partitionBaseFilePairs.size(), recordIndexMaxParallelism);
+    return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
+      final String filename = baseFile.getFileName();
+      Path dataFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+
+      final String fileId = baseFile.getFileId();
+      final String instantTime = baseFile.getCommitTime();
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(configuration.get(), dataFilePath);
+      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
+
+      return new ClosableIterator<HoodieRecord>() {
+        @Override
+        public void close() {
+          recordKeyIterator.close();
+        }
+
+        @Override
+        public boolean hasNext() {
+          return recordKeyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieRecord next() {
+          return forDelete
+              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
+        }
+      };
+    });
   }
 }
