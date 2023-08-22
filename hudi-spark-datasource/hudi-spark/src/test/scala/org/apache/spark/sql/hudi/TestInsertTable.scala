@@ -1908,6 +1908,29 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test insert configuration by spark.hoodie. prefix") {
+    withSQLConf("spark.hoodie.sql.bulk.insert.enable" -> "true", "spark.hoodie.sql.insert.mode" -> "strict") {
+      withTable(generateTableName) { tableName =>
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
+          """.stripMargin)
+        checkException(s"insert into $tableName values(1, 'a1', 10, 1000)")(
+          "Table with primaryKey can not use bulk insert in strict mode."
+        )
+      }
+    }
+  }
+
   def ingestAndValidateDataDupPolicy(tableType: String, tableName: String, tmp: File,
                             expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,
                             setOptions: List[String] = List.empty, insertDupPolicy : String = NONE_INSERT_DUP_POLICY,
