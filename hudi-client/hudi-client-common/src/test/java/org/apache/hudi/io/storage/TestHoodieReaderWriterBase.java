@@ -240,13 +240,12 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   private void verifyFilterRowKeys(HoodieAvroFileReader hoodieReader) {
-      Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
-              .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
-      List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
-              .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
-      assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)
-              .stream().sorted().collect(Collectors.toList()));
-    }
+    Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
+        .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
+    List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
+        .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
+    assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)
+        .stream().sorted().collect(Collectors.toList()));
   }
 
   private void verifyReaderWithSchema(String schemaPath, HoodieAvroFileReader hoodieReader) throws IOException {
