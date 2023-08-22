@@ -136,6 +136,7 @@
                   <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
                   <include>org.apache.flink:${flink.parquet.artifactId}</include>
+                  <include>org.apache.flink:flink-metrics-dropwizard</include>
 
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
