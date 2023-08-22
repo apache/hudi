@@ -19,11 +19,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
@@ -80,10 +84,9 @@ public class TestSourceFormatAdapter {
     testJsonDataSource = null;
   }
 
-  private void setupRowSource(Dataset<Row> ds) {
-    SchemaProvider nullSchemaProvider = new InputBatch.NullSchemaProvider();
-    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(ds), DUMMY_CHECKPOINT, nullSchemaProvider);
-    testRowDataSource = new TestRowDataSource(new TypedProperties(), jsc, spark, nullSchemaProvider, batch);
+  private void setupRowSource(Dataset<Row> ds, TypedProperties properties, SchemaProvider schemaProvider) {
+    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(ds), DUMMY_CHECKPOINT, schemaProvider);
+    testRowDataSource = new TestRowDataSource(properties, jsc, spark, schemaProvider, batch);
   }
 
   private void setupJsonSource(JavaRDD<String> ds, Schema schema) {
@@ -92,11 +95,11 @@ public class TestSourceFormatAdapter {
     testJsonDataSource = new TestJsonDataSource(new TypedProperties(), jsc, spark, basicSchemaProvider, batch);
   }
 
-  private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType unsanitizedSchema) {
+  private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType unsanitizedSchema, SchemaProvider schemaProvider) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
-    setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd));
+    setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd), typedProperties, schemaProvider);
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testRowDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
   }
@@ -116,6 +119,10 @@ public class TestSourceFormatAdapter {
     Dataset<Row> ds = inputBatch.getBatch().get();
     assertEquals(2, ds.collectAsList().size());
     assertEquals(sanitizedSchema, ds.schema());
+    if (inputBatch.getSchemaProvider() instanceof RowBasedSchemaProvider) {
+      assertEquals(AvroConversionUtils.convertStructTypeToAvroSchema(sanitizedSchema,
+          "hoodie_source", "hoodie.source"), inputBatch.getSchemaProvider().getSourceSchema());
+    }
     assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }
 
@@ -123,7 +130,9 @@ public class TestSourceFormatAdapter {
   @MethodSource("provideDataFiles")
   public void testRowSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
     JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
-    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema), sanitizedDataFile, sanitizedSchema);
+    SchemaProvider schemaProvider = new InputBatch.NullSchemaProvider();
+    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, schemaProvider), sanitizedDataFile, sanitizedSchema);
+    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, null), sanitizedDataFile, sanitizedSchema);
 
   }
 
@@ -134,18 +143,17 @@ public class TestSourceFormatAdapter {
     verifySanitization(fetchJsonData(unsanitizedRDD, sanitizedSchema), sanitizedDataFile, sanitizedSchema);
   }
 
-  public static class TestRowDataSource extends Source<Dataset<Row>> {
+  public static class TestRowDataSource extends RowSource {
     private final InputBatch<Dataset<Row>> batch;
-
     public TestRowDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                              SchemaProvider schemaProvider, InputBatch<Dataset<Row>> batch) {
-      super(props, sparkContext, sparkSession, schemaProvider, SourceType.ROW);
+      super(props, sparkContext, sparkSession, schemaProvider);
       this.batch = batch;
     }
 
     @Override
-    protected InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-      return batch;
+    protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+      return Pair.of(batch.getBatch(), batch.getCheckpointForNextBatch());
     }
   }
 
