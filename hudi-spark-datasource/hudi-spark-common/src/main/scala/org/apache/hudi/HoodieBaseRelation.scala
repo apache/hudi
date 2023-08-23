@@ -32,8 +32,8 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Seri
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, validateTimestampAsOf, handleHollowCommitIfNeeded}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
@@ -54,6 +55,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpr
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
@@ -62,7 +64,6 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
-import org.apache.spark.unsafe.types.UTF8String
 
 import java.net.URI
 import scala.collection.JavaConverters._
@@ -482,32 +483,26 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus, basePath: Path,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
-    try {
-      val tableConfig = metaClient.getTableConfig
-      if (extractPartitionValuesFromPartitionPath) {
-        val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
-        val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
-        val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
-        val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
-        if (hiveStylePartitioningEnabled) {
-          val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
-          InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
-        } else {
-          if (partitionColumns.length == 1) {
-            InternalRow.fromSeq(Seq(UTF8String.fromString(relativePath)))
-          } else {
-            val parts = relativePath.split("/")
-            assert(parts.size == partitionColumns.length)
-            InternalRow.fromSeq(parts.map(UTF8String.fromString))
-          }
-        }
-      } else {
-        InternalRow.empty
+    if (extractPartitionValuesFromPartitionPath) {
+      val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
+      val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
+      val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+      val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
+      val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
+        partitionColumns,
+        relativePath,
+        basePath,
+        tableStructSchema,
+        timeZoneId,
+        sparkAdapter.getSparkParsePartitionUtil,
+        conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
+      if(rowValues.length != partitionColumns.length) {
+        throw new HoodieException("Failed to get partition column values from the partition-path:"
+            + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")
       }
-    } catch {
-      case NonFatal(e) =>
-        logWarning(s"Failed to get the right partition InternalRow for file: ${file.toString}", e)
-        InternalRow.empty
+      InternalRow.fromSeq(rowValues)
+    } else {
+      InternalRow.empty
     }
   }
 
