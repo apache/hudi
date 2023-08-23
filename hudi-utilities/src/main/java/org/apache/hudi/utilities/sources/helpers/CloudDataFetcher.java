@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,8 +51,9 @@ public class CloudDataFetcher implements Serializable {
     this.props = props;
   }
 
-  public Option<Dataset<Row>> getCloudObjectDataDF(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props) {
-    return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat);
+  public Option<Dataset<Row>> getCloudObjectDataDF(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
+                                                   TypedProperties props, Option<SchemaProvider> schemaProviderOption) {
+    return loadAsDataset(spark, cloudObjectMetadata, props, fileFormat, schemaProviderOption);
   }
 
 }
