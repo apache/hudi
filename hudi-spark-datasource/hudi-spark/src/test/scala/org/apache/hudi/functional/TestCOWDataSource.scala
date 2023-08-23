@@ -26,9 +26,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
@@ -261,6 +261,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // this write should succeed even w/o setting any param for record key, partition path since table config will be re-used.
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+    assertLastCommitIsUpsert()
   }
 
   @Test
@@ -298,6 +299,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // this write should succeed even w/o though we don't set key gen explicitly.
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+    assertLastCommitIsUpsert()
   }
 
   @Test
@@ -334,6 +336,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // this write should succeed even w/o though we set key gen explicitly, its the default
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+    assertLastCommitIsUpsert()
   }
 
   private def writeToHudi(opts: Map[String, String], df: Dataset[Row]): Unit = {
@@ -1647,6 +1650,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         fail(ex)
       }
     }
+  }
+
+  def assertLastCommitIsUpsert(): Boolean = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(hadoopConf)
+      .build()
+    val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
+    val latestCommit = timeline.lastInstant()
+    assert(latestCommit.isPresent)
+    assert(latestCommit.get().isCompleted)
+    val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
+    metadata.getOperationType.equals(WriteOperationType.UPSERT)
   }
 }
 
