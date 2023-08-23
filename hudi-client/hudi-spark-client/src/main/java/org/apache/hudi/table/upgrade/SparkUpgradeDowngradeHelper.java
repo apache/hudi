@@ -19,6 +19,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -48,5 +50,10 @@ public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
   @Override
   public String getPartitionColumns(HoodieWriteConfig config) {
     return SparkKeyGenUtils.getPartitionColumns(config.getProps());
+  }
+
+  @Override
+  public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
+    return new SparkRDDWriteClient(context, config);
   }
 }
