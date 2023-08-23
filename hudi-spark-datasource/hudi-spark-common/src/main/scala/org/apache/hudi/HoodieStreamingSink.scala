@@ -318,14 +318,18 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
     if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
-      // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
-      val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
-        metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, identifier)
-      if (lastCheckpoint.isPresent) {
-        latestCommittedBatchId = lastCheckpoint.get().toLong
+      if(incomingBatchId == 0) {
+         false
+      } else {
+        val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
+        // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
+        val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
+          metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, identifier)
+        if (lastCheckpoint.isPresent) {
+          latestCommittedBatchId = lastCheckpoint.get().toLong
+        }
+        latestCommittedBatchId >= incomingBatchId
       }
-      latestCommittedBatchId >= incomingBatchId
     } else {
       // In case of DELETE_OPERATION_OPT_VAL the incoming batch id is sentinel value (-1)
       false
