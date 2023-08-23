@@ -75,6 +75,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -553,11 +554,6 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         PARTITION_NAME_BLOOM_FILTERS,
         PARTITION_NAME_RECORD_INDEX
     );
-    Set<String> allPartitionsExceptRecordIndex = CollectionUtils.createImmutableSet(
-        PARTITION_NAME_FILES,
-        PARTITION_NAME_COLUMN_STATS,
-        PARTITION_NAME_BLOOM_FILTERS
-    );
     assertTrue(Files.exists(recordIndexPartitionPath), "record index partition should exist.");
     assertEquals(allPartitions, metaClient.getTableConfig().getMetadataPartitions(),
         TABLE_METADATA_PARTITIONS.key() + " should contain all partitions.");
@@ -571,9 +567,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // validate the relevant table states after downgrade
     assertFalse(Files.exists(recordIndexPartitionPath), "record index partition should be deleted.");
-    assertEquals(allPartitionsExceptRecordIndex, metaClient.getTableConfig().getMetadataPartitions(),
+    assertEquals(Collections.emptySet(), metaClient.getTableConfig().getMetadataPartitions(),
         TABLE_METADATA_PARTITIONS.key() + " should contain all partitions except record_index.");
-    assertEquals(allPartitionsExceptRecordIndex, metaClient.getTableConfig().getMetadataPartitionsInflight(),
+    assertEquals(Collections.emptySet(), metaClient.getTableConfig().getMetadataPartitionsInflight(),
         TABLE_METADATA_PARTITIONS_INFLIGHT.key() + " should contain all partitions except record_index.");
 
   }
