@@ -53,6 +53,7 @@ import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
+import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
 
@@ -181,7 +182,15 @@ public class CloudObjectsSelectorCommon {
     totalSize *= 1.1;
     long parquetMaxFileSize = props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
     int numPartitions = (int) Math.max(totalSize / parquetMaxFileSize, 1);
-    Dataset<Row> dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()])).coalesce(numPartitions);
+    boolean isCommaSeparatedPathFormat = props.getBoolean(SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT, false);
+
+    Dataset<Row> dataset;
+    if (isCommaSeparatedPathFormat) {
+      dataset = reader.load(String.join(",", paths));
+    } else {
+      dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
+    }
+    dataset = dataset.coalesce(numPartitions);
 
     // add partition column from source path if configured
     if (containsConfigProperty(props, PATH_BASED_PARTITION_FIELDS)) {

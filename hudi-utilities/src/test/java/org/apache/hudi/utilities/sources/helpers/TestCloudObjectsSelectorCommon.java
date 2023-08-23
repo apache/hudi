@@ -79,6 +79,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   public void partitionKeyNotPresentInPath() {
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     TypedProperties properties = new TypedProperties();
+    properties.put("hoodie.deltastreamer.source.cloud.data.reader.comma.separated.path.format", "false");
     properties.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "unknown");
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, properties, "json");
     Assertions.assertTrue(result.isPresent());
