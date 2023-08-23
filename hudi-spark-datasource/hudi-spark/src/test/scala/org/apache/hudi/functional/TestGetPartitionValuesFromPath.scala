@@ -50,4 +50,37 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Get partition values from path, configured by spark.hoodie. prefix") {
+    Seq(true, false).foreach { readFromPath =>
+      withSQLConf("spark.hoodie.datasource.read.extract.partition.values.from.path" -> readFromPath.toString) {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               | id int,
+               | name string,
+               | region string,
+               | dt date
+               |) using hudi
+               |tblproperties (
+               | primaryKey = 'id',
+               | type='mor')
+               |location '${tmp.getCanonicalPath}'
+               |partitioned by (region, dt)""".stripMargin)
+          spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-08-01') select 1, 'name1'")
+          checkAnswer(s"show partitions $tableName")(Seq("region=reg1/dt=2023-08-01"))
+
+          val srcPartitionPath = s"${tmp.getCanonicalPath}/region=reg1/dt=2023-08-01"
+          val dstPartitionPath = s"${tmp.getCanonicalPath}/region=reg1/dt=2023-08-02"
+          movePath(srcPartitionPath, dstPartitionPath)
+          checkAnswer(s"select id, name, region, cast(dt as string) from $tableName")(
+            if (readFromPath) Seq(1, "name1", "reg1", "2023-08-02")
+            else Seq(1, "name1", "reg1", "2023-08-01")
+          )
+        }
+      }
+    }
+  }
 }

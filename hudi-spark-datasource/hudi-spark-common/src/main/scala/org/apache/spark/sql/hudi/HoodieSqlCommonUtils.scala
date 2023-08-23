@@ -225,13 +225,14 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
    * Extract hoodie config from conf using prefix "spark.hoodie." and "hoodie.".
+   * Priority for the same key: hoodie. > spark.hoodie.
    */
   def extractHoodieConfig(conf: Map[String, String]): Map[String, String] = {
-    conf.collect {
-      case (key, value) if key.startsWith("spark.") =>
-        (key.stripPrefix("spark."), value)
-      case other => other
-    }.filter(kv => isHoodieConfigKey(kv._1))
+    val (withSparkPrefix, withoutSparkPrefix) = conf.partition(_._1.startsWith("spark."))
+    val combinedConf = withSparkPrefix.map {
+      case (key, value) => (key.stripPrefix("spark."), value)
+    } ++ withoutSparkPrefix
+    combinedConf.filter(kv => isHoodieConfigKey(kv._1))
   }
 
   /**

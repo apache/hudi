@@ -187,32 +187,31 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test show_compaction Procedure by Path") {
-    withTempDir { tmp =>
-      val tableName1 = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName1 (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | tblproperties (
-           |  type = 'mor',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
-           | location '${tmp.getCanonicalPath}/$tableName1'
+    withSQLConf("hoodie.compact.inline" -> "true", "hoodie.compact.inline.max.delta.commits" -> "2") {
+      withTempDir { tmp =>
+        val tableName1 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
-      // set inline compaction
-      spark.sql("set hoodie.compact.inline=true")
-      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
 
-      spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
-      spark.sql(s"update $tableName1 set name = 'a2' where id = 1")
-      spark.sql(s"update $tableName1 set name = 'a3' where id = 1")
-      spark.sql(s"update $tableName1 set name = 'a4' where id = 1")
-      assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
+        spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName1 set name = 'a2' where id = 1")
+        spark.sql(s"update $tableName1 set name = 'a3' where id = 1")
+        spark.sql(s"update $tableName1 set name = 'a4' where id = 1")
+        assertResult(2)(spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}/$tableName1')").collect().length)
+      }
     }
   }
 
@@ -300,6 +299,42 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_compaction Procedure with operation") {
     withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+
+        assertResult(0)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')").collect().length)
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')").collect().length)
+
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
+
+        assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'scheduleAndExecute')").collect().length)
+      }
+    }
+  }
+
+  test(s"Test Call run_compaction Procedure with sql conf start with spark.hoodie. ") {
+    withSQLConf("spark.hoodie.compact.inline" -> "false", "spark.hoodie.compact.inline.max.delta.commits" -> "1") {
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(

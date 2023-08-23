@@ -177,6 +177,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     fs.exists(path)
   }
 
+  protected def movePath(srcPath: String, dstPath: String): Unit = {
+    val sourcePath = new Path(srcPath)
+    val fs = FSUtils.getFs(sourcePath, spark.sparkContext.hadoopConfiguration)
+    fs.rename(sourcePath, new Path(dstPath))
+  }
+
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = spark.sessionState.conf
     val currentValues = pairs.unzip._1.map { k =>
