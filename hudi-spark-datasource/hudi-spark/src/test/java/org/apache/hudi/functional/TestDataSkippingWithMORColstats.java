@@ -320,6 +320,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     options.put("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.NonpartitionedKeyGenerator");
     options.put(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
     options.put(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.key(), "false");
+    options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
     return options;
   }
 
