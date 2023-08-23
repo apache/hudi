@@ -264,7 +264,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           } catch (HoodieIOException e) {
             checkIfOtherWriterCommitted(hoodieInstant, e);
           } catch (Exception e) {
-            LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+            LOG.error("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
             throw e;
           }
         }
@@ -286,7 +286,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.getTimestamp())) {
       LOG.warn("Clean operation was completed by another writer for instant: " + hoodieInstant);
     } else {
-      LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+      LOG.error("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
       throw e;
     }
   }
