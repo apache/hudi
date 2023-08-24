@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -50,12 +51,14 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
+import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
 public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
+  private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
   public static class Config {
 
@@ -128,6 +131,10 @@ public class HoodieIncrSource extends RowSource {
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                           SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
+
+    this.snapshotLoadQuerySplitter = Option.ofNullable(props.getString(SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, null))
+        .map(className -> (SnapshotLoadQuerySplitter) ReflectionUtils.loadClass(className,
+            new Class<?>[] {TypedProperties.class}, props));
   }
 
   @Override
@@ -184,9 +191,13 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
-      source = sparkSession.read().format("org.apache.hudi")
-          .option(QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-          .load(srcPath)
+      Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+          .load(srcPath);
+      if (snapshotLoadQuerySplitter.isPresent()) {
+        queryInfo = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryInfo);
+      }
+      source = snapshot
           // add filtering so that only interested records are returned.
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryInfo.getStartInstant()))

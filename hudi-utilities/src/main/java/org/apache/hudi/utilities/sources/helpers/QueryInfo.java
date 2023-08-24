@@ -97,6 +97,18 @@ public class QueryInfo {
     return orderByColumns;
   }
 
+  public QueryInfo withUpdatedEndInstant(String newEndInstant) {
+    return new QueryInfo(
+        this.queryType,
+        this.previousInstant,
+        this.startInstant,
+        newEndInstant,
+        this.orderColumn,
+        this.keyColumn,
+        this.limitColumn
+    );
+  }
+
   @Override
   public String toString() {
     return ("Query information for Incremental Source "
