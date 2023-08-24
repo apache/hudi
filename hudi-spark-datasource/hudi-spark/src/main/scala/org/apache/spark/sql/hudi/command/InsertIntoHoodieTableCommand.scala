@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -180,11 +181,11 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
                                        conf: SQLConf): LogicalPlan = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
-      planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
+      planUtils.resolveOutputColumns(catalogTable.catalogTableName, DataTypeUtils.toAttributes(expectedSchema), query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
       case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
-        planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
+        planUtils.resolveOutputColumns(catalogTable.catalogTableName, DataTypeUtils.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
 

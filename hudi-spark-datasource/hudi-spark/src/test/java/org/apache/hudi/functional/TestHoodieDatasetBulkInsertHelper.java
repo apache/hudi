@@ -40,8 +40,8 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
+import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -349,9 +349,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
+    List<Attribute> attributes = JavaConversions.asJavaCollection(DataTypeUtils.toAttributes(schema)).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
+    return ExpressionEncoder.apply(schema)
         .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
             SimpleAnalyzer$.MODULE$);
   }

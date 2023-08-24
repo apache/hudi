@@ -18,8 +18,7 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
+import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.types.DataType
 
 class HoodieSpark3_4AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)

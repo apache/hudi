@@ -360,7 +360,6 @@
             <version>${hive.version}</version>
             <scope>${utilities.bundle.hive.scope}</scope>
         </dependency>
-
     </dependencies>
 </project>
 
