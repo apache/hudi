@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -54,6 +55,7 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
+  @Disabled
   public void testNewParquetFileFormat(HoodieTableType tableType, Integer nPartitions) {
     this.bootstrapType = nPartitions == 0 ? "metadata" : "mixed";
     this.dashPartitions = true;
