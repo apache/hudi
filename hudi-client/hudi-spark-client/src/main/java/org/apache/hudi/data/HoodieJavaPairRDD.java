@@ -143,6 +143,14 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
+    return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(
+        pairRDDData.join(HoodieJavaPairRDD.getJavaPairRDD(other))
+            .map(tuple -> new Tuple2<>(tuple._1,
+                new ImmutablePair<>(tuple._2._1, tuple._2._2)))));
+  }
+
+  @Override
   public List<Pair<K, V>> collectAsList() {
     return pairRDDData.map(t -> Pair.of(t._1, t._2)).collect();
   }

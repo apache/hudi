@@ -69,8 +69,8 @@ public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
     // generate markers
     String instantTime1 = "101";
 
-    FileCreateUtils.createMarkerFile(tablePath, "partA", instantTime1, "f0", IOType.APPEND);
-    FileCreateUtils.createMarkerFile(tablePath, "partA", instantTime1, "f1", IOType.APPEND);
+    FileCreateUtils.createLogFileMarker(tablePath, "partA", instantTime1, "f0", IOType.APPEND);
+    FileCreateUtils.createLogFileMarker(tablePath, "partA", instantTime1, "f1", IOType.APPEND);
 
     assertEquals(2, FileCreateUtils.getTotalMarkerFileCount(tablePath, "partA", instantTime1, IOType.APPEND));
 

@@ -25,58 +25,59 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, false, true),
+  FILE("file", false, false, true, true),
   // Hadoop File System
-  HDFS("hdfs", true, false, true),
+  HDFS("hdfs", true, false, true, false),
   // Baidu Advanced File System
-  AFS("afs", true, null, null),
+  AFS("afs", true, null, null, null),
   // Mapr File System
-  MAPRFS("maprfs", true, null, null),
+  MAPRFS("maprfs", true, null, null, null),
   // Apache Ignite FS
-  IGNITE("igfs", true, null, null),
+  IGNITE("igfs", true, null, null, null),
   // AWS S3
-  S3A("s3a", false, true, null), S3("s3", false, true, null),
+  S3A("s3a", false, true, null, true),
+  S3("s3", false, true, null, true),
   // Google Cloud Storage
-  GCS("gs", false, true, null),
+  GCS("gs", false, true, null, true),
   // Azure WASB
-  WASB("wasb", false, null, null), WASBS("wasbs", false, null, null),
+  WASB("wasb", false, null, null, null), WASBS("wasbs", false, null, null, null),
   // Azure ADLS
-  ADL("adl", false, null, null),
+  ADL("adl", false, null, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", false, null, null), ABFSS("abfss", false, null, null),
+  ABFS("abfs", false, null, null, null), ABFSS("abfss", false, null, null, null),
   // Aliyun OSS
-  OSS("oss", false, null, null),
+  OSS("oss", false, null, null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   // View FS support atomic creation
-  VIEWFS("viewfs", true, null, true),
+  VIEWFS("viewfs", true, null, true, null),
   //ALLUXIO
-  ALLUXIO("alluxio", false, null, null),
+  ALLUXIO("alluxio", false, null, null, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", false, null, null),
+  COSN("cosn", false, null, null, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true, null, null),
+  CHDFS("ofs", true, null, null, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false, null, null),
+  GOOSEFS("gfs", false, null, null, null),
   // Databricks file system
-  DBFS("dbfs", false, null, null),
+  DBFS("dbfs", false, null, null, null),
   // IBM Cloud Object Storage
-  COS("cos", false, null, null),
+  COS("cos", false, null, null, null),
   // Huawei Cloud Object Storage
-  OBS("obs", false, null, null),
+  OBS("obs", false, null, null, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false, null, null),
+  KS3("ks3", false, null, null, null),
   // JuiceFileSystem
-  JFS("jfs", true, null, null),
+  JFS("jfs", true, null, null, null),
   // Baidu Object Storage
-  BOS("bos", false, null, null),
+  BOS("bos", false, null, null, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false, null, null),
+  OCI("oci", false, null, null, null),
   // Volcengine Object Storage
-  TOS("tos", false, null, null),
+  TOS("tos", false, null, null, null),
   // Volcengine Cloud HDFS
-  CFS("cfs", true, null, null),
+  CFS("cfs", true, null, null, null),
   // Aliyun Apsara File Storage for HDFS
-  DFS("dfs", true, false, true);
+  DFS("dfs", true, false, true, null);
 
   private String scheme;
   private boolean supportsAppend;
@@ -84,12 +85,17 @@ public enum StorageSchemes {
   private Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
   private Boolean supportAtomicCreation;
+  // list files may bring pressure to storage with centralized meta service like HDFS.
+  // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
+  // here is a trade-off between rpc times and throughput of storage meta service
+  private Boolean listStatusFriendly;
 
-  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
+  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusFriendly) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
+    this.listStatusFriendly = listStatusFriendly;
   }
 
   public String getScheme() {
@@ -106,6 +112,10 @@ public enum StorageSchemes {
 
   public boolean isAtomicCreationSupported() {
     return supportAtomicCreation != null && supportAtomicCreation;
+  }
+
+  public boolean getListStatusFriendly() {
+    return listStatusFriendly != null && listStatusFriendly;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -132,5 +142,12 @@ public enum StorageSchemes {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isAtomicCreationSupported() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isListStatusFriendly(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.getListStatusFriendly() && s.scheme.equals(scheme));
   }
 }

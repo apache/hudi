@@ -46,7 +46,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
@@ -130,6 +132,53 @@ public class DirectWriteMarkers extends WriteMarkers {
     return dataFiles;
   }
 
+  public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
+    Set<String> logFiles = new HashSet<>();
+
+    FileStatus[] topLevelStatuses = fs.listStatus(markerDirPath);
+    List<String> subDirectories = new ArrayList<>();
+    for (FileStatus topLevelStatus: topLevelStatuses) {
+      if (topLevelStatus.isFile()) {
+        String pathStr = topLevelStatus.getPath().toString();
+        if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && pathStr.endsWith(IOType.APPEND.name())) {
+          logFiles.add(translateMarkerToDataPath(pathStr));
+        }
+      } else {
+        subDirectories.add(topLevelStatus.getPath().toString());
+      }
+    }
+
+    if (subDirectories.size() > 0) {
+      parallelism = Math.min(subDirectories.size(), parallelism);
+      SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
+      logFiles.addAll(context.flatMap(subDirectories, directory -> {
+        Queue<Path> candidatesDirs = new LinkedList<>();
+        candidatesDirs.add(new Path(directory));
+        List<String> result = new ArrayList<>();
+        while (!candidatesDirs.isEmpty()) {
+          Path path = candidatesDirs.remove();
+          FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
+          RemoteIterator<FileStatus> itr = fileSystem.listStatusIterator(path);
+          while (itr.hasNext()) {
+            FileStatus status = itr.next();
+            if (status.isDirectory()) {
+              candidatesDirs.add(status.getPath());
+            } else {
+              String pathStr = status.getPath().toString();
+              if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && pathStr.endsWith(IOType.APPEND.name())) {
+                result.add(translateMarkerToDataPath(pathStr));
+              }
+            }
+          }
+        }
+        return result.stream();
+      }, parallelism));
+    }
+
+    return logFiles;
+  }
+
   private String translateMarkerToDataPath(String markerPath) {
     String rPath = MarkerUtils.stripMarkerFolderPrefix(markerPath, basePath, instantTime);
     return stripMarkerSuffix(rPath);
@@ -158,8 +207,8 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  protected Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, fileName, type), checkIfExists);
   }
 
   @Override
