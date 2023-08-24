@@ -35,10 +35,10 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
+import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
@@ -96,9 +96,9 @@ public class SparkDatasetTestUtils {
    * @return the encoder thus generated.
    */
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
+    List<Attribute> attributes = JavaConversions.asJavaCollection(DataTypeUtils.toAttributes(schema)).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
+    return ExpressionEncoder.apply(schema)
         .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
             SimpleAnalyzer$.MODULE$);
   }

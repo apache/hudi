@@ -27,9 +27,9 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.StructType;
 import scala.Function1;
 import scala.collection.JavaConversions;
@@ -101,9 +101,9 @@ public class KeyGeneratorTestUtilities {
   }
 
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
+    List<Attribute> attributes = JavaConversions.asJavaCollection(DataTypeUtils.toAttributes(schema)).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
+    return ExpressionEncoder.apply(schema)
         .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
             SimpleAnalyzer$.MODULE$);
   }
