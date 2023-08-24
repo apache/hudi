@@ -23,14 +23,20 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,6 +44,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
@@ -46,19 +53,32 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
+
+import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
@@ -102,6 +122,84 @@ public class SparkRDDWriteClient<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, HoodieJavaRDD.of(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+  }
+
+  protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
+                        List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
+    LOG.info("Committing " + instantTime + " action " + commitActionType);
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    HoodieCommitMetadata fixedCommitMetadata = addMissingLogFileIfNeeded(table, commitActionType, instantTime, metadata);
+    // Finalize write
+    finalizeWrite(table, instantTime, stats);
+    // do save internal schema to support Implicitly add columns in write process
+    if (!fixedCommitMetadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
+        && fixedCommitMetadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
+      saveInternalSchema(table, instantTime, fixedCommitMetadata);
+    }
+    // update Metadata table
+    writeTableMetadata(table, instantTime, fixedCommitMetadata, writeStatuses);
+    activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
+        Option.of(fixedCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
+  /* In spark mor table, any failed spark task may generate log files which are not included in write status.
+   * We need to add these to CommitMetadata so that it will be synced to MDT and make MDT has correct file info.
+   */
+  private HoodieCommitMetadata addMissingLogFileIfNeeded(HoodieTable table, String commitActionType, String instantTime,
+                                                         HoodieCommitMetadata commitMetadata) throws IOException {
+    if (!table.getMetaClient().getTableConfig().getTableType().equals(HoodieTableType.MERGE_ON_READ)
+        || !commitActionType.equals(HoodieActiveTimeline.DELTA_COMMIT_ACTION)) {
+      return commitMetadata;
+    }
+
+    HoodieCommitMetadata metadata = commitMetadata;
+    WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
+    // if there is log files in this delta commit, we search any invalid log files generated by failed spark task
+    boolean hasLogFileInDeltaCommit = metadata.getPartitionToWriteStats()
+        .values().stream().flatMap(List::stream)
+        .anyMatch(writeStat -> FSUtils.isLogFile(new Path(config.getBasePath(), writeStat.getPath()).getName()));
+    if (hasLogFileInDeltaCommit) {
+      // get all log files generated by log mark file
+      Set<String> logFilesMarkerPath = new HashSet<>(markers.appendedLogPaths(context, config.getFinalizeWriteParallelism()));
+
+      // remove valid log files
+      for (Map.Entry<String, List<HoodieWriteStat>> partitionAndWriteStats : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat hoodieWriteStat : partitionAndWriteStats.getValue()) {
+          logFilesMarkerPath.remove(hoodieWriteStat.getPath());
+        }
+      }
+
+      // remaining are invalid log files, let's generate write stat for them
+      if (logFilesMarkerPath.size() > 0) {
+        context.setJobStatus(this.getClass().getSimpleName(), "generate writeStat for missing log files");
+        List<Option<HoodieDeltaWriteStat>> fakeLogFileWriteStat = context.map(new ArrayList<>(logFilesMarkerPath), (logFilePath) -> {
+          FileSystem fileSystem = table.getMetaClient().getFs();
+          FileStatus fileStatus;
+          try {
+            fileStatus = fileSystem.getFileStatus(new Path(config.getBasePath(), logFilePath));
+          } catch (FileNotFoundException fileNotFoundException) {
+            return Option.empty();
+          }
+
+          HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
+          HoodieLogFile logFile = new HoodieLogFile(fileStatus);
+          writeStat.setPath(logFilePath);
+          writeStat.setFileId(logFile.getFileId());
+          writeStat.setTotalWriteBytes(logFile.getFileSize());
+          writeStat.setFileSizeInBytes(logFile.getFileSize());
+          writeStat.setLogVersion(logFile.getLogVersion());
+          writeStat.setLogFiles(Collections.singletonList(logFile.getPath().toString()));
+          writeStat.setPartitionPath(FSUtils.getRelativePartitionPath(new Path(config.getBasePath()), fileStatus.getPath().getParent()));
+          return Option.of(writeStat);
+        }, config.getFinalizeWriteParallelism());
+
+        // add these write stat to commit meta
+        for (Option<HoodieDeltaWriteStat> deltaWriteStat : fakeLogFileWriteStat) {
+          deltaWriteStat.ifPresent(d -> metadata.addWriteStat(d.getPartitionPath(), d));
+        }
+      }
+    }
+    return metadata;
   }
 
   @Override

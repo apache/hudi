@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -39,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
@@ -255,7 +257,12 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
         .withSuffix(suffix)
+        .withLogWriteCallback(getLogWriteCallback())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+  }
+
+  protected HoodieLogFileWriteCallback getLogWriteCallback() {
+    return new AppendLogWriteCallback();
   }
 
   protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
@@ -274,6 +281,35 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     } catch (IOException e) {
       LOG.error("Fail to get indexRecord from " + record, e);
       return Option.empty();
+    }
+  }
+
+  protected class AppendLogWriteCallback implements HoodieLogFileWriteCallback {
+    // here we distinguish log files created from log files being appended. Considering following scenario:
+    // An appending task write to log file.
+    // (1) append to existing file file_instant_writetoken1.log.1
+    // (2) rollover and create file file_instant_writetoken2.log.2
+    // Then this task failed and retry by a new task.
+    // (3) append to existing file file_instant_writetoken1.log.1
+    // (4) rollover and create file file_instant_writetoken3.log.2
+    // finally file_instant_writetoken2.log.2 should not be committed to hudi, we use marker file to delete it.
+    // keep in mind that log file is not always fail-safe unless it never roll over
+
+    @Override
+    public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+      return createAppendMarker(logFileToAppend);
+    }
+
+    @Override
+    public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+      // TODO: HUDI-1517 may distinguish log file created from log file being appended in the future @guanziyue
+      return createAppendMarker(logFileToCreate);
+    }
+
+    private boolean createAppendMarker(HoodieLogFile logFileToAppend) {
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+          config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
   }
 }

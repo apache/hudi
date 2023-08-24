@@ -21,18 +21,29 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.AppendResult;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -43,6 +54,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -60,8 +73,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -343,6 +359,48 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+      long expectedLogFileNum = statuses.map(writeStatus -> (HoodieDeltaWriteStat) writeStatus.getStat())
+          .flatMap(deltaWriteStat -> deltaWriteStat.getLogFiles().iterator())
+          .count();
+      // inject a fake log file to test marker file for log file
+      HoodieDeltaWriteStat correctWriteStat = (HoodieDeltaWriteStat) statuses.map(WriteStatus::getStat).take(1).get(0);
+      assertTrue(FSUtils.isLogFile(new Path(correctWriteStat.getPath())));
+      HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
+      String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
+
+      final String fakeToken = generateFakeWriteToken(correctWriteToken);
+
+      final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
+          HoodieSparkTable.create(config, context()), newCommitTime);
+      HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
+          .onParentPath(FSUtils.getPartitionPath(config.getBasePath(), correctWriteStat.getPartitionPath()))
+          .withFileId(correctWriteStat.getFileId()).overBaseCommit(newCommitTime)
+          .withLogVersion(correctLogFile.getLogVersion())
+          .withFileSize(0L)
+          .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs())
+          .withRolloverLogWriteToken(fakeToken)
+          .withLogWriteToken(fakeToken)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .withLogWriteCallback(new HoodieLogFileWriteCallback() {
+            @Override
+            public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToAppend.getFileName(), IOType.APPEND).isPresent();
+            }
+
+            @Override
+            public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToCreate.getFileName(), IOType.APPEND).isPresent();
+            }
+          }).build();
+      AppendResult fakeAppendResult = fakeLogWriter.appendBlock(getLogBlock(records, config.getSchema()));
+      fakeLogWriter.close();
+      // check marker for fake log generated
+      assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(fakeToken)));
+      SyncableFileSystemView unCommittedFsView = getFileSystemViewWithUnCommittedSlices(metaClient);
+      // check fake log generated
+      assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath())
+          .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
+          .anyMatch(path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
       writeClient.commit(newCommitTime, statuses);
 
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
@@ -354,7 +412,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         List<FileSlice> allSlices = tableRTFileSystemView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
         assertEquals(0, allSlices.stream().filter(fileSlice -> fileSlice.getBaseFile().isPresent()).count());
         assertTrue(allSlices.stream().anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
-        long logFileCount = allSlices.stream().filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
+        long logFileCount = allSlices.stream().mapToLong(fileSlice -> fileSlice.getLogFiles().count()).sum();
         if (logFileCount > 0) {
           // check the log versions start from the base version
           assertTrue(allSlices.stream().map(slice -> slice.getLogFiles().findFirst().get().getLogVersion())
@@ -363,7 +421,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         numLogFiles += logFileCount;
       }
 
-      assertTrue(numLogFiles > 0);
+      assertEquals(expectedLogFileNum + 1, numLogFiles);
+      Option<byte[]> bytes = table.getActiveTimeline().getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get());
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(bytes.get(), HoodieCommitMetadata.class);
+      assertEquals(expectedLogFileNum + 1, commitMetadata.getWriteStats().size());
       // Do a compaction
       String instantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
@@ -373,5 +434,21 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
       writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     }
+  }
+
+  private HoodieDataBlock getLogBlock(List<HoodieRecord> hoodieRecords, String schema) {
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema);
+    return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  private String generateFakeWriteToken(String correctWriteToken) {
+    Random random = new Random();
+    String fakeToken = "";
+    do {
+      fakeToken = Math.abs(random.nextInt()) + "-" + Math.abs(random.nextInt()) + "-" + Math.abs(random.nextInt());
+    } while (fakeToken.equals(correctWriteToken));
+    return fakeToken;
   }
 }
