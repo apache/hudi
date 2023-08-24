@@ -23,6 +23,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Attri
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
@@ -172,8 +173,7 @@ class Spark34NestedSchemaPruning extends Rule[LogicalPlan] {
     // with the expression ids of the original relation output attributes so that
     // references to the original relation's output are not broken
     val outputIdMap = output.map(att => (att.name, att.exprId)).toMap
-    requiredSchema
-      .toAttributes
+    DataTypeUtils.toAttributes(requiredSchema)
       .map {
         case att if outputIdMap.contains(att.name) =>
           att.withExprId(outputIdMap(att.name))

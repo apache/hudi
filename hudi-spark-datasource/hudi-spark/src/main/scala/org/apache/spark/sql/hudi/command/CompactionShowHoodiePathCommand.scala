@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedureUtils, ShowCompactionProcedure}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
@@ -40,5 +41,5 @@ case class CompactionShowHoodiePathCommand(path: String, limit: Int)
     ShowCompactionProcedure.builder.get().build.call(procedureArgs)
   }
 
-  override val output: Seq[Attribute] = ShowCompactionProcedure.builder.get().build.outputType.toAttributes
+  override val output: Seq[Attribute] = DataTypeUtils.toAttributes(ShowCompactionProcedure.builder.get().build.outputType)
 }

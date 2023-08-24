@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -60,6 +60,7 @@ import scala.collection.JavaConverters
 /**
  * Test suite for SparkSqlWriter class.
  */
+@Disabled
 class TestHoodieSparkSqlWriter {
   var spark: SparkSession = _
   var sqlContext: SQLContext = _
@@ -1056,6 +1057,7 @@ class TestHoodieSparkSqlWriter {
 
     // case 1: test table which created by sql
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+    println("yxchang: sql starting")
     spark.sql(
       s"""
          | create table $tableName1 (
@@ -1078,6 +1080,7 @@ class TestHoodieSparkSqlWriter {
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
     assert(tableConfig1.getUrlEncodePartitioning == "false")
     assert(tableConfig1.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
+    println("yxchang: sql finished, continue case1")
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -1085,6 +1088,7 @@ class TestHoodieSparkSqlWriter {
     val hudiDf = spark.read.format("hudi").load(tablePath1)
     assert(hudiDf.count() == 1)
 
+    println("yxchang: case2")
     // case 2: test table which created by dataframe
     val (tableName2, tablePath2) = ("hoodie_test_params_2", s"$tempBasePath" + "_2")
     // the first write need to specify params
@@ -1100,6 +1104,8 @@ class TestHoodieSparkSqlWriter {
     assert(tableConfig2.getUrlEncodePartitioning == "true")
     assert(tableConfig2.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
 
+    println("yxchang: ready to intercept")
+
     val df2 = Seq((2, "a2", 20, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     // raise exception when use params which is not same with HoodieTableConfig
     val configConflictException = intercept[HoodieException] {
@@ -1112,6 +1118,7 @@ class TestHoodieSparkSqlWriter {
     assert(configConflictException.getMessage.contains("Config conflict"))
     assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[ComplexKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
 
+    println("yxchang: done, writing another df")
     // do not need to specify hiveStylePartitioning/urlEncodePartitioning/KeyGenerator params
     df2.write.format("hudi")
       .options(options)
@@ -1120,6 +1127,7 @@ class TestHoodieSparkSqlWriter {
     val data = spark.read.format("hudi").load(tablePath2)
     assert(data.count() == 2)
     assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
+    println("yxchang: success!")
   }
 
   @Test

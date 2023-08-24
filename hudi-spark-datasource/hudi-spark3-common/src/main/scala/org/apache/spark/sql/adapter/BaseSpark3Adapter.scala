@@ -26,7 +26,7 @@ import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
@@ -57,7 +57,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
+    val encoder = ExpressionEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
   }
 
