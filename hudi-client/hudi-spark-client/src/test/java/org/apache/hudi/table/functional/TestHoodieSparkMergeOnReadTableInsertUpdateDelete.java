@@ -406,7 +406,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
-
+      // get log file number from filesystem view
       long numLogFiles = 0;
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> allSlices = tableRTFileSystemView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -420,9 +420,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         }
         numLogFiles += logFileCount;
       }
-
+      // check log file number in file system cover both valid log file and invalid log file
       assertEquals(expectedLogFileNum + 1, numLogFiles);
       Option<byte[]> bytes = table.getActiveTimeline().getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get());
+      // check log file number in commit metadata cover both valid log file and invalid log file
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(bytes.get(), HoodieCommitMetadata.class);
       assertEquals(expectedLogFileNum + 1, commitMetadata.getWriteStats().size());
       // Do a compaction
