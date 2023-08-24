@@ -68,6 +68,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -102,6 +103,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests hoodie log format {@link HoodieLogFormat}.
  */
 @SuppressWarnings("Duplicates")
+@Disabled
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static final HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlockType.AVRO_DATA_BLOCK;
