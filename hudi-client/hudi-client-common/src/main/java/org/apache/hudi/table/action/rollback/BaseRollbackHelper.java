@@ -207,7 +207,9 @@ public class BaseRollbackHelper implements Serializable {
     return new HoodieLogFileWriteCallback() {
       @Override
       public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-        return createAppendMarker(logFileToAppend);
+        // there may be existed marker file if fs support append. So always return true;
+        createAppendMarker(logFileToAppend);
+        return true;
       }
 
       @Override
@@ -216,7 +218,7 @@ public class BaseRollbackHelper implements Serializable {
       }
 
       private boolean createAppendMarker(HoodieLogFile logFileToAppend) {
-        return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+        return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
             config, fileId, metaClient.getActiveTimeline()).isPresent();
       }
     };
@@ -240,7 +242,7 @@ public class BaseRollbackHelper implements Serializable {
     Map<String, List<Path>> partitionsToLogFiles = logPaths
         .stream()
         .map(logFilePath -> new Path(config.getBasePath(), logFilePath))
-        .collect(Collectors.groupingBy(fullFilePath -> FSUtils.getRelativePartitionPath(basePath, fullFilePath)));
+        .collect(Collectors.groupingBy(fullFilePath -> FSUtils.getRelativePartitionPath(basePath, fullFilePath.getParent())));
 
     // one log file included in rollback request means they are created by delta commit.
     Map<String, Set<String>> partitionsToLogFileNameGeneratedByDeltaCommit = new HashMap<>();
@@ -271,10 +273,15 @@ public class BaseRollbackHelper implements Serializable {
         .stream()
         .map(rbs -> Pair.of(rbs, partitionsToLogFilesGeneratedByRollback.get(rbs.getPartitionPath())))
         .collect(Collectors.toList());
-
+    context.setJobStatus(this.getClass().getName(), "add additional log files in rollback");
     return context.map(rollbackStatsAndLogFilesCreated, rollbackStatAndLogFiles -> {
       HoodieRollbackStat originalRollbackStat = rollbackStatAndLogFiles.getKey();
-      Set<Path> allLogFilesCreatedInRollback = rollbackStatAndLogFiles.getValue();
+      // this partition doesn't have log blocks to rollback. So will not create rollback command block
+      if (originalRollbackStat.getCommandBlocksCount().isEmpty()) {
+        return originalRollbackStat;
+      }
+      Set<Path> allLogFilesCreatedInRollback = Objects.requireNonNull(rollbackStatAndLogFiles.getValue());
+
       Set<String> logFilesInRollbackStat = originalRollbackStat.getCommandBlocksCount()
           .keySet().stream()
           .map(f -> f.getPath().getName())
@@ -284,11 +291,16 @@ public class BaseRollbackHelper implements Serializable {
           .map(Path::getName)
           .filter(name -> !logFilesInRollbackStat.contains(name))
           .collect(Collectors.toSet());
+      // No additional log files created
       if (additionalLogFileNames.size() == 0) {
         return originalRollbackStat;
       }
+
+      // file additional log files' file statuses
       Path fullPartitionPath = new Path(config.getBasePath(), originalRollbackStat.getPartitionPath());
       FileStatus[] fileStatuses = FSUtils.getFileStatusesUnderPartition(table.getMetaClient().getFs(), fullPartitionPath, additionalLogFileNames);
+
+      // build new rollbackStat
       HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
           .withPartitionPath(originalRollbackStat.getPartitionPath());
       for (String file : originalRollbackStat.getSuccessDeleteFiles()) {
