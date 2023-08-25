@@ -368,18 +368,18 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieLogFile correctLogFile = new HoodieLogFile(correctWriteStat.getPath());
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
 
-      final String fakeToken = generateFakeWriteToken(correctWriteToken);
+      final String newToken = generateNewDifferentWriteToken(correctWriteToken);
 
       final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
           HoodieSparkTable.create(config, context()), newCommitTime);
-      HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
+      HoodieLogFormat.Writer additionalLogWriter = HoodieLogFormat.newWriterBuilder()
           .onParentPath(FSUtils.getPartitionPath(config.getBasePath(), correctWriteStat.getPartitionPath()))
           .withFileId(correctWriteStat.getFileId()).overBaseCommit(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
           .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs())
-          .withRolloverLogWriteToken(fakeToken)
-          .withLogWriteToken(fakeToken)
+          .withRolloverLogWriteToken(newToken)
+          .withLogWriteToken(newToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
           .withLogWriteCallback(new HoodieLogFileWriteCallback() {
             @Override
@@ -392,15 +392,15 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
               return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToCreate.getFileName(), IOType.APPEND).isPresent();
             }
           }).build();
-      AppendResult fakeAppendResult = fakeLogWriter.appendBlock(getLogBlock(records, config.getSchema()));
-      fakeLogWriter.close();
-      // check marker for fake log generated
-      assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(fakeToken)));
+      AppendResult additionalAppendResult = additionalLogWriter.appendBlock(getLogBlock(records, config.getSchema()));
+      additionalLogWriter.close();
+      // check marker for additional log generated
+      assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(newToken)));
       SyncableFileSystemView unCommittedFsView = getFileSystemViewWithUnCommittedSlices(metaClient);
-      // check fake log generated
+      // check additional log generated
       assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath())
           .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
-          .anyMatch(path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
+          .anyMatch(path -> path.getName().equals(additionalAppendResult.logFile().getPath().getName())));
       writeClient.commit(newCommitTime, statuses);
 
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
@@ -420,10 +420,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         }
         numLogFiles += logFileCount;
       }
-      // check log file number in file system cover both valid log file and invalid log file
+      // check log file number in file system to cover all log files including additional log files created with spark task retries
       assertEquals(expectedLogFileNum + 1, numLogFiles);
       Option<byte[]> bytes = table.getActiveTimeline().getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get());
-      // check log file number in commit metadata cover both valid log file and invalid log file
+      // check log file number in commit metadata cover all log files mentioned above
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(bytes.get(), HoodieCommitMetadata.class);
       assertEquals(expectedLogFileNum + 1, commitMetadata.getWriteStats().size());
       // Do a compaction
@@ -444,7 +444,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
-  private String generateFakeWriteToken(String correctWriteToken) {
+  private String generateNewDifferentWriteToken(String correctWriteToken) {
     Random random = new Random();
     String fakeToken = "";
     do {

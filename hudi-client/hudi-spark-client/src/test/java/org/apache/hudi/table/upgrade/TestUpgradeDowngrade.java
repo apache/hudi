@@ -862,8 +862,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       WriteMarkers writeMarkers =
           WriteMarkersFactory.get(table.getConfig().getMarkersType(), table, instant.getTimestamp());
       Set<String> oldMarkers = writeMarkers.allMarkerFilePaths();
-      boolean hasAppendMarker = oldMarkers.stream().anyMatch(marker -> marker.contains(IOType.APPEND.name())
-          || marker.contains(IOType.CREATE.name()));
+      boolean hasAppendMarker = oldMarkers.stream().anyMatch(marker -> marker.contains(IOType.APPEND.name()));
       if (hasAppendMarker) {
         // delete all markers and regenerate
         writeMarkers.deleteMarkerDir(table.getContext(), 2);
