@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
 import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
@@ -78,21 +79,21 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
-    // hdfsTestService = new HdfsTestService();
-    // fs = hdfsTestService.start(true).getFileSystem();
+    hdfsTestService = new HdfsTestService();
+    fs = hdfsTestService.start(true).getFileSystem();
   }
 
   @AfterAll
   public static void tearDownClass() {
-    // hdfsTestService.stop();
+    hdfsTestService.stop();
   }
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
-    // assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
+    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
   }
 
-  // @Test
+  @Test
   public void multiPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
     // test for HUDI-1718
     Configuration conf = new Configuration();
@@ -175,7 +176,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     recordReader.close();
   }
 
-  // @Test
+  @Test
   public void multiLevelPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
     // test for HUDI-1718
     Configuration conf = new Configuration();
@@ -247,7 +248,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     recordReader.close();
   }
 
-  // @Test
+  @Test
   public void testMultiReaderRealtimeCombineHoodieInputFormat() throws Exception {
     // test for hudi-1722
     Configuration conf = new Configuration();
