@@ -132,7 +132,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     return dataFiles;
   }
 
-  public Set<String> appendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
+  public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
     Set<String> logFiles = new HashSet<>();
 
     FileStatus[] topLevelStatuses = fs.listStatus(markerDirPath);

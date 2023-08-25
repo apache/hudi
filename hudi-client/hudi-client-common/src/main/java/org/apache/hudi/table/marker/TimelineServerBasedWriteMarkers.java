@@ -123,7 +123,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  public Set<String> appendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
+  public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       Set<String> markerPaths = executeRequestToTimelineServer(

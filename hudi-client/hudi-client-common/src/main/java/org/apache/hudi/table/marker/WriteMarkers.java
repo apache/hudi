@@ -214,7 +214,7 @@ public abstract class WriteMarkers implements Serializable {
    * @return all the log file paths of write IO type "APPEND"
    * @throws IOException
    */
-  public abstract Set<String> appendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
+  public abstract Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
 
   /**
    * @return all the marker paths

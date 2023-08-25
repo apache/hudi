@@ -232,7 +232,7 @@ public class BaseRollbackHelper implements Serializable {
     WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
     Set<String> logPaths;
     try {
-      logPaths = markers.appendedLogPaths(context, config.getFinalizeWriteParallelism());
+      logPaths = markers.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to list log file markers", e);
     }
