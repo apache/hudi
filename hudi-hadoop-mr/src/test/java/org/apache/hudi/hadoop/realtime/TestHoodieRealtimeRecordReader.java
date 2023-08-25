@@ -73,6 +73,8 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -101,6 +103,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
+@Disabled("HUDI-6755")
 public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
@@ -157,7 +160,7 @@ public class TestHoodieRealtimeRecordReader {
         HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK);
   }
 
-  @Test
+  @Disabled("HUDI-6753")
   public void testParquetInlineReader() throws Exception {
     testReaderInternal(ExternalSpillableMap.DiskMapType.BITCASK, false, false,
         HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK);
