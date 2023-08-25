@@ -133,7 +133,6 @@ public abstract class AbstractRealtimeRecordReader {
       LOG.warn("fall to init HiveAvroSerializer to support payload merge", e);
       this.supportPayload = false;
     }
-
   }
 
   /**
