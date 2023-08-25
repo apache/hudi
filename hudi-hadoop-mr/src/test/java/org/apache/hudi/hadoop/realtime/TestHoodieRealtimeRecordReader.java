@@ -160,7 +160,7 @@ public class TestHoodieRealtimeRecordReader {
         HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK);
   }
 
-  @Disabled("HUDI-6753")
+  @Test
   public void testParquetInlineReader() throws Exception {
     testReaderInternal(ExternalSpillableMap.DiskMapType.BITCASK, false, false,
         HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK);
