@@ -86,6 +86,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
@@ -131,15 +132,28 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   protected HoodieTableFileSystemView tableView;
   protected HoodieJavaWriteClient writeClient;
 
+  @AfterAll
+  public static void tearDownAll() throws IOException {
+    FileSystem.closeAll();
+  }
+
   @BeforeEach
   protected void initResources() throws IOException {
-    basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toUri().getPath();
+    basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
     hadoopConf = new Configuration();
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
     initFileSystem(basePath, hadoopConf);
     initTestDataGenerator();
     initMetaClient();
+  }
+
+  @AfterEach
+  protected void cleanupResources() throws IOException {
+    cleanupClients();
+    cleanupTestDataGenerator();
+    cleanupFileSystem();
+    cleanupExecutorService();
   }
 
   public class TestJavaTaskContextSupplier extends TaskContextSupplier {
@@ -170,14 +184,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
     }
-  }
-
-  @AfterEach
-  protected void cleanupResources() throws IOException {
-    cleanupClients();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupExecutorService();
   }
 
   protected void initFileSystem(String basePath, Configuration hadoopConf) {
