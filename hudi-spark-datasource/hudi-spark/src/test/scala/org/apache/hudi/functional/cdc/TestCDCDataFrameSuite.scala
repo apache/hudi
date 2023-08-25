@@ -687,6 +687,5 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
 
     assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
-
   }
 }
