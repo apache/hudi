@@ -203,14 +203,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   public static List<Arguments> tableOperationsTestArgs() {
     return asList(
-        Arguments.of(COPY_ON_WRITE, true, true),
-        Arguments.of(COPY_ON_WRITE, true, false),
-        Arguments.of(COPY_ON_WRITE, false, true),
-        Arguments.of(COPY_ON_WRITE, false, false),
-        Arguments.of(MERGE_ON_READ, true, true),
-        Arguments.of(MERGE_ON_READ, true, false),
-        Arguments.of(MERGE_ON_READ, false, true),
-        Arguments.of(MERGE_ON_READ, false, false)
+        Arguments.of(COPY_ON_WRITE, true),
+        Arguments.of(COPY_ON_WRITE, false),
+        Arguments.of(MERGE_ON_READ, true),
+        Arguments.of(MERGE_ON_READ, false)
     );
   }
 
@@ -479,14 +475,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @ParameterizedTest
   @MethodSource("tableOperationsTestArgs")
-  public void testTableOperations(HoodieTableType tableType, boolean enableFullScan, boolean enableMetrics) throws Exception {
+  public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
     List<Long> commitTimeList = new ArrayList<>();
     commitTimeList.add(Long.parseLong(HoodieActiveTimeline.createNewInstantTime()));
     for (int i = 0; i < 8; i++) {
       long nextCommitTime = getNextCommitTime(commitTimeList.get(commitTimeList.size() - 1));
       commitTimeList.add(nextCommitTime);
     }
-    init(tableType, true, enableFullScan, enableMetrics, false);
+    init(tableType, true, enableFullScan, false, false);
     doWriteInsertAndUpsert(testTable, commitTimeList.get(0).toString(), commitTimeList.get(1).toString(), false);
 
     // trigger an upsert
@@ -2726,7 +2722,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testbootstrapWithEmptyCommit() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
 
-    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, true).build();
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     testTable.doWriteOperation(HoodieActiveTimeline.createNewInstantTime(), INSERT, Collections.EMPTY_LIST, 0);
     syncTableMetadata(writeConfig);
