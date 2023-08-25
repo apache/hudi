@@ -313,6 +313,29 @@ public class FSUtils {
     }
   }
 
+  public static FileStatus[] getFileStatusesUnderPartition(FileSystem fileSystem,
+                                                           Path partitionPathIncludeBasePath,
+                                                           Set<String> filesNamesUnderThisPartition) {
+    String fileSystemType = fileSystem.getScheme();
+    boolean useListStatus = !StorageSchemes.isListStatusUnfriendly(fileSystemType);
+    try {
+      if (useListStatus) {
+        return fileSystem.listStatus(partitionPathIncludeBasePath,
+            path -> filesNamesUnderThisPartition.contains(path.getName()));
+      } else {
+        FileStatus[] result = new FileStatus[filesNamesUnderThisPartition.size()];
+        int index = 0;
+        for (String fileName : filesNamesUnderThisPartition) {
+          Path fullPath = new Path(partitionPathIncludeBasePath.toString(), fileName);
+          result[index++] = fileSystem.getFileStatus(fullPath);
+        }
+        return result;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("List files under " + partitionPathIncludeBasePath + " failed", e);
+    }
+  }
+
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
     String fileName = new File(fullName).getName();

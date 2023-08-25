@@ -146,7 +146,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
         "002").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
 
-    List<HoodieRollbackStat> stats = new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    List<HoodieRollbackStat> stats = new BaseRollbackHelper(hoodieTable, getConfig()).performRollback(context,
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
         rollbackRequests);
 
@@ -254,7 +254,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         "002").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
 
     // rollback 1st commit and ensure stats reflect the info.
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    return new BaseRollbackHelper(hoodieTable, getConfig()).performRollback(context,
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
         rollbackRequests);
   }
@@ -279,7 +279,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         "003").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
 
     // rollback 2nd commit and ensure stats reflect the info.
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    return new BaseRollbackHelper(hoodieTable, getConfig()).performRollback(context,
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
         rollbackRequests);
   }

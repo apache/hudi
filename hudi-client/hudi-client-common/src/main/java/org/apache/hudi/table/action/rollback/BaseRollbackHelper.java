@@ -24,7 +24,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -33,6 +35,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -43,11 +48,14 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,11 +67,13 @@ public class BaseRollbackHelper implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
+  protected final HoodieTable table;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieWriteConfig config;
 
-  public BaseRollbackHelper(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    this.metaClient = metaClient;
+  public BaseRollbackHelper(HoodieTable table, HoodieWriteConfig config) {
+    this.table = table;
+    this.metaClient = table.getMetaClient();
     this.config = config;
   }
 
@@ -79,8 +89,16 @@ public class BaseRollbackHelper implements Serializable {
     // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
     // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
     List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
-    return context.reduceByKey(maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, true, parallelism),
-        RollbackUtils::mergeRollbackStat, parallelism);
+    List<Pair<String, HoodieRollbackStat>> getRollbackStats = maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, true, parallelism);
+    List<HoodieRollbackStat> mergedRollbackStatByPartitionPath = context.reduceByKey(getRollbackStats, RollbackUtils::mergeRollbackStat, parallelism);
+
+    // Considering rollback may failed before, which generated some additional log files. We need to add these log files back.
+    boolean hasLogBlockToRollback = rollbackRequests.stream().anyMatch(rollbackRequest -> !rollbackRequest.getLogBlocksToBeDeleted().isEmpty());
+    if (hasLogBlockToRollback) {
+      mergedRollbackStatByPartitionPath = addAdditionalLogFile(context, instantToRollback, rollbackRequests,
+          mergedRollbackStatByPartitionPath, parallelism);
+    }
+    return mergedRollbackStatByPartitionPath;
   }
 
   /**
@@ -123,14 +141,19 @@ public class BaseRollbackHelper implements Serializable {
         HoodieLogFormat.Writer writer = null;
         final Path filePath;
         try {
+          String partitionPath = rollbackRequest.getPartitionPath();
           String fileId = rollbackRequest.getFileId();
           String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
+
+          // Pls attention that, we use instantToRollback rather than instant of current rollback for marker file.
+          WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
 
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .overBaseCommit(latestBaseInstant)
               .withFs(metaClient.getFs())
+              .withLogWriteCallback(getRollbackLogMarkerCallback(writeMarkers, partitionPath, fileId))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata
@@ -178,6 +201,109 @@ public class BaseRollbackHelper implements Serializable {
             .stream();
       }
     }, numPartitions);
+  }
+
+  private HoodieLogFileWriteCallback getRollbackLogMarkerCallback(final WriteMarkers writeMarkers, String partitionPath, String fileId) {
+    return new HoodieLogFileWriteCallback() {
+      @Override
+      public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+        return createAppendMarker(logFileToAppend);
+      }
+
+      @Override
+      public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+        return createAppendMarker(logFileToCreate);
+      }
+
+      private boolean createAppendMarker(HoodieLogFile logFileToAppend) {
+        return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+            config, fileId, metaClient.getActiveTimeline()).isPresent();
+      }
+    };
+  }
+
+  private List<HoodieRollbackStat> addAdditionalLogFile(HoodieEngineContext context,
+                                                        final HoodieInstant instantToRollback,
+                                                        List<HoodieRollbackRequest> rollbackRequests,
+                                                        List<HoodieRollbackStat> originalRollbackStats,
+                                                        int parallelism) {
+    WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
+    Set<String> logPaths;
+    try {
+      logPaths = markers.appendedLogPaths(context, config.getFinalizeWriteParallelism());
+    } catch (IOException e) {
+      throw new HoodieRollbackException("Failed to list log file markers", e);
+    }
+    final Path basePath = new Path(config.getBasePath());
+
+    // here we have all log files in this instant, including ones created by delta commit as well as rollback.
+    Map<String, List<Path>> partitionsToLogFiles = logPaths
+        .stream()
+        .map(logFilePath -> new Path(config.getBasePath(), logFilePath))
+        .collect(Collectors.groupingBy(fullFilePath -> FSUtils.getRelativePartitionPath(basePath, fullFilePath)));
+
+    // one log file included in rollback request means they are created by delta commit.
+    Map<String, Set<String>> partitionsToLogFileNameGeneratedByDeltaCommit = new HashMap<>();
+    rollbackRequests.forEach(rbr -> {
+      Set<String> logFileName = partitionsToLogFileNameGeneratedByDeltaCommit.getOrDefault(rbr.getPartitionPath(), new HashSet<>());
+      for (String logFileFullPath : rbr.getLogBlocksToBeDeleted().keySet()) {
+        logFileName.add(new Path(logFileFullPath).getName());
+      }
+      partitionsToLogFileNameGeneratedByDeltaCommit.putIfAbsent(rbr.getPartitionPath(), logFileName);
+    });
+
+    // get log files created by rollback by removing those created in delta commit from all.
+    Map<String, Set<Path>> partitionsToLogFilesGeneratedByRollback = partitionsToLogFiles
+        .entrySet()
+        .stream()
+        .map(partitionAndLogFiles -> {
+          String partitionPath = partitionAndLogFiles.getKey();
+          Set<String> logFilesGeneratedByDeltaCommit = Objects.requireNonNull(partitionsToLogFileNameGeneratedByDeltaCommit.get(partitionPath),
+              "invalid partition: " + partitionPath);
+          Set<Path> logFilesGeneratedByRollback = partitionAndLogFiles.getValue()
+              .stream().filter(p -> !logFilesGeneratedByDeltaCommit.contains(p.getName()))
+              .collect(Collectors.toSet());
+          return Pair.of(partitionPath, logFilesGeneratedByRollback);
+        })
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    List<Pair<HoodieRollbackStat, Set<Path>>> rollbackStatsAndLogFilesCreated = originalRollbackStats
+        .stream()
+        .map(rbs -> Pair.of(rbs, partitionsToLogFilesGeneratedByRollback.get(rbs.getPartitionPath())))
+        .collect(Collectors.toList());
+
+    return context.map(rollbackStatsAndLogFilesCreated, rollbackStatAndLogFiles -> {
+      HoodieRollbackStat originalRollbackStat = rollbackStatAndLogFiles.getKey();
+      Set<Path> allLogFilesCreatedInRollback = rollbackStatAndLogFiles.getValue();
+      Set<String> logFilesInRollbackStat = originalRollbackStat.getCommandBlocksCount()
+          .keySet().stream()
+          .map(f -> f.getPath().getName())
+          .collect(Collectors.toSet());
+      Set<String> additionalLogFileNames = allLogFilesCreatedInRollback
+          .stream()
+          .map(Path::getName)
+          .filter(name -> !logFilesInRollbackStat.contains(name))
+          .collect(Collectors.toSet());
+      if (additionalLogFileNames.size() == 0) {
+        return originalRollbackStat;
+      }
+      Path fullPartitionPath = new Path(config.getBasePath(), originalRollbackStat.getPartitionPath());
+      FileStatus[] fileStatuses = FSUtils.getFileStatusesUnderPartition(table.getMetaClient().getFs(), fullPartitionPath, additionalLogFileNames);
+      HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
+          .withPartitionPath(originalRollbackStat.getPartitionPath());
+      for (String file : originalRollbackStat.getSuccessDeleteFiles()) {
+        builder.withDeletedFileResult(file, true);
+      }
+
+      for (String file : originalRollbackStat.getFailedDeleteFiles()) {
+        builder.withDeletedFileResult(file, false);
+      }
+
+      Map<FileStatus, Long> commandBlocksCount = new HashMap<>(originalRollbackStat.getCommandBlocksCount());
+      Arrays.stream(fileStatuses).forEach(f -> commandBlocksCount.put(f, 1L));
+      builder.withRollbackBlockAppendResults(commandBlocksCount);
+      return builder.build();
+    }, parallelism);
   }
 
   /**

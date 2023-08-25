@@ -154,14 +154,14 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       latestLogFileOption = Option.of(latestLogFile);
     }
 
-    Map<String, Long> logFilesWithBlocsToRollback = new HashMap<>();
+    Map<String, Long> logFilesWithBlocksToRollback = new HashMap<>();
     if (latestLogFileOption.isPresent()) {
       HoodieLogFile latestLogFile = latestLogFileOption.get();
       // NOTE: Marker's don't carry information about the cumulative size of the blocks that have been appended,
       //       therefore we simply stub this value.
-      logFilesWithBlocsToRollback = Collections.singletonMap(latestLogFile.getPath().toString(), -1L);
+      logFilesWithBlocksToRollback = Collections.singletonMap(latestLogFile.getPath().toString(), -1L);
     }
     return new HoodieRollbackRequest(relativePartitionPath, fileId, baseCommitTime, Collections.emptyList(),
-        logFilesWithBlocsToRollback);
+        logFilesWithBlocksToRollback);
   }
 }
