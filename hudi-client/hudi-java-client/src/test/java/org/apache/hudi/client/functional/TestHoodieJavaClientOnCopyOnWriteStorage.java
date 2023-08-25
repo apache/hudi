@@ -934,11 +934,11 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   private HoodieWriteMetadata<List<WriteStatus>> performClustering(HoodieClusteringConfig clusteringConfig,
-                                                                      boolean populateMetaFields,
-                                                                      boolean completeClustering,
-                                                                      String validatorClasses,
-                                                                      String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation,
-                                                                      Pair<List<HoodieRecord>, List<String>> allRecords) throws IOException {
+                                                                   boolean populateMetaFields,
+                                                                   boolean completeClustering,
+                                                                   String validatorClasses,
+                                                                   String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation,
+                                                                   Pair<List<HoodieRecord>, List<String>> allRecords) throws IOException {
     HoodiePreCommitValidatorConfig validatorConfig = HoodiePreCommitValidatorConfig.newBuilder()
         .withPreCommitValidator(StringUtils.nullToEmpty(validatorClasses))
         .withPrecommitValidatorEqualitySqlQueries(sqlQueryForEqualityValidation)
