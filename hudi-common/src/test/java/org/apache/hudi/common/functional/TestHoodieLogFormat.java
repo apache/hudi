@@ -737,7 +737,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       Function5<Set<HoodieLogFile>, Path, Schema, List<IndexedRecord>, Integer, Boolean> logGenFunc)
       throws IOException, URISyntaxException, InterruptedException {
 
-    // Generate 4 delta-log files w/ random records
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400);
