@@ -1247,31 +1247,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       }
     });
 
-    //Make the MDT appear to fail mid write
-    //Get the write stats for the latest commit
+    //Make the MDT appear to fail mid write by deleting the commit in the MDT timline. The MDT does not use markers so we do not need to recreate them
     String metadataBasePath = basePath + "/.hoodie/metadata";
     HoodieTableMetaClient metadataMetaClient =  HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(metadataBasePath).build();
     HoodieInstant latestCommitInstant = metadataMetaClient.getActiveTimeline().lastInstant().get();
-    Map<String, List<HoodieWriteStat>> partitionToWriteStats;
-    try (FSDataInputStream inputStream = metadataMetaClient.getRawFs().open(new Path(metadataMetaClient.getMetaPath(), latestCommitInstant.getFileName()))) {
-      partitionToWriteStats = HoodieCommitMetadata.fromJsonString(FileIOUtils.readAsUTFString(inputStream), HoodieCommitMetadata.class).getPartitionToWriteStats();
-    }
-
-    //delete the commit in the MDT timeline
     File metadatadeltacommit = new File(metadataBasePath + "/.hoodie/" + latestCommitInstant.getFileName());
     assertTrue(metadatadeltacommit.delete());
-    //Add back the marker files to mimic that we haven't committed yet
-    HoodieTableMetaClient finalMetadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
-    HoodieWriteConfig  MDTWriteConfig = HoodieWriteConfig.newBuilder().withProperties(finalMetadataMetaClient.getTableConfig().getProps()).withPath(metadataBasePath).build();
-    partitionToWriteStats.forEach((partition, writeStats) -> {
-      writeStats.forEach(s -> {
-        try {
-          writeMarkerFile(MDTWriteConfig, finalMetadataMetaClient, "002", s);
-        } catch (IOException | InterruptedException e) {
-          throw new RuntimeException(e);
-        }
-      });
-    });
 
     //New update will trigger rollback and we will commit this time
     updateRecords(client, dataGen, "003", records, true);
