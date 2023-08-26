@@ -1286,9 +1286,6 @@ public class HoodieTableMetadataUtil {
     metadataMetaClient.getActiveTimeline().getRollbackAndRestoreTimeline().filterCompletedInstants()
         .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION))
         .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
-
-    // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, PARTITION_INITIALIZATION_TIME_SUFFIX));
     return validInstantTimestamps;
   }
 
