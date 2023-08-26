@@ -35,12 +35,12 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -344,9 +344,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
-            .withExecutorMetrics(enableMetrics).build())
-        .withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-            .usePrefix("unit-test").build())
+            .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.CONSOLE.name()).build())
         .withRollbackUsingMarkers(useRollbackUsingMarkers)
         .withProperties(properties);
   }
