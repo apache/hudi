@@ -303,7 +303,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
-            .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.CONSOLE.name()).build())
+            .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())
         .withRollbackUsingMarkers(useRollbackUsingMarkers)
         .withProperties(properties);
   }

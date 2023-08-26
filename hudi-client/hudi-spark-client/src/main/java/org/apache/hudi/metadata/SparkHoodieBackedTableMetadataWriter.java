@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metrics.DistributedRegistry;
+import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -98,7 +99,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
-      if (metadataWriteConfig.isExecutorMetricsEnabled()) {
+      if (metadataWriteConfig.isExecutorMetricsEnabled() && metadataWriteConfig.getMetricsReporterType() != MetricsReporterType.INMEMORY) {
         registry = Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
         HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
         ((DistributedRegistry) registry).register(sparkEngineContext.getJavaSparkContext());
