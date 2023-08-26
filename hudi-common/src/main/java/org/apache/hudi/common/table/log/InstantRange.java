@@ -157,7 +157,7 @@ public abstract class InstantRange implements Serializable {
     public boolean isInRange(String instant) {
       // if instant time is solo commit time or any special instant time that has suffix in MDT (which will not match DT's commit times), we treat them as valid.
       if (instant.startsWith(SOLO_COMMIT_TIMESTAMP) || instant.length() == 20) {
-                return true;
+        return true;
       }
       return this.instants.contains(instant);
     }
