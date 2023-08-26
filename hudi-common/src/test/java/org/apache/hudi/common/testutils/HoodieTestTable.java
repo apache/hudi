@@ -1071,7 +1071,7 @@ public class HoodieTestTable {
     return commitMetadata;
   }
 
-  private Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
+  public Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();

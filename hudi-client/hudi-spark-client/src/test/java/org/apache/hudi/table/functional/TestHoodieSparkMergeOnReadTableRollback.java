@@ -24,11 +24,16 @@ import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.functional.TestHoodieBackedMetadata;
+import org.apache.hudi.client.utils.MetadataTableUtils;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -46,14 +51,19 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -62,6 +72,7 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
@@ -71,12 +82,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -1036,6 +1050,20 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     return records;
   }
 
+  private List<HoodieRecord> insertRecordsAndCommit(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime) {
+    /*
+     * Write 1 (only inserts, written as base file)
+     */
+    client.startCommitWithTime(commitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+
+    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, commitTime);
+    assertTrue(client.commit(commitTime, statuses));
+    return records;
+  }
+
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
                                            List<HoodieRecord> records, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg,
                                            boolean assertLogFiles) throws IOException {
@@ -1061,6 +1089,20 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertTrue(numLogFiles > 0);
     }
     return records;
+  }
+
+  private List<WriteStatus> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
+                                          List<HoodieRecord> records, Boolean shouldCommit) throws IOException {
+    client.startCommitWithTime(commitTime);
+
+    records = dataGen.generateUpdates(commitTime, records);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+    List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    assertNoWriteErrors(statuses);
+    if (shouldCommit) {
+      assertTrue(client.commit(commitTime, jsc().parallelize(statuses)));
+    }
+    return statuses;
   }
 
   private long doCompaction(SparkRDDWriteClient client, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, long numLogFiles) throws IOException {
@@ -1102,5 +1144,139 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(3)
             .build());
     return cfgBuilder.build();
+  }
+
+  private HoodieWriteConfig getConfigMDTRollback(String basePath) {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(getPropertiesForKeyGen(true))
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withDeleteParallelism(2)
+        .withAutoCommit(false)
+        .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
+        .withRollbackUsingMarkers(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+  }
+
+  @Test
+  public void testRollbackWithFailurePreMDT() throws IOException {
+    String basePath = basePath().substring(7);
+    HoodieWriteConfig cfg = getConfigMDTRollback(basePath);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ);
+    SparkRDDWriteClient client =  getHoodieWriteClient(cfg);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    //normal insert
+    List<HoodieRecord> records = insertRecordsAndCommit(client, dataGen, "001");
+    //update but don't commit
+    updateRecords(client, dataGen, "002", records, false);
+    //New update will trigger rollback and we will commit this time
+    updateRecords(client, dataGen, "003", records, true);
+    //validate that metadata table file listing matches reality
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+  }
+  @Test
+  public void testRollbackWithFailurePostMDT() throws IOException {
+    String basePath = basePath().substring(7);
+    HoodieWriteConfig cfg = getConfigMDTRollback(basePath);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ);
+    SparkRDDWriteClient client =  getHoodieWriteClient(cfg);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    //normal insert
+    List<HoodieRecord> records = insertRecordsAndCommit(client, dataGen, "001");
+    //New update and commit so that the MDT has the update
+    List<WriteStatus> statuses = updateRecords(client, dataGen, "002", records, true);
+
+    //delete commit from timeline
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
+    File deltacommit = new File(metaClient.getBasePathV2().toString().substring(5) + "/.hoodie/" + filename);
+    assertTrue(deltacommit.delete());
+    metaClient.reloadActiveTimeline();
+
+    //Add back the marker files to mimic that we haven't committed yet
+    HoodieTableMetaClient finalMetaClient = metaClient;
+    statuses.forEach(s -> {
+      try {
+        writeMarkerFile(cfg, finalMetaClient, "002", s);
+      } catch (IOException | InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    //now we are at a state that we would be at if a write failed after writing to MDT but before commit is finished
+
+    //New update will trigger rollback and we will commit this time
+    updateRecords(client, dataGen, "003", records, true);
+    //validate that metadata table file listing matches reality
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
+  }
+
+  @Test
+  public void testRollbackWithFailureinMDT() throws Exception {
+    String basePath = basePath().substring(7);
+    HoodieWriteConfig cfg = getConfigMDTRollback(basePath);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ);
+    SparkRDDWriteClient client =  getHoodieWriteClient(cfg);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    //normal insert
+    List<HoodieRecord> records = insertRecordsAndCommit(client, dataGen, "001");
+    //New update and commit
+    List<WriteStatus> statuses = updateRecords(client, dataGen, "002", records, true);
+
+    //delete commit from timeline
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
+    File deltacommit = new File(metaClient.getBasePathV2().toString().substring(5) + "/.hoodie/" + filename);
+    assertTrue(deltacommit.delete());
+    metaClient.reloadActiveTimeline();
+
+    //Add back the marker files to mimic that we haven't committed yet
+    HoodieTableMetaClient finalMetaClient = metaClient;
+    statuses.forEach(s -> {
+      try {
+        writeMarkerFile(cfg, finalMetaClient, "002", s);
+      } catch (IOException | InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    //Make the MDT appear to fail mid write
+    //Get the write stats for the latest commit
+    String metadataBasePath = basePath + "/.hoodie/metadata";
+    HoodieTableMetaClient metadataMetaClient =  HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(metadataBasePath).build();
+    HoodieInstant latestCommitInstant = metadataMetaClient.getActiveTimeline().lastInstant().get();
+    Map<String, List<HoodieWriteStat>> partitionToWriteStats;
+    try (FSDataInputStream inputStream = metadataMetaClient.getRawFs().open(new Path(metadataMetaClient.getMetaPath(), latestCommitInstant.getFileName()))) {
+      partitionToWriteStats = HoodieCommitMetadata.fromJsonString(FileIOUtils.readAsUTFString(inputStream), HoodieCommitMetadata.class).getPartitionToWriteStats();
+    }
+
+    //delete the commit in the MDT timeline
+    File metadatadeltacommit = new File(metadataBasePath + "/.hoodie/" + latestCommitInstant.getFileName());
+    assertTrue(metadatadeltacommit.delete());
+    //Add back the marker files to mimic that we haven't committed yet
+    HoodieTableMetaClient finalMetadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+    HoodieWriteConfig  MDTWriteConfig = HoodieWriteConfig.newBuilder().withProperties(finalMetadataMetaClient.getTableConfig().getProps()).withPath(metadataBasePath).build();
+    partitionToWriteStats.forEach((partition, writeStats) -> {
+      writeStats.forEach(s -> {
+        try {
+          writeMarkerFile(MDTWriteConfig, finalMetadataMetaClient, "002", s);
+        } catch (IOException | InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+      });
+    });
+
+    //New update will trigger rollback and we will commit this time
+    updateRecords(client, dataGen, "003", records, true);
+    //validate that metadata table file listing matches reality
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), fs(), basePath, metaClient, hadoopConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client));
   }
 }

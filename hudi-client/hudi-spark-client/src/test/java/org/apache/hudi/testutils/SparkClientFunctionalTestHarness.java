@@ -27,16 +27,28 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.AppendResult;
+import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -49,6 +61,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
@@ -74,6 +88,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -404,5 +419,56 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     // to avoid port reuse causing failures
     timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
     return timelineServicePort;
+  }
+
+  protected void writeMarkerFile(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, String commitTime, WriteStatus writeStatus) throws IOException, InterruptedException {
+    writeMarkerFile(cfg, metaClient, commitTime,  writeStatus.getStat());
+  }
+
+  protected void writeMarkerFile(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, String commitTime, HoodieWriteStat writeStat) throws IOException, InterruptedException {
+    assertTrue(FSUtils.isLogFile(new Path(writeStat.getPath())));
+    HoodieLogFile logFile = new HoodieLogFile(writeStat.getPath());
+    writeMarkerFile(cfg, metaClient, commitTime, writeStat, 1, FSUtils.getWriteTokenFromLogPath(logFile.getPath()), new ArrayList<>());
+  }
+  protected void writeMarkerFile(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, String commitTime, HoodieWriteStat writeStat, Integer logVersion, String logWriteToken,
+                                 List<HoodieRecord> hoodieRecords) throws IOException, InterruptedException {
+    final WriteMarkers writeMarkers = WriteMarkersFactory.get(cfg.getMarkersType(),
+        HoodieSparkTable.create(cfg, context()), commitTime);
+    HoodieLogFormat.Writer additionalLogWriter = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(FSUtils.getPartitionPath(cfg.getBasePath(), writeStat.getPartitionPath()))
+        .withFileId(writeStat.getFileId()).overBaseCommit(commitTime)
+        .withLogVersion(logVersion)
+        .withFileSize(0L)
+        .withSizeThreshold(cfg.getLogFileMaxSize()).withFs(fs())
+        .withRolloverLogWriteToken(logWriteToken)
+        .withLogWriteToken(logWriteToken)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogWriteCallback(new HoodieLogFileWriteCallback() {
+          @Override
+          public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
+            return writeMarkers.create(writeStat.getPartitionPath(), logFileToAppend.getFileName(), IOType.APPEND).isPresent();
+          }
+
+          @Override
+          public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
+            return writeMarkers.create(writeStat.getPartitionPath(), logFileToCreate.getFileName(), IOType.APPEND).isPresent();
+          }
+        }).build();
+    AppendResult additionalAppendResult = additionalLogWriter.appendBlock(getLogBlock(hoodieRecords, cfg.getSchema()));
+    additionalLogWriter.close();
+    // check marker for additional log generated
+    assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(logWriteToken)));
+    SyncableFileSystemView unCommittedFsView = getFileSystemViewWithUnCommittedSlices(metaClient);
+    // check additional log generated
+    assertTrue(unCommittedFsView.getAllFileSlices(writeStat.getPartitionPath())
+        .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
+        .anyMatch(path -> path.getName().equals(additionalAppendResult.logFile().getPath().getName())));
+  }
+
+  private HoodieDataBlock getLogBlock(List<HoodieRecord> hoodieRecords, String schema) {
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema);
+    return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 }
