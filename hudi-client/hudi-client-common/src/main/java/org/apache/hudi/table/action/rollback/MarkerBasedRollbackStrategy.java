@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
@@ -159,9 +161,18 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       HoodieLogFile latestLogFile = latestLogFileOption.get();
       // NOTE: Marker's don't carry information about the cumulative size of the blocks that have been appended,
       //       therefore we simply stub this value.
-      logFilesWithBlocksToRollback = Collections.singletonMap(latestLogFile.getPath().toString(), -1L);
+      FileSystem fileSystem = table.getMetaClient().getFs();
+      List<Option<FileStatus>> fileStatuses = FSUtils.getFileStatusesUnderPartition(fileSystem, filePath.getParent(), Collections.singletonList(filePath.getName()), true);
+      if (fileStatuses.isEmpty() || !fileStatuses.get(0).isPresent()) {
+        throw new HoodieIOException("Failed to get file status for " + filePath);
+      }
+      logFilesWithBlocksToRollback = Collections.singletonMap(latestLogFile.getPath().toString(), blockCeil(fileStatuses.get(0).get().getLen(), fileStatuses.get(0).get().getBlockSize()));
     }
     return new HoodieRollbackRequest(relativePartitionPath, fileId, baseCommitTime, Collections.emptyList(),
         logFilesWithBlocksToRollback);
+  }
+
+  private Long blockCeil(Long a, Long b) {
+    return a / b + ((a % b == 0) ? 0 : 1);
   }
 }

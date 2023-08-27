@@ -51,7 +51,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -95,8 +94,7 @@ public class BaseRollbackHelper implements Serializable {
     // Considering rollback may failed before, which generated some additional log files. We need to add these log files back.
     boolean hasLogBlockToRollback = rollbackRequests.stream().anyMatch(rollbackRequest -> !rollbackRequest.getLogBlocksToBeDeleted().isEmpty());
     if (hasLogBlockToRollback) {
-      mergedRollbackStatByPartitionPath = addAdditionalLogFile(context, instantToRollback, rollbackRequests,
-          mergedRollbackStatByPartitionPath, parallelism);
+      mergedRollbackStatByPartitionPath = addLogFilesFromPreviousFailedRollbacksToStat(context, instantToRollback, mergedRollbackStatByPartitionPath, parallelism);
     }
     return mergedRollbackStatByPartitionPath;
   }
@@ -145,7 +143,7 @@ public class BaseRollbackHelper implements Serializable {
           String fileId = rollbackRequest.getFileId();
           String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
 
-          // Pls attention that, we use instantToRollback rather than instant of current rollback for marker file.
+          // NOTE: we use instantToRollback rather than instant of current rollback for marker file.
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
 
           writer = HoodieLogFormat.newWriterBuilder()
@@ -190,6 +188,7 @@ public class BaseRollbackHelper implements Serializable {
                 HoodieRollbackStat.newBuilder()
                     .withPartitionPath(rollbackRequest.getPartitionPath())
                     .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                    .withLogFilesFromFailedCommit(rollbackRequest.getLogBlocksToBeDeleted())
                     .build()))
             .stream();
       } else {
@@ -224,11 +223,10 @@ public class BaseRollbackHelper implements Serializable {
     };
   }
 
-  private List<HoodieRollbackStat> addAdditionalLogFile(HoodieEngineContext context,
-                                                        final HoodieInstant instantToRollback,
-                                                        List<HoodieRollbackRequest> rollbackRequests,
-                                                        List<HoodieRollbackStat> originalRollbackStats,
-                                                        int parallelism) {
+  private List<HoodieRollbackStat> addLogFilesFromPreviousFailedRollbacksToStat(HoodieEngineContext context,
+                                                                                final HoodieInstant instantToRollback,
+                                                                                List<HoodieRollbackStat> originalRollbackStats,
+                                                                                int parallelism) {
     WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
     Set<String> logPaths;
     try {
@@ -244,34 +242,9 @@ public class BaseRollbackHelper implements Serializable {
         .map(logFilePath -> new Path(config.getBasePath(), logFilePath))
         .collect(Collectors.groupingBy(fullFilePath -> FSUtils.getRelativePartitionPath(basePath, fullFilePath.getParent())));
 
-    // one log file included in rollback request means they are created by delta commit.
-    Map<String, Set<String>> partitionsToLogFileNameGeneratedByDeltaCommit = new HashMap<>();
-    rollbackRequests.forEach(rbr -> {
-      Set<String> logFileName = partitionsToLogFileNameGeneratedByDeltaCommit.getOrDefault(rbr.getPartitionPath(), new HashSet<>());
-      for (String logFileFullPath : rbr.getLogBlocksToBeDeleted().keySet()) {
-        logFileName.add(new Path(logFileFullPath).getName());
-      }
-      partitionsToLogFileNameGeneratedByDeltaCommit.putIfAbsent(rbr.getPartitionPath(), logFileName);
-    });
-
-    // get log files created by rollback by removing those created in delta commit from all.
-    Map<String, Set<Path>> partitionsToLogFilesGeneratedByRollback = partitionsToLogFiles
-        .entrySet()
+    List<Pair<HoodieRollbackStat, List<Path>>> rollbackStatsAndLogFilesCreated = originalRollbackStats
         .stream()
-        .map(partitionAndLogFiles -> {
-          String partitionPath = partitionAndLogFiles.getKey();
-          Set<String> logFilesGeneratedByDeltaCommit = Objects.requireNonNull(partitionsToLogFileNameGeneratedByDeltaCommit.get(partitionPath),
-              "invalid partition: " + partitionPath);
-          Set<Path> logFilesGeneratedByRollback = partitionAndLogFiles.getValue()
-              .stream().filter(p -> !logFilesGeneratedByDeltaCommit.contains(p.getName()))
-              .collect(Collectors.toSet());
-          return Pair.of(partitionPath, logFilesGeneratedByRollback);
-        })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
-    List<Pair<HoodieRollbackStat, Set<Path>>> rollbackStatsAndLogFilesCreated = originalRollbackStats
-        .stream()
-        .map(rbs -> Pair.of(rbs, partitionsToLogFilesGeneratedByRollback.get(rbs.getPartitionPath())))
+        .map(rbs -> Pair.of(rbs, partitionsToLogFiles.get(rbs.getPartitionPath())))
         .collect(Collectors.toList());
     context.setJobStatus(this.getClass().getName(), "add additional log files in rollback");
     return context.map(rollbackStatsAndLogFilesCreated, rollbackStatAndLogFiles -> {
@@ -280,16 +253,14 @@ public class BaseRollbackHelper implements Serializable {
       if (originalRollbackStat.getCommandBlocksCount().isEmpty()) {
         return originalRollbackStat;
       }
-      Set<Path> allLogFilesCreatedInRollback = Objects.requireNonNull(rollbackStatAndLogFiles.getValue());
-
+      Set<String> logFilesToBeRolledBack = originalRollbackStat.getLogFilesFromFailedCommit().keySet();
       Set<String> logFilesInRollbackStat = originalRollbackStat.getCommandBlocksCount()
           .keySet().stream()
           .map(f -> f.getPath().getName())
           .collect(Collectors.toSet());
-      List<String> additionalLogFileNames = allLogFilesCreatedInRollback
+      List<String> additionalLogFileNames = Objects.requireNonNull(rollbackStatAndLogFiles.getValue())
           .stream()
-          .map(Path::getName)
-          .filter(name -> !logFilesInRollbackStat.contains(name))
+          .filter(p -> !logFilesToBeRolledBack.contains(p.toString()) && !logFilesInRollbackStat.contains(p.getName())).map(Path::getName)
           .collect(Collectors.toList());
       // No additional log files created
       if (additionalLogFileNames.size() == 0) {
@@ -316,6 +287,7 @@ public class BaseRollbackHelper implements Serializable {
       fileStatuses.stream().filter(Option::isPresent)
           .map(Option::get).forEach(f -> commandBlocksCount.put(f, 1L));
       builder.withRollbackBlockAppendResults(commandBlocksCount);
+      builder.withLogFilesFromFailedCommit(originalRollbackStat.getLogFilesFromFailedCommit());
       return builder.build();
     }, parallelism);
   }

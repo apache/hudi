@@ -1023,14 +1023,19 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       validateRollback(commitToRollbackInstantTime, compactionInstant, deltacommitsSinceCompaction);
 
-      // lets apply a delta commit with DT's rb instant(with special suffix) containing following records:
+      // lets apply a delta commit with DT's rb instant containing following records:
       // a. any log files as part of RB commit metadata that was added
       // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
       // both above list should only be added to FILES partition.
-
-      String rollbackInstantTime = createRollbackTimestamp(instantTime);
+      if (deltacommitsSinceCompaction.containsInstant(instantTime)) {
+        LOG.info("Rolling back MDT deltacommit for " + instantTime + ", since previous attempt failed");
+        if (!getWriteClient().rollback(instantTime)) {
+          throw new HoodieMetadataException("Failed to rollback deltacommit at " + instantTime);
+        }
+      }
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
+      String rollbackInstantTime = createRollbackTimestamp(instantTime);
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
