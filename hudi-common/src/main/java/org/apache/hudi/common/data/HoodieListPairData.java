@@ -192,6 +192,30 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
+    ValidationUtils.checkArgument(other instanceof HoodieListPairData);
+
+    // Transform right-side container to a multi-map of [[K]] to [[List<W>]] values
+    HashMap<K, List<W>> rightStreamMap = ((HoodieListPairData<K, W>) other).asStream().collect(
+        Collectors.groupingBy(
+            Pair::getKey,
+            HashMap::new,
+            Collectors.mapping(Pair::getValue, Collectors.toList())));
+
+    Stream<Pair<K, Pair<V, W>>> joinResult = asStream().filter((kv) -> rightStreamMap.containsKey(kv.getKey())).flatMap(pair -> {
+      K key = pair.getKey();
+      V leftValue = pair.getValue();
+      List<W> rightValues = rightStreamMap.get(key);
+
+      // rightValues should be non null since we filter upfront for only matching entries
+      return rightValues.stream().map(rightValue ->
+            Pair.of(key, Pair.of(leftValue, rightValue)));
+    });
+
+    return new HoodieListPairData<>(joinResult, lazy);
+  }
+
+  @Override
   public long count() {
     return super.count();
   }
