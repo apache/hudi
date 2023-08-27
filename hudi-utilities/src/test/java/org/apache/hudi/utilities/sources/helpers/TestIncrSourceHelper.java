@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -94,10 +95,10 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit2", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         emptyDataset, 50L, queryInfo, new CloudObjectIncrCheckpoint(null, null));
     assertEquals(INIT_INSTANT_TS, result.getKey().toString());
-    assertEquals(emptyDataset, result.getRight());
+    assertTrue(!result.getRight().isPresent());
   }
 
   @Test
@@ -115,11 +116,11 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit2", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         inputDs, 50L, queryInfo, new CloudObjectIncrCheckpoint("commit1", null));
-    Row row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+    Row row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit1#path/to/file1.json", result.getKey().toString());
-    List<Row> rows = result.getRight().collectAsList();
+    List<Row> rows = result.getRight().get().collectAsList();
     assertEquals(1, rows.size());
     assertEquals("[[commit1,[[bucket-1],[path/to/file1.json,100]],100]]", rows.toString());
     assertEquals(100L, row.get(0));
@@ -142,20 +143,20 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit2", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         inputDs, 350L, queryInfo, new CloudObjectIncrCheckpoint("commit1", null));
-    Row row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+    Row row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit1#path/to/file2.json", result.getKey().toString());
-    List<Row> rows = result.getRight().collectAsList();
+    List<Row> rows = result.getRight().get().collectAsList();
     assertEquals(2, rows.size());
     assertEquals("[[commit1,[[bucket-1],[path/to/file1.json,100]],100], [commit1,[[bucket-1],[path/to/file2.json,150]],250]]", rows.toString());
     assertEquals(250L, row.get(0));
 
     result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         inputDs, 550L, queryInfo, new CloudObjectIncrCheckpoint("commit1", null));
-    row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+    row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit2#path/to/file4.json", result.getKey().toString());
-    rows = result.getRight().collectAsList();
+    rows = result.getRight().get().collectAsList();
     assertEquals(4, rows.size());
     assertEquals("[[commit1,[[bucket-1],[path/to/file1.json,100]],100], [commit1,[[bucket-1],[path/to/file2.json,150]],250],"
             + " [commit1,[[bucket-1],[path/to/file3.json,200]],450], [commit2,[[bucket-1],[path/to/file4.json,50]],500]]",
@@ -181,11 +182,11 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit2", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         inputDs, 1500L, queryInfo, new CloudObjectIncrCheckpoint("commit1", null));
-    Row row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+    Row row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit3#path/to/file8.json", result.getKey().toString());
-    List<Row> rows = result.getRight().collectAsList();
+    List<Row> rows = result.getRight().get().collectAsList();
     assertEquals(8, rows.size());
     assertEquals(1050L, row.get(0));
   }
@@ -206,19 +207,19 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit3", "commit3",
         "commit4", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-        inputDs, 50L, queryInfo, new CloudObjectIncrCheckpoint("commit3","path/to/file8.json"));
-    Row row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 50L, queryInfo, new CloudObjectIncrCheckpoint("commit3", "path/to/file8.json"));
+    Row row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit4#path/to/file0.json", result.getKey().toString());
-    List<Row> rows = result.getRight().collectAsList();
+    List<Row> rows = result.getRight().get().collectAsList();
     assertEquals(1, rows.size());
     assertEquals(100L, row.get(0));
 
     result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-        inputDs, 350L, queryInfo, new CloudObjectIncrCheckpoint("commit3","path/to/file8.json"));
-    row = result.getRight().select("cumulativeSize").collectAsList().get((int) result.getRight().count() - 1);
+        inputDs, 350L, queryInfo, new CloudObjectIncrCheckpoint("commit3", "path/to/file8.json"));
+    row = result.getRight().get().select("cumulativeSize").collectAsList().get((int) result.getRight().get().count() - 1);
     assertEquals("commit4#path/to/file2.json", result.getKey().toString());
-    rows = result.getRight().collectAsList();
+    rows = result.getRight().get().collectAsList();
     assertEquals(3, rows.size());
     assertEquals(200L, row.get(0));
   }
@@ -241,9 +242,9 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit3", "_hoodie_commit_time",
         "s3.object.key", "s3.object.size");
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-        inputDs, 1500L, queryInfo, new CloudObjectIncrCheckpoint("commit3","path/to/file8.json"));
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1500L, queryInfo, new CloudObjectIncrCheckpoint("commit3", "path/to/file8.json"));
     assertEquals("commit3#path/to/file8.json", result.getKey().toString());
-    assertTrue(result.getRight().isEmpty());
+    assertTrue(!result.getRight().isPresent());
   }
 }

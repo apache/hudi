@@ -212,8 +212,7 @@ public class HoodieClusteringJob {
         // Instant time is not specified
         // Find the earliest scheduled clustering instant for execution
         Option<HoodieInstant> firstClusteringInstant =
-            metaClient.getActiveTimeline().firstInstant(
-                HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.REQUESTED);
+            metaClient.getActiveTimeline().filterPendingReplaceTimeline().firstInstant();
         if (firstClusteringInstant.isPresent()) {
           cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "

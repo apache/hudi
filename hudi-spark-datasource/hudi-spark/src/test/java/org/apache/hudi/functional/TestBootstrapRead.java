@@ -63,7 +63,7 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void runTests(String bootstrapType, Boolean dashPartitions, HoodieTableType tableType, Integer nPartitions) {
+  public void testBootstrapFunctional(String bootstrapType, Boolean dashPartitions, HoodieTableType tableType, Integer nPartitions) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;

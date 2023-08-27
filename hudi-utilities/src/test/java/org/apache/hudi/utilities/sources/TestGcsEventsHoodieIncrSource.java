@@ -37,9 +37,10 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
-import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
 
@@ -104,7 +105,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   @Mock
   QueryRunner queryRunner;
 
-  protected FilebasedSchemaProvider schemaProvider;
+  protected Option<SchemaProvider> schemaProvider;
   private HoodieTableMetaClient metaClient;
   private JavaSparkContext jsc;
 
@@ -114,6 +115,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   public void setUp() throws IOException {
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
+    String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
+    this.schemaProvider = Option.of(new FilebasedSchemaProvider(props, jsc));
     MockitoAnnotations.initMocks(this);
   }
 
@@ -134,7 +140,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(gcsObjectMetadataFetcher, times(0)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
             anyBoolean());
     verify(gcsObjectDataFetcher, times(0)).getCloudObjectDataDF(
-            Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.any(), Mockito.any(), Mockito.any(), eq(schemaProvider));
   }
 
   @Test
@@ -166,7 +172,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 200L, "1"));
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any(),
+        eq(schemaProvider))).thenReturn(Option.of(rows));
     when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, 4, "1#path/to/file1.json");
@@ -174,7 +181,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(gcsObjectMetadataFetcher, times(1)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
             anyBoolean());
     verify(gcsObjectDataFetcher, times(1)).getCloudObjectDataDF(Mockito.any(),
-            eq(cloudObjectMetadataList), Mockito.any());
+        eq(cloudObjectMetadataList), Mockito.any(), eq(schemaProvider));
   }
 
   @Test
@@ -208,7 +215,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any(),
+        eq(schemaProvider))).thenReturn(Option.of(rows));
     when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 250L, 4, "1#path/to/file2.json");
@@ -217,7 +225,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(gcsObjectMetadataFetcher, times(2)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
         anyBoolean());
     verify(gcsObjectDataFetcher, times(2)).getCloudObjectDataDF(Mockito.any(),
-        eq(cloudObjectMetadataList), Mockito.any());
+        eq(cloudObjectMetadataList), Mockito.any(), eq(schemaProvider));
   }
 
   @Test
@@ -253,7 +261,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any())).thenReturn(Option.of(rows));
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any(),
+        eq(schemaProvider))).thenReturn(Option.of(rows));
     when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, 4, "1#path/to/file1.json");
@@ -263,7 +272,12 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(gcsObjectMetadataFetcher, times(3)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
         anyBoolean());
     verify(gcsObjectDataFetcher, times(3)).getCloudObjectDataDF(Mockito.any(),
-        eq(cloudObjectMetadataList), Mockito.any());
+        eq(cloudObjectMetadataList), Mockito.any(), eq(schemaProvider));
+
+    schemaProvider = Option.empty();
+    when(gcsObjectDataFetcher.getCloudObjectDataDF(Mockito.any(), eq(cloudObjectMetadataList), Mockito.any(),
+        eq(schemaProvider))).thenReturn(Option.of(rows));
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, 4, "1#path/to/file1.json");
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
@@ -271,7 +285,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     TypedProperties typedProperties = setProps(missingCheckpointStrategy);
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
-            spark(), schemaProvider, gcsObjectMetadataFetcher, gcsObjectDataFetcher, queryRunner);
+        spark(), schemaProvider.orElse(null), gcsObjectMetadataFetcher, gcsObjectDataFetcher, queryRunner);
 
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
 

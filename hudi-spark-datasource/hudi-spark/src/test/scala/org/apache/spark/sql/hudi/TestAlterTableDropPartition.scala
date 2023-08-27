@@ -552,7 +552,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
-      // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
+      // disable automatic inline compaction to test with pending compaction instants
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
@@ -596,7 +599,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
-      // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
+      // disable automatic inline compaction to test with pending compaction instants
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
       // Write everything into the same FileGroup but into separate blocks
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")

@@ -19,6 +19,9 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieSparkUtils.isSpark2
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
 
@@ -109,6 +112,21 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 40.0, 1000)
         )
+
+        // verify default compaction w/ MOR
+        if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+          spark.sql(s"update $tableName set price = price * 2 where id = 1")
+          spark.sql(s"update $tableName set price = price * 2 where id = 1")
+          spark.sql(s"update $tableName set price = price * 2 where id = 1")
+          // verify compaction is complete
+          val metaClient = HoodieTableMetaClient.builder()
+            .setConf(spark.sparkContext.hadoopConfiguration)
+            .setBasePath(tmp.getCanonicalPath + "/" + tableName)
+            .build()
+
+          assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+        }
+
       }
     })
   }

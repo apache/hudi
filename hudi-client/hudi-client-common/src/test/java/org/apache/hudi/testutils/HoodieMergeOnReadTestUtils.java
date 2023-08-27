@@ -166,6 +166,7 @@ public class HoodieMergeOnReadTestUtils {
               .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
           records.add(newRecord.build());
         }
+        recordReader.close();
       }
     } catch (IOException ie) {
       LOG.error("Read records error", ie);

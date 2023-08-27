@@ -44,12 +44,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -71,7 +71,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -118,11 +118,22 @@ public class TestHoodieRealtimeRecordReader {
     fs = FSUtils.getFs(basePath.toUri().toString(), baseJobConf);
   }
 
+  @AfterEach
+  public void tearDown() throws Exception {
+    if (fs != null) {
+      fs.delete(new Path(basePath.toString()), true);
+      fs.close();
+    }
+    if (baseJobConf != null) {
+      baseJobConf.clear();
+    }
+  }
+
   @TempDir
   public java.nio.file.Path basePath;
 
   private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
-      int numberOfRecords) throws InterruptedException, IOException {
+                              int numberOfRecords) throws InterruptedException, IOException {
     return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, fileId, baseCommit, newCommit,
         numberOfRecords, 0,
         0);
@@ -170,8 +181,8 @@ public class TestHoodieRealtimeRecordReader {
   }
 
   private void testReaderInternal(ExternalSpillableMap.DiskMapType diskMapType,
-                         boolean isCompressionEnabled,
-                         boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
+                                  boolean isCompressionEnabled,
+                                  boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -611,7 +622,7 @@ public class TestHoodieRealtimeRecordReader {
     String newCommitTime = "101";
     File partitionDir1 =
         InputFormatTestUtil.prepareSimpleParquetTable(basePath, evolvedSchema, 1, numberOfRecords,
-            instantTime, HoodieTableType.MERGE_ON_READ,"2017","05","01");
+            instantTime, HoodieTableType.MERGE_ON_READ, "2017", "05", "01");
     HoodieCommitMetadata commitMetadata1 = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         evolvedSchema.toString(), HoodieTimeline.COMMIT_ACTION);
     FileCreateUtils.createCommit(basePath.toString(), newCommitTime, Option.of(commitMetadata1));
@@ -664,7 +675,7 @@ public class TestHoodieRealtimeRecordReader {
     final int numRecords = 1000;
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numRecords, instantTime,
         HoodieTableType.MERGE_ON_READ);
-    createDeltaCommitFile(basePath, instantTime,"2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
+    createDeltaCommitFile(basePath, instantTime, "2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
 
@@ -675,11 +686,11 @@ public class TestHoodieRealtimeRecordReader {
           InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
               numRecords, numRecords, 0);
       writer.close();
-      createDeltaCommitFile(basePath, newCommitTime,"2016/05/01", "2016/05/01/.fileid0_100.log.1_1-0-1", "fileid0", schema.toString());
+      createDeltaCommitFile(basePath, newCommitTime, "2016/05/01", "2016/05/01/.fileid0_100.log.1_1-0-1", "fileid0", schema.toString());
 
       InputFormatTestUtil.setupIncremental(baseJobConf, "101", 1);
 
-      HoodieParquetRealtimeInputFormat inputFormat =  new HoodieParquetRealtimeInputFormat();
+      HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
       inputFormat.setConf(baseJobConf);
       InputSplit[] splits = inputFormat.getSplits(baseJobConf, 1);
       assertEquals(1, splits.length);
@@ -687,7 +698,7 @@ public class TestHoodieRealtimeRecordReader {
       List<Schema.Field> fields = schema.getFields();
       setHiveColumnNameProps(fields, newJobConf, false);
       newJobConf.set("columns.types", "string,string,string,string,string,string,string,string,bigint,string,string");
-      RecordReader<NullWritable, ArrayWritable> reader  = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
+      RecordReader<NullWritable, ArrayWritable> reader = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
       // use reader to read log file.
       NullWritable key = reader.createKey();
       ArrayWritable value = reader.createValue();
@@ -713,21 +724,21 @@ public class TestHoodieRealtimeRecordReader {
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);
-    createDeltaCommitFile(basePath, baseInstant,"2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
+    createDeltaCommitFile(basePath, baseInstant, "2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
 
     InputFormatTestUtil.simulateInserts(partitionDir, ".parquet", "fileid1", 1, "200");
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
-    List<String> replacedFileId  = new ArrayList<>();
+    List<String> replacedFileId = new ArrayList<>();
     replacedFileId.add("fileid0");
     partitionToReplaceFileIds.put("2016/05/01", replacedFileId);
     createReplaceCommitFile(basePath,
-        "200","2016/05/01", "2016/05/01/fileid10_1-0-1_200.parquet", "fileid10", partitionToReplaceFileIds);
+        "200", "2016/05/01", "2016/05/01/fileid10_1-0-1_200.parquet", "fileid10", partitionToReplaceFileIds);
 
     InputFormatTestUtil.setupIncremental(baseJobConf, "0", 1);
 
-    HoodieParquetRealtimeInputFormat inputFormat =  new HoodieParquetRealtimeInputFormat();
+    HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
     inputFormat.setConf(baseJobConf);
     InputSplit[] splits = inputFormat.getSplits(baseJobConf, 1);
     assertTrue(splits.length == 1);
@@ -735,7 +746,7 @@ public class TestHoodieRealtimeRecordReader {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, newJobConf, false);
     newJobConf.set("columns.types", "string,string,string,string,string,string,string,string,bigint,string,string");
-    RecordReader<NullWritable, ArrayWritable> reader  = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
+    RecordReader<NullWritable, ArrayWritable> reader = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
 
     // use reader to read log file.
     NullWritable key = reader.createKey();
@@ -882,7 +893,7 @@ public class TestHoodieRealtimeRecordReader {
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);
-    createDeltaCommitFile(basePath, baseInstant,"2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
+    createDeltaCommitFile(basePath, baseInstant, "2016/05/01", "2016/05/01/fileid0_1-0-1_100.parquet", "fileid0", schema.toString());
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
 
@@ -895,7 +906,7 @@ public class TestHoodieRealtimeRecordReader {
     InputFormatTestUtil.setupIncremental(baseJobConf, "100", 10);
 
     // verify that incremental reads do NOT show inserts after compaction timestamp
-    HoodieParquetRealtimeInputFormat inputFormat =  new HoodieParquetRealtimeInputFormat();
+    HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
     inputFormat.setConf(baseJobConf);
     InputSplit[] splits = inputFormat.getSplits(baseJobConf, 1);
     assertTrue(splits.length == 0);

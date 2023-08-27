@@ -182,6 +182,14 @@ object HoodieOptionConfig {
     options.filterNot(_._1.startsWith("hoodie.")).filterNot(kv => sqlOptionKeyToWriteConfigKey.contains(kv._1))
   }
 
+  /**
+   * The opposite of `deleteHoodieOptions`, this method extract all hoodie related
+   * options(start with `hoodie.` and all sql options)
+   */
+  def extractHoodieOptions(options: Map[String, String]): Map[String, String] = {
+    options.filter(_._1.startsWith("hoodie.")) ++ extractSqlOptions(options)
+  }
+
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapTableConfigsToSqlOptions(options)

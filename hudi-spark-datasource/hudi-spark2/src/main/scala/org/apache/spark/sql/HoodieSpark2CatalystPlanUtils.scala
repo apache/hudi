@@ -20,6 +20,7 @@ package org.apache.spark.sql
 import org.apache.hudi.SparkHoodieTableFileIndex
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer
+import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.optimizer.SimplifyCasts
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
@@ -66,6 +67,14 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
         Some((table, partition, query, overwrite, ifPartitionNotExists))
       case _ => None
     }
+  }
+
+  /**
+   * Don't support CreateTableLike in spark2, since spark2 doesn't support passing
+   * provider, whereas HUDI can't identify whether the targetTable is a HUDI table or not.
+   */
+  override def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)] = {
+    None
   }
 
   def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan =

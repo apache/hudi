@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, listCommitsSince}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
@@ -125,7 +125,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     // we have 2 commits, try pulling the first commit (which is not the latest)
     //HUDI-5266
     val firstCommit = listCommitsSince(fs, tableBasePath, "000").get(0)
-    val hoodieIncViewDf1 = spark.sql(s"select * from hudi_table_changes('$tableName', 'earliest', '$firstCommit')")
+    val hoodieIncViewDf1 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', 'earliest', '$firstCommit')")
 
     assertEquals(100, hoodieIncViewDf1.count()) // 100 initial inserts must be pulled
     var countsPerCommit = hoodieIncViewDf1.groupBy("_hoodie_commit_time").count().collect()
@@ -137,7 +137,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
     //another incremental query with commit2 and commit3
     //HUDI-5266
-    val hoodieIncViewDf2 = spark.sql(s"select * from hudi_table_changes('$tableName', '$commitInstantTime2', '$commitInstantTime3')")
+    val hoodieIncViewDf2 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', '$commitInstantTime2', '$commitInstantTime3')")
 
     assertEquals(uniqueKeyCnt2, hoodieIncViewDf2.count()) // 60 records must be pulled
     countsPerCommit = hoodieIncViewDf2.groupBy("_hoodie_commit_time").count().collect()
@@ -185,8 +185,8 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
     try {
-      spark.sql("set hoodie.datasource.query.type=\"snapshot\"")
-      spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnRead)}")
+      spark.sql(s"set hoodie.datasource.query.type=$QUERY_TYPE_SNAPSHOT_OPT_VAL")
+      spark.sql(s"set hoodie.metadata.enable=$isMetadataEnabledOnRead")
       spark.sql(s"select * from $tableName")
     } finally {
       spark.conf.unset("hoodie.datasource.query.type")

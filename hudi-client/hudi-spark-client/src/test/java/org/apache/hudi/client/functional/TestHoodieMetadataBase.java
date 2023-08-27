@@ -344,7 +344,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
-            .withExecutorMetrics(true).build())
+            .withExecutorMetrics(enableMetrics).build())
         .withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
             .usePrefix("unit-test").build())
         .withRollbackUsingMarkers(useRollbackUsingMarkers)

@@ -150,16 +150,20 @@ trait SparkAdapter extends Serializable {
   }
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
-    map.getOrDefault("provider", "").equals("hudi")
+    isHoodieTable(map.getOrDefault("provider", ""))
   }
 
   def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
+    isHoodieTable(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull)
   }
 
   def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
     val table = spark.sessionState.catalog.getTableMetadata(tableId)
     isHoodieTable(table)
+  }
+
+  def isHoodieTable(provider: String): Boolean = {
+    "hudi".equalsIgnoreCase(provider)
   }
 
   /**

@@ -44,6 +44,7 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -287,6 +288,15 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       assertTrue(compactionInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
     }
 
+    // test SnapshotLoadQuerySpliiter to split snapshot query .
+    // Reads only first commit
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+        Option.empty(),
+        100,
+        dataBatches.get(0).getKey(),
+        Option.of(TestSnapshotQuerySplitterImpl.class.getName()));
+    writeClient.close();
+
     // The pending tables services should not block the incremental pulls
     // Reads everything up to latest
     readAndAssert(
@@ -315,15 +325,16 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         Option.of(dataBatches.get(6).getKey()),
         0,
         dataBatches.get(6).getKey());
-
-    writeClient.close();
   }
 
-  private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount, String expectedCheckpoint) {
+  private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
+                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt) {
 
     Properties properties = new Properties();
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
+    snapshotCheckPointImplClassOpt.map(className ->
+        properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
     HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA));
 
@@ -336,6 +347,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
     }
     assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
+  }
+
+  private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull,
+                             int expectedCount, String expectedCheckpoint) {
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,

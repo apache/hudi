@@ -24,14 +24,14 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
-import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
-import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
+import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -64,44 +64,44 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
  * You should set spark.driver.extraClassPath in spark-defaults.conf to
  * look like below WITHOUT THE NEWLINES (or give the equivalent as CLI options if in cluster mode):
  * (mysql-connector at the end is only needed if Hive Sync is enabled and Mysql is used for Hive Metastore).
-
- absolute_path_to/protobuf-java-3.21.1.jar:absolute_path_to/failureaccess-1.0.1.jar:
- absolute_path_to/31.1-jre/guava-31.1-jre.jar:
- absolute_path_to/mysql-connector-java-8.0.30.jar
-
- This class can be invoked via spark-submit as follows. There's a bunch of optional hive sync flags at the end.
- $ bin/spark-submit \
- --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
- --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
- --driver-memory 4g \
- --executor-memory 4g \
- --class org.apache.hudi.utilities.streamer.HoodieStreamer \
- absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
- --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
- --op INSERT \
- --hoodie-conf hoodie.streamer.source.hoodieincr.file.format="parquet" \
- --hoodie-conf hoodie.streamer.source.cloud.data.select.file.extension="jsonl" \
- --hoodie-conf hoodie.streamer.source.cloud.data.datafile.format="json" \
- --hoodie-conf hoodie.streamer.source.cloud.data.select.relpath.prefix="country" \
- --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.prefix="blah" \
- --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.substring="blah" \
- --hoodie-conf hoodie.datasource.write.recordkey.field=id \
- --hoodie-conf hoodie.datasource.write.partitionpath.field= \
- --filter-dupes \
- --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
- --hoodie-conf hoodie.combine.before.insert=true \
- --source-ordering-field id \
- --table-type COPY_ON_WRITE \
- --target-base-path file:\/\/\/absolute_path_to/data-gcs \
- --target-table gcs_data \
- --continuous \
- --source-limit 100 \
- --min-sync-interval-seconds 60 \
- --hoodie-conf hoodie.streamer.source.hoodieincr.path=file:\/\/\/absolute_path_to/meta-gcs \
- --hoodie-conf hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT \
- --enable-hive-sync \
- --hoodie-conf hoodie.datasource.hive_sync.database=default \
- --hoodie-conf hoodie.datasource.hive_sync.table=gcs_data
+ * <p>
+ * absolute_path_to/protobuf-java-3.21.1.jar:absolute_path_to/failureaccess-1.0.1.jar:
+ * absolute_path_to/31.1-jre/guava-31.1-jre.jar:
+ * absolute_path_to/mysql-connector-java-8.0.30.jar
+ * <p>
+ * This class can be invoked via spark-submit as follows. There's a bunch of optional hive sync flags at the end.
+ * $ bin/spark-submit \
+ * --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
+ * --packages com.google.cloud.bigdataoss:gcs-connector:hadoop2-2.2.7 \
+ * --driver-memory 4g \
+ * --executor-memory 4g \
+ * --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+ * absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
+ * --source-class org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource \
+ * --op INSERT \
+ * --hoodie-conf hoodie.streamer.source.hoodieincr.file.format="parquet" \
+ * --hoodie-conf hoodie.streamer.source.cloud.data.select.file.extension="jsonl" \
+ * --hoodie-conf hoodie.streamer.source.cloud.data.datafile.format="json" \
+ * --hoodie-conf hoodie.streamer.source.cloud.data.select.relpath.prefix="country" \
+ * --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.prefix="blah" \
+ * --hoodie-conf hoodie.streamer.source.cloud.data.ignore.relpath.substring="blah" \
+ * --hoodie-conf hoodie.datasource.write.recordkey.field=id \
+ * --hoodie-conf hoodie.datasource.write.partitionpath.field= \
+ * --filter-dupes \
+ * --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
+ * --hoodie-conf hoodie.combine.before.insert=true \
+ * --source-ordering-field id \
+ * --table-type COPY_ON_WRITE \
+ * --target-base-path file:\/\/\/absolute_path_to/data-gcs \
+ * --target-table gcs_data \
+ * --continuous \
+ * --source-limit 100 \
+ * --min-sync-interval-seconds 60 \
+ * --hoodie-conf hoodie.streamer.source.hoodieincr.path=file:\/\/\/absolute_path_to/meta-gcs \
+ * --hoodie-conf hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT \
+ * --enable-hive-sync \
+ * --hoodie-conf hoodie.datasource.hive_sync.database=default \
+ * --hoodie-conf hoodie.datasource.hive_sync.table=gcs_data
  */
 public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
@@ -113,6 +113,8 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final GcsObjectMetadataFetcher gcsObjectMetadataFetcher;
   private final CloudDataFetcher gcsObjectDataFetcher;
   private final QueryRunner queryRunner;
+  private final Option<SchemaProvider> schemaProvider;
+
 
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
@@ -142,6 +144,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     this.gcsObjectMetadataFetcher = gcsObjectMetadataFetcher;
     this.gcsObjectDataFetcher = gcsObjectDataFetcher;
     this.queryRunner = queryRunner;
+    this.schemaProvider = Option.ofNullable(schemaProvider);
 
     LOG.info("srcPath: " + srcPath);
     LOG.info("missingCheckpointStrategy: " + missingCheckpointStrategy);
@@ -169,26 +172,24 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     }
 
     Dataset<Row> cloudObjectMetadataDF = queryRunner.run(queryInfo);
-    if (cloudObjectMetadataDF.isEmpty()) {
-      LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-          + queryInfo.getEndInstant());
-      return Pair.of(Option.empty(), queryInfo.getEndInstant());
-    }
-
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> checkPointAndDataset =
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
             cloudObjectMetadataDF, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+    if (!checkPointAndDataset.getRight().isPresent()) {
+      LOG.info("Empty source, returning endpoint:" + queryInfo.getEndInstant());
+      return Pair.of(Option.empty(), queryInfo.getEndInstant());
+    }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
-    Pair<Option<Dataset<Row>>, String> extractedCheckPointAndDataset = extractData(queryInfo, checkPointAndDataset.getRight());
+    Pair<Option<Dataset<Row>>, String> extractedCheckPointAndDataset = extractData(queryInfo, checkPointAndDataset.getRight().get());
     return Pair.of(extractedCheckPointAndDataset.getLeft(), checkPointAndDataset.getLeft().toString());
   }
 
   private Pair<Option<Dataset<Row>>, String> extractData(QueryInfo queryInfo, Dataset<Row> cloudObjectMetadataDF) {
     List<CloudObjectMetadata> cloudObjectMetadata = gcsObjectMetadataFetcher.getGcsObjectMetadata(sparkContext, cloudObjectMetadataDF, checkIfFileExists);
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
-    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props);
+    Option<Dataset<Row>> fileDataRows = gcsObjectDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(fileDataRows, queryInfo.getEndInstant());
   }
 

@@ -78,6 +78,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   private final QueryRunner queryRunner;
   private final CloudDataFetcher cloudDataFetcher;
 
+  private final Option<SchemaProvider> schemaProvider;
+
   public static class Config {
     // control whether we do existence check for files before consuming them
     @Deprecated
@@ -135,6 +137,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;
+    this.schemaProvider = Option.ofNullable(schemaProvider);
   }
 
   @Override
@@ -157,18 +160,16 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
 
     Dataset<Row> source = queryRunner.run(queryInfo);
-    if (source.isEmpty()) {
-      LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-          + queryInfo.getEndInstant());
-      return Pair.of(Option.empty(), queryInfo.getEndInstant());
-    }
-
     Dataset<Row> filteredSourceData = applyFilter(source, fileFormat);
 
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
-    Pair<CloudObjectIncrCheckpoint, Dataset<Row>> checkPointAndDataset =
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+    if (!checkPointAndDataset.getRight().isPresent()) {
+      LOG.info("Empty source, returning endpoint:" + queryInfo.getEndInstant());
+      return Pair.of(Option.empty(), queryInfo.getEndInstant());
+    }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
     String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
@@ -176,14 +177,14 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     // Create S3 paths
     SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(sparkContext.hadoopConfiguration());
-    List<CloudObjectMetadata> cloudObjectMetadata = checkPointAndDataset.getRight()
+    List<CloudObjectMetadata> cloudObjectMetadata = checkPointAndDataset.getRight().get()
         .select(S3_BUCKET_NAME, S3_OBJECT_KEY, S3_OBJECT_SIZE)
         .distinct()
         .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, serializableHadoopConf, checkIfFileExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
-    Option<Dataset<Row>> datasetOption = cloudDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props);
+    Option<Dataset<Row>> datasetOption = cloudDataFetcher.getCloudObjectDataDF(sparkSession, cloudObjectMetadata, props, schemaProvider);
     return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
   }
 

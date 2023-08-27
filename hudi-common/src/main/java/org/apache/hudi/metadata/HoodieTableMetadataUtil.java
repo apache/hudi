@@ -18,10 +18,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -54,6 +55,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -66,6 +68,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -89,13 +92,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.Tuple3;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
@@ -105,6 +107,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -529,8 +532,8 @@ public class HoodieTableMetadataUtil {
   }
 
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMissingPartitionRecords(HoodieEngineContext engineContext,
-                                                                        List<String> deletedPartitions, Map<String, Map<String, Long>> filesAdded,
-                                                                        Map<String, List<String>> filesDeleted, String instantTime) {
+                                                                                                    List<String> deletedPartitions, Map<String, Map<String, Long>> filesAdded,
+                                                                                                    Map<String, List<String>> filesDeleted, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     int[] filesAddedCount = {0};
@@ -795,9 +798,9 @@ public class HoodieTableMetadataUtil {
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getBloomIndexParallelism()), 1);
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple._1();
-      final String filename = partitionFileFlagTuple._2();
-      final boolean isDeleted = partitionFileFlagTuple._3();
+      final String partitionName = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
       if (!FSUtils.isBaseFile(new Path(filename))) {
         LOG.warn(String.format("Ignoring file %s as it is not a base file", filename));
         return Stream.<HoodieRecord>empty().iterator();
@@ -819,7 +822,7 @@ public class HoodieTableMetadataUtil {
 
       final String partition = getPartitionIdentifier(partitionName);
       return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              partition, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple._3()))
+              partition, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple.f2))
           .iterator();
     });
   }
@@ -849,9 +852,9 @@ public class HoodieTableMetadataUtil {
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple._1();
-      final String filename = partitionFileFlagTuple._2();
-      final boolean isDeleted = partitionFileFlagTuple._3();
+      final String partitionName = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
       if (!FSUtils.isBaseFile(new Path(filename)) || !filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         LOG.warn(String.format("Ignoring file %s as it is not a PARQUET file", filename));
         return Stream.<HoodieRecord>empty().iterator();
@@ -880,10 +883,10 @@ public class HoodieTableMetadataUtil {
         + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
     final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
     partitionToDeletedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> new Tuple3<>(entry.getKey(), deletedFile, true)))
+        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> Tuple3.of(entry.getKey(), deletedFile, true)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     partitionToAppendedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> new Tuple3<>(entry.getKey(), addedFile, false)))
+        .flatMap(entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
         .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
     return partitionFileFlagTupleList;
   }
@@ -1069,8 +1072,8 @@ public class HoodieTableMetadataUtil {
   }
 
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
-                                                                     HoodieTableMetaClient datasetMetaClient,
-                                                                     List<String> columnsToIndex) {
+                                                                      HoodieTableMetaClient datasetMetaClient,
+                                                                      List<String> columnsToIndex) {
     if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getColumnStats().isPresent()) {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getColumnStats().get();
       Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
@@ -1332,7 +1335,7 @@ public class HoodieTableMetadataUtil {
    */
   public static boolean isIndexingCommit(String instantTime) {
     return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + OperationSuffix.METADATA_INDEXER.getSuffix().length()
-            && instantTime.endsWith(OperationSuffix.METADATA_INDEXER.getSuffix());
+        && instantTime.endsWith(OperationSuffix.METADATA_INDEXER.getSuffix());
   }
 
   /**
@@ -1457,7 +1460,7 @@ public class HoodieTableMetadataUtil {
 
     if (backup) {
       final Path metadataPartitionBackupPath = new Path(metadataTablePartitionPath.getParent().getParent(),
-              String.format(".metadata_%s_%s", partitionType.getPartitionPath(), HoodieActiveTimeline.createNewInstantTime()));
+          String.format(".metadata_%s_%s", partitionType.getPartitionPath(), HoodieActiveTimeline.createNewInstantTime()));
       LOG.info(String.format("Backing up MDT partition %s to %s before deletion", partitionType, metadataPartitionBackupPath));
       try {
         if (fs.rename(metadataTablePartitionPath, metadataPartitionBackupPath)) {
@@ -1586,7 +1589,7 @@ public class HoodieTableMetadataUtil {
    * @return The estimated number of file groups.
    */
   public static int estimateFileGroupCount(MetadataPartitionType partitionType, long recordCount, int averageRecordSize, int minFileGroupCount,
-      int maxFileGroupCount, float growthFactor, int maxFileGroupSizeBytes) {
+                                           int maxFileGroupCount, float growthFactor, int maxFileGroupSizeBytes) {
     int fileGroupCount;
 
     // If a fixed number of file groups are desired
@@ -1639,5 +1642,56 @@ public class HoodieTableMetadataUtil {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Gets the location from record index content.
+   *
+   * @param recordIndexInfo {@link HoodieRecordIndexInfo} instance.
+   * @return {@link HoodieRecordGlobalLocation} containing the location.
+   */
+  public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(HoodieRecordIndexInfo recordIndexInfo) {
+    return getLocationFromRecordIndexInfo(
+        recordIndexInfo.getPartitionName(), recordIndexInfo.getFileIdEncoding(),
+        recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits(),
+        recordIndexInfo.getFileIndex(), recordIndexInfo.getFileId(),
+        recordIndexInfo.getInstantTime());
+  }
+
+  /**
+   * Gets the location from record index content.
+   * Note that, a UUID based fileId is stored as 3 pieces in record index (fileIdHighBits,
+   * fileIdLowBits and fileIndex). FileID format is {UUID}-{fileIndex}.
+   * The arguments are consistent with what {@link HoodieRecordIndexInfo} contains.
+   *
+   * @param partition      The partition name the record belongs to.
+   * @param fileIdEncoding FileId encoding. Possible values are 0 and 1. O represents UUID based
+   *                       fileID, and 1 represents raw string format of the fileId.
+   * @param fileIdHighBits High 64 bits if the fileId is based on UUID format.
+   * @param fileIdLowBits  Low 64 bits if the fileId is based on UUID format.
+   * @param fileIndex      Index representing file index which is used to re-construct UUID based fileID.
+   * @param originalFileId FileId of the location where record belongs to.
+   *                       When the encoding is 1, fileID is stored in raw string format.
+   * @param instantTime    Epoch time in millisecond representing the commit time at which record was added.
+   * @return {@link HoodieRecordGlobalLocation} containing the location.
+   */
+  public static HoodieRecordGlobalLocation getLocationFromRecordIndexInfo(
+      String partition, int fileIdEncoding, long fileIdHighBits, long fileIdLowBits,
+      int fileIndex, String originalFileId, Long instantTime) {
+    String fileId = null;
+    if (fileIdEncoding == 0) {
+      // encoding 0 refers to UUID based fileID
+      final UUID uuid = new UUID(fileIdHighBits, fileIdLowBits);
+      fileId = uuid.toString();
+      if (fileIndex != RECORD_INDEX_MISSING_FILEINDEX_FALLBACK) {
+        fileId += "-" + fileIndex;
+      }
+    } else {
+      // encoding 1 refers to no encoding. fileID as is.
+      fileId = originalFileId;
+    }
+
+    final java.util.Date instantDate = new java.util.Date(instantTime);
+    return new HoodieRecordGlobalLocation(partition, HoodieActiveTimeline.formatDate(instantDate), fileId);
   }
 }
