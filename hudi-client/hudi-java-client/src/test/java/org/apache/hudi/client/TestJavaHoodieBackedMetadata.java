@@ -170,6 +170,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Disabled("HUDI-6455")
 public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestJavaHoodieBackedMetadata.class);

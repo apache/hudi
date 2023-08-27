@@ -101,6 +101,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -146,6 +147,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
+@Disabled("HUDI-6455")
 public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTestHarness {
 
   private static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";

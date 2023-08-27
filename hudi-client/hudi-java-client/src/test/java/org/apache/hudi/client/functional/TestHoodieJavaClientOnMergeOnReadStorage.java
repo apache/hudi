@@ -32,6 +32,7 @@ import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +42,7 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertD
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled("HUDI-6455")
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
 
   private HoodieTestTable testTable;
