@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -48,7 +49,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -286,11 +286,11 @@ public class BaseRollbackHelper implements Serializable {
           .keySet().stream()
           .map(f -> f.getPath().getName())
           .collect(Collectors.toSet());
-      Set<String> additionalLogFileNames = allLogFilesCreatedInRollback
+      List<String> additionalLogFileNames = allLogFilesCreatedInRollback
           .stream()
           .map(Path::getName)
           .filter(name -> !logFilesInRollbackStat.contains(name))
-          .collect(Collectors.toSet());
+          .collect(Collectors.toList());
       // No additional log files created
       if (additionalLogFileNames.size() == 0) {
         return originalRollbackStat;
@@ -298,7 +298,8 @@ public class BaseRollbackHelper implements Serializable {
 
       // file additional log files' file statuses
       Path fullPartitionPath = new Path(config.getBasePath(), originalRollbackStat.getPartitionPath());
-      FileStatus[] fileStatuses = FSUtils.getFileStatusesUnderPartition(table.getMetaClient().getFs(), fullPartitionPath, additionalLogFileNames);
+      List<Option<FileStatus>> fileStatuses = FSUtils.getFileStatusesUnderPartition(table.getMetaClient().getFs(),
+          fullPartitionPath, additionalLogFileNames, true);
 
       // build new rollbackStat
       HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
@@ -312,7 +313,8 @@ public class BaseRollbackHelper implements Serializable {
       }
 
       Map<FileStatus, Long> commandBlocksCount = new HashMap<>(originalRollbackStat.getCommandBlocksCount());
-      Arrays.stream(fileStatuses).forEach(f -> commandBlocksCount.put(f, 1L));
+      fileStatuses.stream().filter(Option::isPresent)
+          .map(Option::get).forEach(f -> commandBlocksCount.put(f, 1L));
       builder.withRollbackBlockAppendResults(commandBlocksCount);
       return builder.build();
     }, parallelism);
