@@ -71,6 +71,13 @@ public class HoodieClusteringJob {
     }
   }
 
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props) {
+    this.cfg = cfg;
+    this.jsc = jsc;
+    this.props = props;
+    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+  }
+
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
     return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);

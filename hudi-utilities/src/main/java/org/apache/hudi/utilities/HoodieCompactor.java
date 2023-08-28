@@ -74,6 +74,13 @@ public class HoodieCompactor {
     }
   }
 
+  public HoodieCompactor(JavaSparkContext jsc, Config cfg, TypedProperties props) {
+    this.cfg = cfg;
+    this.jsc = jsc;
+    this.props = props;
+    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+  }
+
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
     return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
@@ -261,8 +268,7 @@ public class HoodieCompactor {
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
-        Option<HoodieInstant> firstCompactionInstant =
-            metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+        Option<HoodieInstant> firstCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "

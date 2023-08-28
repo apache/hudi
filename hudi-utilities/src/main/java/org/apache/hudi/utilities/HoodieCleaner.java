@@ -64,6 +64,13 @@ public class HoodieCleaner {
     LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
+  public HoodieCleaner(Config cfg, TypedProperties props, JavaSparkContext jssc) {
+    this.cfg = cfg;
+    this.jssc = jssc;
+    this.props = props;
+    LOG.info("Creating Cleaner with configs : " + props.toString());
+  }
+
   public void run() {
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg)) {
