@@ -69,6 +69,7 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String SKIP_TABLE_SERVICES = "skip_table_services";
   public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
   public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
+  public static final String ASYNC_INDEXER_CATCHUP_TIME = "async_indexer_catchup_time";
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
 
@@ -126,7 +127,7 @@ public class HoodieMetadataMetrics implements Serializable {
     return stats;
   }
 
-  protected void updateMetrics(String action, long durationInMs) {
+  public void updateMetrics(String action, long durationInMs) {
     if (metricsRegistry == null) {
       return;
     }
