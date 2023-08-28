@@ -108,7 +108,7 @@ public class BaseRollbackHelper implements Serializable {
     List<Pair<String, HoodieRollbackStat>> getRollbackStats = maybeDeleteAndCollectStats(context, instantTime, instantToRollback, serializableRequests, true, parallelism,
         logPaths);
     List<HoodieRollbackStat> mergedRollbackStatByPartitionPath = context.reduceByKey(getRollbackStats, RollbackUtils::mergeRollbackStat, parallelism);
-    return addLogFilesFromPreviousFailedRollbacksToStat(context, instantToRollback, mergedRollbackStatByPartitionPath, logPaths);
+    return addLogFilesFromPreviousFailedRollbacksToStat(context, mergedRollbackStatByPartitionPath, logPaths);
   }
 
   /**
@@ -238,7 +238,6 @@ public class BaseRollbackHelper implements Serializable {
   }
 
   private List<HoodieRollbackStat> addLogFilesFromPreviousFailedRollbacksToStat(HoodieEngineContext context,
-                                                                                final HoodieInstant instantToRollback,
                                                                                 List<HoodieRollbackStat> originalRollbackStats,
                                                                                 Set<String> logPaths) {
     if (logPaths.isEmpty()) {
@@ -290,11 +289,11 @@ public class BaseRollbackHelper implements Serializable {
             List<FileStatus> fileStatuses = fileStatusesOpt.stream().filter(fileStatusOption -> fileStatusOption.isPresent())
                 .map(fileStatusOption -> fileStatusOption.get()).collect(Collectors.toList());
 
-            Map<String, Long> logFilesFromFailedCommit = rollbackStat.getLogFilesFromFailedCommit();
-            fileStatuses.stream().forEach(fileStatus -> logFilesFromFailedCommit.put(fileStatus.getPath().toUri().toString(), fileStatus.getLen()));
+            HashMap<FileStatus, Long> commandBlocksCount = new HashMap<>(rollbackStat.getCommandBlocksCount());
+            fileStatuses.forEach(fileStatus -> commandBlocksCount.put(fileStatus, fileStatus.getLen()));
 
-            return new HoodieRollbackStat(rollbackStat.getPartitionPath(), rollbackStat.getSuccessDeleteFiles(), rollbackStat.getFailedDeleteFiles(), rollbackStat.getCommandBlocksCount(),
-                logFilesFromFailedCommit);
+            return new HoodieRollbackStat(rollbackStat.getPartitionPath(), rollbackStat.getSuccessDeleteFiles(), rollbackStat.getFailedDeleteFiles(),
+                commandBlocksCount, rollbackStat.getLogFilesFromFailedCommit());
           } else {
             return v1.getValue().getKey();
           }
